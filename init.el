@@ -40,6 +40,12 @@
   :config
   (evil-mode +1))
 
+(add-hook 'emacs-lisp-mode-hook
+          (defun +set-emacs-lisp-lookup-func ()
+            (setq-local evil-lookup-func (defun +emacs-lisp-lookup-func ()
+                                           (interactive)
+                                           (describe-symbol (symbol-at-point))))))
+
 (use-package evil-org :ensure t
   ;; Provides extra evil keybindings for org-mode, org-agenda etc.
   :hook (org-mode . evil-org-mode)
