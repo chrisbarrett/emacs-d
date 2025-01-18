@@ -85,7 +85,13 @@
   )
 
 (use-package magit :ensure t
-  :bind (("C-x g" . magit-status)))
+  :bind (("C-x g" . magit-status))
+  :config
+  (add-hook 'git-commit-mode-hook
+            (defun +git-commit-initial-state ()
+              (when (and (bound-and-true-p evil-mode)
+                         (thing-at-point-looking-at (rx bol (* space) eol)))
+                (evil-insert-state)))))
 
 (setq vc-follow-symlinks t)
 
