@@ -7,6 +7,7 @@
 
 (setq ring-bell-function #'ignore)
 
+(server-start)
 
 
 ;;; General editing
