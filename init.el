@@ -54,6 +54,14 @@
   :config
   (global-page-break-lines-mode +1))
 
+(use-package recentf
+  ;; Maintain a list of visited files.
+  :demand t
+  :custom
+  (recentf-max-saved-items 100)
+  :config
+  (recentf-mode +1))
+
 
 ;;; evil-mode
 
