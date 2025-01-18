@@ -246,6 +246,15 @@
 ;; Don't prompt when following links to files that are under version control.
 (setq vc-follow-symlinks t)
 
+
+;;; projects
+
+(use-package project
+  ;; Emacs' built-in project lib
+  :config
+  (project-remember-projects-under "~/.config")
+  (project-remember-projects-under "~/src")
+  (project-remember-projects-under "~/org"))
 
 ;; Local Variables:
 ;; no-byte-compile: t
