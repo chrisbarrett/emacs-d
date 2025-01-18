@@ -270,6 +270,13 @@
   (project-remember-projects-under "~/src")
   (project-remember-projects-under "~/org"))
 
+
+;;; Documentation systems
+
+(use-package help
+  :custom
+  (help-window-select t))
+
 ;; Local Variables:
 ;; no-byte-compile: t
 ;; no-native-compile: t
