@@ -225,7 +225,6 @@
 
 (setq text-mode-ispell-word-completion nil)
 
-
 (use-package which-key
   ;; which-key displays a UI popup of available key commands as you type.
   :demand t
@@ -270,7 +269,6 @@
 (use-package help
   :custom
   (help-window-select t))
-
 
 
 ;;; Emacs Lisp
