@@ -71,7 +71,7 @@
 (use-package vertico :ensure (:wait t)
   ;; Vertico provides a better completion UI than the built-in default.
   :demand t
-  :init
+  :config
   (vertico-mode +1))
 
 (use-package marginalia :ensure t
