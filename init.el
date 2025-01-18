@@ -25,6 +25,11 @@
   ;; Basic code folding.
   :hook (prog-mode . hs-minor-mode))
 
+(add-hook 'find-file-hook
+          (defun +maybe-enable-readonly-mode ()
+            (when (and (buffer-file-name)
+                       (string-match-p (rx "/emacs/elpaca/") (buffer-file-name)))
+              (read-only-mode +1))))
 
 ;;; evil-mode
 
