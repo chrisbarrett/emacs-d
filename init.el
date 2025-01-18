@@ -60,6 +60,8 @@
     (evil-collection-magit-setup)))
 
 (use-package evil-surround :ensure t
+  ;; Evil-surround makes the S key work as an operator to surround an
+  ;; object with, e.g., matched parentheses.
   :after evil
   :demand t
   :config
@@ -83,6 +85,8 @@
   (marginalia-mode +1))
 
 (use-package orderless :ensure t
+  ;; Orderless allows you to filter completion candidates by typing
+  ;; space-separated terms in any order.
   :after vertico
   :demand t
   :custom
