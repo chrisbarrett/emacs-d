@@ -48,6 +48,8 @@
   (minions-mode +1))
 
 (use-package page-break-lines :ensure t
+  ;; Displays ^L page break characters as a horizontal rule. Useful for
+  ;; demarcating sections of a file.
   :demand t
   :config
   (global-page-break-lines-mode +1))
