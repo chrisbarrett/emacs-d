@@ -9,7 +9,7 @@
 
 (server-start)
 
-
+
 ;;; General editing
 
 (setq-default indent-tabs-mode nil)
@@ -41,7 +41,12 @@
   :config
   (minions-mode +1))
 
+(use-package page-break-lines :ensure t
+  :demand t
+  :config
+  (global-page-break-lines-mode +1))
 
+
 ;;; evil-mode
 
 (use-package evil :ensure (:wait t)
@@ -103,7 +108,7 @@
   :config
   (global-evil-surround-mode +1))
 
-
+
 ;;; Completion
 
 (use-package vertico :ensure (:wait t)
@@ -189,7 +194,7 @@
                 (car args))
         (cdr args)))
 
-
+
 ;;; VC & magit
 
 (use-package transient :ensure t
