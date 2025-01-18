@@ -50,6 +50,13 @@
   ;; Undefine useless forward-char binding.
   (:map evil-motion-state-map ("SPC" . nil)))
 
+(use-package vundo :ensure
+  (vundo :host github :repo "casouri/vundo")
+  ;; Visualise the Emacs undo history.
+  :bind ("C-x u" . vundo)
+  :config
+  (setq vundo-glyph-alist vundo-unicode-symbols))
+
 (add-hook 'emacs-lisp-mode-hook
           (defun +set-emacs-lisp-lookup-func ()
             (setq-local evil-lookup-func (defun +emacs-lisp-lookup-func ()
