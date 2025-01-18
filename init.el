@@ -31,8 +31,8 @@
   (evil-mode +1))
 
 (use-package evil-org :ensure t
+  ;; Provides extra evil keybindings for org-mode, org-agenda etc.
   :hook (org-mode . evil-org-mode)
-
   :init
   (use-package evil-org-agenda
     :after org-agenda
@@ -40,6 +40,8 @@
     (evil-org-agenda-set-keys)))
 
 (use-package evil-collection :ensure (:wait t)
+  ;; Community-managed collection of evil keybindings; makes evil behave more
+  ;; consistently across many modes.
   :after evil
   :config
   (evil-collection-init)
@@ -51,8 +53,7 @@
 ;;; Completion
 
 (use-package vertico :ensure (:wait t)
-  ;; Vertico provides a better completion UI than the built-in
-  ;; default.
+  ;; Vertico provides a better completion UI than the built-in default.
   :demand t
   :init
   (vertico-mode +1))
@@ -81,8 +82,8 @@
 ;;; VC & magit
 
 (use-package transient :ensure t
-  ;; Magit depends on a more recent version of transient than the one
-  ;; that ships with Emacs.
+  ;; Magit depends on a more recent version of transient than the one that ships
+  ;; with Emacs.
   )
 
 (use-package magit :ensure t
@@ -94,5 +95,6 @@
                          (thing-at-point-looking-at (rx bol (* space) eol)))
                 (evil-insert-state)))))
 
+;; Don't prompt when following links to files that are under version control.
 (setq vc-follow-symlinks t)
 
