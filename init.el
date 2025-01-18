@@ -184,3 +184,9 @@
 ;; Don't prompt when following links to files that are under version control.
 (setq vc-follow-symlinks t)
 
+
+;; Local Variables:
+;; no-byte-compile: t
+;; no-native-compile: t
+;; no-update-autoloads: t
+;; End:
