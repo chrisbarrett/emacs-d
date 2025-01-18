@@ -10,11 +10,13 @@
 (tool-bar-mode -1)
 (menu-bar-mode -1)
 
+
 ;;; General editing
 
 (electric-pair-mode +1)
 (setq-default indent-tabs-mode nil)
 (setq-default require-final-newline t)
+
 
 ;;; evil-mode
 
@@ -44,9 +46,16 @@
   (with-eval-after-load 'magit
     (evil-collection-magit-setup)))
 
-;;; magit
 
-(use-package transient :ensure t)
+;;; VC & magit
+
+(use-package transient :ensure t
+  ;; Magit depends on a more recent version of transient than the one
+  ;; that ships with Emacs.
+  )
 
 (use-package magit :ensure t
   :bind (("C-x g" . magit-status)))
+
+(setq vc-follow-symlinks t)
+
