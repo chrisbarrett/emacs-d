@@ -1,2 +1,4 @@
 eln-cache
 *.elc
+/elpaca
+/auto-save-list/
