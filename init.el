@@ -62,6 +62,16 @@
   :config
   (recentf-mode +1))
 
+(use-package flymake
+  ;; Frontend for in-buffer error checking & navigation.
+  ;;
+  ;; c.f. `next-error' and friends, which operate on compilation & grep results
+  ;; across any number of buffers.
+  :hook (prog-mode . flymake-mode)
+  :bind (:map flymake-mode-map
+              ("M-n" . flymake-goto-next-error)
+              ("M-p" . flymake-goto-prev-error)))
+
 
 ;;; evil-mode
 
