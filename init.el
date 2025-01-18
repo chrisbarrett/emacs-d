@@ -83,7 +83,20 @@
   ;; Vertico provides a better completion UI than the built-in default.
   :demand t
   :config
-  (vertico-mode +1))
+  (vertico-mode +1)
+
+  :custom
+  (vertico-preselect 'no-prompt)
+  (vertico-cycle t)
+
+  (use-package vertico-directory
+    :demand t
+    :hook (rfn-eshadow-update-overlay . vertico-directory-tidy)
+    :bind (:map vertico-map
+                ("RET" . vertico-directory-enter)
+                ("DEL" . vertico-directory-delete-char)
+                ("C-l" . vertico-insert)
+                ("C-h" . vertico-directory-delete-word))))
 
 (use-package marginalia :ensure t
   ;; Marginalia shows extra information alongside minibuffer items
