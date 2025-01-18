@@ -194,6 +194,26 @@
                 (car args))
         (cdr args)))
 
+(use-package corfu :ensure t
+  :demand t
+  :custom
+  (corfu-auto t)
+  (corfu-quit-no-match t)
+  (tab-always-indent 'complete)
+  (corfu-popupinfo-delay '(1.0 . 0.5))
+  :config
+  (global-corfu-mode +1)
+  (corfu-popupinfo-mode +1)
+
+  (add-hook 'eshell-mode-hook (defun +corfu-eshell-setup ()
+                                (setq-local corfu-auto nil)
+                                (corfu-mode)))
+
+  :bind
+  (:map corfu-map ("RET" . corfu-send)))
+
+(setq text-mode-ispell-word-completion nil)
+
 
 ;;; VC & magit
 
