@@ -14,7 +14,7 @@
 
 (setq-default indent-tabs-mode nil)
 (setq-default require-final-newline t)
-(setq fill-column 80)
+(setq-default fill-column 80)
 
 (use-package elec-pair
   ;; Automatically insert matching pairs.
