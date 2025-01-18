@@ -35,7 +35,8 @@
   :init
   (setq evil-want-keybinding nil)
   (setq evil-want-integration t)
-  
+  :custom
+  (evil-symbol-word-search t)
   :config
   (evil-mode +1))
 
