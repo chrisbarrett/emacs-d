@@ -31,6 +31,9 @@
                        (string-match-p (rx "/emacs/elpaca/") (buffer-file-name)))
               (read-only-mode +1))))
 
+;; Always use y-or-n-p
+(defalias 'yes-or-no-p #'y-or-n-p)
+
 ;;; evil-mode
 
 (use-package evil :ensure (:wait t)
