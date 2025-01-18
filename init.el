@@ -105,7 +105,19 @@
                 ("RET" . vertico-directory-enter)
                 ("DEL" . vertico-directory-delete-char)
                 ("C-l" . vertico-insert)
-                ("C-h" . vertico-directory-delete-word))))
+                ("C-h" . vertico-directory-delete-word)))
+
+  (use-package vertico-repeat
+    ;; Quickly restore the previous vertico command you ran.
+    :hook (minibuffer-setup . vertico-repeat-save)
+    :config
+    (with-eval-after-load 'savehist
+      (add-to-list 'savehist-additional-variables 'vertico-repeat-history))
+    :bind
+    (("C-x SPC" . vertico-repeat)
+     :map vertico-map
+     ("M-P" . vertico-repeat-previous)
+     ("M-N" . vertico-repeat-next))))
 
 (use-package marginalia :ensure t
   ;; Marginalia shows extra information alongside minibuffer items
