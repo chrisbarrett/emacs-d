@@ -73,6 +73,14 @@
   :init
   (vertico-mode +1))
 
+(use-package marginalia :ensure t
+  ;; Marginalia shows extra information alongside minibuffer items
+  ;; during completion.
+  :after vertico
+  :demand t
+  :config
+  (marginalia-mode +1))
+
 (use-package orderless :ensure t
   :after vertico
   :demand t
