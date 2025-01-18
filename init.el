@@ -34,6 +34,14 @@
 ;; Always use y-or-n-p
 (defalias 'yes-or-no-p #'y-or-n-p)
 
+(use-package minions :ensure t
+  ;; Hides minor modes, which are generally uninteresting and consume lots of
+  ;; space.
+  :demand t
+  :config
+  (minions-mode +1))
+
+
 ;;; evil-mode
 
 (use-package evil :ensure (:wait t)
