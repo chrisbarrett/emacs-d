@@ -29,6 +29,8 @@
 ;;; evil-mode
 
 (use-package evil :ensure (:wait t)
+  ;; Evil is a better vim emulation implementation than the one that
+  ;; ships with Emacs.
   :demand t
   :init
   (setq evil-want-keybinding nil)
