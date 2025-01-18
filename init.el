@@ -47,6 +47,36 @@
     (evil-collection-magit-setup)))
 
 
+;;; Completion
+
+(use-package vertico :ensure (:wait t)
+  ;; Vertico provides a better completion UI than the built-in
+  ;; default.
+  :demand t
+  :init
+  (vertico-mode +1))
+
+(use-package orderless :ensure t
+  :after vertico
+  :demand t
+  :custom
+  (completion-category-defaults nil)
+  (completion-styles '(orderless basic))
+  (completion-category-overrides '((file (styles partial-completion)))))
+
+(use-package savehist
+  ;; Persists Emacs completion history. Used by vertico.
+  :init (savehist-mode +1))
+
+(setq enable-recursive-minibuffers t)
+(setq read-file-name-completion-ignore-case t)
+(setq read-buffer-completion-ignore-case t)
+(setq completion-ignore-case t)
+
+;; Hide commands that don't work in the current major-mode.
+(setq read-extended-command-predicate #'command-completion-default-include-p)
+
+
 ;;; VC & magit
 
 (use-package transient :ensure t
