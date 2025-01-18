@@ -119,6 +119,15 @@
 (setq minibuffer-prompt-properties '(read-only t cursor-intangible t face minibuffer-prompt))
 (add-hook 'minibuffer-setup-hook #'cursor-intangible-mode)
 
+(define-advice completing-read-multiple (:filter-args (args) crm-indicator)
+  "Display the separator during `completing-read-multiple'."
+  (cons (format "[CRM%s] %s"
+                (replace-regexp-in-string
+                 "\\`\\[.*?]\\*\\|\\[.*?]\\*\\'" ""
+                 crm-separator)
+                (car args))
+        (cdr args)))
+
 
 ;;; VC & magit
 
