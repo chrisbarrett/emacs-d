@@ -12,11 +12,15 @@
 
 ;;; General editing
 
-(electric-pair-mode +1)
+
 (setq-default indent-tabs-mode nil)
 (setq-default require-final-newline t)
 (setq fill-column 80)
 
+(use-package elec-pair
+  ;; Automatically insert matching pairs.
+  :init
+  (electric-pair-mode +1))
 
 ;;; evil-mode
 
