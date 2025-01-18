@@ -53,7 +53,10 @@
   (use-package evil-org-agenda
     :after org-agenda
     :config
-    (evil-org-agenda-set-keys)))
+    (evil-org-agenda-set-keys))
+
+  :custom
+  (evil-v$-excludes-newline t))
 
 (use-package evil-collection :ensure (:wait t)
   ;; Community-managed collection of evil keybindings; makes evil behave more
