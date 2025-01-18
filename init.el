@@ -22,6 +22,10 @@
   :init
   (electric-pair-mode +1))
 
+(use-package hideshow
+  ;; Basic code folding.
+  :hook (prog-mode . hs-minor-mode))
+
 ;;; evil-mode
 
 (use-package evil :ensure (:wait t)
