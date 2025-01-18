@@ -49,6 +49,12 @@
   (with-eval-after-load 'magit
     (evil-collection-magit-setup)))
 
+(use-package evil-surround :ensure t
+  :after evil
+  :demand t
+  :config
+  (global-evil-surround-mode +1))
+
 
 ;;; Completion
 
