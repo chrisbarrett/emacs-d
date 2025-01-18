@@ -106,6 +106,7 @@
   :init
   (use-package evil-org-agenda
     :after org-agenda
+    :demand t
     :config
     (evil-org-agenda-set-keys))
 
