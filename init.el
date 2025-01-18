@@ -7,7 +7,9 @@
 
 (setq ring-bell-function #'ignore)
 
-(server-start)
+(require 'server)
+(unless (server-running-p)
+  (server-start))
 
 
 ;;; General editing
