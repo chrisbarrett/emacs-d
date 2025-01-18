@@ -66,11 +66,9 @@
   ;; Community-managed collection of evil keybindings; makes evil behave more
   ;; consistently across many modes.
   :after evil
+  :demand t
   :config
-  (evil-collection-init)
-
-  (with-eval-after-load 'magit
-    (evil-collection-magit-setup)))
+  (evil-collection-init))
 
 (use-package evil-surround :ensure t
   ;; Evil-surround makes the S key work as an operator to surround an
