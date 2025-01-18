@@ -20,6 +20,10 @@
 
 (use-package evil :ensure (:wait t)
   :demand t
+  :init
+  (setq evil-want-keybinding nil)
+  (setq evil-want-integration t)
+  
   :config
   (evil-mode +1))
 
@@ -31,6 +35,14 @@
     :after org-agenda
     :config
     (evil-org-agenda-set-keys)))
+
+(use-package evil-collection :ensure (:wait t)
+  :after evil
+  :config
+  (evil-collection-init)
+
+  (with-eval-after-load 'magit
+    (evil-collection-magit-setup)))
 
 ;;; magit
 
