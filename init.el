@@ -217,6 +217,15 @@
 
 (setq text-mode-ispell-word-completion nil)
 
+
+(use-package which-key
+  ;; which-key displays a UI popup of available key commands as you type.
+  :demand t
+  :config
+  (which-key-mode)
+  :custom
+  (which-key-idle-delay 0.4))
+
 
 ;;; VC & magit
 
