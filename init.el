@@ -12,7 +12,6 @@
 
 ;;; General editing
 
-
 (setq-default indent-tabs-mode nil)
 (setq-default require-final-newline t)
 (setq fill-column 80)
@@ -25,6 +24,7 @@
 (use-package hideshow
   ;; Basic code folding.
   :hook (prog-mode . hs-minor-mode))
+
 
 ;;; evil-mode
 
