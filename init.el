@@ -1,5 +1,9 @@
 ;; -*- lexical-binding: t; -*-
 
+;; TODO: Remove once Emacs 30 is out of pretest.
+(when (eq emacs-major-version 30)
+  (setq elpaca-core-date 20241219))
+
 (load-file (expand-file-name "./elpaca-bootstrap.el" user-emacs-directory))
 
 (setq inhibit-startup-screen t)
