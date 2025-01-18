@@ -38,7 +38,11 @@
   :custom
   (evil-symbol-word-search t)
   :config
-  (evil-mode +1))
+  (evil-mode +1)
+
+  :bind
+  ;; Undefine useless forward-char binding.
+  (:map evil-motion-state-map ("SPC" . nil)))
 
 (add-hook 'emacs-lisp-mode-hook
           (defun +set-emacs-lisp-lookup-func ()
