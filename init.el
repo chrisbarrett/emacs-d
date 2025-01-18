@@ -16,6 +16,7 @@
 (electric-pair-mode +1)
 (setq-default indent-tabs-mode nil)
 (setq-default require-final-newline t)
+(setq fill-column 80)
 
 
 ;;; evil-mode
