@@ -42,6 +42,7 @@
   (setq evil-want-integration t)
   :custom
   (evil-symbol-word-search t)
+  (evil-undo-system 'undo-redo)
   :config
   (evil-mode +1)
 
