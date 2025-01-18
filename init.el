@@ -90,12 +90,6 @@
   :config
   (setq vundo-glyph-alist vundo-unicode-symbols))
 
-(add-hook 'emacs-lisp-mode-hook
-          (defun +set-emacs-lisp-lookup-func ()
-            (setq-local evil-lookup-func (defun +emacs-lisp-lookup-func ()
-                                           (interactive)
-                                           (describe-symbol (symbol-at-point))))))
-
 (use-package evil-org :ensure t
   ;; Provides extra evil keybindings for org-mode, org-agenda etc.
   :hook (org-mode . evil-org-mode)
@@ -277,6 +271,17 @@
   :custom
   (help-window-select t))
 
+
+
+;;; Emacs Lisp
+
+(use-package elisp-slime-nav :ensure t
+  ;; Provides a somewhat better go-to-definition for Emacs Lisp symbols.
+  :hook (emacs-lisp-mode . elisp-slime-nav-mode)
+  :bind (:map emacs-lisp-mode-map
+              ([remap xref-find-definitions] . elisp-slime-nav-find-elisp-thing-at-point)))
+
+
 ;; Local Variables:
 ;; no-byte-compile: t
 ;; no-native-compile: t
