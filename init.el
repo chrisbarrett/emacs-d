@@ -94,6 +94,8 @@
   (vertico-cycle t)
 
   (use-package vertico-directory
+    ;; Extension that teaches vertico how to operate on filename
+    ;; components in a more ergonomic way.
     :demand t
     :hook (rfn-eshadow-update-overlay . vertico-directory-tidy)
     :bind (:map vertico-map
