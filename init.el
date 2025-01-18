@@ -197,6 +197,7 @@
         (cdr args)))
 
 (use-package corfu :ensure t
+  ;; Corfu provides in-buffer completions as you type.
   :demand t
   :custom
   (corfu-auto t)
