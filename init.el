@@ -85,11 +85,16 @@
   ;; Vertico provides a better completion UI than the built-in default.
   :demand t
   :config
-  (vertico-mode +1)
 
   :custom
   (vertico-preselect 'no-prompt)
   (vertico-cycle t)
+
+  :bind (:map vertico-map
+              ("C-<return>" . minibuffer-complete-and-exit))
+
+  :config
+  (vertico-mode +1)
 
   (use-package vertico-directory
     ;; Extension that teaches vertico how to operate on filename
