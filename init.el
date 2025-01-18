@@ -5,6 +5,7 @@
 (setq inhibit-startup-screen t)
 (setq use-package-always-defer t)
 
+(setq ring-bell-function #'ignore)
 
 
 
