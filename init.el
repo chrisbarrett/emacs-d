@@ -5,10 +5,7 @@
 (setq inhibit-startup-screen t)
 (setq use-package-always-defer t)
 
-;; Disable unneeded UI clutter.
 
-(tool-bar-mode -1)
-(menu-bar-mode -1)
 
 
 ;;; General editing
