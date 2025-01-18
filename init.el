@@ -157,7 +157,9 @@
   "Display the separator during `completing-read-multiple'."
   (cons (format "[CRM%s] %s"
                 (replace-regexp-in-string
-                 "\\`\\[.*?]\\*\\|\\[.*?]\\*\\'" ""
+                 (rx (or (and bos "[" (*? any) "]*")
+                         (and "[" (*? any) "]*" eos)))
+                 ""
                  crm-separator)
                 (car args))
         (cdr args)))
