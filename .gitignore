@@ -1,10 +1,10 @@
-eln-cache
 *.elc
-/elpaca
-/auto-save-list/
-/transient/
-/history
 /.org-id-locations
+/auto-save-list/
+/eln-cache
+/elpaca
+/eshell/history
+/history
 /projects
 /recentf
-/eshell/history
+/transient/
