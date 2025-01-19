@@ -46,9 +46,6 @@
                        (string-match-p (rx "/emacs/elpaca/") (buffer-file-name)))
               (read-only-mode +1))))
 
-;; Always use y-or-n-p
-(defalias 'yes-or-no-p #'y-or-n-p)
-
 (use-package minions :ensure t
   ;; Hides minor modes, which are generally uninteresting and consume lots of
   ;; space.
