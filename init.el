@@ -24,6 +24,7 @@
 
 (use-package elec-pair
   ;; Automatically insert matching pairs.
+  ;; TODO: replace with puni?
   :init
   (electric-pair-mode +1))
 
