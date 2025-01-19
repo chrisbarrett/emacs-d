@@ -89,7 +89,7 @@
   (evil-mode +1)
 
   :bind
-  (:map evil-normal-state-map ("M-." . xref-find-definitions))
+  (:map evil-normal-state-map ("M-." . nil))
   ;; Undefine useless forward-char binding.
   (:map evil-motion-state-map ("SPC" . nil)))
 
