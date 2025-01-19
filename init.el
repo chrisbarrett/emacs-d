@@ -244,6 +244,39 @@
   :custom
   (which-key-idle-delay 0.4))
 
+(use-package consult :ensure t
+  ;; Consult provides commands for common tasks that leverage the Emacs
+  ;; completion system. It composes well with the above packages.
+  :bind (("C-c SPC" . consult-buffer)
+         ("C-c /" . consult-ripgrep)
+         :map flymake-mode-map
+         ("C-c l" . consult-flymake))
+  :custom
+  ;; Use Consult to select xref locations with preview
+  (xref-show-xrefs-function #'consult-xref)
+  (xref-show-definitions-function #'consult-xref)
+
+  :config
+
+  ;; Tweak the register preview for `consult-register-load',
+  ;; `consult-register-store' and the built-in commands.  This improves the
+  ;; register formatting, adds thin separator lines, register sorting and hides
+  ;; the window mode line.
+  (advice-add #'register-preview :override #'consult-register-window)
+  (setq register-preview-delay 0.5))
+
+(use-package embark :ensure t
+  ;; Embark provides a UI for performing contextual actions on selected items
+  ;; within completing-read.
+  :bind
+  (("C-@" . embark-act)
+   ("M-." . embark-dwim))
+
+  :init
+  (use-package embark-consult
+    :ensure t
+    :hook (embark-collect-mode . consult-preview-at-point-mode)))
+
 
 ;;; VC & magit
 
