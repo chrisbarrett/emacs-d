@@ -10,6 +10,7 @@
 (setq use-package-always-defer t)
 
 (setq ring-bell-function #'ignore)
+(setq backups-inhibited t)
 
 (require 'server)
 (unless (server-running-p)
