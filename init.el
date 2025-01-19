@@ -16,6 +16,12 @@
 (unless (server-running-p)
   (server-start))
 
+(defvar +leader-map (make-sparse-keymap)
+  "Keymap for leader key (SPC).")
+
+(with-eval-after-load 'evil
+  (evil-global-set-key 'motion (kbd "SPC") +leader-map))
+
 
 ;;; General editing
 
