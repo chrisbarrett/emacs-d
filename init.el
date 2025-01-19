@@ -17,10 +17,38 @@
 (unless (server-running-p)
   (server-start))
 
-(defvar +leader-map (make-sparse-keymap)
-  "Keymap for leader key (SPC).")
+(defvar-keymap +leader-map
+  :doc "Keymap for leader key (SPC)."
+
+  "SPC" #'consult-buffer
+  "x" #'execute-extended-command
+  "r" #'vertico-repeat
+
+  "/" #'consult-ripgrep
+  "p" project-prefix-map
+
+  "f f" #'find-file
+  "f F" #'find-file-other-window
+  "f s" #'save-buffer
+
+  "e l" #'consult-flymake
+
+  "g s" #'magit-status
+
+  "w o" #'delete-other-windows
+  "w q" #'delete-window
+  "w w" #'other-window
+  "w /" #'split-window-horizontally
+  "w -" #'split-window-vertically
+
+  "<tab>" (defun +swap-buffers ()
+            "Switch between the previous buffer and the current one."
+            (interactive)
+            (switch-to-buffer nil)))
+  
 
 (with-eval-after-load 'evil
+  (evil-global-set-key 'normal (kbd "SPC") +leader-map)
   (evil-global-set-key 'motion (kbd "SPC") +leader-map))
 
 
@@ -171,8 +199,7 @@
     (with-eval-after-load 'savehist
       (add-to-list 'savehist-additional-variables 'vertico-repeat-history))
     :bind
-    (("C-x SPC" . vertico-repeat)
-     :map vertico-map
+    (:map vertico-map
      ("M-P" . vertico-repeat-previous)
      ("M-N" . vertico-repeat-next))))
 
@@ -253,10 +280,6 @@
 (use-package consult :ensure t
   ;; Consult provides commands for common tasks that leverage the Emacs
   ;; completion system. It composes well with the above packages.
-  :bind (("C-c SPC" . consult-buffer)
-         ("C-c /" . consult-ripgrep)
-         :map flymake-mode-map
-         ("C-c l" . consult-flymake))
   :custom
   ;; Use Consult to select xref locations with preview
   (xref-show-xrefs-function #'consult-xref)
@@ -292,7 +315,6 @@
   )
 
 (use-package magit :ensure t
-  :bind (("C-x g" . magit-status))
   :config
   (add-hook 'git-commit-mode-hook
             (defun +git-commit-initial-state ()
