@@ -4,7 +4,8 @@
 (when (eq emacs-major-version 30)
   (setq elpaca-core-date 20241219))
 
-(load-file (expand-file-name "./elpaca-bootstrap.el" user-emacs-directory))
+(require 'elpaca-bootstrap
+         (expand-file-name "./elpaca-bootstrap.el" user-emacs-directory))
 
 (setq inhibit-startup-screen t)
 (setq use-package-always-defer t)

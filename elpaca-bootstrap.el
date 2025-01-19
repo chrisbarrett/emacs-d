@@ -44,3 +44,5 @@
 (elpaca elpaca-use-package
   ;; Enable use-package :ensure support for Elpaca.
   (elpaca-use-package-mode))
+
+(provide 'elpaca-bootstrap)
