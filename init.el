@@ -191,6 +191,17 @@
                      (interactive)
                      (insert-char #x00A0)))
 
+(use-package winner
+  ;; Provides undo/redo for buffer & window layout changes.
+  :bind (:map winner-mode-map
+              ("C-," . winner-undo)
+              ("C-." . winner-redo))
+  :init
+  (winner-mode +1)
+  :config
+  (with-eval-after-load 'evil
+    (keymap-set evil-normal-state-map "C-." #'winner-redo)))
+
 
 ;;; evil-mode
 
