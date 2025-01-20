@@ -59,6 +59,9 @@
   "r" #'narrow-to-region
   "w" #'widen)
 
+(defvar-keymap +comment-prefix-map
+  "r" #'comment-dwim)
+
 (defvar-keymap +git/goto-prefix-map
   "s" #'magit-status
 
@@ -95,6 +98,7 @@
   "x" #'execute-extended-command
   "r" #'vertico-repeat
   ":" #'pp-eval-expression
+  "c" +comment-prefix-map
   "d" #'dirvish
 
   "/" #'consult-ripgrep
