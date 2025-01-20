@@ -263,7 +263,9 @@
                 ("RET" . vertico-directory-enter)
                 ("DEL" . vertico-directory-delete-char)
                 ("C-l" . vertico-insert)
-                ("C-h" . vertico-directory-delete-word)))
+                ("C-h" . vertico-directory-delete-word)
+                ("M-l" . vertico-insert)
+                ("M-h" . vertico-directory-delete-word)))
 
   (use-package vertico-repeat
     ;; Quickly restore the previous vertico command you ran.
