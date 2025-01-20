@@ -17,77 +17,102 @@
 (unless (server-running-p)
   (server-start))
 
+
+;;; Leader key
+
+(defvar-keymap +buffer-prefix-map
+  "b" #'bury-buffer
+  "d" #'kill-current-buffer
+  "l" #'ibuffer-list-buffers)
+
+(defvar-keymap +file-prefix-map
+  "f" #'find-file
+  "F" #'find-file-other-window
+  "s" #'save-buffer
+  "r" #'recentf
+
+  "D" (defun +delete-file-and-buffer ()
+        (interactive)
+        (let ((file (buffer-file-name)))
+          (kill-buffer (current-buffer))
+          (when file
+            (delete-file file))))
+
+  "y" (defun +copy-file-path ()
+        (interactive)
+        (if-let* ((file (buffer-file-name)))
+            (progn
+              (kill-new file)
+              (message "%s" file))
+          (user-error "Buffer is not visiting a file")))
+
+  "v" (defun +revisit-file ()
+        (interactive)
+        (if-let* ((file (buffer-file-name)))
+            (find-alternate-file file)
+          (user-error "Buffer is not visiting a file"))))
+
+(defvar-keymap +narrowing-prefix-map
+  "f" #'narrow-to-defun
+  "r" #'narrow-to-region
+  "w" #'widen)
+
+(defvar-keymap +git/goto-prefix-map
+  "s" #'magit-status
+
+  "i" (defun +goto-init-el-file ()
+        (interactive)
+        (find-file (expand-file-name "init.el" user-emacs-directory)))
+
+  "n" (defun +goto-nix-file ()
+          (interactive)
+          (project-find-file-in  "flake.nix" nil
+                                 (project-current nil "~/.config/nix-configuration"))))
+
+(defvar-keymap +org-prefix-map
+  "a" (defun +org-agenda-dwim (&optional arg)
+        (interactive "P")
+        (org-agenda arg "a")))
+
+(defvar-keymap +errors-prefix-map
+  "l" #'consult-flymake)
+
+(defvar-keymap +windows-prefix-map
+  "d" #'delete-window
+  "o" #'delete-other-windows
+  "q" #'delete-window
+  "w" #'other-window
+  "/" #'split-window-horizontally
+  "-" #'split-window-vertically)
+
 (defvar-keymap +leader-map
   :doc "Keymap for leader key (SPC)."
   "SPC" #'consult-buffer
   "x" #'execute-extended-command
   "r" #'vertico-repeat
   ":" #'pp-eval-expression
+  "d" #'dirvish
 
   "/" #'consult-ripgrep
 
-  ;; TODO: flesh this out
+  "b" +buffer-prefix-map
   "p" project-prefix-map
-
-  "b d" #'kill-current-buffer
-
-  "f f" #'find-file
-  "f F" #'find-file-other-window
-  "f s" #'save-buffer
-  "f r" #'recentf
-
-  "f D" (defun +delete-file-and-buffer ()
-          (interactive)
-          (let ((file (buffer-file-name)))
-            (kill-buffer (current-buffer))
-            (when file
-              (delete-file file))))
-
-  "f y" (defun +copy-file-path ()
-          (interactive)
-          (if-let* ((file (buffer-file-name)))
-              (progn
-                (kill-new file)
-                (message "%s" file))
-            (user-error "Buffer is not visiting a file")))
-
-  "f v" (defun +revisit-file ()
-          (interactive)
-          (if-let* ((file (buffer-file-name)))
-              (find-alternate-file file)
-            (user-error "Buffer is not visiting a file")))
-
-  "n f" #'narrow-to-defun
-  "n r" #'narrow-to-region
-  "n w" #'widen
-
-  "e l" #'consult-flymake
-
-  "g s" #'magit-status
-  "g i" (defun +goto-init-el-file ()
-          (interactive)
-          (find-file (expand-file-name "init.el" user-emacs-directory)))
-  "g n" (defun +goto-nix-file ()
-          (interactive)
-          (project-find-file-in  "flake.nix" nil
-                                 (project-current nil "~/.config/nix-configuration")))
-
-  "w d" #'delete-window
-  "w o" #'delete-other-windows
-  "w q" #'delete-window
-  "w w" #'other-window
-  "w /" #'split-window-horizontally
-  "w -" #'split-window-vertically
-
+  "f" +file-prefix-map
+  "n" +narrowing-prefix-map
+  "g" +git/goto-prefix-map
+  "o" +org-prefix-map
+  "w" +windows-prefix-map
+  "e" +errors-prefix-map
+  "h" help-map
   "<tab>" (defun +swap-buffers ()
             "Switch between the previous buffer and the current one."
             (interactive)
             (switch-to-buffer nil)))
-  
 
-(with-eval-after-load 'evil
-  (evil-global-set-key 'normal (kbd "SPC") +leader-map)
-  (evil-global-set-key 'motion (kbd "SPC") +leader-map))
+(add-hook 'evil-local-mode-hook (defun +bind-leader-key ()
+                                  (evil-local-set-key 'motion (kbd "SPC") +leader-map)
+                                  (evil-local-set-key 'normal (kbd "SPC") +leader-map)))
+
 
 
 ;;; General editing
