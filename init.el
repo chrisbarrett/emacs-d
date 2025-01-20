@@ -342,8 +342,9 @@
    ("M-." . embark-dwim))
 
   :init
-  (use-package embark-consult
-    :ensure t
+  (use-package embark-consult :ensure t
+    :after consult
+    :demand t
     :hook (embark-collect-mode . consult-preview-at-point-mode)))
 
 
