@@ -401,7 +401,7 @@
 
   :init
   (use-package embark-consult :ensure t
-    :after consult
+    :after (:any consult embark)
     :demand t
     :hook (embark-collect-mode . consult-preview-at-point-mode)))
 
