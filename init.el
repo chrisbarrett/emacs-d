@@ -175,6 +175,10 @@
               ("M-n" . flymake-goto-next-error)
               ("M-p" . flymake-goto-prev-error)))
 
+(use-package dirvish :ensure t
+  ;; Wrapper around `dired' that provides better UX.
+  )
+
 
 ;;; evil-mode
 
