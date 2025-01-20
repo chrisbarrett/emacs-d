@@ -64,6 +64,9 @@
 
 (defvar-keymap +git/goto-prefix-map
   "s" #'magit-status
+  "?" (defun +goto-messages ()
+        (interactive)
+        (display-buffer "*Messages*"))
 
   "i" (defun +goto-init-el-file ()
         (interactive)
@@ -555,6 +558,33 @@
                            :max-duration "10:00"
                            :min-duration 0
                            :max-gap 0))))))))
+
+
+;;; Input methods
+
+(setq default-input-method "french-postfix")
+
+(with-eval-after-load "quail/latin-post"
+  (require '+quail)
+
+  (message "Initializing custom keybindings for latin-post")
+  
+  (+quail-defun "french-postfix" ";"
+    (delete-horizontal-space)
+    (insert " ; "))
+
+  (+quail-defun "french-postfix" ":"
+    (delete-horizontal-space)
+    (let ((left-pad (cond
+                     ((equal (char-before) ?:)
+                      "")
+                     ((and (derived-mode-p 'org-mode) (org-at-item-p) (not (org-at-item-description-p)))
+                      " ")
+                     (t
+                      " "))))
+      (insert left-pad ": "))))
+
+
 
 ;; Local Variables:
 ;; no-byte-compile: t
