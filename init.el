@@ -20,6 +20,16 @@
 (add-to-list 'load-path (expand-file-name "lisp" user-emacs-directory))
 
 
+;;; Macros
+
+(defmacro pushnew! (var &rest elements)
+  "Add missing ELEMENTS to VAR in-place."
+  (let ((gvar (gensym)))
+    `(let ((,gvar ',var))
+       (set ,gvar
+            (seq-union (eval ,gvar) ',elements)))))
+
+
 ;;; Leader key
 
 (defvar-keymap +buffer-prefix-map
@@ -412,6 +422,14 @@
     :demand t
     :hook (embark-collect-mode . consult-preview-at-point-mode)))
 
+(pushnew! completion-ignored-extensions
+          ".DS_Store"
+          ".eln"
+          ".drv"
+          ".direnv/"
+          ".git/"
+          )
+
 
 ;;; VC & magit
 
@@ -430,6 +448,13 @@
 
 ;; Don't prompt when following links to files that are under version control.
 (setq vc-follow-symlinks t)
+
+(pushnew! vc-directory-exclusion-list
+          "node_modules"
+          "cdk.out"
+          "target"
+          ".direnv"
+          )
 
 
 ;;; projects
