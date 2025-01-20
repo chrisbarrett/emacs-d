@@ -390,6 +390,11 @@
                                            (describe-symbol (symbol-at-point))))))
 
 
+;;; Programming modes
+
+(use-package elisp-mode
+  :bind (:map emacs-lisp-mode-map
+              ("C-c RET" . pp-macroexpand-last-sexp)))
 
 (use-package nix-ts-mode :ensure t
  :mode "\\.nix\\'")
