@@ -186,6 +186,11 @@
   ;; Wrapper around `dired' that provides better UX.
   )
 
+(keymap-global-set "C-c SPC"
+                   (defun +insert-nbsp ()
+                     (interactive)
+                     (insert-char #x00A0)))
+
 
 ;;; evil-mode
 
