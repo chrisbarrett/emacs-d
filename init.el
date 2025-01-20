@@ -383,18 +383,19 @@
   :custom
   (help-window-select t))
 
-(add-hook 'emacs-lisp-mode-hook
-          (defun +set-emacs-lisp-lookup-func ()
-            (setq-local evil-lookup-func (defun +emacs-lisp-lookup-func ()
-                                           (interactive)
-                                           (describe-symbol (symbol-at-point))))))
-
 
 ;;; Programming modes
 
 (use-package elisp-mode
   :bind (:map emacs-lisp-mode-map
-              ("C-c RET" . pp-macroexpand-last-sexp)))
+              ("C-c RET" . pp-macroexpand-last-sexp)
+              ("C-c C-c" . eval-defun))
+  :config
+  (add-hook 'emacs-lisp-mode-hook
+            (defun +set-emacs-lisp-lookup-func ()
+              (setq-local evil-lookup-func (defun +emacs-lisp-lookup-func ()
+                                             (interactive)
+                                             (describe-symbol (symbol-at-point)))))))
 
 (use-package nix-ts-mode :ensure t
  :mode "\\.nix\\'")
