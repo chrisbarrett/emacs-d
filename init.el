@@ -434,6 +434,19 @@
  :mode "\\.nix\\'")
 
 
+;;; org-mode
+
+(setq org-directory "~/org")
+
+(use-package org
+  :init
+  (use-package org-habit :after org :demand t))
+
+(use-package org-agenda
+  :bind (("C-c a" . org-agenda))
+  :custom
+  (org-agenda-files (expand-file-name "org-agenda-files" org-directory)))
+
 ;; Local Variables:
 ;; no-byte-compile: t
 ;; no-native-compile: t
