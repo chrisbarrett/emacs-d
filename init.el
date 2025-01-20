@@ -17,6 +17,8 @@
 (unless (server-running-p)
   (server-start))
 
+(add-to-list 'load-path (expand-file-name "lisp" user-emacs-directory))
+
 
 ;;; Leader key
 
@@ -70,9 +72,11 @@
                                  (project-current nil "~/.config/nix-configuration"))))
 
 (defvar-keymap +org-prefix-map
-  "a" (defun +org-agenda-dwim (&optional arg)
-        (interactive "P")
-        (org-agenda arg "a")))
+  "a" (defun +org-agenda-dwim ()
+        (interactive)
+        (require 'org)
+        (require 'org-clock)
+        (org-agenda nil (if (org-clocking-p) "w" "p"))))
 
 (defvar-keymap +errors-prefix-map
   "l" #'consult-flymake)
@@ -456,8 +460,81 @@
 
 (use-package org-agenda
   :bind (("C-c a" . org-agenda))
+  :config (require '+agenda)
   :custom
-  (org-agenda-files (expand-file-name "org-agenda-files" org-directory)))
+  (org-agenda-files (expand-file-name "org-agenda-files" org-directory))
+  (org-agenda-custom-commands
+   (let ((today '(agenda ""
+                         ((org-agenda-overriding-header "Today")
+                          (org-agenda-use-time-grid t)
+                          (org-agenda-clockreport-parameter-plist '(:compact t
+                                                                             :link t
+                                                                             :maxlevel 3
+                                                                             :fileskip0 t
+                                                                             :filetitle t))
+                          (org-agenda-skip-function #'+agenda-view-skip-function))))
+         (next-actions '(tags-todo "-project-tickler-inbox+TODO=\"TODO\""
+                                   ((org-agenda-overriding-header "Next Actions")
+                                    (org-agenda-skip-function #'+agenda-next-actions-skip-function))))
+
+         (inbox '(tags-todo "+inbox+TODO=\"TODO\""
+                            ((org-agenda-overriding-header "Inbox"))))
+
+         (delegated '(todo "WAIT"
+                           ((org-agenda-overriding-header "Delegated")
+                            (org-agenda-skip-function '(org-agenda-skip-entry-if 'scheduled)))))
+
+         (projects '(tags-todo "+project+TODO=\"TODO\""
+                               ((org-agenda-overriding-header "Projects"))))
+
+         (tickler
+          '(todo "TODO"
+                 ((org-agenda-overriding-header "Tickler")
+                  (org-agenda-skip-function #'+agenda-tickler-section-skip-function))))
+
+
+         (unprocessed-notes
+          '(tags-todo "+outline-project+TODO=\"TODO\""
+                      ((org-agenda-overriding-header "Unprocessed Notes")
+                       (org-agenda-skip-function #'+agenda-next-actions-skip-function))))
+
+         (defaults `((org-agenda-todo-ignore-scheduled 'future)
+                     (org-habit-preceding-days 14)
+                     (org-habit-following-days 7)
+                     (org-agenda-span 'day)
+                     (org-agenda-window-setup 'only-window)
+                     (org-agenda-start-day nil)
+                     (org-agenda-include-diary nil)
+                     (org-agenda-insert-diary-extract-time nil)
+                     (org-agenda-show-inherited-tags nil)
+                     (org-agenda-skip-deadline-if-done t)
+                     (org-agenda-skip-deadline-prewarning-if-scheduled 'pre-scheduled)
+                     (org-agenda-skip-scheduled-if-done t)
+                     (org-agenda-start-on-weekday nil)
+                     (org-agenda-dim-blocked-tasks 'invisible)
+                     (org-agenda-sorting-strategy '((agenda time-up category-up priority-down todo-state-up)
+                                                    (todo priority-down category-up scheduled-up)
+                                                    (tags priority-down category-up)
+                                                    (search category-up)))
+                     (org-agenda-clock-report-header "\nClocking")
+                     (org-agenda-tags-column -100)
+                     (org-agenda-use-time-grid nil)
+                     (org-agenda-start-with-log-mode '(closed state))
+                     (org-agenda-show-future-repeats nil)
+                     (org-agenda-ignore-properties '(effort appt))
+                     (org-agenda-archives-mode t))))
+
+     `(("p" "personal agenda" ,(list today next-actions inbox delegated projects tickler)
+        (,@defaults
+         (org-agenda-tag-filter-preset '("-work" "-ignore"))))
+       ("w" "work agenda" ,(list today next-actions inbox delegated projects tickler unprocessed-notes)
+        (,@defaults
+         (org-agenda-tag-filter-preset (list "-ignore" (format "+%s" (timekeep-work-tag))))
+         (org-agenda-clock-consistency-checks
+          '(:gap-ok-around ("12:20" "12:40" "4:00")
+                           :max-duration "10:00"
+                           :min-duration 0
+                           :max-gap 0))))))))
 
 ;; Local Variables:
 ;; no-byte-compile: t
