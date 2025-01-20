@@ -113,6 +113,10 @@
                                   (evil-local-set-key 'motion (kbd "SPC") +leader-map)
                                   (evil-local-set-key 'normal (kbd "SPC") +leader-map)))
 
+
+;;; Theme
+
+(defun +theme-update ())
 
 
 ;;; General editing
