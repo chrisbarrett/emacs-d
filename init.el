@@ -422,8 +422,15 @@
 (use-package elisp-mode
   :bind (:map emacs-lisp-mode-map
               ("C-c RET" . pp-macroexpand-last-sexp)
-              ("C-c C-c" . eval-defun))
+              ("C-c C-c" . +eval-dwim))
+
   :config
+  (defun +eval-dwim (&optional beg end)
+    (interactive "r")
+    (if (region-active-p)
+        (message "Eval region => %s" (eval-region beg end))
+      (message "Eval defun => %s" (eval-defun nil))))
+
   (add-hook 'emacs-lisp-mode-hook
             (defun +set-emacs-lisp-lookup-func ()
               (setq-local evil-lookup-func (defun +emacs-lisp-lookup-func ()
