@@ -19,22 +19,60 @@
 
 (defvar-keymap +leader-map
   :doc "Keymap for leader key (SPC)."
-
   "SPC" #'consult-buffer
   "x" #'execute-extended-command
   "r" #'vertico-repeat
+  ":" #'pp-eval-expression
 
   "/" #'consult-ripgrep
+
+  ;; TODO: flesh this out
   "p" project-prefix-map
+
+  "b d" #'kill-current-buffer
 
   "f f" #'find-file
   "f F" #'find-file-other-window
   "f s" #'save-buffer
+  "f r" #'recentf
+
+  "f D" (defun +delete-file-and-buffer ()
+          (interactive)
+          (let ((file (buffer-file-name)))
+            (kill-buffer (current-buffer))
+            (when file
+              (delete-file file))))
+
+  "f y" (defun +copy-file-path ()
+          (interactive)
+          (if-let* ((file (buffer-file-name)))
+              (progn
+                (kill-new file)
+                (message "%s" file))
+            (user-error "Buffer is not visiting a file")))
+
+  "f v" (defun +revisit-file ()
+          (interactive)
+          (if-let* ((file (buffer-file-name)))
+              (find-alternate-file file)
+            (user-error "Buffer is not visiting a file")))
+
+  "n f" #'narrow-to-defun
+  "n r" #'narrow-to-region
+  "n w" #'widen
 
   "e l" #'consult-flymake
 
   "g s" #'magit-status
+  "g i" (defun +goto-init-el-file ()
+          (interactive)
+          (find-file (expand-file-name "init.el" user-emacs-directory)))
+  "g n" (defun +goto-nix-file ()
+          (interactive)
+          (project-find-file-in  "flake.nix" nil
+                                 (project-current nil "~/.config/nix-configuration")))
 
+  "w d" #'delete-window
   "w o" #'delete-other-windows
   "w q" #'delete-window
   "w w" #'other-window
@@ -53,6 +91,8 @@
 
 
 ;;; General editing
+
+(put 'narrow-to-region 'disabled nil)
 
 (setq-default indent-tabs-mode nil)
 (setq-default require-final-newline t)
