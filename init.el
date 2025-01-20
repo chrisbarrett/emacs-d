@@ -94,6 +94,9 @@
   "d" #'dirvish
 
   "/" #'consult-ripgrep
+  "*" (defun +consult-ripgrep-symbol ()
+        (interactive)
+        (consult-ripgrep nil (format "%s" (symbol-at-point))))
 
   "b" +buffer-prefix-map
   "p" project-prefix-map
