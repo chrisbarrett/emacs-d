@@ -389,6 +389,10 @@
                                            (interactive)
                                            (describe-symbol (symbol-at-point))))))
 
+
+
+(use-package nix-ts-mode :ensure t
+ :mode "\\.nix\\'")
 
 
 ;; Local Variables:
