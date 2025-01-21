@@ -97,6 +97,10 @@
                                  (project-current nil "~/.config/nix-configuration"))))
 
 (defvar-keymap +org-prefix-map
+  "i" (defun +goto-org-roam-index ()
+        (interactive)
+        (find-file (expand-file-name "roam/notes/index.org" org-directory)))
+
   "a" (defun +org-agenda-dwim ()
         (interactive)
         (require 'org)
