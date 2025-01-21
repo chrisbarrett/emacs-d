@@ -55,7 +55,16 @@
         (if-let* ((file (buffer-file-name)))
             (progn
               (kill-new file)
-              (message "%s" file))
+              (message "Copied to clipboard => %s" file))
+          (user-error "Buffer is not visiting a file")))
+
+  "d" (defun +copy-file-directory ()
+        (interactive)
+        (if-let* ((file (buffer-file-name))
+                  (dir (file-name-directory file)))
+            (progn
+              (kill-new dir)
+              (message "Copied to clipboard => %s" dir))
           (user-error "Buffer is not visiting a file")))
 
   "v" (defun +revisit-file ()
