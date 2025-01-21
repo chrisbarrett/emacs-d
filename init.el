@@ -547,11 +547,6 @@
   (org-babel-python-command "python3")
   (org-babel-load-languages '((emacs-lisp . t)
                               (C . t)
-                              (clojure . t)
-                              (dot . t)
-                              (gnuplot . t)
-                              (sql . t)
-                              (python . t)
                               (calc . t)
                               (shell . t)))
 
