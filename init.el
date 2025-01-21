@@ -254,6 +254,7 @@
   :custom
   (evil-symbol-word-search t)
   (evil-undo-system 'undo-redo)
+  (evil-v$-excludes-newline t)
   :config
   (evil-mode +1)
 
@@ -268,19 +269,6 @@
   :bind ("C-x u" . vundo)
   :config
   (setq vundo-glyph-alist vundo-unicode-symbols))
-
-(use-package evil-org :ensure t
-  ;; Provides extra evil keybindings for org-mode, org-agenda etc.
-  :hook (org-mode . evil-org-mode)
-  :init
-  (use-package evil-org-agenda
-    :after org-agenda
-    :demand t
-    :config
-    (evil-org-agenda-set-keys))
-
-  :custom
-  (evil-v$-excludes-newline t))
 
 (use-package evil-collection :ensure (:wait t)
   ;; Community-managed collection of evil keybindings; makes evil behave more
@@ -527,8 +515,111 @@
 (setq org-directory "~/org")
 
 (use-package org
+  :hook ((org-mode . abbrev-mode)
+         (org-mode . auto-fill-mode))
   :init
-  (use-package org-habit :after org :demand t))
+  (use-package org-habit :after org :demand t)
+  :custom
+  (abbrev-file-name (expand-file-name "abbrev.el" org-directory))
+
+  ;; visual settings
+  (org-list-indent-offset 1)
+  (org-cycle-separator-lines 1)
+  (org-ellipsis " …")
+  (org-hide-emphasis-markers t)
+  (org-pretty-entities t)
+  (org-startup-folded 'showall)
+  (org-startup-indented t)
+  (org-startup-shrink-all-tables t)
+  (org-startup-with-inline-images t)
+
+  ;; TODOs, checkboxes, stats, properties.
+  (org-todo-keywords '((type "TODO(t)" "WAIT(w)" "|" "DONE(d)" "CANCELLED(c@)")))
+  (org-enforce-todo-dependencies t)
+  (org-hierarchical-todo-statistics nil)
+  (org-use-property-inheritance t)
+
+  ;; babel & src support
+  (org-edit-src-content-indentation 0)
+  (org-src-window-setup 'current-window)
+  (org-confirm-babel-evaluate nil)
+  (org-babel-default-header-args:emacs-lisp '((:lexical . "yes")))
+  (org-babel-python-command "python3")
+  (org-babel-load-languages '((emacs-lisp . t)
+                              (C . t)
+                              (clojure . t)
+                              (dot . t)
+                              (gnuplot . t)
+                              (sql . t)
+                              (python . t)
+                              (calc . t)
+                              (shell . t)))
+
+  ;; interactive behaviour
+  (org-bookmark-names-plist nil)
+  (org-M-RET-may-split-line nil)
+  (org-blank-before-new-entry '((heading . t) (plain-list-item . auto)))
+  (org-footnote-auto-adjust t)
+  (org-insert-heading-respect-content t)
+  (org-loop-over-headlines-in-active-region 'start-level)
+
+  :config
+
+  ;; Prefer inserting headings with M-RET
+  (add-hook 'org-metareturn-hook
+            (defun +org-metareturn-append-line ()
+              (when (org-in-item-p)
+                (org-insert-heading current-prefix-arg)
+                (evil-append-line 1)
+                t)))
+
+  ;; Automatically enter insert state when inserting new headings, logbook notes
+  ;; or when using `org-capture'.
+
+  (defun +org-enter-evil-insert-state (&rest _)
+    (when (and (bound-and-true-p evil-mode)
+               (called-interactively-p nil))
+      (evil-insert-state)))
+
+  (dolist (cmd '(org-insert-heading
+                 org-insert-heading-respect-content
+                 org-insert-todo-heading-respect-content
+                 org-insert-todo-heading))
+    (advice-add cmd :after #'+org-enter-evil-insert-state))
+
+  (define-advice org-capture (:after (&rest _) insert-state)
+    (when (and (bound-and-true-p evil-mode)
+               (called-interactively-p nil)
+               (bound-and-true-p org-capture-mode))
+      (evil-insert-state)))
+
+  (add-hook 'org-log-buffer-setup-hook #'evil-insert-state)
+
+  ;; Ensure we use dired rather than the Finder on macOS.
+
+  (when (equal system-type 'darwin)
+    (add-to-list 'org-file-apps '(directory . emacs)))
+
+  ;; Don't show secondary selection when running `org-show-todo-tree'.
+  (advice-add #'org-highlight-new-match :override #'ignore)
+  )
+
+(use-package org-habit
+  :custom
+  (org-habit-today-glyph ?▲)
+  (org-habit-completed-glyph ?✓))
+
+(use-package evil-org :ensure t
+  ;; Provides extra evil keybindings for org-mode, org-agenda etc.
+  :hook (org-mode . evil-org-mode)
+  :custom
+  (evil-org-key-theme '(todo navigation insert textobjects additional calendar))
+  :init
+  (use-package evil-org-agenda
+    :after org-agenda
+    :demand t
+    :config
+    (evil-org-agenda-set-keys)))
 
 (use-package org-agenda
   :bind (("C-c a" . org-agenda))
