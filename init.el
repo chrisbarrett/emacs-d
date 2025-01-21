@@ -228,6 +228,11 @@
   (with-eval-after-load 'evil
     (keymap-set evil-normal-state-map "C-." #'winner-redo)))
 
+(use-package saveplace
+  ;; Save buffer position
+  :demand t
+  :config (save-place-mode +1))
+
 
 ;;; evil-mode
 
