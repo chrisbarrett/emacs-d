@@ -244,7 +244,7 @@
 
 ;;; evil-mode
 
-(use-package evil :ensure (:wait t)
+(use-package evil :ensure t
   ;; Evil is a better vim emulation implementation than the one that
   ;; ships with Emacs.
   :demand t
@@ -270,7 +270,7 @@
   :config
   (setq vundo-glyph-alist vundo-unicode-symbols))
 
-(use-package evil-collection :ensure (:wait t)
+(use-package evil-collection :ensure t
   ;; Community-managed collection of evil keybindings; makes evil behave more
   ;; consistently across many modes.
   :after evil
@@ -289,7 +289,7 @@
 
 ;;; Completion
 
-(use-package vertico :ensure (:wait t)
+(use-package vertico :ensure t
   ;; Vertico provides a better completion UI than the built-in default.
   :demand t
   :config
@@ -693,6 +693,8 @@
                            :max-duration "10:00"
                            :min-duration 0
                            :max-gap 0))))))))
+
+(use-package org-roam :ensure t)
 
 
 ;;; Input methods
