@@ -32,123 +32,128 @@
 
 ;;; Leader key
 
-(defvar-keymap +buffer-prefix-map
-  "b" #'bury-buffer
-  "d" #'kill-current-buffer
-  "l" #'ibuffer-list-buffers)
+(use-package general :ensure (:wait t) :demand t
+  ;; General provides a featureful key binding system. It makes defining leader
+  ;; key bindings much easier.
+  :init
+  (general-auto-unbind-keys)
+  (general-unbind :states '(normal motion) "SPC")
+  (general-unbind :keymaps '(magit-status-mode-map help-mode-map) "SPC")
 
-(defvar-keymap +file-prefix-map
-  "f" #'find-file
-  "F" #'find-file-other-window
-  "s" #'save-buffer
-  "r" #'recentf
+  :config
+  (general-define-key
+   :states '(normal motion)
+   :prefix "SPC"
 
-  "D" (defun +delete-file-and-buffer ()
-        (interactive)
-        (let ((file (buffer-file-name)))
-          (kill-buffer (current-buffer))
-          (when file
-            (delete-file file))))
+   "SPC" #'consult-buffer
+   "x" #'execute-extended-command
+   "r" #'vertico-repeat
+   ":" #'pp-eval-expression
+   "d" #'dirvish
+   "u" #'universal-argument-more
 
-  "y" (defun +copy-file-path ()
-        (interactive)
-        (if-let* ((file (buffer-file-name)))
-            (progn
-              (kill-new file)
-              (message "Copied to clipboard => %s" file))
-          (user-error "Buffer is not visiting a file")))
+   "/" #'consult-ripgrep
+   "*" (defun +consult-ripgrep-symbol ()
+         (interactive)
+         (consult-ripgrep nil (format "%s" (symbol-at-point))))
 
-  "d" (defun +copy-file-directory ()
-        (interactive)
-        (if-let* ((file (buffer-file-name))
-                  (dir (file-name-directory file)))
-            (progn
-              (kill-new dir)
-              (message "Copied to clipboard => %s" dir))
-          (user-error "Buffer is not visiting a file")))
+   "<tab>" (defun +swap-buffers ()
+             "Switch between the previous buffer and the current one."
+             (interactive)
+             (switch-to-buffer nil))
 
-  "v" (defun +revisit-file ()
-        (interactive)
-        (if-let* ((file (buffer-file-name)))
-            (find-alternate-file file)
-          (user-error "Buffer is not visiting a file"))))
+   "p"  '(nil :which-key "project")
+   "p" project-prefix-map
 
-(defvar-keymap +narrowing-prefix-map
-  "f" #'narrow-to-defun
-  "r" #'narrow-to-region
-  "w" #'widen)
+   "h"  '(nil :which-key "help")
+   "h" help-map
 
-(defvar-keymap +comment-prefix-map
-  "r" #'comment-dwim)
+   "b"  '(nil :which-key "buffers")
+   "bb" #'bury-buffer
+   "bd" #'kill-current-buffer
+   "bl" #'ibuffer-list-buffers
 
-(defvar-keymap +git/goto-prefix-map
-  "s" #'magit-status
-  "?" (defun +goto-messages ()
-        (interactive)
-        (display-buffer "*Messages*"))
+   "f"  '(nil :which-key "files")
+   "ff" #'find-file
+   "fF" #'find-file-other-window
+   "fs" #'save-buffer
+   "fr" #'recentf
 
-  "i" (defun +goto-init-el-file ()
-        (interactive)
-        (find-file (expand-file-name "init.el" user-emacs-directory)))
+   "fD" (defun +delete-file-and-buffer ()
+          (interactive)
+          (let ((file (buffer-file-name)))
+            (kill-buffer (current-buffer))
+            (when file
+              (delete-file file))))
 
-  "n" (defun +goto-nix-file ()
+   "fy" (defun +copy-file-path ()
+          (interactive)
+          (if-let* ((file (buffer-file-name)))
+              (progn
+                (kill-new file)
+                (message "Copied to clipboard => %s" file))
+            (user-error "Buffer is not visiting a file")))
+
+   "fd" (defun +copy-file-directory ()
+          (interactive)
+          (if-let* ((file (buffer-file-name))
+                    (dir (file-name-directory file)))
+              (progn
+                (kill-new dir)
+                (message "Copied to clipboard => %s" dir))
+            (user-error "Buffer is not visiting a file")))
+
+   "fv" (defun +revisit-file ()
+          (interactive)
+          (if-let* ((file (buffer-file-name)))
+              (find-alternate-file file)
+            (user-error "Buffer is not visiting a file")))
+
+   "n"  '(nil :which-key "narrowing")
+   "nf" #'narrow-to-defun
+   "nr" #'narrow-to-region
+   "nw" #'widen
+
+   "c"  '(nil :which-key "comments")
+   "cr" #'comment-dwim
+
+   "g"  '(nil :which-key "git/goto")
+   "gs" #'magit-status
+   "g?" (defun +goto-messages ()
+          (interactive)
+          (display-buffer "*Messages*"))
+
+   "gi" (defun +goto-init-el-file ()
+          (interactive)
+          (find-file (expand-file-name "init.el" user-emacs-directory)))
+
+   "gn" (defun +goto-nix-file ()
           (interactive)
           (project-find-file-in  "flake.nix" nil
-                                 (project-current nil "~/.config/nix-configuration"))))
+                                 (project-current nil "~/.config/nix-configuration")))
 
-(defvar-keymap +org-prefix-map
-  "i" (defun +goto-org-roam-index ()
-        (interactive)
-        (find-file (expand-file-name "roam/notes/index.org" org-directory)))
+   "o"  '(nil :which-key "org")
+   "oi" (defun +goto-org-roam-index ()
+          (interactive)
+          (find-file (expand-file-name "roam/notes/index.org" org-directory)))
 
-  "a" (defun +org-agenda-dwim ()
-        (interactive)
-        (require 'org)
-        (require 'org-clock)
-        (org-agenda nil (if (org-clocking-p) "w" "p"))))
+   "oa" (defun +org-agenda-dwim ()
+          (interactive)
+          (require 'org)
+          (require 'org-clock)
+          (org-agenda nil (if (org-clocking-p) "w" "p")))
 
-(defvar-keymap +errors-prefix-map
-  "l" #'consult-flymake)
+   "e"  '(nil :which-key "errors")
+   "el" #'consult-flymake
 
-(defvar-keymap +windows-prefix-map
-  "d" #'delete-window
-  "o" #'delete-other-windows
-  "q" #'delete-window
-  "w" #'other-window
-  "/" #'split-window-horizontally
-  "-" #'split-window-vertically)
-
-(defvar-keymap +leader-map
-  :doc "Keymap for leader key (SPC)."
-  "SPC" #'consult-buffer
-  "x" #'execute-extended-command
-  "r" #'vertico-repeat
-  ":" #'pp-eval-expression
-  "c" +comment-prefix-map
-  "d" #'dirvish
-
-  "/" #'consult-ripgrep
-  "*" (defun +consult-ripgrep-symbol ()
-        (interactive)
-        (consult-ripgrep nil (format "%s" (symbol-at-point))))
-
-  "b" +buffer-prefix-map
-  "p" project-prefix-map
-  "f" +file-prefix-map
-  "n" +narrowing-prefix-map
-  "g" +git/goto-prefix-map
-  "o" +org-prefix-map
-  "w" +windows-prefix-map
-  "e" +errors-prefix-map
-  "h" help-map
-  "<tab>" (defun +swap-buffers ()
-            "Switch between the previous buffer and the current one."
-            (interactive)
-            (switch-to-buffer nil)))
-
-(add-hook 'evil-local-mode-hook (defun +bind-leader-key ()
-                                  (evil-local-set-key 'motion (kbd "SPC") +leader-map)
-                                  (evil-local-set-key 'normal (kbd "SPC") +leader-map)))
+   "w"  '(nil :which-key "windows")
+   "wd" #'delete-window
+   "wo" #'delete-other-windows
+   "wq" #'delete-window
+   "ww" #'other-window
+   "w/" #'split-window-horizontally
+   "w-" #'split-window-vertically
+   ))
 
 
 ;;; Theme
@@ -259,9 +264,7 @@
   (evil-mode +1)
 
   :bind
-  (:map evil-normal-state-map ("M-." . nil))
-  ;; Undefine useless forward-char binding.
-  (:map evil-motion-state-map ("SPC" . nil)))
+  (:map evil-normal-state-map ("M-." . nil)))
 
 (use-package vundo :ensure
   (vundo :host github :repo "casouri/vundo")
@@ -400,6 +403,7 @@
   :config
   (which-key-mode)
   :custom
+  (which-key-prefix-prefix "…")
   (which-key-idle-delay 0.4))
 
 (use-package consult :ensure t
