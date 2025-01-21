@@ -428,13 +428,13 @@
   ;; within completing-read.
   :bind
   (("C-@" . embark-act)
-   ("M-." . embark-dwim))
+   ("M-." . embark-dwim)))
 
-  :init
-  (use-package embark-consult :ensure t
-    :after (:any consult embark)
-    :demand t
-    :hook (embark-collect-mode . consult-preview-at-point-mode)))
+(use-package embark-consult :ensure t
+  ;; Integration embark with consult
+  :after (:any consult embark)
+  :demand t
+  :hook (embark-collect-mode . consult-preview-at-point-mode))
 
 (pushnew! completion-ignored-extensions
           ".DS_Store"
