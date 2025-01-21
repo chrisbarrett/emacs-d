@@ -233,6 +233,10 @@
   :demand t
   :config (save-place-mode +1))
 
+(use-package ws-butler :ensure t
+  ;; Automatically remove trailing whitespace on edited lines.
+  :hook (prog-mode text-mode))
+
 
 ;;; evil-mode
 
