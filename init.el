@@ -484,8 +484,9 @@
 
   :config
   (defun +eval-dwim (&optional beg end)
-    (interactive "r")
-    (if (region-active-p)
+    (interactive (when (region-active-p)
+                   (list beg end)))
+    (if (and beg and)
         (message "Eval region => %s" (eval-region beg end))
       (message "Eval defun => %s" (eval-defun nil))))
 
