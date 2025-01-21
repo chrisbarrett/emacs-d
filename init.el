@@ -439,6 +439,7 @@
   )
 
 (use-package magit :ensure t
+  ;; Magit is the definitive UX for working with git.
   :config
   (add-hook 'git-commit-mode-hook
             (defun +git-commit-initial-state ()
