@@ -517,6 +517,7 @@
 ;;; org-mode
 
 (setq org-directory "~/org")
+(setq org-roam-directory "~/org/roam")
 
 (use-package org
   :hook ((org-mode . abbrev-mode)
@@ -625,6 +626,11 @@
   :config (require '+agenda)
   :custom
   (org-agenda-files (expand-file-name "org-agenda-files" org-directory))
+
+  (org-agenda-text-search-extra-files `(agenda-archives ,(expand-file-name "archive.org" org-directory)))
+  (org-agenda-restore-windows-after-quit t)
+  (org-agenda-search-view-always-boolean t)
+  (org-archive-tag "ARCHIVED")
   (org-agenda-custom-commands
    (let ((today '(agenda ""
                          ((org-agenda-overriding-header "Today")
@@ -696,7 +702,56 @@
           '(:gap-ok-around ("12:20" "12:40" "4:00")
                            :max-duration "10:00"
                            :min-duration 0
-                           :max-gap 0))))))))
+                           :max-gap 0)))))))
+  :config
+
+  ;; Use page-break separator for sections
+
+  (setq org-agenda-block-separator (char-to-string ?\f))
+
+  (with-eval-after-load 'page-break-lines
+    (add-to-list 'page-break-lines-modes 'org-agenda-mode)
+
+    (define-advice org-agenda (:after (&rest _) draw-separator)
+      (page-break-lines--update-display-tables))
+
+    (define-advice org-agenda-redo (:after (&rest _) draw-separator)
+      (page-break-lines--update-display-tables)))
+
+  ;; Search for and update agenda files automatically
+
+  (defvar +org--agenda-update-process nil)
+
+  (defconst +agenda-files-update-script
+    (file-name-concat user-emacs-directory "scripts/update-agenda-files.sh"))
+
+  (defun +org-agenda-update-files ()
+    (interactive)
+    (unless (and +org--agenda-update-process (process-live-p +org--agenda-update-process))
+      (setq +org--agenda-update-process
+            (start-process "update-org-agenda-files" nil +agenda-files-update-script))))
+
+  (add-hook 'org-mode-hook
+            (defun +update-org-agenda-files ()
+              (add-hook 'after-save-hook
+                        #'+org-agenda-update-files
+                        nil
+                        t)))
+
+;;; Forget deleted agenda files without prompting
+  (define-advice org-check-agenda-file (:override (file) always-remove-missing)
+    (unless (file-exists-p file)
+      (org-remove-file file)
+      (throw 'nextfile t)))
+
+;;; Reveal context around item on TAB
+  (add-hook 'org-agenda-after-show-hook
+            (defun +org-reveal-context ()
+              (org-overview)
+              (org-reveal)
+              (org-fold-show-subtree)
+              (org-display-outline-path)))
+  )
 
 (use-package org-roam :ensure t)
 
