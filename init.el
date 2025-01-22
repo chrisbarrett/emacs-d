@@ -143,6 +143,7 @@
    "o"  '(nil :which-key "org")
    "oi" (defun +goto-org-roam-index ()
           (interactive)
+          (require 'org-roam)
           (find-file (file-name-concat org-roam-directory "notes/index.org")))
 
    "oa" (defun +org-agenda-dwim ()
