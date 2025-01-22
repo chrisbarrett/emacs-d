@@ -5,7 +5,7 @@
   (setq elpaca-core-date 20241219))
 
 (require 'elpaca-bootstrap
-         (expand-file-name "./elpaca-bootstrap.el" user-emacs-directory))
+         (file-name-concat user-emacs-directory "elpaca-bootstrap.el"))
 
 (setq inhibit-startup-screen t)
 (setq use-package-always-defer t)
@@ -17,7 +17,7 @@
 (unless (server-running-p)
   (server-start))
 
-(add-to-list 'load-path (expand-file-name "lisp" user-emacs-directory))
+(add-to-list 'load-path (file-name-concat user-emacs-directory "lisp"))
 
 (add-to-list 'trusted-content (expand-file-name (file-name-concat find-function-C-source-directory "../lisp/")))
 (add-to-list 'trusted-content (file-name-concat user-emacs-directory "early-init.el"))
@@ -130,7 +130,7 @@
 
    "gi" (defun +goto-init-el-file ()
           (interactive)
-          (find-file (expand-file-name "init.el" user-emacs-directory)))
+          (find-file (file-name-concat user-emacs-directory "init.el")))
 
    "gn" (defun +goto-nix-file ()
           (interactive)
@@ -140,7 +140,7 @@
    "o"  '(nil :which-key "org")
    "oi" (defun +goto-org-roam-index ()
           (interactive)
-          (find-file (expand-file-name "roam/notes/index.org" org-directory)))
+          (find-file (file-name-concat org-roam-directory "notes/index.org")))
 
    "oa" (defun +org-agenda-dwim ()
           (interactive)
@@ -538,7 +538,7 @@
   :hook ((org-mode . abbrev-mode)
          (org-mode . auto-fill-mode))
   :custom
-  (abbrev-file-name (expand-file-name "abbrev.el" org-directory))
+  (abbrev-file-name (file-name-concat org-directory "abbrev.el"))
 
   ;; visual settings
   (org-list-indent-offset 1)
@@ -643,8 +643,8 @@
   ("C-c a" #'org-agenda)
   :config (require '+agenda)
   :custom
-  (org-agenda-files (expand-file-name "org-agenda-files" org-directory))
-  (org-agenda-text-search-extra-files `(agenda-archives ,(expand-file-name "archive.org" org-directory)))
+  (org-agenda-files (file-name-concat org-directory "org-agenda-files"))
+  (org-agenda-text-search-extra-files `(agenda-archives ,(file-name-concat org-directory "archive.org")))
   (org-agenda-restore-windows-after-quit t)
   (org-agenda-search-view-always-boolean t)
   (org-archive-tag "ARCHIVED")
