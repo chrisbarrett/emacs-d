@@ -492,6 +492,15 @@
 
 (use-package project
   ;; Emacs' built-in project lib
+  :custom
+  (project-switch-commands
+   (defun +project-switch-magit-status ()
+     (interactive)
+     (let* ((proj (project-current t))
+            (root (project-root proj)))
+       (if (file-directory-p (file-name-concat root ".git"))
+           (magit-status-setup-buffer root)
+         (dirvish root)))))
   :config
   (project-remember-projects-under "~/.config")
   (project-remember-projects-under "~/src")
