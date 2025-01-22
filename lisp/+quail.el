@@ -1,9 +1,7 @@
 ;; -*- lexical-binding: t; -*-
 
 (require 'cl-lib)
-
-(eval-when-compile
-  (require 'quail))
+(require 'quail)
 
 (defmacro +quail-defun (package-name key &rest body)
   "Define a quail key to execute Lisp forms.

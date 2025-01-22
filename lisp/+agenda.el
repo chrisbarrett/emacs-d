@@ -6,6 +6,8 @@
 
 ;;; Code:
 
+(require 'org)
+
 (defun +agenda--any-scheduled-or-deadline-p ()
   (or (org-get-scheduled-time (point))
       (org-get-deadline-time (point))))
