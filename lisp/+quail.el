@@ -1,6 +1,12 @@
 ;; -*- lexical-binding: t; -*-
 
+(require 'cl-lib)
+
 (defmacro +quail-defun (package-name key &rest body)
+  "Define a quail key to execute Lisp forms.
+
+PACKAGE-NAME is the name of a quail package. When that quail package is
+active and user enters KEY then BODY forms will be executed."
   ;; https://emacs.stackexchange.com/questions/76725/how-to-implement-a-function-in-quail-define-rules-for-set-input-method
   (declare (indent 2))
   (cl-assert (stringp key))
