@@ -322,6 +322,18 @@
               (setf (alist-get ?` evil-surround-pairs-alist) '("`" . "'"))
               (setf (alist-get ?f evil-surround-pairs-alist) 'evil-surround-prefix-function))))
 
+(use-package evil-goggles :ensure t
+  ;; evil-goggles displays text highlights for changed regions.
+  ;;
+  ;; cf. volatile-highlights or goggles for non-evil configurations.
+  :init
+  (evil-goggles-mode +1)
+  :custom
+  (evil-goggles-duration 0.1)
+  (evil-goggles-pulse nil)
+  (evil-goggles-enable-delete nil)
+  (evil-goggles-enable-change nil))
+
 
 ;;; Completion
 
