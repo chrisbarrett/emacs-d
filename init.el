@@ -563,7 +563,7 @@
   (advice-add #'calculate-lisp-indent :override #'+elisp--calculate-lisp-indent-a))
 
 (use-package nix-ts-mode :ensure t
- :mode "\\.nix\\'")
+  :mode "\\.nix\\'")
 
 
 ;;; org-mode
@@ -687,38 +687,38 @@
   (org-archive-tag "ARCHIVED")
   (org-agenda-custom-commands
    (let ((today '(agenda ""
-                         ((org-agenda-overriding-header "Today")
-                          (org-agenda-use-time-grid t)
-                          (org-agenda-clockreport-parameter-plist '(:compact t
-                                                                             :link t
-                                                                             :maxlevel 3
-                                                                             :fileskip0 t
-                                                                             :filetitle t))
-                          (org-agenda-skip-function #'+agenda-view-skip-function))))
+                  ((org-agenda-overriding-header "Today")
+                   (org-agenda-use-time-grid t)
+                   (org-agenda-clockreport-parameter-plist '(:compact t
+                                                             :link t
+                                                             :maxlevel 3
+                                                             :fileskip0 t
+                                                             :filetitle t))
+                   (org-agenda-skip-function #'+agenda-view-skip-function))))
          (next-actions '(tags-todo "-project-tickler-inbox+TODO=\"TODO\""
-                                   ((org-agenda-overriding-header "Next Actions")
-                                    (org-agenda-skip-function #'+agenda-next-actions-skip-function))))
+                         ((org-agenda-overriding-header "Next Actions")
+                          (org-agenda-skip-function #'+agenda-next-actions-skip-function))))
 
          (inbox '(tags-todo "+inbox+TODO=\"TODO\""
-                            ((org-agenda-overriding-header "Inbox"))))
+                  ((org-agenda-overriding-header "Inbox"))))
 
          (delegated '(todo "WAIT"
-                           ((org-agenda-overriding-header "Delegated")
-                            (org-agenda-skip-function '(org-agenda-skip-entry-if 'scheduled)))))
+                      ((org-agenda-overriding-header "Delegated")
+                       (org-agenda-skip-function '(org-agenda-skip-entry-if 'scheduled)))))
 
          (projects '(tags-todo "+project+TODO=\"TODO\""
-                               ((org-agenda-overriding-header "Projects"))))
+                     ((org-agenda-overriding-header "Projects"))))
 
          (tickler
           '(todo "TODO"
-                 ((org-agenda-overriding-header "Tickler")
-                  (org-agenda-skip-function #'+agenda-tickler-section-skip-function))))
+            ((org-agenda-overriding-header "Tickler")
+             (org-agenda-skip-function #'+agenda-tickler-section-skip-function))))
 
 
          (unprocessed-notes
           '(tags-todo "+outline-project+TODO=\"TODO\""
-                      ((org-agenda-overriding-header "Unprocessed Notes")
-                       (org-agenda-skip-function #'+agenda-next-actions-skip-function))))
+            ((org-agenda-overriding-header "Unprocessed Notes")
+             (org-agenda-skip-function #'+agenda-next-actions-skip-function))))
 
          (defaults `((org-agenda-todo-ignore-scheduled 'future)
                      (org-habit-preceding-days 14)
@@ -754,9 +754,9 @@
          (org-agenda-tag-filter-preset (list "-ignore" (format "+%s" (timekeep-work-tag))))
          (org-agenda-clock-consistency-checks
           '(:gap-ok-around ("12:20" "12:40" "4:00")
-                           :max-duration "10:00"
-                           :min-duration 0
-                           :max-gap 0)))))))
+            :max-duration "10:00"
+            :min-duration 0
+            :max-gap 0)))))))
   :config
 
   ;; Use page-break separator for sections
