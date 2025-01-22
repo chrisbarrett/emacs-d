@@ -118,7 +118,7 @@
    "cr" #'comment-dwim
 
    "g"  '(nil :which-key "git/goto")
-   "gs" #'magit-status
+   "gg" #'magit-status
    "g?" (defun +goto-messages ()
           (interactive)
           (display-buffer "*Messages*"))
