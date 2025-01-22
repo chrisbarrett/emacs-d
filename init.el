@@ -42,6 +42,7 @@
   (general-define-key
    :states '(normal motion)
    :prefix "SPC"
+   :prefix-command '+leader-key
 
    "SPC" #'consult-buffer
    "x" #'execute-extended-command
@@ -278,9 +279,13 @@
   :demand t
   :custom
   ;; Ensure we do not overwrite the leader key binding.
-  (evil-collection-key-blacklist '("SPC"))
+  (evil-collection-key-blacklist '("SPC" "S-SPC"))
   :config
-  (evil-collection-init))
+  (evil-collection-init)
+  (define-advice evil-collection-magit-init (:after (&rest _) bind-leader)
+    (general-define-key :keymaps evil-collection-magit-maps
+                        :states '(normal)
+                        "SPC" #'+leader-key)))
 
 (use-package evil-surround :ensure t
   ;; Evil-surround makes the S key work as an operator to surround an
