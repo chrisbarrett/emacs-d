@@ -38,8 +38,6 @@
   :init
   (general-auto-unbind-keys)
   (general-unbind :states '(normal motion) "SPC")
-  (general-unbind :keymaps '(magit-status-mode-map help-mode-map) "SPC")
-
   :config
   (general-define-key
    :states '(normal motion)
@@ -278,6 +276,9 @@
   ;; consistently across many modes.
   :after evil
   :demand t
+  :custom
+  ;; Ensure we do not overwrite the leader key binding.
+  (evil-collection-key-blacklist '("SPC"))
   :config
   (evil-collection-init))
 
