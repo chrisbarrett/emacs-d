@@ -551,6 +551,10 @@
                                              (interactive)
                                              (describe-symbol (symbol-at-point))))))
   :init
+  (use-package checkdoc
+    :custom
+    (checkdoc-force-docstrings-flag nil))
+
   (use-package +elisp
     :general (:keymaps 'emacs-lisp-mode-map "C-c C-c" #'+elisp-eval-dwim)
 
