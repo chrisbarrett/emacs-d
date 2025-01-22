@@ -55,6 +55,7 @@
    ":" #'pp-eval-expression
    "d" #'dirvish
    "u" #'universal-argument-more
+   "i" #'consult-imenu
 
    "/" #'consult-ripgrep
    "*" (defun +consult-ripgrep-symbol ()
