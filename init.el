@@ -224,7 +224,11 @@
 
 (use-package dirvish :ensure t
   ;; Wrapper around `dired' that provides better UX.
-  )
+  :general
+  (:keymaps '(dirvish-mode-map dired-mode-map) :states 'normal
+            "q" #'dirvish-quit)
+  :init
+  (dirvish-override-dired-mode))
 
 (keymap-global-set "C-c SPC"
                    (defun +insert-nbsp ()
