@@ -558,7 +558,9 @@
             (defun +set-emacs-lisp-lookup-func ()
               (setq-local evil-lookup-func (defun +emacs-lisp-lookup-func ()
                                              (interactive)
-                                             (describe-symbol (symbol-at-point)))))))
+                                             (describe-symbol (symbol-at-point))))))
+
+  (advice-add #'calculate-lisp-indent :override #'+elisp--calculate-lisp-indent-a))
 
 (use-package nix-ts-mode :ensure t
  :mode "\\.nix\\'")
