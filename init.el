@@ -292,8 +292,25 @@
   ;; object with, e.g., matched parentheses.
   :after evil
   :demand t
+  ;; Use lowercase 's' for surround instead of 'S'.
+  :general (:states '(visual) :keymaps 'evil-surround-mode-map "s" #'evil-surround-region)
+  :custom
+  (evil-surround-pairs-alist '((?\( . ("(" . ")"))
+                               (?\[ . ("[" . "]"))
+                               (?\{ . ("{" . "}"))
+                               (?# . ("#{" . "}"))
+                               (?> . ("<" . ">"))
+                               (?f . evil-surround-function)
+                               (?t . evil-surround-read-tag)
+                               (?< . evil-surround-read-tag)))
   :config
-  (global-evil-surround-mode +1))
+  (global-evil-surround-mode +1)
+
+  (add-hook 'emacs-lisp-mode-hook
+            (defun +elisp-configure-evil-surround ()
+              (make-local-variable 'evil-surround-pairs-alist)
+              (setf (alist-get ?` evil-surround-pairs-alist) '("`" . "'"))
+              (setf (alist-get ?f evil-surround-pairs-alist) 'evil-surround-prefix-function))))
 
 
 ;;; Completion
