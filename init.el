@@ -19,6 +19,11 @@
 
 (add-to-list 'load-path (expand-file-name "lisp" user-emacs-directory))
 
+(add-to-list 'trusted-content (expand-file-name (file-name-concat find-function-C-source-directory "../lisp/")))
+(add-to-list 'trusted-content (file-name-concat user-emacs-directory "early-init.el"))
+(add-to-list 'trusted-content (file-name-concat user-emacs-directory "init.el"))
+(add-to-list 'trusted-content (file-name-concat user-emacs-directory "lisp/"))
+
 
 ;;; Macros
 
