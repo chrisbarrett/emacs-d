@@ -2,6 +2,9 @@
 
 (require 'cl-lib)
 
+(eval-when-compile
+  (require 'quail))
+
 (defmacro +quail-defun (package-name key &rest body)
   "Define a quail key to execute Lisp forms.
 
@@ -16,7 +19,7 @@ active and user enters KEY then BODY forms will be executed."
     `(let* ((,gkey ,key)
             (,gpackage-name ,package-name)
             (fname (make-symbol (format "+quail-%s-key-%s" ,gpackage-name ,gkey))))
-       (defalias fname (lambda (key idx)
+       (defalias fname (lambda (,(gensym "key") ,(gensym "idx"))
                          (quail-delete-region)
                          (setq quail-current-str nil
                                quail-converting nil

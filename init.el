@@ -2,7 +2,7 @@
 
 ;; TODO: Remove once Emacs 30 is out of pretest.
 (when (eq emacs-major-version 30)
-  (setq elpaca-core-date 20241219))
+  (defvar elpaca-core-date 20241219))
 
 (require 'elpaca-bootstrap
          (file-name-concat user-emacs-directory "elpaca-bootstrap.el"))
@@ -11,18 +11,21 @@
 (setq use-package-always-defer t)
 
 (setq ring-bell-function #'ignore)
-(setq backups-inhibited t)
 
 (require 'server)
 (unless (server-running-p)
   (server-start))
 
-(add-to-list 'load-path (file-name-concat user-emacs-directory "lisp"))
+(eval-and-compile
+  (add-to-list 'load-path (file-name-concat user-emacs-directory "lisp")))
 
-(add-to-list 'trusted-content (expand-file-name (file-name-concat find-function-C-source-directory "../lisp/")))
 (add-to-list 'trusted-content (file-name-concat user-emacs-directory "early-init.el"))
 (add-to-list 'trusted-content (file-name-concat user-emacs-directory "init.el"))
 (add-to-list 'trusted-content (file-name-concat user-emacs-directory "lisp/"))
+
+(use-package find-func
+  :config
+  (add-to-list 'trusted-content (expand-file-name (file-name-concat find-function-C-source-directory "../lisp/"))))
 
 
 ;;; Macros
@@ -169,6 +172,7 @@
 ;;; General editing
 
 (put 'narrow-to-region 'disabled nil)
+(setq sentence-end-double-space nil)
 
 (setq-default indent-tabs-mode nil)
 (setq-default require-final-newline t)
@@ -387,16 +391,20 @@
 (setq minibuffer-prompt-properties '(read-only t cursor-intangible t face minibuffer-prompt))
 (add-hook 'minibuffer-setup-hook #'cursor-intangible-mode)
 
-(define-advice completing-read-multiple (:filter-args (args) crm-indicator)
-  "Display the separator during `completing-read-multiple'."
-  (cons (format "[CRM%s] %s"
-                (replace-regexp-in-string
-                 (rx (or (and bos "[" (*? any) "]*")
-                         (and "[" (*? any) "]*" eos)))
-                 ""
-                 crm-separator)
-                (car args))
-        (cdr args)))
+(use-package crm
+  ;; Provides a variant of completing-read that allows users to enter multiple
+  ;; values, separated by a delimiter.
+  :config
+  (define-advice completing-read-multiple (:filter-args (args) crm-indicator)
+    "Display the separator during `completing-read-multiple'."
+    (cons (format "[CRM%s] %s"
+                  (replace-regexp-in-string
+                   (rx (or (and bos "[" (*? any) "]*")
+                           (and "[" (*? any) "]*" eos)))
+                   ""
+                   crm-separator)
+                  (car args))
+          (cdr args))))
 
 (use-package corfu :ensure t
   ;; Corfu provides in-buffer completions as you type.
@@ -505,6 +513,8 @@
        (if (file-directory-p (file-name-concat root ".git"))
            (magit-status-setup-buffer root)
          (dirvish root)))))
+
+  :autoload project-remember-projects-under
   :config
   (project-remember-projects-under "~/.config")
   (project-remember-projects-under "~/src")
@@ -544,13 +554,11 @@
 
 ;;; org-mode
 
-(setq org-directory "~/org")
-(setq org-roam-directory "~/org/roam")
-
 (use-package org
   :hook ((org-mode . abbrev-mode)
          (org-mode . auto-fill-mode))
   :custom
+  (org-directory "~/org")
   (abbrev-file-name (file-name-concat org-directory "abbrev.el"))
 
   ;; visual settings
@@ -602,11 +610,12 @@
   ;; Automatically enter insert state when inserting new headings, logbook notes
   ;; or when using `org-capture'.
 
+  :preface
   (defun +org-enter-evil-insert-state (&rest _)
     (when (and (bound-and-true-p evil-mode)
                (called-interactively-p nil))
       (evil-insert-state)))
-
+  :config
   (dolist (cmd '(org-insert-heading
                  org-insert-heading-respect-content
                  org-insert-todo-heading-respect-content
@@ -627,7 +636,8 @@
     (add-to-list 'org-file-apps '(directory . emacs)))
 
   ;; Don't show secondary selection when running `org-show-todo-tree'.
-  (advice-add #'org-highlight-new-match :override #'ignore)
+  :functions org-highlight-new-match
+  :config (advice-add #'org-highlight-new-match :override #'ignore)
   )
 
 (use-package org-habit
@@ -783,7 +793,9 @@
               (org-display-outline-path)))
   )
 
-(use-package org-roam :ensure t)
+(use-package org-roam :ensure t
+  :custom
+  (org-roam-directory "~/org/roam"))
 
 
 ;;; Input methods
@@ -791,7 +803,8 @@
 (setq default-input-method "french-postfix")
 
 (with-eval-after-load "quail/latin-post"
-  (require '+quail)
+  (eval-and-compile
+    (require '+quail))
 
   (message "Initializing custom keybindings for latin-post")
   
