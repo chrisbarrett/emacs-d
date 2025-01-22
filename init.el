@@ -630,20 +630,17 @@
     :after org-agenda
     :demand t
     :config
-    (evil-org-agenda-set-keys)))
+    (evil-org-agenda-set-keys)
+    (evil-define-key 'motion org-agenda-mode-map
+      (kbd "SPC") nil
+      (kbd "/") #'org-agenda-filter)))
 
 (use-package org-agenda
   :general
   ("C-c a" #'org-agenda)
-  :general-config
-  (:states 'normal :keymaps 'org-agenda-mode-map
-           "SPC" #'+leader-key
-           "/" #'org-agenda-filter)
-
   :config (require '+agenda)
   :custom
   (org-agenda-files (expand-file-name "org-agenda-files" org-directory))
-
   (org-agenda-text-search-extra-files `(agenda-archives ,(expand-file-name "archive.org" org-directory)))
   (org-agenda-restore-windows-after-quit t)
   (org-agenda-search-view-always-boolean t)
