@@ -543,25 +543,21 @@
 ;;; Programming modes
 
 (use-package elisp-mode
-  :general-config (:keymaps 'emacs-lisp-mode-map
-                            "C-c RET" #'pp-macroexpand-last-sexp
-                            "C-c C-c" #'+eval-dwim)
+  :general-config (:keymaps 'emacs-lisp-mode-map "C-c RET" #'pp-macroexpand-last-sexp)
   :config
-  (defun +eval-dwim (&optional beg end)
-    (interactive (when (region-active-p)
-                   (list (region-beginning) (region-end))))
-    (if (and beg end)
-        (message "Eval region => %s" (eval-region beg end))
-      (message "Eval defun => %s" (eval-defun nil))))
-
   (add-hook 'emacs-lisp-mode-hook
             (defun +set-emacs-lisp-lookup-func ()
               (setq-local evil-lookup-func (defun +emacs-lisp-lookup-func ()
                                              (interactive)
                                              (describe-symbol (symbol-at-point))))))
+  :init
+  (use-package +elisp
+    :general (:keymaps 'emacs-lisp-mode-map "C-c C-c" #'+elisp-eval-dwim)
 
-  (require '+elisp)
-  (advice-add #'calculate-lisp-indent :override #'+elisp--calculate-lisp-indent-a))
+    ;; Improve plist indentation
+    :autoload +elisp--calculate-lisp-indent-a
+    :init
+    (advice-add #'calculate-lisp-indent :override #'+elisp--calculate-lisp-indent-a)))
 
 (use-package nix-ts-mode :ensure t
   :mode "\\.nix\\'")
