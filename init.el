@@ -560,6 +560,7 @@
                                              (interactive)
                                              (describe-symbol (symbol-at-point))))))
 
+  (require '+elisp)
   (advice-add #'calculate-lisp-indent :override #'+elisp--calculate-lisp-indent-a))
 
 (use-package nix-ts-mode :ensure t
