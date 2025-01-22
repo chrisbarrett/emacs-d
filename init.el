@@ -294,8 +294,7 @@
 (use-package evil-surround :ensure t
   ;; Evil-surround makes the S key work as an operator to surround an
   ;; object with, e.g., matched parentheses.
-  :after evil
-  :demand t
+  :hook ((text-mode prog-mode) . evil-surround-mode)
   ;; Use lowercase 's' for surround instead of 'S'.
   :general (:states '(visual) :keymaps 'evil-surround-mode-map "s" #'evil-surround-region)
   :custom
@@ -307,8 +306,6 @@
                                (?f . evil-surround-function)
                                (?t . evil-surround-read-tag)
                                (?< . evil-surround-read-tag)))
-  :init
-  (global-evil-surround-mode +1)
 
   :config
   (add-hook 'emacs-lisp-mode-hook
