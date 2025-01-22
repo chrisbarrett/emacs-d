@@ -212,9 +212,9 @@
   ;; c.f. `next-error' and friends, which operate on compilation & grep results
   ;; across any number of buffers.
   :hook (prog-mode . flymake-mode)
-  :bind (:map flymake-mode-map
-              ("M-n" . flymake-goto-next-error)
-              ("M-p" . flymake-goto-prev-error)))
+  :general-config (:keymaps 'flymake-mode-map
+                            "M-n" #'flymake-goto-next-error
+                            "M-p" #'flymake-goto-prev-error))
 
 (use-package dirvish :ensure t
   ;; Wrapper around `dired' that provides better UX.
@@ -227,9 +227,9 @@
 
 (use-package winner
   ;; Provides undo/redo for buffer & window layout changes.
-  :bind (:map winner-mode-map
-              ("C-," . winner-undo)
-              ("C-." . winner-redo))
+  :general-config (:keymaps 'winner-mode-map
+                            "C-," #'winner-undo
+                            "C-." #'winner-redo)
   :init
   (winner-mode +1)
   :config
@@ -252,23 +252,20 @@
   ;; Evil is a better vim emulation implementation than the one that
   ;; ships with Emacs.
   :demand t
-  :init
-  (setq evil-want-keybinding nil)
-  (setq evil-want-integration t)
+  :general-config (:states 'normal "M-." nil)
   :custom
+  (evil-want-keybinding nil)
+  (evil-want-integration t)
   (evil-symbol-word-search t)
   (evil-undo-system 'undo-redo)
   (evil-v$-excludes-newline t)
-  :config
-  (evil-mode +1)
-
-  :bind
-  (:map evil-normal-state-map ("M-." . nil)))
+  :init
+  (evil-mode +1))
 
 (use-package vundo :ensure
   (vundo :host github :repo "casouri/vundo")
   ;; Visualise the Emacs undo history.
-  :bind ("C-x u" . vundo)
+  :general ("C-x u" #'vundo)
   :config
   (setq vundo-glyph-alist vundo-unicode-symbols))
 
@@ -280,8 +277,9 @@
   :custom
   ;; Ensure we do not overwrite the leader key binding.
   (evil-collection-key-blacklist '("SPC" "S-SPC"))
-  :config
+  :init
   (evil-collection-init)
+  :config
   (define-advice evil-collection-magit-init (:after (&rest _) bind-leader)
     (general-define-key :keymaps evil-collection-magit-maps
                         :states '(normal)
@@ -303,9 +301,10 @@
                                (?f . evil-surround-function)
                                (?t . evil-surround-read-tag)
                                (?< . evil-surround-read-tag)))
-  :config
+  :init
   (global-evil-surround-mode +1)
 
+  :config
   (add-hook 'emacs-lisp-mode-hook
             (defun +elisp-configure-evil-surround ()
               (make-local-variable 'evil-surround-pairs-alist)
@@ -318,48 +317,41 @@
 (use-package vertico :ensure t
   ;; Vertico provides a better completion UI than the built-in default.
   :demand t
-  :config
-
   :custom
   (vertico-preselect 'no-prompt)
   (vertico-cycle t)
-
-  :bind (:map vertico-map
-              ("C-<return>" . minibuffer-complete-and-exit))
-
-  :config
+  :general-config (:keymaps 'vertico-map
+                            "C-<return>" #'minibuffer-complete-and-exit
+                            "RET" #'vertico-directory-enter
+                            "DEL" #'vertico-directory-delete-char
+                            "C-l" #'vertico-insert
+                            "C-h" #'vertico-directory-delete-word
+                            "M-l" #'vertico-insert
+                            "M-h" #'vertico-directory-delete-word
+                            "M-P" #'vertico-repeat-previous
+                            "M-N" #'vertico-repeat-next)
+  :init
   (vertico-mode +1)
 
   (use-package vertico-directory
     ;; Extension that teaches vertico how to operate on filename
     ;; components in a more ergonomic way.
     :demand t
-    :hook (rfn-eshadow-update-overlay . vertico-directory-tidy)
-    :bind (:map vertico-map
-                ("RET" . vertico-directory-enter)
-                ("DEL" . vertico-directory-delete-char)
-                ("C-l" . vertico-insert)
-                ("C-h" . vertico-directory-delete-word)
-                ("M-l" . vertico-insert)
-                ("M-h" . vertico-directory-delete-word)))
+    :hook (rfn-eshadow-update-overlay . vertico-directory-tidy))
 
   (use-package vertico-repeat
     ;; Quickly restore the previous vertico command you ran.
     :hook (minibuffer-setup . vertico-repeat-save)
     :config
     (with-eval-after-load 'savehist
-      (add-to-list 'savehist-additional-variables 'vertico-repeat-history))
-    :bind
-    (:map vertico-map
-     ("M-P" . vertico-repeat-previous)
-     ("M-N" . vertico-repeat-next))))
+      (add-to-list 'savehist-additional-variables 'vertico-repeat-history))))
 
 (use-package marginalia :ensure t
   ;; Marginalia shows extra information alongside minibuffer items
   ;; during completion.
   :after vertico
   :demand t
-  :config
+  :init
   (marginalia-mode +1))
 
 (use-package orderless :ensure t
@@ -402,29 +394,27 @@
 (use-package corfu :ensure t
   ;; Corfu provides in-buffer completions as you type.
   :demand t
+  :general-config (:keymaps 'corfu-map "RET" #'corfu-send)
   :custom
   (corfu-auto t)
   (corfu-quit-no-match t)
   (tab-always-indent 'complete)
   (corfu-popupinfo-delay '(1.0 . 0.5))
-  :config
+  :init
   (global-corfu-mode +1)
-  (corfu-popupinfo-mode +1)
-
   (add-hook 'eshell-mode-hook (defun +corfu-eshell-setup ()
                                 (setq-local corfu-auto nil)
-                                (corfu-mode)))
-
-  :bind
-  (:map corfu-map ("RET" . corfu-send)))
+                                (corfu-mode +1)))
+  :config
+  (corfu-popupinfo-mode +1))
 
 (setq text-mode-ispell-word-completion nil)
 
 (use-package which-key
   ;; which-key displays a UI popup of available key commands as you type.
   :demand t
-  :config
-  (which-key-mode)
+  :init
+  (which-key-mode +1)
   :custom
   (which-key-prefix-prefix "…")
   (which-key-idle-delay 0.4))
@@ -449,9 +439,9 @@
 (use-package embark :ensure t
   ;; Embark provides a UI for performing contextual actions on selected items
   ;; within completing-read.
-  :bind
-  (("C-@" . embark-act)
-   ("M-." . embark-dwim)))
+  :general
+  ("C-@" #'embark-act
+   "M-." #'embark-dwim))
 
 (use-package embark-consult :ensure t
   ;; Integration embark with consult
@@ -515,10 +505,9 @@
 ;;; Programming modes
 
 (use-package elisp-mode
-  :bind (:map emacs-lisp-mode-map
-              ("C-c RET" . pp-macroexpand-last-sexp)
-              ("C-c C-c" . +eval-dwim))
-
+  :general-config (:keymaps 'emacs-lisp-mode-map
+                            "C-c RET" #'pp-macroexpand-last-sexp
+                            "C-c C-c" #'+eval-dwim)
   :config
   (defun +eval-dwim (&optional beg end)
     (interactive (when (region-active-p)
@@ -545,8 +534,6 @@
 (use-package org
   :hook ((org-mode . abbrev-mode)
          (org-mode . auto-fill-mode))
-  :init
-  (use-package org-habit :after org :demand t)
   :custom
   (abbrev-file-name (expand-file-name "abbrev.el" org-directory))
 
@@ -629,6 +616,7 @@
 
 (use-package org-habit
   :custom
+  (org-habit-graph-column 72)
   (org-habit-today-glyph ?▲)
   (org-habit-completed-glyph ?✓))
 
@@ -645,7 +633,13 @@
     (evil-org-agenda-set-keys)))
 
 (use-package org-agenda
-  :bind (("C-c a" . org-agenda))
+  :general
+  ("C-c a" #'org-agenda)
+  :general-config
+  (:states 'normal :keymaps 'org-agenda-mode-map
+           "SPC" #'+leader-key
+           "/" #'org-agenda-filter)
+
   :config (require '+agenda)
   :custom
   (org-agenda-files (expand-file-name "org-agenda-files" org-directory))
@@ -761,13 +755,13 @@
                         nil
                         t)))
 
-;;; Forget deleted agenda files without prompting
+  ;; Forget deleted agenda files without prompting
   (define-advice org-check-agenda-file (:override (file) always-remove-missing)
     (unless (file-exists-p file)
       (org-remove-file file)
       (throw 'nextfile t)))
 
-;;; Reveal context around item on TAB
+  ;; Reveal context around item on TAB
   (add-hook 'org-agenda-after-show-hook
             (defun +org-reveal-context ()
               (org-overview)
