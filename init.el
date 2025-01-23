@@ -573,6 +573,7 @@
 (use-package org
   :hook ((org-mode . abbrev-mode)
          (org-mode . auto-fill-mode))
+
   :custom
   (org-directory "~/org")
   (abbrev-file-name (file-name-concat org-directory "abbrev.el"))
@@ -654,6 +655,17 @@
   ;; Don't show secondary selection when running `org-show-todo-tree'.
   :functions org-highlight-new-match
   :config (advice-add #'org-highlight-new-match :override #'ignore)
+
+  ;; Make C-c C-k either cut subtrees or cancel open notes.
+  :general-config
+  (:map 'org-mode-map "C-c C-k" #'+org-cut-subtree-or-cancel-note)
+  :config
+  (defun +org-cut-subtree-or-cancel-note ()
+    (interactive)
+    (if org-finish-function
+        (org-finish-function
+	 (let ((org-note-abort t)) (funcall org-finish-function)))
+      (org-cut-subtree)))
   )
 
 (use-package org-habit
