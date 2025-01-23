@@ -657,6 +657,8 @@
   )
 
 (use-package org-habit
+  :after org-agenda
+  :demand t
   :custom
   (org-habit-graph-column 72)
   (org-habit-today-glyph ?▲)
