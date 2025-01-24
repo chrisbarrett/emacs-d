@@ -1041,6 +1041,7 @@
   (org-enforce-todo-dependencies t)
   (org-hierarchical-todo-statistics nil)
   (org-use-property-inheritance t)
+  (org-log-into-drawer t)
 
   ;; babel & src support
   (org-edit-src-content-indentation 0)
