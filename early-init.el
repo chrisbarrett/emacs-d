@@ -21,17 +21,12 @@
 ;; Configure theme early to ensure we don't observe the change during the
 ;; startup process.
 
-(use-package +theme
-  :demand t
-  :autoload +theme-update
-  :init
-  (setq +theme-light 'modus-operandi)
-  (setq +theme-dark 'modus-vivendi)
-  :custom
-  (modus-themes-italic-constructs t)
-  (modus-themes-bold-constructs nil)
-  :config
-  (+theme-update))
+(setq +theme-light 'modus-operandi)
+(setq +theme-dark 'modus-vivendi)
+(setq modus-themes-italic-constructs t)
+(setq modus-themes-bold-constructs nil)
+(require '+theme)
+(+theme-update)
 
 ;; Local Variables:
 ;; no-native-compile: t
