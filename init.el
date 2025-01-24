@@ -74,8 +74,30 @@
    "r" #'vertico-repeat
    ":" #'pp-eval-expression
    "d" #'dirvish
-   "u" #'universal-argument-more
+   "u" #'universal-argument
    "i" #'consult-imenu
+   "-" #'window-toggle-side-windows
+   "!" #'async-shell-command
+
+   "'" (general-predicate-dispatch #'poporg-dwim
+
+         ;; Exit indirect edit session if active
+
+         (bound-and-true-p poporg-mode) #'poporg-edit-exit
+         (bound-and-true-p edit-indirect--overlay) #'edit-indirect-commit
+         (bound-and-true-p org-src-mode) #'org-edit-src-exit
+
+         ;; Otherwise, open indirect-edit buffer
+
+         (and (derived-mode-p 'prog-mode)
+              ;; Are we in a string or comment? See: `parse-partial-sexp'
+              (or (nth 3 (syntax-ppss)) (nth 4 (syntax-ppss))))
+         #'poporg-dwim
+
+         (and (derived-mode-p 'prog-mode) (region-active-p)) #'edit-indirect-region
+         (equal (buffer-name) "*Edit Formulas*") #'org-table-fedit-finish
+         (derived-mode-p 'org-mode) #'org-edit-special
+         (and (derived-mode-p 'markdown-mode) (markdown-code-block-at-point-p))'markdown-edit-code-block)
 
    "/" #'consult-ripgrep
    "*" (defun +consult-ripgrep-symbol ()
@@ -95,11 +117,17 @@
 
    "a"  '(nil :which-key "apps")
    "ac" #'quick-calc
+   "aC" #'full-calc
+   "ae" #'eshell
+   "ar" (general-predicate-dispatch 'profiler-start
+          (and (featurep 'profiler) (profiler-running-p)) #'+profiler-stop-and-report)
 
    "b"  '(nil :which-key "buffers")
    "bb" #'bury-buffer
    "bd" #'kill-current-buffer
-   "bl" #'ibuffer-list-buffers
+   "bl" #'ibuffer
+   "bn" #'next-buffer
+   "bp" #'previous-buffer
 
    "f"  '(nil :which-key "files")
    "ff" #'find-file
@@ -175,15 +203,31 @@
    "e"  '(nil :which-key "errors")
    "el" #'consult-flymake
 
-   "kr" #'consult-yank-from-kill-ring
+   "kr" #'consult-yank-pop
+
+   "t"  '(nil :which-key "toggles")
+   "td" #'dirvish-side
+   "tf" #'global-display-fill-column-indicator-mode
+   "ti" #'indent-bars-mode
+   "tl" #'global-display-line-numbers-mode
+   "tm" #'toggle-input-method
+   "ts" #'spell-fu-mode
+   "tr" #'read-only-mode
+   ;; TODO: install indent-bars, spell-fu
 
    "w"  '(nil :which-key "windows")
+   "w-" #'+split-window-vertically-dwim
+   "w/" #'+split-window-horizontally-dwim
+   "w="  #'balance-windows
    "wd" #'delete-window
-   "wo" #'delete-other-windows
+   "wo"  #'+delete-nondedicated-windows
+   "wO"  #'delete-other-windows
    "wq" #'delete-window
+   "wr" #'evil-window-rotate-downwards
+   "ws" #'consult-register
+   "wS" 'window-configuration-to-register
+   "wt"  #'+toggle-window-dedication
    "ww" #'other-window
-   "w/" #'split-window-horizontally
-   "w-" #'split-window-vertically
    ))
 
 
@@ -1205,6 +1249,8 @@
 (use-package org-roam :ensure t
   :preface
   (setq org-roam-directory "~/org/roam"))
+
+(use-package poporg :ensure t)
 
 
 ;;; Input methods
