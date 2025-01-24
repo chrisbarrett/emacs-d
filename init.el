@@ -824,6 +824,17 @@
   :custom
   (help-window-select t))
 
+(use-package eldoc
+  ;; Display help hints in the echo area as you move around.
+  :config
+  ;; Teach eldoc to re-run after these commands.
+  (eldoc-add-command '+escape
+                     'evil-normal-state
+                     'evil-insert
+                     'evil-change
+                     'evil-delete
+                     'evil-replace))
+
 
 ;;; Text & programming modes
 
