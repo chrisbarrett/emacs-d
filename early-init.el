@@ -3,7 +3,12 @@
 (setq package-enable-at-startup nil)
 
 (setq frame-resize-pixelwise t)
+
+;; Always prompt for "y" or "n", rather than "yes" or "no".
 (setq use-short-answers t)
+;; For safety, don't treat space as a "y".
+(define-key y-or-n-p-map (kbd "SPC") nil)
+
 (setq inhibit-x-resources t)
 
 ;; Disable unneeded UI clutter.
