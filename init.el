@@ -93,6 +93,9 @@
    "h"  '(nil :which-key "help")
    "h" help-map
 
+   "a"  '(nil :which-key "apps")
+   "ac" #'quick-calc
+
    "b"  '(nil :which-key "buffers")
    "bb" #'bury-buffer
    "bd" #'kill-current-buffer
