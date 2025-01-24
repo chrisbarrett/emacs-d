@@ -345,15 +345,15 @@
   (ediff-show-clashes-only t)
   :config
   (with-eval-after-load 'org
-    (defun +ediff-reveal-org-content-around-hunk (&rest _)
+    (defun +ad-ediff-reveal-org-content-around-hunk (&rest _)
       (dolist (buf (list ediff-buffer-A ediff-buffer-B ediff-buffer-C))
         (when (and buf (buffer-live-p buf))
           (with-current-buffer buf
             (when (derived-mode-p 'org-mode)
               (org-reveal t))))))
 
-    (advice-add 'ediff-next-difference :after #'+ediff-reveal-org-content-around-hunk)
-    (advice-add 'ediff-previous-difference :after #'+ediff-reveal-org-content-around-hunk)))
+    (advice-add 'ediff-next-difference :after #'+ad-ediff-reveal-org-content-around-hunk)
+    (advice-add 'ediff-previous-difference :after #'+ad-ediff-reveal-org-content-around-hunk)))
 
 (use-package tabify
   ;; Tab-to-space conversion
