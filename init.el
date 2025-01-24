@@ -10,8 +10,6 @@
 (setq inhibit-startup-screen t)
 (setq use-package-always-defer t)
 
-(setq ring-bell-function #'ignore)
-
 (require 'server)
 (unless (server-running-p)
   (server-start))
@@ -173,11 +171,45 @@
 ;;; General editing
 
 (put 'narrow-to-region 'disabled nil)
-(setq sentence-end-double-space nil)
 
-(setq-default indent-tabs-mode nil)
-(setq-default require-final-newline t)
 (setq-default fill-column 80)
+(setq ring-bell-function #'ignore)
+
+(setq create-lockfiles nil)
+(setq auto-save-include-big-deletions t)
+
+;; Wrap words on word boundaries.
+(setq-default word-wrap t)
+(setq-default truncate-lines t)
+(setq truncate-partial-width-windows nil)
+
+(use-package simple
+  ;; Core editing functionality.
+  :custom
+  (kill-do-not-save-duplicates t)
+  :init
+  (setq-default indent-tabs-mode nil))
+
+(use-package paragraphs
+  ;; Emacs' core paragraph parser.
+  :custom
+  (sentence-end-double-space nil))
+
+(use-package files
+  ;; General built-in file IO.
+  :custom
+  (require-final-newline t)
+  (find-file-visit-truename t)
+  (make-backup-files nil)
+
+  :config
+  (define-advice after-find-file (:around (fn &rest args) dont-block-on-autosave-exists)
+    "Prevent the editor blocking to inform you when an autosave file exists."
+    (cl-letf (((symbol-function #'sit-for) #'ignore))
+      (apply fn args))))
+
+(use-package autorevert
+  )
 
 (use-package elec-pair
   ;; Automatically insert matching pairs.
@@ -252,7 +284,7 @@
     (keymap-set evil-normal-state-map "C-." #'winner-redo)))
 
 (use-package saveplace
-  ;; Save buffer position
+  ;; Save buffer position when re-visiting files, even across Emacs sessions.
   :demand t
   :config (save-place-mode +1))
 
@@ -261,6 +293,7 @@
   :hook (prog-mode text-mode))
 
 (use-package ediff
+  ;; File diff UI.
   :custom
   (ediff-diff-options "-w")
   (ediff-split-window-function #'split-window-horizontally)
@@ -277,6 +310,11 @@
 
     (advice-add 'ediff-next-difference :after #'+ediff-reveal-org-content-around-hunk)
     (advice-add 'ediff-previous-difference :after #'+ediff-reveal-org-content-around-hunk)))
+
+(use-package tabify
+  ;; Tab-to-space conversion
+  :custom
+  (tabify-regexp "^\t* [ \t]+"))
 
 
 ;;; evil-mode
@@ -454,8 +492,6 @@
   :config
   (corfu-popupinfo-mode +1))
 
-(setq text-mode-ispell-word-completion nil)
-
 (use-package which-key
   ;; which-key displays a UI popup of available key commands as you type.
   :demand t
@@ -559,7 +595,19 @@
   (help-window-select t))
 
 
-;;; Programming modes
+;;; Text & programming modes
+
+(use-package text-mode
+  ;; Emacs' general parent mode for non-programming-language text files.
+
+  :mode  ("/LICENSE\\'")
+
+  ;; Not sure of the performance impact of this... leave off for now.
+  ;;
+  ;; :hook (text-mode . visual-line-mode)
+
+  :custom
+  (text-mode-ispell-word-completion nil))
 
 (use-package elisp-mode
   :general-config (:keymaps 'emacs-lisp-mode-map "C-c RET" #'pp-macroexpand-last-sexp)
@@ -584,6 +632,13 @@
 
 (use-package nix-ts-mode :ensure t
   :mode "\\.nix\\'")
+
+(use-package conf-mode
+  ;; Unix configuration files
+
+  :init
+  ;; Fall back to conf-mode for rc files.
+  (add-to-list 'auto-mode-alist (rx "rc" eos) 'append))
 
 
 ;;; org-mode
