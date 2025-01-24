@@ -711,7 +711,7 @@
                (setq this-command 'keyboard-quit)))))))
 
 (global-set-key [remap keyboard-quit] #'+escape)
-(keymap-set minibuffer-mode-map "ESC" #'+escape)
+(keymap-set minibuffer-mode-map "<escape>" #'+escape)
 
 
 ;;; Completion
