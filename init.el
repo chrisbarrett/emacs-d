@@ -199,6 +199,11 @@
           (require 'org)
           (require 'org-clock)
           (org-agenda nil (if (org-clocking-p) "w" "p")))
+   "og" #'org-capture-goto-last-stored
+   "ov" #'org-tags-view
+   "ok" #'org-capture
+   "ol" #'org-store-link
+   "of"  #'+roam-node-find
 
    "e"  '(nil :which-key "errors")
    "el" #'consult-flymake
