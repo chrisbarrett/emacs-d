@@ -431,7 +431,7 @@
 (use-package compile
   ;; Integration for running compilers and other processes from inside Emacs.
   :custom
-  (compilation-always-kill t) 
+  (compilation-always-kill t)
   (compilation-ask-about-save nil) ; automatically save before compiling.
   (compilation-scroll-output 'first-error)
   :config
@@ -1074,7 +1074,7 @@
     (require '+quail))
 
   (message "Initializing custom keybindings for latin-post")
-  
+
   (+quail-defun "french-postfix" ";"
     (delete-horizontal-space)
     (insert " ; "))
