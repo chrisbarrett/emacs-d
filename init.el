@@ -655,8 +655,9 @@
   :hook ((org-mode . abbrev-mode)
          (org-mode . auto-fill-mode))
 
+  :preface
+  (setq org-directory "~/org")
   :custom
-  (org-directory "~/org")
   (abbrev-file-name (file-name-concat org-directory "abbrev.el"))
 
   ;; visual settings
@@ -905,8 +906,8 @@
   )
 
 (use-package org-roam :ensure t
-  :custom
-  (org-roam-directory "~/org/roam"))
+  :preface
+  (setq org-roam-directory "~/org/roam"))
 
 
 ;;; Input methods
