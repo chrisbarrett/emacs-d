@@ -36,6 +36,35 @@
             (seq-union (eval ,gvar) ',elements)))))
 
 
+;;; Extra UI lifecycle hooks
+;;
+;; These are cribbed from Doom.
+
+(defvar +switch-buffer-hook nil)
+(defvar +switch-frame-hook nil)
+(defvar +switch-window-hook nil)
+
+(defun +run-switch-buffer-hooks-h (&optional _)
+  (let ((gc-cons-threshold most-positive-fixnum)
+        (inhibit-redisplay t))
+    (run-hooks '+switch-buffer-hook)))
+
+(defun +run-switch-window-or-frame-hooks-h (&optional _)
+  (let ((gc-cons-threshold most-positive-fixnum)
+        (inhibit-redisplay t))
+    (unless (equal (old-selected-frame) (selected-frame))
+      (run-hooks '+switch-frame-hook))
+    (unless (or (minibufferp)
+                (equal (old-selected-window) (minibuffer-window)))
+      (run-hooks '+switch-window-hook))))
+
+(add-hook 'after-init-hook
+          (defun +install-ui-hooks-h ()
+            (add-hook 'window-selection-change-functions #'+run-switch-window-or-frame-hooks-h)
+            (add-hook 'window-buffer-change-functions #'+run-switch-buffer-hooks-h)
+            (add-hook 'server-visit-hook #'+run-switch-buffer-hooks-h)))
+
+
 ;;; Leader key
 
 (use-package general :ensure (:wait t) :demand t
