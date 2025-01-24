@@ -545,8 +545,8 @@
   ;; A more lightweight spell-checker than the built-in.
   :hook (text-mode prog-mode conf-mode)
   :config
-  (spell-fu-dictionary-add "en_AU")
-  (spell-fu-dictionary-add "fr")
+  (spell-fu-dictionary-add (spell-fu-get-ispell-dictionary "en_AU"))
+  (spell-fu-dictionary-add (spell-fu-get-ispell-dictionary "fr"))
   (unless (executable-find "aspell")
     (warn "Could not find aspell program; spell checking will not work")))
 
