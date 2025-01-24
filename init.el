@@ -226,7 +226,34 @@
       (apply fn args))))
 
 (use-package autorevert
-  )
+  ;; Automatically revert buffers.
+  ;;
+  ;; This configuration is adapted from Doom; it disables the file watcher
+  ;; mechanism and instead auto-reverts based on users switching windows &
+  ;; buffers. This is much less resource-intensive.
+  :config
+  (defun +auto-revert-current-buffer-h ()
+    (unless (or auto-revert-mode (active-minibuffer-window))
+      (let ((auto-revert-mode t))
+        (auto-revert-handler))))
+
+  (defun +auto-revert-visible-buffers-h ()
+    "Auto revert stale buffers in visible windows, if necessary."
+    (dolist (buf (+visible-buffers))
+      (with-current-buffer buf
+			   (+auto-revert-current-buffer-h))))
+  :hook
+  (after-save . +auto-revert-visible-buffers-h)
+  (+switch-buffer . +auto-revert-current-buffer-h)
+  (+switch-window . +auto-revert-current-buffer-h)
+  :config
+  (add-function :after after-focus-change-function #'+auto-revert-visible-buffers-h)
+
+  :custom
+  (auto-revert-use-notify nil)
+  (auto-revert-stop-on-user-input nil)
+  ;; Only prompts for confirmation when buffer is unsaved.
+  (revert-without-query (list ".")))
 
 (use-package elec-pair
   ;; Automatically insert matching pairs.
