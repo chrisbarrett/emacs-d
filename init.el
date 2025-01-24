@@ -217,7 +217,7 @@
   :hook (prog-mode . hs-minor-mode))
 
 (add-hook 'find-file-hook
-          (defun +maybe-enable-readonly-mode ()
+          (defun +maybe-enable-readonly-mode-h ()
             (when (and (buffer-file-name)
                        (string-match-p (rx "/emacs/elpaca/") (buffer-file-name)))
               (read-only-mode +1))))
@@ -369,7 +369,7 @@
 
   :config
   (add-hook 'emacs-lisp-mode-hook
-            (defun +elisp-configure-evil-surround ()
+            (defun +elisp-configure-evil-surround-h ()
               (make-local-variable 'evil-surround-pairs-alist)
               (setf (alist-get ?` evil-surround-pairs-alist) '("`" . "'"))
               (setf (alist-get ?f evil-surround-pairs-alist) 'evil-surround-prefix-function))))
@@ -481,7 +481,7 @@
   (corfu-popupinfo-delay '(1.0 . 0.5))
   :init
   (global-corfu-mode +1)
-  (add-hook 'eshell-mode-hook (defun +corfu-eshell-setup ()
+  (add-hook 'eshell-mode-hook (defun +corfu-eshell-setup-h ()
                                 (setq-local corfu-auto nil)
                                 (corfu-mode +1)))
   :config
@@ -546,7 +546,7 @@
   ;; Magit is the definitive UX for working with git.
   :config
   (add-hook 'git-commit-mode-hook
-            (defun +git-commit-initial-state ()
+            (defun +git-commit-initial-state-h ()
               (when (and (bound-and-true-p evil-mode)
                          (thing-at-point-looking-at (rx bol (* space) eol)))
                 (evil-insert-state)))))
@@ -607,11 +607,12 @@
 (use-package elisp-mode
   :general-config (:keymaps 'emacs-lisp-mode-map "C-c RET" #'pp-macroexpand-last-sexp)
   :config
+  (defun +emacs-lisp-lookup-func ()
+    (describe-symbol (symbol-at-point)))
+
   (add-hook 'emacs-lisp-mode-hook
-            (defun +set-emacs-lisp-lookup-func ()
-              (setq-local evil-lookup-func (defun +emacs-lisp-lookup-func ()
-                                             (interactive)
-                                             (describe-symbol (symbol-at-point))))))
+            (defun +set-emacs-lisp-lookup-func-h ()
+              (setq-local evil-lookup-func #'+emacs-lisp-lookup-func)))
   :init
   (use-package checkdoc
     :custom
@@ -698,7 +699,7 @@
 
   ;; Prefer inserting headings with M-RET
   (add-hook 'org-metareturn-hook
-            (defun +org-metareturn-append-line ()
+            (defun +org-metareturn-append-line-h ()
               (when (org-in-item-p)
                 (org-insert-heading current-prefix-arg)
                 (evil-append-line 1)
@@ -708,7 +709,7 @@
   ;; or when using `org-capture'.
 
   :preface
-  (defun +org-enter-evil-insert-state (&rest _)
+  (defun +ad-org-enter-evil-insert-state (&rest _)
     (when (and (bound-and-true-p evil-mode)
                (called-interactively-p nil))
       (evil-insert-state)))
@@ -717,7 +718,7 @@
                  org-insert-heading-respect-content
                  org-insert-todo-heading-respect-content
                  org-insert-todo-heading))
-    (advice-add cmd :after #'+org-enter-evil-insert-state))
+    (advice-add cmd :after #'+ad-org-enter-evil-insert-state))
 
   (define-advice org-capture (:after (&rest _) insert-state)
     (when (and (bound-and-true-p evil-mode)
@@ -882,7 +883,7 @@
             (start-process "update-org-agenda-files" nil +agenda-files-update-script))))
 
   (add-hook 'org-mode-hook
-            (defun +update-org-agenda-files ()
+            (defun +update-org-agenda-files-h ()
               (add-hook 'after-save-hook
                         #'+org-agenda-update-files
                         nil
@@ -896,7 +897,7 @@
 
   ;; Reveal context around item on TAB
   (add-hook 'org-agenda-after-show-hook
-            (defun +org-reveal-context ()
+            (defun +org-reveal-context-h ()
               (org-overview)
               (org-reveal)
               (org-fold-show-subtree)
