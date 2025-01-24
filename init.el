@@ -491,6 +491,15 @@
 
 (setq redisplay-skip-fontification-on-input t)
 
+(use-package spell-fu :ensure t
+  ;; A more lightweight spell-checker than the built-in.
+  :hook (text-mode prog-mode conf-mode)
+  :config
+  (spell-fu-dictionary-add "en_AU")
+  (spell-fu-dictionary-add "fr")
+  (unless (executable-find "aspell")
+    (warn "Could not find aspell program; spell checking will not work")))
+
 
 ;;; evil-mode
 
