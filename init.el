@@ -176,6 +176,7 @@
 
    "g"  '(nil :which-key "git/goto")
    "gg" #'magit-status
+   "gl" #'magit-log-buffer-file
    "g?" (defun +goto-messages ()
           (interactive)
           (display-buffer "*Messages*"))
