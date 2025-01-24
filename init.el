@@ -260,6 +260,12 @@
   ;; Automatically remove trailing whitespace on edited lines.
   :hook (prog-mode text-mode))
 
+(use-package ediff
+  :custom
+  (ediff-diff-options "-w")
+  (ediff-split-window-function #'split-window-horizontally)
+  (ediff-window-setup-function #'ediff-setup-windows-plain))
+
 
 ;;; evil-mode
 
