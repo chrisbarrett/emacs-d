@@ -286,6 +286,9 @@
 (setq minibuffer-prompt-properties '(read-only t cursor-intangible t face minibuffer-prompt))
 (add-hook 'minibuffer-setup-hook #'cursor-intangible-mode)
 
+(keymap-set minibuffer-local-map "C-p" #'previous-line-or-history-element)
+(keymap-set minibuffer-local-map "C-n" #'next-line-or-history-element)
+
 (use-package window
   ;; Window management stuff that's not in the C layer.
 
