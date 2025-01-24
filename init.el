@@ -393,10 +393,6 @@
   :demand t
   :config (save-place-mode +1))
 
-(use-package ws-butler :ensure t
-  ;; Automatically remove trailing whitespace on edited lines.
-  :hook (prog-mode text-mode))
-
 (use-package ediff
   ;; File diff UI.
   :custom
@@ -459,6 +455,17 @@
   :init
   (setq-default display-line-numbers-width 3)
   (setq-default display-line-numbers-widen t))
+
+(use-package ws-butler :ensure t
+  ;; Delete trailing whitespace on visited lines.
+  :hook (prog-mode text-mode conf-mode)
+  :config
+  (pushnew! ws-butler-global-exempt-modes
+            'special-mode
+            'comint-mode
+            'term-mode
+            'eshell-mode
+            'diff-mode))
 
 ;; Disable bidirectional text by default.
 (setq-default bidi-display-reordering 'left-to-right)
