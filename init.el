@@ -553,7 +553,13 @@
   (spell-fu-dictionary-add (spell-fu-get-ispell-dictionary "en_AU"))
   (spell-fu-dictionary-add (spell-fu-get-ispell-dictionary "fr"))
   (unless (executable-find "aspell")
-    (warn "Could not find aspell program; spell checking will not work")))
+    (warn "Could not find aspell program; spell checking will not work"))
+
+  (add-hook 'org-mode-hook
+            (defun +spell-fu-org-configure ()
+              (setq-local spell-fu-faces-exclude '(org-meta-line org-link org-code org-block
+                                                   org-block-begin-line org-block-end-line
+                                                   org-footnote)))))
 
 (use-package hl-todo :ensure t
   :hook (prog-mode yaml-ts-mode conf-mode)
