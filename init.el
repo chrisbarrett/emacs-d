@@ -649,7 +649,17 @@
   (which-key-mode +1)
   :custom
   (which-key-prefix-prefix "…")
-  (which-key-idle-delay 0.4))
+  (which-key-idle-delay 0.4)
+  (which-key-sort-order #'which-key-key-order-alpha)
+  (which-key-sort-uppercase-first nil)
+  (which-key-add-column-padding 1)
+  (which-key-min-display-lines 6)
+  (which-key-side-window-slot -10)
+  :config
+  (which-key-setup-side-window-bottom)
+  (add-hook 'which-key-init-buffer-hook
+            (defun +set-which-key-buffer-spacing-h ()
+              (setq-local line-spacing 3))))
 
 (use-package consult :ensure t
   ;; Consult provides commands for common tasks that leverage the Emacs
