@@ -163,11 +163,6 @@
    ))
 
 
-;;; Theme
-
-(defun +theme-update ())
-
-
 ;;; General editing
 
 (put 'narrow-to-region 'disabled nil)
