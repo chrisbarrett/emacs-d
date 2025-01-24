@@ -10,9 +10,6 @@
 (require 'elpaca-bootstrap
          (file-name-concat user-emacs-directory "elpaca-bootstrap.el"))
 
-(setq inhibit-startup-screen t)
-(setq use-package-always-defer t)
-
 (require 'server)
 (unless (server-running-p)
   (server-start))

@@ -1,6 +1,10 @@
 ;; -*- lexical-binding: t; -*-
 
+(setq inhibit-startup-screen t)
+
 (setq package-enable-at-startup nil)
+(setq use-package-always-defer t)
+(setq use-package-enable-imenu-support t)
 
 (setq frame-resize-pixelwise t)
 
