@@ -175,6 +175,8 @@
    "e"  '(nil :which-key "errors")
    "el" #'consult-flymake
 
+   "kr" #'consult-yank-from-kill-ring
+
    "w"  '(nil :which-key "windows")
    "wd" #'delete-window
    "wo" #'delete-other-windows
