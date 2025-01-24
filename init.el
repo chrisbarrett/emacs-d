@@ -392,8 +392,17 @@
 
 (use-package saveplace
   ;; Save buffer position when re-visiting files, even across Emacs sessions.
-  :demand t
-  :config (save-place-mode +1))
+  :init (save-place-mode +1)
+
+  :config
+  (define-advice save-place-find-file-hook (:after-while (&rest _) recenter)
+    "Recenter on cursor when loading a saved place."
+    (when buffer-file-name (ignore-errors (recenter))))
+
+  (define-advice save-place-alist-to-file (:around (fn &rest args) use-prin1-not-pp)
+    "Use the faster prin1 for saving history."
+    (cl-letf (((symbol-function #'pp) #'prin1))
+           (apply fn args))))
 
 (use-package ediff
   ;; File diff UI.
@@ -612,7 +621,32 @@
 
 (use-package savehist
   ;; Persists Emacs completion history. Used by vertico.
-  :init (savehist-mode +1))
+  :init (savehist-mode +1)
+  :custom
+  (savehist-autosave-interval nil) ; on exit
+  :config
+  (pushnew! savehist-additional-variables
+            'kill-ring
+            'register-alist
+            'mark-ring 'global-mark-ring
+            'search-ring 'regexp-search-ring)
+
+  (add-hook 'savehist-save-hook
+            (defun +remove-text-props-from-kill-ring-h ()
+              "Reduce size of savehist's cache by dropping text properties."
+              (setq kill-ring
+                    (mapcar #'substring-no-properties
+                            (cl-remove-if-not #'stringp kill-ring))
+                    register-alist
+                    (cl-loop for (reg . item) in register-alist
+                             if (stringp item)
+                             collect (cons reg (substring-no-properties item))
+                             else collect (cons reg item)))))
+  (add-hook 'savehist-save-hook
+            (defun +savehist-filter-registers-h ()
+              "Avoid attempts to save unprintable registers, e.g. window configurations."
+              (setq-local register-alist
+                          (seq-filter #'savehist-printable register-alist)))))
 
 (setq enable-recursive-minibuffers t)
 (setq read-file-name-completion-ignore-case t)
