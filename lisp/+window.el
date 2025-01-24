@@ -45,3 +45,5 @@ With prefix arg ARG, don't select the new window."
       (unless (or (equal win selected)
                   (window-dedicated-p win))
         (delete-window win)))))
+
+(provide '+window)
