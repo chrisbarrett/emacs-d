@@ -1252,10 +1252,7 @@
 
   (add-hook 'org-mode-hook
             (defun +update-org-agenda-files-h ()
-              (add-hook 'after-save-hook
-                        #'+org-agenda-update-files
-                        nil
-                        t)))
+              (add-hook 'after-save-hook #'+org-agenda-update-files nil t)))
 
   ;; Forget deleted agenda files without prompting
   (define-advice org-check-agenda-file (:override (file) always-remove-missing)
