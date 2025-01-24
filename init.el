@@ -716,6 +716,25 @@
 (global-set-key [remap keyboard-quit] #'+escape)
 (keymap-set minibuffer-mode-map "<escape>" #'+escape)
 
+(use-package evil-multiedit :ensure t
+  ;; Evil-compatible multiple cursors.
+  :after evil
+  :config
+  (evil-multiedit-default-keybinds)
+
+  :init
+  (defun +multiedit ()
+    (interactive)
+    (evil-normal-state)
+    (unless (eolp)
+      (forward-char -1))
+    (evil-multiedit-match-all))
+
+  :general
+  (:states 'visual
+           "v" (general-predicate-dispatch #'evil-multiedit-match-all
+                 (equal last-command 'evil-visual-char) #'+multiedit)))
+
 
 ;;; Completion
 
