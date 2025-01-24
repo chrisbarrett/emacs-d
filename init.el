@@ -200,12 +200,57 @@
 (setq-default truncate-lines t)
 (setq truncate-partial-width-windows nil)
 
+;; Tune scrolling behaviour
+(setq hscroll-margin 2)
+(setq hscroll-step 1)
+(setq scroll-conservatively 10)
+(setq scroll-margin 0)
+(setq scroll-preserve-screen-position t)
+(setq auto-window-vscroll nil)
+
+(blink-cursor-mode -1)
+(setq blink-matching-paren nil)
+(setq x-stretch-cursor nil)
+
+(setq use-dialog-box nil)
+
+;; Show keystrokes in minibuffer pretty much immediately.
+(setq echo-keystrokes 0.02)
+
+(use-package tooltip
+  ;; Emacs' built-in tooltip system. Just disable the thing.
+  :init (tooltip-mode -1))
+
 (use-package simple
   ;; Core editing functionality.
   :custom
   (kill-do-not-save-duplicates t)
+  ;; Hide commands that don't work in the current major-mode.
+  (read-extended-command-predicate #'command-completion-default-include-p)
   :init
   (setq-default indent-tabs-mode nil))
+
+;; Do not allow the cursor in the minibuffer prompt
+(setq minibuffer-prompt-properties '(read-only t cursor-intangible t face minibuffer-prompt))
+(add-hook 'minibuffer-setup-hook #'cursor-intangible-mode)
+
+(use-package window
+  ;; Window management stuff that's not in the C layer.
+
+  ;; Prefer vertical splits--better when the Emacs GUI window is wide rather
+  ;; than tall.
+  :custom
+  (split-width-threshold 160)
+  (split-height-threshold nil))
+
+(use-package frame
+  ;; Frame management settings
+  :custom
+  (window-divider-default-places t)
+  (window-divider-default-bottom-width 1)
+  (window-divider-default-right-width 1)
+  :init
+  (window-divider-mode +1))
 
 (use-package paragraphs
   ;; Emacs' core paragraph parser.
@@ -218,12 +263,18 @@
   (require-final-newline t)
   (find-file-visit-truename t)
   (make-backup-files nil)
+  (confirm-nonexistent-file-or-buffer nil)
+  (auto-mode-case-fold nil)
 
   :config
   (define-advice after-find-file (:around (fn &rest args) dont-block-on-autosave-exists)
     "Prevent the editor blocking to inform you when an autosave file exists."
     (cl-letf (((symbol-function #'sit-for) #'ignore))
       (apply fn args))))
+
+(use-package uniquify
+  :custom
+  (uniquify-buffer-name-style 'forward))
 
 (use-package autorevert
   ;; Automatically revert buffers.
@@ -293,6 +344,12 @@
   :config
   (recentf-mode +1))
 
+(use-package paren
+  :custom
+  (show-paren-delay 0.1)
+  (show-paren-when-point-inside-paren t)
+  (show-paren-when-point-in-periphery t))
+
 (use-package flymake
   ;; Frontend for in-buffer error checking & navigation.
   ;;
@@ -323,6 +380,10 @@
                             "C-." #'winner-redo)
   :init
   (winner-mode +1)
+  :custom
+  (winner-boring-buffers '("*Completions*" "*Compile-Log*" "*inferior-lisp*"
+                           "*Fuzzy Completions*" "*Apropos*" "*Help*" "*cvs*"
+                           "*Buffer List*" "*Ibuffer*" "*esh command on file*"))
   :config
   (with-eval-after-load 'evil
     (keymap-set evil-normal-state-map "C-." #'winner-redo)))
@@ -359,6 +420,58 @@
   ;; Tab-to-space conversion
   :custom
   (tabify-regexp "^\t* [ \t]+"))
+
+(use-package comint
+  ;; Emacs' basic system for hosting interactive command interpreters.
+  :custom
+  (comint-prompt-read-only t)
+  (comint-buffer-maximum-size 2048) ; double the default.
+  )
+
+(use-package compile
+  ;; Integration for running compilers and other processes from inside Emacs.
+  :custom
+  (compilation-always-kill t) 
+  (compilation-ask-about-save nil) ; automatically save before compiling.
+  (compilation-scroll-output 'first-error)
+  :config
+  (add-hook 'compilation-filter-hook #'ansi-color-compilation-filter)
+
+  ;; Automatically truncate long compilation bufers.
+  (autoload 'comint-truncate-buffer "comint" nil t)
+  (add-hook 'compilation-filter-hook #'comint-truncate-buffer))
+
+(use-package hide-mode-line :ensure
+  (hide-mode-line :host github :repo "hlissner/emacs-hide-mode-line")
+  ;; Disable the mode-line in situations where it's not useful.
+  :hook ((completion-list-mode Man-mode) . hide-mode-line-mode))
+
+(use-package highlight-numbers :ensure
+  (highlight-numbers :host github :repo "Fanael/highlight-numbers")
+  ;; Ensure numbers always have syntax highlighting applied, even if a
+  ;; major-mode neglects to configure that.
+  :hook (prog-mode conf-mode)
+  :custom (highlight-numbers-generic-regexp
+           (rx symbol-start (+ digit) (? "." (* digit)) symbol-end)))
+
+(use-package display-line-numbers
+  ;; Show line-numbers in the margin.
+  :init
+  (setq-default display-line-numbers-width 3)
+  (setq-default display-line-numbers-widen t))
+
+;; Disable bidirectional text by default.
+(setq-default bidi-display-reordering 'left-to-right)
+(setq-default bidi-paragraph-direction 'left-to-right)
+(setq bidi-inhibit-bpa t)
+
+;; Don't render cursors or regions in non-focused windows.
+(setq-default cursor-in-non-selected-windows nil)
+(setq highlight-nonselected-windows nil)
+
+(setq fast-but-imprecise-scrolling t)
+
+(setq redisplay-skip-fontification-on-input t)
 
 
 ;;; evil-mode
@@ -496,13 +609,6 @@
 (setq read-file-name-completion-ignore-case t)
 (setq read-buffer-completion-ignore-case t)
 (setq completion-ignore-case t)
-
-;; Hide commands that don't work in the current major-mode.
-(setq read-extended-command-predicate #'command-completion-default-include-p)
-
-;; Do not allow the cursor in the minibuffer prompt
-(setq minibuffer-prompt-properties '(read-only t cursor-intangible t face minibuffer-prompt))
-(add-hook 'minibuffer-setup-hook #'cursor-intangible-mode)
 
 (use-package crm
   ;; Provides a variant of completing-read that allows users to enter multiple

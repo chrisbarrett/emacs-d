@@ -15,11 +15,19 @@
 
 (setq inhibit-x-resources t)
 
-;; Disable unneeded UI clutter.
+(set-language-environment "UTF-8")
 
-(tool-bar-mode -1)
-(menu-bar-mode -1)
-(scroll-bar-mode -1)
+;; Disable unneeded UI clutter.
+;;
+;; Take a cue from Doom's playbook and avoid calling the functions which can
+;; trigger window-system redraws; instead, modify the frame parameters directly.
+
+(push '(menu-bar-lines . 0)   default-frame-alist)
+(push '(tool-bar-lines . 0)   default-frame-alist)
+(push '(vertical-scroll-bars) default-frame-alist)
+(setq menu-bar-mode nil)
+(setq tool-bar-mode nil)
+(setq scroll-bar-mode nil)
 
 (when (equal system-type 'darwin)
   (modify-all-frames-parameters '((undecorated . t))))
