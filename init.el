@@ -498,13 +498,54 @@
   ;; Evil is a better vim emulation implementation than the one that
   ;; ships with Emacs.
   :demand t
-  :general-config (:states 'normal "M-." nil)
+  :general-config
+  (:states 'emacs "ESC ESC" #'evil-normal-state)
   :custom
-  (evil-want-keybinding nil)
-  (evil-want-integration t)
   (evil-symbol-word-search t)
   (evil-undo-system 'undo-redo)
   (evil-v$-excludes-newline t)
+  (evil-want-C-g-bindings)
+  (evil-want-C-u-delete t)
+  (evil-want-C-u-scroll t)
+  (evil-want-C-w-delete t)
+  (evil-want-Y-yank-to-eol t)
+  (evil-want-abbrev-expand-on-insert-exit nil)
+  (evil-want-integration t)
+  (evil-want-keybinding nil)
+
+  ;; Cursor customisation
+  :init
+  (defun +sync-evil-cursor-colors-with-theme ()
+    (put 'cursor 'evil-emacs-color  (face-foreground 'warning))
+    (put 'cursor 'evil-normal-color (face-background 'cursor)))
+
+  (+sync-evil-cursor-colors-with-theme)
+  (add-hook 'modus-themes-post-load-hook #'+sync-evil-cursor-colors-with-theme)
+
+  (defun +evil-default-cursor-fn ()
+    (evil-set-cursor-color (get 'cursor 'evil-normal-color)))
+  (defun +evil-emacs-cursor-fn ()
+    (evil-set-cursor-color (get 'cursor 'evil-emacs-color)))
+
+  :config
+  (setq evil-default-cursor '+evil-default-cursor-fn)
+  (setq evil-normal-state-cursor 'box)
+  (setq evil-emacs-state-cursor  '(box +evil-emacs-cursor-fn))
+  (setq evil-insert-state-cursor 'bar)
+  (setq evil-visual-state-cursor 'hollow)
+
+  :config
+  (add-hook 'after-change-major-mode-hook
+            (defun +update-evil-shift-width ()
+              (setq-local evil-shift-width tab-width)))
+
+  :config
+  (add-hook '+escape-hook
+            (defun +evil-disable-ex-highlights-h ()
+              (when (evil-ex-hl-active-p 'evil-ex-search)
+                (evil-ex-nohighlight)
+                t)))
+
   :init
   (evil-mode +1))
 
@@ -752,6 +793,7 @@
   ;; Embark provides a UI for performing contextual actions on selected items
   ;; within completing-read.
   :general
+  (:states 'normal "M-." nil)
   ("C-@" #'embark-act
    "M-." #'embark-dwim))
 
