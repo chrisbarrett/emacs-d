@@ -544,6 +544,17 @@
   (unless (executable-find "aspell")
     (warn "Could not find aspell program; spell checking will not work")))
 
+(use-package hl-todo :ensure t
+  :hook (prog-mode yaml-ts-mode conf-mode)
+  :custom
+  (hl-todo-highlight-punctuation ":")
+  (hl-todo-keyword-faces
+        '(("TODO" warning bold)
+          ("FIXME" error bold)
+          ("HACK" font-lock-constant-face bold)
+          ("DEPRECATED" font-lock-doc-face bold)
+          ("NOTE" success bold))))
+
 
 ;;; evil-mode
 
