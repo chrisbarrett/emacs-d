@@ -65,6 +65,8 @@
   (general-unbind :states '(normal motion) "SPC")
   :config
   (require '+window)
+  (require '+roam)
+
   (general-define-key
    :states '(normal motion)
    :prefix "SPC"

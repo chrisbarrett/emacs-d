@@ -1,8 +1,5 @@
 ;; -*- lexical-binding: t; -*-
 
-(eval-when-compile
-  (require 'org-roam))
-
 (defun +roam-node-find (&optional other-window)
   "Find an org-roam node. See `org-roam-node-find'.
 
