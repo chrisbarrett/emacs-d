@@ -872,7 +872,7 @@
   ;; Embark provides a UI for performing contextual actions on selected items
   ;; within completing-read.
   :general
-  (:states 'normal "M-." nil)
+  (:states 'normal "M-." #'embark-dwim)
   ("C-@" #'embark-act
    "M-." #'embark-dwim))
 
