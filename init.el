@@ -1,5 +1,8 @@
 ;; -*- lexical-binding: t; -*-
 
+(eval-and-compile
+  (require '+corelib (file-name-concat user-emacs-directory "lisp/+corelib.el")))
+
 ;; TODO: Remove once Emacs 30 is out of pretest.
 (when (eq emacs-major-version 30)
   (defvar elpaca-core-date 20241219))
@@ -24,16 +27,6 @@
 (use-package find-func
   :config
   (add-to-list 'trusted-content (expand-file-name (file-name-concat find-function-C-source-directory "../lisp/"))))
-
-
-;;; Macros
-
-(defmacro pushnew! (var &rest elements)
-  "Add missing ELEMENTS to VAR in-place."
-  (let ((gvar (gensym)))
-    `(let ((,gvar ',var))
-       (set ,gvar
-            (seq-union (eval ,gvar) ',elements)))))
 
 
 ;;; Extra UI lifecycle hooks
