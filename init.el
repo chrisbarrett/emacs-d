@@ -566,6 +566,33 @@
   (evil-goggles-enable-delete nil)
   (evil-goggles-enable-change nil))
 
+;; Adapt the escape key customisation from Doom.
+
+;; TODO: Not sure if I need this hook yet.
+(defvar +escape-hook nil
+  "Hook functions run until success when ESC is pressed.")
+
+(defun +escape (&optional interactive)
+  "Run `+escape-hook'."
+  (interactive (list 'interactive))
+  (let ((inhibit-quit t))
+    (cond ((minibuffer-window-active-p (minibuffer-window))
+           ;; quit the minibuffer if open.
+           (when interactive
+             (setq this-command 'abort-recursive-edit))
+           (abort-recursive-edit))
+          ;; Run all escape hooks. If any returns non-nil, then stop there.
+          ((run-hook-with-args-until-success '+escape-hook))
+          ;; don't abort macros
+          ((or defining-kbd-macro executing-kbd-macro) nil)
+          ;; Back to the default
+          ((unwind-protect (keyboard-quit)
+             (when interactive
+               (setq this-command 'keyboard-quit)))))))
+
+(global-set-key [remap keyboard-quit] #'+escape)
+(keymap-set minibuffer-mode-map "ESC" #'+escape)
+
 
 ;;; Completion
 
