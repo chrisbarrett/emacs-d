@@ -218,7 +218,6 @@
    "tm" #'toggle-input-method
    "ts" #'spell-fu-mode
    "tr" #'read-only-mode
-   ;; TODO: install indent-bars, spell-fu
 
    "w"  '(nil :which-key "windows")
    "w-" #'+split-window-vertically-dwim
@@ -559,6 +558,15 @@
           ("HACK" font-lock-constant-face bold)
           ("DEPRECATED" font-lock-doc-face bold)
           ("NOTE" success bold))))
+
+(use-package indent-bars :ensure t
+  :hook (yaml-ts-mode python-ts-mode)
+  :custom
+  (indent-bars-starting-column 0)
+  (indent-bars-width-frac 0.15)
+  (indent-bars-color-by-depth nil)
+  (indent-bars-color '(font-lock-comment-face :face-bg nil :blend 0.425))
+  (indent-bars-highlight-current-depth nil))
 
 
 ;;; evil-mode
