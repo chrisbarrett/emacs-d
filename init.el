@@ -158,6 +158,7 @@
    "ap"  '(nil :which-key "elpaca")
    "app" #'elpaca-manager
    "apl" #'elpaca-log
+   "api" #'elpaca-info
    "apb" #'elpaca-browse
    "apv" #'elpaca-visit
 
