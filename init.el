@@ -216,8 +216,14 @@
    "cl" #'comment-line
 
    "g"  '(nil :which-key "git/goto")
+   "gb" #'magit-blame
+   "gd" #'magit-diff-buffer-file
+   "gf" #'magit-file-dispatch
    "gg" #'magit-status
    "gl" #'magit-log-buffer-file
+   "gr" #'browse-at-remote
+   "gt" #'git-timemachine-toggle
+   "gy" #'browse-at-remote-kill
 
    "g?" (defun +goto-messages ()
           (interactive)
