@@ -1449,6 +1449,8 @@
            "C-c C-i" #'org-roam-node-insert)
 
   :config
+  (org-roam-db-autosync-mode +1)
+
   (+local-leader-set-key 'org-mode-map
     "<tab>" #'org-roam-buffer-toggle)
 
