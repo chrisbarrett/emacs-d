@@ -1310,6 +1310,14 @@
 	 (let ((org-note-abort t)) (funcall org-finish-function)))
       (org-cut-subtree)))
 
+  ;; Highlight broken file links.
+  (org-link-set-parameters
+   "file" :face (lambda (path)
+                  (if (or (file-remote-p path)
+                          (file-exists-p path))
+                      'org-link
+                    '(warning org-link))))
+
   ;; Fix keybinding that gets clobbered by evil-collection.
   (define-advice evil-collection-org-setup (:after (&rest _) bind-leader)
     (general-define-key :keymaps (append evil-collection-magit-maps
