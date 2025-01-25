@@ -1211,10 +1211,18 @@
   (org-ellipsis " …")
   (org-hide-emphasis-markers t)
   (org-pretty-entities t)
-  (org-startup-folded 'showall)
+  (org-startup-folded nil)
   (org-startup-indented t)
   (org-startup-shrink-all-tables t)
   (org-startup-with-inline-images t)
+  (org-fontify-quote-and-verse-blocks t)
+  (org-fontify-whole-heading-line t)
+  (org-priority-faces
+   '((?A . error)
+     (?B . warning)
+     (?C . success)))
+
+  ;; (org-tags-column 0) ; REVISIT: Not sure what I want tags to do.
 
   ;; TODOs, checkboxes, stats, properties.
   (org-todo-keywords '((type "TODO(t)" "WAIT(w)" "|" "DONE(d)" "CANCELLED(c@)")))
@@ -1225,8 +1233,10 @@
 
   ;; babel & src support
   (org-edit-src-content-indentation 0)
-  (org-src-window-setup 'current-window)
+  (org-src-preserve-indentation t)
+  (org-src-window-setup 'other-window)
   (org-confirm-babel-evaluate nil)
+  (org-link-elisp-confirm-function nil)
   (org-babel-default-header-args:emacs-lisp '((:lexical . "yes")))
   (org-babel-python-command "python3")
   (org-babel-load-languages '((emacs-lisp . t)
@@ -1409,6 +1419,7 @@
   (org-agenda-restore-windows-after-quit t)
   (org-agenda-search-view-always-boolean t)
   (org-agenda-skip-unavailable-files t)
+  (org-agenda-start-on-weekday nil)
   (org-archive-tag "ARCHIVED")
   (org-agenda-inhibit-startup t)
   (org-agenda-custom-commands
