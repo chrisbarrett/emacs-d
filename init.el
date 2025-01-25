@@ -253,7 +253,10 @@
    "ov" #'org-tags-view
    "ok" #'org-capture
    "ol" #'org-store-link
-   "of"  #'+roam-node-find
+   "of" #'+roam-node-find
+   "orr" #'org-roam-review
+   "orl" #'org-roam-links
+   "os" #'org-roam-search
 
    "e"  '(nil :which-key "errors")
    "el" #'consult-flymake
@@ -1495,6 +1498,36 @@
                      (t
                       " "))))
       (insert left-pad ": "))))
+
+
+
+(use-package nursery :ensure
+  (nursery :host github :repo "chrisbarrett/nursery"
+           :files (:defaults "extensions/*"))
+
+  :init
+  (use-package org-roam-review
+    :commands (org-roam-review org-roam-review-list-recently-added)
+    :general-config
+    (:states '(normal) :keymaps 'org-roam-review-mode-map
+             ;; "TAB" 'magit-section-cycle
+             "g r" 'org-roam-review-refresh))
+
+  (use-package org-roam-search
+    :commands (org-roam-search))
+
+  (use-package org-roam-links
+    :commands (org-roam-links))
+
+  (use-package org-roam-dblocks
+    :hook (org-mode . org-roam-dblocks-autoupdate-mode))
+
+  (use-package org-roam-slipbox
+    :after org-roam
+    :demand t
+    :config
+    (org-roam-slipbox-buffer-identification-mode +1)
+    (org-roam-slipbox-tag-mode +1)))
 
 
 
