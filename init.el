@@ -1376,7 +1376,15 @@
 
 (use-package org-roam :ensure t
   :preface
-  (setq org-roam-directory "~/org/roam"))
+  (setq org-roam-directory "~/org/roam")
+
+  :custom
+  (org-roam-capture-templates
+   '(("d" "default" plain "%?"
+      :target (file+head "notes/${slug}.org" "#+title: ${title}\n")
+      :immediate-finish t
+      :unnarrowed t)))
+  (org-roam-extract-new-file-path "notes/${slug}.org"))
 
 (use-package poporg :ensure t)
 
