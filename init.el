@@ -1249,7 +1249,7 @@
 
   ;; Make C-c C-k either cut subtrees or cancel open notes.
   :general-config
-  (:map 'org-mode-map "C-c C-k" #'+org-cut-subtree-or-cancel-note)
+  (:keymaps 'org-mode-map "C-c C-k" #'+org-cut-subtree-or-cancel-note)
   :config
   (defun +org-cut-subtree-or-cancel-note ()
     (interactive)
