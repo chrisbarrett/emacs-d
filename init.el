@@ -369,6 +369,12 @@
   (make-backup-files nil)
   (confirm-nonexistent-file-or-buffer nil)
   (auto-mode-case-fold nil)
+  (version-control nil)
+  (backup-by-copying t)
+  (delete-old-versions t)
+  (kept-old-versions 5)
+  (kept-new-versions 5)
+  (backup-directory-alist (list (cons "." (file-name-concat user-emacs-directory "backup/"))))
 
   :config
   (define-advice after-find-file (:around (fn &rest args) dont-block-on-autosave-exists)
@@ -376,7 +382,25 @@
     (cl-letf (((symbol-function #'sit-for) #'ignore))
       (apply fn args))))
 
+(use-package startup
+  :custom
+  (auto-save-list-file-prefix (file-name-concat user-emacs-directory "autosave/"))
+  :config
+  (setq auto-save-file-name-transforms
+        (list (list "\\`/[^/]*:\\([^/]*/\\)*\\([^/]*\\)\\'"
+                    ;; Prefix tramp autosaves to prevent conflicts with local ones
+                    (concat auto-save-list-file-prefix "tramp-\\2") t)
+              (list ".*" auto-save-list-file-prefix t))))
+
+(use-package tramp
+  ;; Provides remote editing support, e.g. over SSH connections.
+  :after files
+  :config
+  (setq tramp-backup-directory-alist backup-directory-alist)
+  (setq tramp-auto-save-directory (file-name-concat user-emacs-directory "tramp-autosave/")))
+
 (use-package uniquify
+  ;; Controls how buffers with conflicting names are managed.
   :custom
   (uniquify-buffer-name-style 'forward))
 
