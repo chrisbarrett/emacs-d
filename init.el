@@ -230,6 +230,11 @@
           (project-find-file-in  "flake.nix" nil
                                  (project-current nil "~/.config/nix-configuration")))
 
+   "gp" (defun +goto-project-file ()
+          (interactive)
+          (let ((proj (project-current nil (project-prompt-project-dir))))
+            (project-find-file-in nil nil proj)))
+
    "o"  '(nil :which-key "org")
    "oi" (defun +goto-org-roam-index ()
           (interactive)
