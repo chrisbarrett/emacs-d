@@ -588,14 +588,14 @@
   :config
   (spell-fu-dictionary-add (spell-fu-get-ispell-dictionary "en_AU"))
   (spell-fu-dictionary-add (spell-fu-get-ispell-dictionary "fr"))
+
   (unless (executable-find "aspell")
     (warn "Could not find aspell program; spell checking will not work"))
 
-  (add-hook 'org-mode-hook
-            (defun +spell-fu-org-configure ()
-              (setq-local spell-fu-faces-exclude '(org-meta-line org-link org-code org-block
-                                                   org-block-begin-line org-block-end-line
-                                                   org-footnote)))))
+  (setq-hook! 'org-mode-hook
+    spell-fu-faces-exclude '(org-meta-line org-link org-code org-block
+                             org-block-begin-line org-block-end-line
+                             org-footnote)))
 
 (use-package hl-todo :ensure t
   ;; Display TODO comments with special highlights.
@@ -671,9 +671,9 @@
   (setq evil-visual-state-cursor 'hollow)
 
   :config
-  (add-hook 'after-change-major-mode-hook
-            (defun +update-evil-shift-width ()
-              (setq-local evil-shift-width tab-width)))
+  ;; Keep shift-width in sync if mode changes.
+  (setq-hook! 'after-change-major-mode
+    evil-shift-width tab-width)
 
   :config
   (add-hook '+escape-hook
@@ -745,7 +745,6 @@
 
 ;; Adapt the escape key customisation from Doom.
 
-;; TODO: Not sure if I need this hook yet.
 (defvar +escape-hook nil
   "Hook functions run until success when ESC is pressed.")
 
@@ -854,22 +853,16 @@
             'mark-ring 'global-mark-ring
             'search-ring 'regexp-search-ring)
 
-  (add-hook 'savehist-save-hook
-            (defun +remove-text-props-from-kill-ring-h ()
-              "Reduce size of savehist's cache by dropping text properties."
-              (setq kill-ring
-                    (mapcar #'substring-no-properties
-                            (cl-remove-if-not #'stringp kill-ring))
-                    register-alist
-                    (cl-loop for (reg . item) in register-alist
-                             if (stringp item)
-                             collect (cons reg (substring-no-properties item))
-                             else collect (cons reg item)))))
-  (add-hook 'savehist-save-hook
-            (defun +savehist-filter-registers-h ()
-              "Avoid attempts to save unprintable registers, e.g. window configurations."
-              (setq-local register-alist
-                          (seq-filter #'savehist-printable register-alist)))))
+  (setq-hook! 'savehist-save-hook
+    ;; Reduce size of savehist's cache by dropping text properties.
+    kill-ring (mapcar #'substring-no-properties (cl-remove-if-not #'stringp kill-ring))
+    register-alist (cl-loop for (reg . item) in register-alist
+                            if (stringp item)
+                            collect (cons reg (substring-no-properties item))
+                            else collect (cons reg item))
+
+    ;; Avoid attempts to save unprintable registers, e.g. window configurations.
+    register-alist (seq-filter #'savehist-printable register-alist)))
 
 (setq enable-recursive-minibuffers t)
 (setq read-file-name-completion-ignore-case t)
@@ -902,9 +895,8 @@
   (corfu-popupinfo-delay '(1.0 . 0.5))
   :init
   (global-corfu-mode +1)
-  (add-hook 'eshell-mode-hook (defun +corfu-eshell-setup-h ()
-                                (setq-local corfu-auto nil)
-                                (corfu-mode +1)))
+  (setq-hook! 'eshell-mode-hook corfu-auto nil)
+  (add-hook 'eshell-mode-hook (corfu-mode +1))
   :config
   (corfu-popupinfo-mode +1))
 
@@ -1049,13 +1041,14 @@
 
 (use-package elisp-mode
   :general-config (:keymaps 'emacs-lisp-mode-map "C-c RET" #'pp-macroexpand-last-sexp)
+
   :config
   (defun +emacs-lisp-lookup-func ()
     (describe-symbol (symbol-at-point)))
 
-  (add-hook 'emacs-lisp-mode-hook
-            (defun +set-emacs-lisp-lookup-func-h ()
-              (setq-local evil-lookup-func #'+emacs-lisp-lookup-func)))
+  (setq-hook! 'emacs-lisp-mode-hook
+    evil-lookup-func #'+emacs-lisp-lookup-func)
+
   :init
   (use-package checkdoc
     :custom
