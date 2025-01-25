@@ -1302,6 +1302,12 @@
 	 (let ((org-note-abort t)) (funcall org-finish-function)))
       (org-cut-subtree)))
 
+  ;; Fix keybinding that gets clobbered by evil-collection.
+  (define-advice evil-collection-org-setup (:after (&rest _) bind-leader)
+    (general-define-key :keymaps (append evil-collection-magit-maps
+                                         evil-collection-magit-section-maps)
+                        :states '(normal)
+                        "SPC" #'+leader-key))
 
   :general-config
   (:keymaps 'org-mode-map
