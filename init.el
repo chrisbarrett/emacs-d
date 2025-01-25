@@ -1685,6 +1685,15 @@ file in your browser at the visited revision."
   (use-package org-roam-links
     :commands (org-roam-links))
 
+  (use-package org-roam-rewrite
+    :init
+    (+local-leader-set-key 'org-mode-map
+      "r" '(nil :wk "node refactoring")
+      "rr" #'org-roam-rewrite-rename
+      "ri" #'org-roam-rewrite-inline
+      "re" #'org-roam-rewrite-extract
+      "rD" #'org-roam-rewrite-remove))
+
   (use-package org-roam-dblocks
     :hook (org-mode . org-roam-dblocks-autoupdate-mode))
 
