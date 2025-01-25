@@ -1204,6 +1204,7 @@
   (org-footnote-auto-adjust t)
   (org-insert-heading-respect-content t)
   (org-loop-over-headlines-in-active-region 'start-level)
+  (org-return-follows-link t)
 
   :config
 
