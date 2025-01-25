@@ -38,7 +38,8 @@ back to `+load-packages--incremental-idle-timer'), then in
 `+load-packages--incremental-idle-timer' intervals afterwards."
   (let* ((gc-cons-threshold most-positive-fixnum)
          (first-idle-timer (or +load-packages--first-idle-timer
-                               +load-packages--incremental-idle-timer)))
+                               +load-packages--incremental-idle-timer))
+         (packages (flatten-tree packages)))
     (if (not now)
         (cl-callf append +load-packages--work-queue packages)
       (while packages
