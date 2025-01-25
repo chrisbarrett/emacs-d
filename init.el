@@ -796,16 +796,26 @@
 (use-package evil-collection :ensure t
   ;; Community-managed collection of evil keybindings; makes evil behave more
   ;; consistently across many modes.
-  :after evil
-  :demand t
   :custom
-  ;; Ensure we do not overwrite the leader key binding.
+  ;; Ensure we do not overwrite the global leader key binding.
   (evil-collection-key-blacklist '("SPC" "S-SPC"))
+
+  ;; Org-mode derives from outline-mode; disable the outline bindings to prevent
+  ;; conflicts.
+  (evil-collection-outline-enable-in-minor-mode-p nil)
+
+  ;; Be a bit smarter about the evil-collection load sequence; in particular,
+  ;; set up bindings in hooks first time we activate a major-mode. This makes
+  ;; key binding setup more performant and more predictable.
   :init
-  ;; NOTE: I might want to enable things more selectively if I have to keep
-  ;; hacking around broken bindings.
-  (evil-collection-init)
+  (with-eval-after-load 'evil
+    (require '+evil-collection)
+    (+evil-collection-defer-install-to-mode-activation))
   :config
+  (+evil-collection-init 'comint)
+
+  ;; Fix leader keybindings that get clobbered by evil-collection.
+
   (define-advice evil-collection-magit-init (:after (&rest _) bind-leader)
     (general-define-key :keymaps (append evil-collection-magit-maps
                                          evil-collection-magit-section-maps)
@@ -1405,13 +1415,6 @@ file in your browser at the visited revision."
                           (file-exists-p path))
                       'org-link
                     '(warning org-link))))
-
-  ;; Fix keybinding that gets clobbered by evil-collection.
-  (define-advice evil-collection-org-setup (:after (&rest _) bind-leader)
-    (general-define-key :keymaps (append evil-collection-magit-maps
-                                         evil-collection-magit-section-maps)
-                        :states '(normal)
-                        "SPC" #'+leader-key))
 
   :general-config
   (:keymaps 'org-mode-map
