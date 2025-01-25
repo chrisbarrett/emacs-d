@@ -1624,7 +1624,10 @@ file in your browser at the visited revision."
   (org-roam-db-autosync-mode +1)
 
   (+local-leader-set-key 'org-mode-map
-    "<tab>" #'org-roam-buffer-toggle)
+    "<tab>" #'org-roam-buffer-toggle
+    "l" '(nil :wk "aliases")
+    "la" #'org-roam-alias-add
+    "lx" #'org-roam-alias-remove)
 
   :custom
   (org-roam-capture-templates
