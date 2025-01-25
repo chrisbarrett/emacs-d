@@ -511,14 +511,17 @@
    '(vc-state subtree-state nerd-icons collapse file-size file-time))
 
   :preface
-  (use-package nerd-icons :ensure t)
+  (use-package nerd-icons :ensure t
+    :demand t
+    :after dirvish
+    :config
+    (setq dirvish-path-separators (list
+                                   (format "  %s " (nerd-icons-codicon "nf-cod-home"))
+                                   (format "  %s " (nerd-icons-codicon "nf-cod-root_folder"))
+                                   (format " %s " (nerd-icons-faicon "nf-fa-angle_right")))))
   :config
-  (require 'nerd-icons)
   (dirvish-peek-mode +1)
-  (setq dirvish-path-separators (list
-                                 (format "  %s " (nerd-icons-codicon "nf-cod-home"))
-                                 (format "  %s " (nerd-icons-codicon "nf-cod-root_folder"))
-                                 (format " %s " (nerd-icons-faicon "nf-fa-angle_right"))))
+  
   :init
   (dirvish-override-dired-mode))
 
