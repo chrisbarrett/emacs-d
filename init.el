@@ -1540,8 +1540,9 @@
 (use-package org-roam :ensure t
   :preface
   (setq org-roam-directory "~/org/roam")
+
   :defer-incrementally
-  '(ansi-color dash f rx seq magit-section emacsql)
+  ansi-color dash f rx seq magit-section emacsql
 
   :general-config
   (:states '(motion insert normal) :keymaps 'org-mode-map
