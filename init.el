@@ -1271,6 +1271,9 @@
                 (evil-append-line 1)
                 t)))
 
+  ;; Prevent flickering when org-indent is enabled.
+  (setq-hook! 'org-mode-hook show-paren-mode nil)
+
   ;; Automatically enter insert state when inserting new headings, logbook notes
   ;; or when using `org-capture'.
 
