@@ -489,6 +489,11 @@
                             "M-n" #'flymake-goto-next-error
                             "M-p" #'flymake-goto-prev-error))
 
+(use-package dired
+  :custom
+  (dired-listing-switches
+   "--almost-all --human-readable --group-directories-first --no-group"))
+
 (use-package dirvish :ensure t
   ;; Wrapper around `dired' that provides better UX.
   :general
