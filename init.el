@@ -288,6 +288,7 @@
    ))
 
 (defmacro +local-leader-set-key (keymaps &rest general-args)
+  (declare (indent 1))
   `(general-define-key :prefix "," :states '(normal motion) :keymaps ,keymaps ,@general-args))
 
 
