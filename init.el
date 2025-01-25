@@ -684,6 +684,26 @@
    :keymaps 'elpaca-manager-mode-map
    "/" #'elpaca-ui-search))
 
+;; Teach Emacs that C-i and C-m do in fact exist.
+(pcase-dolist (`(,key ,fallback . ,events)
+               '(([C-i] [?\C-i] tab kp-tab)
+                 ([C-m] [?\C-m] return kp-return)))
+  (define-key
+   input-decode-map fallback
+   (lambda (&rest _args)
+     (interactive)
+     (if (when-let ((keys (this-single-command-raw-keys)))
+           (and (display-graphic-p)
+                (not (cl-loop for event in events
+                              if (cl-position event keys)
+                              return t))
+                ;; Use FALLBACK if nothing is bound to KEY, otherwise we've
+                ;; broken all pre-existing FALLBACK keybinds.
+                (key-binding (vconcat (if (= 0 (length keys)) [] (cl-subseq keys 0 -1))
+                                      key)
+                             nil t)))
+         key fallback))))
+
 
 ;;; evil-mode
 
