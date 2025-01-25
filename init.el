@@ -1293,6 +1293,14 @@
   :functions org-highlight-new-match
   :config (advice-add #'org-highlight-new-match :override #'ignore)
 
+  :config
+  (define-advice org-return (:after (&optional indent _arg _interactive) emulate-major-mode-indent)
+    "Mimic `newline-and-indent' in src blocks w/ lang-appropriate indentation."
+    (when (and indent org-src-tab-acts-natively (org-in-src-block-p t))
+      (save-window-excursion
+        (org-babel-do-in-edit-buffer
+         (call-interactively #'indent-for-tab-command)))))
+
   ;; Make C-c C-k either cut subtrees or cancel open notes.
   :config
   (defun +org-cut-subtree-or-cancel-note ()
