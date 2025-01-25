@@ -215,13 +215,15 @@
    "g"  '(nil :which-key "git/goto")
    "gg" #'magit-status
    "gl" #'magit-log-buffer-file
+
    "g?" (defun +goto-messages ()
           (interactive)
           (display-buffer "*Messages*"))
 
-   "gi" (defun +goto-init-el-file ()
+   "ge" (defun +goto-emacs-config-file ()
           (interactive)
-          (find-file (file-name-concat user-emacs-directory "init.el")))
+          (project-find-file-in "init.el" nil
+                                (project-current nil user-emacs-directory)))
 
    "gn" (defun +goto-nix-file ()
           (interactive)
