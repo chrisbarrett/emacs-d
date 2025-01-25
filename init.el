@@ -1444,6 +1444,10 @@
   :preface
   (setq org-roam-directory "~/org/roam")
 
+  :general-config
+  (:states '(motion insert normal) :keymaps 'org-mode-map
+           "C-c C-i" #'org-roam-node-insert)
+
   :config
   (+local-leader-set-key 'org-mode-map
     "<tab>" #'org-roam-buffer-toggle)
