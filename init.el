@@ -41,7 +41,7 @@
 
 (use-package find-func
   :config
-  (add-to-list 'trusted-content (expand-file-name (file-name-concat find-function-C-source-directory "../lisp/"))))
+  (add-to-list 'trusted-content (file-name-concat find-function-C-source-directory "../lisp/")))
 
 ;; Make sure I don't accidentally start loading super-expensive packages on startup.
 
