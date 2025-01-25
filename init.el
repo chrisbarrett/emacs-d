@@ -1104,6 +1104,10 @@
   (defun +emacs-lisp-lookup-func ()
     (describe-symbol (symbol-at-point)))
 
+  (+local-leader-set-key 'emacs-lisp-mode-map
+    "e" '(nil :which-key "eval")
+    "eb" #'eval-buffer)
+
   (setq-hook! 'emacs-lisp-mode-hook
     evil-lookup-func #'+emacs-lisp-lookup-func)
 
