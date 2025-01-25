@@ -10,8 +10,6 @@
 ;; - something like smartparens
 ;;     - maybe puni?
 ;;
-;; - incremental package loading while idle
-;;
 ;; - file templates
 ;;
 ;; - text snippets
