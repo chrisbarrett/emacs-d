@@ -350,6 +350,8 @@
 (keymap-set minibuffer-local-map "C-p" #'previous-line-or-history-element)
 (keymap-set minibuffer-local-map "C-n" #'next-line-or-history-element)
 
+(keymap-global-set "C-c e e" #'toggle-debug-on-error)
+
 (use-package window
   ;; Window management stuff that's not in the C layer.
 
