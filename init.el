@@ -881,7 +881,8 @@
   "Hook functions run until success when ESC is pressed.")
 
 (defun +escape (&optional interactive)
-  "Run `+escape-hook'."
+  "Quit things, abort things, and finish things.
+Runs `+escape-hook'."
   (interactive (list 'interactive))
   (let ((inhibit-quit t))
     (cond ((minibuffer-window-active-p (minibuffer-window))
