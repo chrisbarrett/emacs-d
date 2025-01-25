@@ -760,7 +760,8 @@
   (evil-collection-init)
   :config
   (define-advice evil-collection-magit-init (:after (&rest _) bind-leader)
-    (general-define-key :keymaps evil-collection-magit-maps
+    (general-define-key :keymaps (append evil-collection-magit-maps
+                                         evil-collection-magit-section-maps)
                         :states '(normal)
                         "SPC" #'+leader-key)))
 
