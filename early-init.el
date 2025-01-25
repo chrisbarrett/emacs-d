@@ -25,6 +25,8 @@
 
 ;; (setq use-package-expand-minimally t)
 
+(require '+use-package-exts)
+
 
 ;;; Customise UI early in init sequence.
 
