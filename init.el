@@ -1300,13 +1300,39 @@
             "M-n" #'org-metadown)
   )
 
+
+(defvar +org-habit-graph-window-ratio 0.2
+  "The ratio of the consistency graphs relative to the window width.")
+
+(defvar +org-habit-graph-padding 2
+  "The padding added to the end of the consistency graph.")
+
+(defvar +org-habit-min-width 30
+  "Hide the consistency graph if `org-habit-graph-column' is less than this.")
+
 (use-package org-habit
-  :after org-agenda
-  :demand t
+  :after-call org-agenda
   :custom
   (org-habit-graph-column 72)
   (org-habit-today-glyph ?▲)
-  (org-habit-completed-glyph ?✓))
+  (org-habit-completed-glyph ?✓)
+  :config
+  (add-hook 'org-agenda-mode-hook
+            (defun +org-habit-resize-graph-h ()
+              "Right align and resize the consistency graphs based on
+`+org-habit-graph-window-ratio'"
+              (let* ((total-days (float (+ org-habit-preceding-days org-habit-following-days)))
+                     (preceding-days-ratio (/ org-habit-preceding-days total-days))
+                     (graph-width (floor (* (window-width) +org-habit-graph-window-ratio)))
+                     (preceding-days (floor (* graph-width preceding-days-ratio)))
+                     (following-days (- graph-width preceding-days))
+                     (graph-column (- (window-width) (+ preceding-days following-days)))
+                     (graph-column-adjusted (if (> graph-column +org-habit-min-width)
+                                                (- graph-column +org-habit-graph-padding)
+                                              nil)))
+                (setq-local org-habit-preceding-days preceding-days)
+                (setq-local org-habit-following-days following-days)
+                (setq-local org-habit-graph-column graph-column-adjusted)))))
 
 (use-package evil-org :ensure t
   ;; Provides extra evil keybindings for org-mode, org-agenda etc.
@@ -1370,8 +1396,6 @@
              (org-agenda-skip-function #'+agenda-next-actions-skip-function))))
 
          (defaults `((org-agenda-todo-ignore-scheduled 'future)
-                     (org-habit-preceding-days 14)
-                     (org-habit-following-days 7)
                      (org-agenda-span 'day)
                      (org-agenda-window-setup 'only-window)
                      (org-agenda-start-day nil)
