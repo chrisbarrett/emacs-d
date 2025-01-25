@@ -19,6 +19,7 @@
 
 (setq use-package-always-defer t)
 (setq use-package-enable-imenu-support t)
+(setq use-package-minimum-reported-time 0.01)
 
 ;; Enable this when the configuration reaches a steady state; it will make it
 ;; much easier to read the macro-expanded output of use-package calls.
