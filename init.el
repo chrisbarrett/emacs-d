@@ -285,6 +285,9 @@
    "ww" #'other-window
    ))
 
+(defmacro +local-leader-set-key (keymaps &rest general-args)
+  `(general-define-key :prefix "," :states '(normal motion) :keymaps ,keymaps ,@general-args))
+
 
 ;;; General editing
 
