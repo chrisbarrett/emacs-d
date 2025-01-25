@@ -213,6 +213,7 @@
 
    "c"  '(nil :which-key "comments")
    "cr" #'comment-dwim
+   "cl" #'comment-line
 
    "g"  '(nil :which-key "git/goto")
    "gg" #'magit-status
