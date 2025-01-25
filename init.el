@@ -25,6 +25,17 @@
   :config
   (add-to-list 'trusted-content (expand-file-name (file-name-concat find-function-C-source-directory "../lisp/"))))
 
+;; Make sure I don't accidentally start loading super-expensive packages on startup.
+
+(defconst +expensive-packages '(org org-roam org-agenda))
+
+(add-hook 'after-init-hook
+          (defun +assert-packages-deferred ()
+            (when-let* ((loaded (seq-filter #'featurep +expensive-packages)))
+              (warn "The following package(s) were loaded eagerly, rather than deferred: %S" loaded)))
+          nil
+          -99)
+
 
 ;;; Extra UI lifecycle hooks
 ;;
