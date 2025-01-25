@@ -172,6 +172,7 @@
    "ff" #'find-file
    "fF" #'find-file-other-window
    "fs" #'save-buffer
+   "fR" #'rename-visited-file
    "fr" #'recentf
 
    "fD" (defun +delete-file-and-buffer ()
