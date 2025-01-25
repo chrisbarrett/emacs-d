@@ -87,6 +87,7 @@
    "x" #'execute-extended-command
    "r" #'vertico-repeat
    ":" #'pp-eval-expression
+   ";" #'ielm
    "d" #'dirvish
    "u" #'universal-argument
    "i" #'consult-imenu
