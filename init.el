@@ -1,4 +1,22 @@
-;; -*- lexical-binding: t; -*-
+;;; init.el --- main Emacs init file -*- lexical-binding: t; -*-
+
+;;; Commentary:
+
+;; This is the primary Emacs init file, loaded by the editor on startup. It is
+;; loaded after early-init.el.
+;;
+;; TODO:
+;;
+;; - something like smartparens
+;;     - maybe puni?
+;;
+;; - incremental package loading while idle
+;;
+;; - file templates
+;;
+;; - text snippets
+
+;;; Code:
 
 (eval-and-compile
   (require '+corelib (file-name-concat user-emacs-directory "lisp/+corelib.el")))

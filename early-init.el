@@ -1,4 +1,12 @@
-;; -*- lexical-binding: t; -*-
+;;; early-init.el --- early Emacs init file -*- lexical-binding: t; -*-
+
+;;; Commentary:
+
+;; This file is loaded by the editor early in the bootstrap process, before
+;; resources like GUI frames are initialised. It is generally used to tune
+;; critical aspects of the presentation or behaviour of the editor.
+
+;;; Code:
 
 (setq inhibit-startup-screen t)
 
@@ -42,7 +50,10 @@
 (setq +theme-dark 'modus-vivendi)
 (setq modus-themes-italic-constructs t)
 (setq modus-themes-bold-constructs nil)
+
 (require '+theme)
+
+;; Sync the theme with the window system.
 (+theme-update)
 
 ;; Local Variables:
