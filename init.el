@@ -658,6 +658,13 @@
 (use-package spell-fu :ensure t
   ;; A more lightweight spell-checker than the built-in.
   :hook (text-mode prog-mode conf-mode)
+  :general
+  (:states '(normal motion)
+           "zn" #'spell-fu-goto-next-error
+           "zp" #'spell-fu-goto-previous-error
+           "zg" #'spell-fu-word-add
+           "zx" #'spell-fu-word-remove)
+
   :config
   (add-hook 'spell-fu-mode-hook
             (defun +spell-fu-set-dictionaries ()
