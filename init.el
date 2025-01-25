@@ -137,6 +137,12 @@
    "ar" (general-predicate-dispatch 'profiler-start
           (and (featurep 'profiler) (profiler-running-p)) #'+profiler-stop-and-report)
 
+   "ap"  '(nil :which-key "elpaca")
+   "app" #'elpaca-manager
+   "apl" #'elpaca-log
+   "apb" #'elpaca-browse
+   "apv" #'elpaca-visit
+
    "b"  '(nil :which-key "buffers")
    "bb" #'bury-buffer
    "bd" #'kill-current-buffer
@@ -595,6 +601,13 @@
   (indent-bars-color-by-depth nil)
   (indent-bars-color '(font-lock-comment-face :face-bg nil :blend 0.425))
   (indent-bars-highlight-current-depth nil))
+
+(use-package elpaca
+  ;; Configure aspects of elpaca not required for initial package bootstrap.
+  :general-config
+  (:states 'normal
+   :keymaps 'elpaca-manager-mode-map
+   "/" #'elpaca-ui-search))
 
 
 ;;; evil-mode
