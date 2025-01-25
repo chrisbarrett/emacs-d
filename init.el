@@ -708,12 +708,20 @@
 
   ;; Cursor customisation
   :init
+  (custom-theme-set-faces 'user
+                          `(cursor
+                            ((((background dark))
+                              (:background "#51afef"))
+                             (((background light))
+                              (:background "#000000")))))
+
   (defun +sync-evil-cursor-colors-with-theme ()
     (put 'cursor 'evil-emacs-color  (face-foreground 'warning))
     (put 'cursor 'evil-normal-color (face-background 'cursor)))
 
-  (+sync-evil-cursor-colors-with-theme)
+  (advice-add '+theme-update :after #'+sync-evil-cursor-colors-with-theme)
   (add-hook 'modus-themes-post-load-hook #'+sync-evil-cursor-colors-with-theme)
+  (+sync-evil-cursor-colors-with-theme)
 
   (defun +evil-default-cursor-fn ()
     (evil-set-cursor-color (get 'cursor 'evil-normal-color)))
