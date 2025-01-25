@@ -25,7 +25,8 @@
 
 ;; (setq use-package-expand-minimally t)
 
-(require '+use-package-exts)
+(require '+load-incrementally)
+(+load-incrementally-setup-use-package-keywords)
 
 
 ;;; Customise UI early in init sequence.
