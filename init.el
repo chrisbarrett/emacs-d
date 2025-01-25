@@ -1277,8 +1277,6 @@
   :config (advice-add #'org-highlight-new-match :override #'ignore)
 
   ;; Make C-c C-k either cut subtrees or cancel open notes.
-  :general-config
-  (:keymaps 'org-mode-map "C-c C-k" #'+org-cut-subtree-or-cancel-note)
   :config
   (defun +org-cut-subtree-or-cancel-note ()
     (interactive)
@@ -1286,6 +1284,13 @@
         (org-finish-function
 	 (let ((org-note-abort t)) (funcall org-finish-function)))
       (org-cut-subtree)))
+
+
+  :general-config
+  (:keymaps 'org-mode-map
+            "C-c C-k" #'+org-cut-subtree-or-cancel-note
+            "M-p" #'org-metaup
+            "M-n" #'org-metadown)
   )
 
 (use-package org-habit
