@@ -1560,7 +1560,10 @@
       :target (file+head "notes/${slug}.org" "#+title: ${title}\n")
       :immediate-finish t
       :unnarrowed t)))
-  (org-roam-extract-new-file-path "notes/${slug}.org"))
+  (org-roam-extract-new-file-path "notes/${slug}.org")
+  (org-roam-completion-everywhere t)
+  ;; prefer faster utilities
+  (org-roam-list-files-commands '(fd fdfind rg find)))
 
 (use-package poporg :ensure t)
 
