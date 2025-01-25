@@ -574,6 +574,7 @@
                                                    org-footnote)))))
 
 (use-package hl-todo :ensure t
+  ;; Display TODO comments with special highlights.
   :hook (prog-mode yaml-ts-mode conf-mode)
   :custom
   (hl-todo-highlight-punctuation ":")
@@ -585,6 +586,8 @@
           ("NOTE" success bold))))
 
 (use-package indent-bars :ensure t
+  ;; Display indentation guides in buffers. Particularly useful for
+  ;; indentation-sensitive language modes.
   :hook (yaml-ts-mode python-ts-mode)
   :custom
   (indent-bars-starting-column 0)
