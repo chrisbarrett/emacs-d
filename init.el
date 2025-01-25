@@ -18,6 +18,8 @@
 
 ;;; Code:
 
+(require 'use-package)
+
 (eval-and-compile
   (require '+corelib (file-name-concat user-emacs-directory "lisp/+corelib.el")))
 
