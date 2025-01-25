@@ -1384,7 +1384,9 @@
 (use-package org-agenda
   :general
   ("C-c a" #'org-agenda)
-  :config (require '+agenda)
+  :config
+  (require '+agenda)
+
   :custom
   (org-agenda-files (file-name-concat org-directory "org-agenda-files"))
   (org-agenda-text-search-extra-files `(agenda-archives ,(file-name-concat org-directory "archive.org")))
