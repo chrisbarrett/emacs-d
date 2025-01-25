@@ -680,6 +680,14 @@
                              org-block-begin-line org-block-end-line
                              org-footnote)))
 
+(use-package flyspell-correct :ensure t
+  ;; Provides a nicer command for working with spelling corrections.
+  :after spell-fu
+  :config
+  (ispell-set-spellchecker-params)
+  :general
+  (:states 'normal "z SPC" #'flyspell-correct-at-point))
+
 (use-package hl-todo :ensure t
   ;; Display TODO comments with special highlights.
   :hook (prog-mode yaml-ts-mode conf-mode)
