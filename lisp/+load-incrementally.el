@@ -12,6 +12,8 @@
 
 ;;; Code:
 
+(require '+log)
+
 (eval-when-compile
   (require 'use-package-core))
 
@@ -22,7 +24,7 @@
 
 Set this to nil to disable incremental loading at startup. Set this to 0
 to load all incrementally deferred packages immediately at
-`doom-after-init-hook'.")
+`after-init-hook'.")
 
 (defvar +load-packages--incremental-idle-timer 0.75
   "How long (in idle seconds) in between incrementally loading packages.")
@@ -43,17 +45,17 @@ back to `+load-packages--incremental-idle-timer'), then in
         (let ((req (pop packages))
               idle-time)
           (if (featurep req)
-              (doom-log "start:iloader: Already loaded %s (%d left)" req (length packages))
+              (+log "start:iloader: Already loaded %s (%d left)" req (length packages))
             (condition-case-unless-debug e
                 (and
                  (or (null (setq idle-time (current-idle-time)))
                      (< (float-time idle-time) first-idle-timer)
                      (not
                       (while-no-input
-                        (doom-log "start:iloader: Loading %s (%d left)" req (length packages))
+                        (+log "start:iloader: Loading %s (%d left)" req (length packages))
                         ;; If `default-directory' doesn't exist or is
                         ;; unreadable, Emacs throws file errors.
-                        (let ((default-directory doom-emacs-dir)
+                        (let ((default-directory user-emacs-directory)
                               (inhibit-message t)
                               (file-name-handler-alist
                                (list (rassq 'jka-compr-handler file-name-handler-alist))))
@@ -64,7 +66,7 @@ back to `+load-packages--incremental-idle-timer'), then in
                (message "Error: failed to incrementally load %S because: %s" req e)
                (setq packages nil)))
             (if (null packages)
-                (doom-log "start:iloader: Finished!")
+                (+log "start:iloader: Finished!")
               (run-at-time (if idle-time
                                +load-packages--incremental-idle-timer
                              first-idle-timer)
