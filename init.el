@@ -466,7 +466,8 @@
 
 (use-package recentf
   ;; Maintain a list of visited files.
-  :demand t
+  :after-call recentf consult-buffer
+  :defer-incrementally t
   :custom
   (recentf-max-saved-items 100)
   :config
@@ -1122,7 +1123,17 @@
 
 ;;; org-mode
 
-(use-package org
+
+(use-package org :ensure t ; NB. installed from org package archive.
+  ;; org-mode - the reason why I can probably never switch to another editor.
+
+  ;; org is a chonker; decompose the load process into smaller features so it's
+  ;; less noticeable.
+  :defer-incrementally
+  calendar find-func format-spec org-macs org-compat org-faces org-entities
+  org-list org-pcomplete org-src org-footnote org-macro ob org org-habit org-agenda
+  org-capture
+
   :hook ((org-mode . abbrev-mode)
          (org-mode . auto-fill-mode))
 
