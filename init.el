@@ -1620,15 +1620,6 @@ file in your browser at the visited revision."
   (:states '(motion insert normal) :keymaps 'org-mode-map
            "C-c C-i" #'org-roam-node-insert)
 
-  :config
-  (org-roam-db-autosync-mode +1)
-
-  (+local-leader-set-key 'org-mode-map
-    "<tab>" #'org-roam-buffer-toggle
-    "l" '(nil :wk "aliases")
-    "la" #'org-roam-alias-add
-    "lx" #'org-roam-alias-remove)
-
   :custom
   (org-roam-capture-templates
    '(("d" "default" plain "%?"
@@ -1638,7 +1629,54 @@ file in your browser at the visited revision."
   (org-roam-extract-new-file-path "notes/${slug}.org")
   (org-roam-completion-everywhere t)
   ;; prefer faster utilities
-  (org-roam-list-files-commands '(fd fdfind rg find)))
+  (org-roam-list-files-commands '(fd fdfind rg find))
+
+  :config
+  (org-roam-db-autosync-mode +1)
+
+  (+local-leader-set-key 'org-mode-map
+    "<tab>" #'org-roam-buffer-toggle
+    "l" '(nil :wk "aliases")
+    "la" #'org-roam-alias-add
+    "lx" #'org-roam-alias-remove)
+
+  (setq-hook! 'org-roam-find-file-hook
+    org-id-link-to-org-use-id 'create-if-interactive)
+
+  (add-hook 'org-roam-mode-hook #'turn-on-visual-line-mode)
+
+  ;; Work around clashes with evil bindings.
+  :config
+  (add-hook 'org-roam-mode-hook
+            (defun +org-roam-detach-magit-section-mode-map-h ()
+              (set-keymap-parent org-roam-mode-map nil)))
+  :general-config
+  (:keymaps 'org-roam-mode-map
+   "M-p"     #'magit-section-backward-sibling
+   "M-n"     #'magit-section-forward-sibling
+   [tab]     #'magit-section-toggle
+   [C-tab]   #'magit-section-cycle
+   [backtab] #'magit-section-cycle-global
+   :states '(normal visual)
+   "]"       #'magit-section-forward-sibling
+   "["       #'magit-section-backward-sibling
+   "gj"      #'magit-section-forward-sibling
+   "gk"      #'magit-section-backward-sibling
+   "gr"      #'revert-buffer
+   "gR"      #'revert-buffer
+   "z1"      #'magit-section-show-level-1
+   "z2"      #'magit-section-show-level-2
+   "z3"      #'magit-section-show-level-3
+   "z4"      #'magit-section-show-level-4
+   "za"      #'magit-section-toggle
+   "zc"      #'magit-section-hide
+   "zC"      #'magit-section-hide-children
+   "zo"      #'magit-section-show
+   "zO"      #'magit-section-show-children
+   "zm"      #'magit-section-show-level-2-all
+   "zr"      #'magit-section-show-level-4-all
+   "C-j"     #'magit-section-forward
+   "C-k"     #'magit-section-backward))
 
 (use-package poporg :ensure t)
 
