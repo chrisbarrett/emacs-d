@@ -499,6 +499,21 @@
   :general
   (:keymaps '(dirvish-mode-map dired-mode-map) :states 'normal
             "q" #'dirvish-quit)
+  (:keymaps 'dirvish-mode-map :states 'normal
+            "<tab>" #'dirvish-layout-toggle)
+  :custom
+  (dirvish-attributes
+   '(vc-state subtree-state nerd-icons collapse file-size file-time))
+
+  :preface
+  (use-package nerd-icons :ensure t)
+  :config
+  (require 'nerd-icons)
+  (dirvish-peek-mode +1)
+  (setq dirvish-path-separators (list
+                                 (format "  %s " (nerd-icons-codicon "nf-cod-home"))
+                                 (format "  %s " (nerd-icons-codicon "nf-cod-root_folder"))
+                                 (format " %s " (nerd-icons-faicon "nf-fa-angle_right"))))
   :init
   (dirvish-override-dired-mode))
 
