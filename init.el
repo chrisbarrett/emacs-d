@@ -1415,6 +1415,10 @@
   :preface
   (setq org-roam-directory "~/org/roam")
 
+  :config
+  (+local-leader-set-key 'org-mode-map
+    "<tab>" #'org-roam-buffer-toggle)
+
   :custom
   (org-roam-capture-templates
    '(("d" "default" plain "%?"
