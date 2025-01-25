@@ -1243,6 +1243,14 @@
   (org-loop-over-headlines-in-active-region 'start-level)
   (org-return-follows-link t)
 
+  ;; Custom links
+
+  (org-link-abbrev-alist
+   '(("github"      . "https://github.com/%s")
+     ("youtube"     . "https://youtube.com/watch?v=%s")
+     ("google"      . "https://google.com/search?q=")
+     ("wikipedia"   . "https://en.wikipedia.org/wiki/%s")))
+
   :config
 
   ;; Prefer inserting headings with M-RET
