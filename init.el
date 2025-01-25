@@ -1332,6 +1332,10 @@
             "M-n" #'org-metadown)
   )
 
+(use-package org-capture
+  :config
+  ;; Kill capture buffers by default (unless they've been visited)
+  (org-capture-put :kill-buffer t))
 
 (use-package org-refile
   :custom
