@@ -1390,6 +1390,7 @@
   (org-agenda-text-search-extra-files `(agenda-archives ,(file-name-concat org-directory "archive.org")))
   (org-agenda-restore-windows-after-quit t)
   (org-agenda-search-view-always-boolean t)
+  (org-agenda-skip-unavailable-files t)
   (org-archive-tag "ARCHIVED")
   (org-agenda-inhibit-startup t)
   (org-agenda-custom-commands
@@ -1493,12 +1494,6 @@
   (add-hook 'org-mode-hook
             (defun +update-org-agenda-files-h ()
               (add-hook 'after-save-hook #'+org-agenda-update-files nil t)))
-
-  ;; Forget deleted agenda files without prompting
-  (define-advice org-check-agenda-file (:override (file) always-remove-missing)
-    (unless (file-exists-p file)
-      (org-remove-file file)
-      (throw 'nextfile t)))
 
   ;; Reveal context around item on TAB
   (add-hook 'org-agenda-after-show-hook
