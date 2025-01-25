@@ -659,8 +659,11 @@
   ;; A more lightweight spell-checker than the built-in.
   :hook (text-mode prog-mode conf-mode)
   :config
-  (spell-fu-dictionary-add (spell-fu-get-ispell-dictionary "en_AU"))
-  (spell-fu-dictionary-add (spell-fu-get-ispell-dictionary "fr"))
+  (add-hook 'spell-fu-mode-hook
+            (defun +spell-fu-set-dictionaries ()
+              (spell-fu-dictionary-add (spell-fu-get-ispell-dictionary "en_AU"))
+              (spell-fu-dictionary-add (spell-fu-get-ispell-dictionary "fr"))
+              (spell-fu-dictionary-add (spell-fu-get-personal-dictionary "en-personal" "~/org/aspell.en.pws"))))
 
   (unless (executable-find "aspell")
     (warn "Could not find aspell program; spell checking will not work"))
