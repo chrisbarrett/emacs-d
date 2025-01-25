@@ -1333,6 +1333,7 @@
   (org-agenda-restore-windows-after-quit t)
   (org-agenda-search-view-always-boolean t)
   (org-archive-tag "ARCHIVED")
+  (org-agenda-inhibit-startup t)
   (org-agenda-custom-commands
    (let ((today '(agenda ""
                   ((org-agenda-overriding-header "Today")
