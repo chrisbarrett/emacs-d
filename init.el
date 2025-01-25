@@ -793,6 +793,8 @@
   ;; Ensure we do not overwrite the leader key binding.
   (evil-collection-key-blacklist '("SPC" "S-SPC"))
   :init
+  ;; NOTE: I might want to enable things more selectively if I have to keep
+  ;; hacking around broken bindings.
   (evil-collection-init)
   :config
   (define-advice evil-collection-magit-init (:after (&rest _) bind-leader)
