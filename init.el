@@ -1586,7 +1586,6 @@
     :after org-roam
     :demand t
     :config
-    (org-roam-slipbox-buffer-identification-mode +1)
     (org-roam-slipbox-tag-mode +1)))
 
 
