@@ -1077,6 +1077,72 @@
                          (thing-at-point-looking-at (rx bol (* space) eol)))
                 (evil-insert-state)))))
 
+(use-package git-timemachine :ensure t
+  :general-config
+  (:states 'normal
+   :keymaps 'git-timemachine-mode-map
+   "C-p" #'git-timemachine-show-previous-revision
+   "C-n" #'git-timemachine-show-next-revision
+   "gb"  #'git-timemachine-blame
+   "gtc" #'git-timemachine-show-commit)
+
+  :config
+  ;; Ensure git-timemachine uses `delay-mode-hooks', which can suppress
+  ;; font-lock.
+  (add-hook 'git-timemachine-mode-hook #'font-lock-mode)
+  ;; Ensure evil keymaps are applied
+  (add-hook 'git-timemachine-mode-hook #'evil-normalize-keymaps)
+
+  ;; Show information in header-line for better visibility.
+  :custom
+  (git-timemachine-show-minibuffer-details t)
+  :config
+  (define-advice git-timemachine--show-minibuffer-details (:override (revision) use-header-line)
+    "Show revision details in the header-line, instead of the minibuffer."
+    (let* ((date-relative (nth 3 revision))
+           (date-full (nth 4 revision))
+           (author (if git-timemachine-show-author (concat (nth 6 revision) ": ") ""))
+           (sha-or-subject (if (eq git-timemachine-minibuffer-detail 'commit) (car revision) (nth 5 revision))))
+      (setq header-line-format
+            (format "%s%s [%s (%s)]"
+                    (propertize author 'face 'git-timemachine-minibuffer-author-face)
+                    (propertize sha-or-subject 'face 'git-timemachine-minibuffer-detail-face)
+                    date-full date-relative)))))
+
+(use-package browse-at-remote :ensure t
+  :custom
+  (browse-at-remote-add-line-number-if-no-region-selected nil)
+
+  :config
+  (define-advice browse-at-remote--get-local-branch (:after-until () const-main)
+    "Return 'main' in detached state."
+    "main")
+
+  ;; Integrate browse-at-remote with git-timemachine
+  :config
+  (define-advice browse-at-remote-get-url (:around (fn &rest args) git-timemachine-integration)
+    "Allow `browse-at-remote' commands in git-timemachine buffers to open that
+file in your browser at the visited revision."
+    (if (bound-and-true-p git-timemachine-mode)
+        (let* ((start-line (line-number-at-pos (min (region-beginning) (region-end))))
+               (end-line (line-number-at-pos (max (region-beginning) (region-end))))
+               (remote-ref (browse-at-remote--remote-ref buffer-file-name))
+               (remote (car remote-ref))
+               (ref (car git-timemachine-revision))
+               (relname
+                (file-relative-name
+                 buffer-file-name (expand-file-name (vc-git-root buffer-file-name))))
+               (target-repo (browse-at-remote--get-url-from-remote remote))
+               (remote-type (browse-at-remote--get-remote-type target-repo))
+               (repo-url (cdr target-repo))
+               (url-formatter (browse-at-remote--get-formatter 'region-url remote-type)))
+          (unless url-formatter
+            (error (format "Origin repo parsing failed: %s" repo-url)))
+          (funcall url-formatter repo-url ref relname
+                   (if start-line start-line)
+                   (if (and end-line (not (equal start-line end-line))) end-line)))
+      (apply fn args))))
+
 ;; Don't prompt when following links to files that are under version control.
 (setq vc-follow-symlinks t)
 
