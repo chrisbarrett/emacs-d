@@ -1333,6 +1333,18 @@
   )
 
 
+(use-package org-refile
+  :custom
+  (org-refile-targets
+   '((nil :maxlevel . 3)
+     (org-agenda-files :maxlevel . 3)))
+  (org-refile-use-outline-path 'file)
+  (org-outline-path-complete-in-steps nil)
+  :config
+  ;; When refiling from org-capture, Emacs prompts to kill the underlying,
+  ;; modified buffer. This fixes that.
+  (add-hook 'org-after-refile-insert-hook #'save-buffer))
+
 (defvar +org-habit-graph-window-ratio 0.2
   "The ratio of the consistency graphs relative to the window width.")
 
