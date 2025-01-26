@@ -1106,7 +1106,15 @@ Runs `+escape-hook'."
 (use-package corfu :ensure t
   ;; Corfu provides in-buffer completions as you type.
   :demand t
-  :general-config (:keymaps 'corfu-map "RET" #'corfu-send)
+  :general-config (:keymaps 'corfu-map
+                            "RET" #'corfu-send
+                            "<escape>" #'corfu-reset
+                            "C-n" #'corfu-next
+                            "C-p" #'corfu-previous)
+
+  ;; Make ESC dismiss corfu but stay in insert state.
+  (:keymaps 'corfu-map :states '(insert emacs)
+            "<escape>" #'corfu-reset)
   :custom
   (corfu-auto t)
   (corfu-quit-no-match t)
