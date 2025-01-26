@@ -1544,6 +1544,15 @@ file in your browser at the visited revision."
     "t" #'org-show-todo-tree)
   )
 
+(use-package ol
+  ;; Hyperlink functionality in org-mode
+  :config
+  (defface +org-id-link
+    '((t (:weight semi-bold :inherit font-lock-variable-name-face)))
+    "Face for ID links; these would typically be org-roam links.")
+
+  (org-link-set-parameters "id" :face '+org-id-link))
+
 (use-package org-capture
   :config
   ;; Kill capture buffers by default (unless they've been visited)
