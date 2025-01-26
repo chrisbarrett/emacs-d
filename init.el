@@ -754,6 +754,7 @@
   :demand t
   :general-config
   (:states 'emacs "ESC ESC" #'evil-normal-state)
+  (:states '(insert normal) "C-x RET" #'insert-char)
   :custom
   (evil-symbol-word-search t)
   (evil-undo-system 'undo-redo)
