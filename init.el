@@ -1857,6 +1857,10 @@ file in your browser at the visited revision."
   :custom
   (org-modern-todo-faces '(("WAIT" warning :bold t :inverse-video t))))
 
+(use-package org-cliplink :ensure t
+  ;; Create org-mode links from URLs on the clipboard.
+  :general (:keymaps 'org-mode-map "C-c l" #'org-cliplink))
+
 
 ;;; Input methods
 
