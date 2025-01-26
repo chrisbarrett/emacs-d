@@ -236,6 +236,10 @@
           (project-find-file-in "init.el" nil
                                 (project-current nil user-emacs-directory)))
 
+   "ge" (defun +goto-emacs-init-file ()
+          (interactive)
+          (find-file (file-name-concat user-emacs-directory "init.el")))
+
    "gn" (defun +goto-nix-file ()
           (interactive)
           (project-find-file-in  "flake.nix" nil
