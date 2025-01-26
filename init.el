@@ -1306,6 +1306,7 @@ file in your browser at the visited revision."
 
   :preface
   (setq org-directory "~/org")
+
   :custom
   (abbrev-file-name (file-name-concat org-directory "abbrev.el"))
 
@@ -1407,8 +1408,7 @@ file in your browser at the visited revision."
     (add-to-list 'org-file-apps '(directory . emacs)))
 
   ;; Don't show secondary selection when running `org-show-todo-tree'.
-  :functions org-highlight-new-match
-  :config (advice-add #'org-highlight-new-match :override #'ignore)
+  (advice-add #'org-highlight-new-match :override #'ignore)
 
   :config
   (define-advice org-return (:after (&optional indent _arg _interactive) emulate-major-mode-indent)
@@ -1437,9 +1437,34 @@ file in your browser at the visited revision."
 
   :general-config
   (:keymaps 'org-mode-map
-            "C-c C-k" #'+org-cut-subtree-or-cancel-note
-            "M-p" #'org-metaup
-            "M-n" #'org-metadown)
+   :states '(normal insert)
+   "C-c C-k" #'+org-cut-subtree-or-cancel-note
+   "C-c f" #'org-footnote-new
+   "M-+" #'org-table-insert-column
+   "M--" #'org-table-delete-column
+   "C-c C-." #'org-time-stamp-inactive
+   "C-c ." #'org-time-stamp
+   "C-c RET" (general-predicate-dispatch #'org-insert-todo-heading
+               (org-at-table-p) #'org-table-hline-and-move))
+
+  (:keymaps 'org-mode-map
+   :states 'normal
+   "RET" 'org-open-at-point
+   "M-p" #'org-metaup
+   "M-n" #'org-metadown
+   "C-c c" #'org-columns
+   "C-c d" #'org-dynamic-block-insert-dblock
+   "C-c n" 'org-next-link
+   "C-c p" 'org-previous-link
+   "C-c o" 'org-table-toggle-coordinate-overlays
+   "SPC n s" #'org-narrow-to-subtree)
+
+  :config
+  (+local-leader-set-key 'org-mode-map
+    "y" #'org-copy-subtree
+    "x" #'org-cut-subtree
+    "p" #'org-paste-subtree
+    "t" #'org-show-todo-tree)
   )
 
 (use-package org-capture
