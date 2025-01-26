@@ -316,6 +316,7 @@ Runs `+escape-hook'."
    "ol" #'org-store-link
    "of" #'+roam-node-find
    "os" #'org-roam-search
+   "ow" #'timekeep-visit-node
 
    "oc" '(nil :wk "clock")
    "oci" #'timekeep-start
