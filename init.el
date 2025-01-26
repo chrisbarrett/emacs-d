@@ -1124,9 +1124,7 @@ Runs `+escape-hook'."
   (which-key-side-window-slot -10)
   :config
   (which-key-setup-side-window-bottom)
-  (add-hook 'which-key-init-buffer-hook
-            (defun +set-which-key-buffer-spacing-h ()
-              (setq-local line-spacing 3))))
+  (setq-hook! 'which-key-init-buffer-hook line-spacing 3))
 
 (use-package consult :ensure t
   ;; Consult provides commands for common tasks that leverage the Emacs
