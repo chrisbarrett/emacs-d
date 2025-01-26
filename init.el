@@ -94,6 +94,7 @@
             (add-hook 'server-visit-hook #'+run-switch-buffer-hooks-h)))
 
 
+;; Adapt the escape key customisation from Doom.
 
 (defvar +default-minibuffer-maps
   '(minibuffer-local-map
@@ -103,8 +104,6 @@
     minibuffer-local-isearch-map
     read-expression-map))
 
-;; Adapt the escape key customisation from Doom.
-
 (defvar +escape-hook nil
   "Hook functions run until success when ESC is pressed.")
 
@@ -112,25 +111,31 @@
   "Quit things, abort things, and finish things.
 Runs `+escape-hook'."
   (interactive (list 'interactive))
-  (let ((inhibit-quit t))
-    (cond ((minibuffer-window-active-p (minibuffer-window))
-           ;; quit the minibuffer if open.
-           (when interactive
-             (setq this-command 'abort-recursive-edit))
-           (abort-recursive-edit))
-          ;; Run all escape hooks. If any returns non-nil, then stop there.
-          ((run-hook-with-args-until-success '+escape-hook))
-          ;; don't abort macros
-          ((or defining-kbd-macro executing-kbd-macro) nil)
-          ;; Back to the default
-          ((unwind-protect (keyboard-quit)
-             (when interactive
-               (setq this-command 'keyboard-quit)))))))
+  (let ((inhibit-quit t)
+        (in-minibuffer? (minibuffer-window-active-p (minibuffer-window))))
+    (cond
+     (in-minibuffer?
+      (when interactive (setq this-command 'abort-recursive-edit))
+      (abort-recursive-edit))
+
+     ;; Run all escape hooks. If any returns non-nil, then stop there.
+     ((run-hook-with-args-until-success '+escape-hook))
+
+     ;; Don't abort keyboard macros.
+     ((or defining-kbd-macro executing-kbd-macro))
+
+     ;; Fall back to keyboard-quit.
+     (t
+      (unwind-protect (keyboard-quit)
+        (when interactive
+          (setq this-command 'keyboard-quit)))))))
 
 (global-set-key [remap keyboard-quit] #'+escape)
 (global-set-key [remap abort-recursive-edit] #'+escape)
 (with-eval-after-load 'general
   (general-define-key :keymaps +default-minibuffer-maps [escape] #'+escape))
+(with-eval-after-load 'eldoc
+  (eldoc-add-command '+escape))
 
 
 ;;; Leader key
@@ -1308,8 +1313,7 @@ file in your browser at the visited revision."
   ;; Display help hints in the echo area as you move around.
   :config
   ;; Teach eldoc to re-run after these commands.
-  (eldoc-add-command '+escape
-                     'evil-normal-state
+  (eldoc-add-command 'evil-normal-state
                      'evil-insert
                      'evil-change
                      'evil-delete
