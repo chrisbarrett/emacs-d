@@ -965,7 +965,20 @@ Runs `+escape-hook'."
   :general
   (:states 'visual
            "v" (general-predicate-dispatch #'evil-multiedit-match-all
-                 (equal last-command 'evil-visual-char) #'+multiedit)))
+                 (equal last-command 'evil-visual-char) #'+multiedit))
+
+  :general-config
+  (:keymaps 'evil-multiedit-mode-map
+   :states 'normal
+   "Y" (defun +evil-multiedit-copy ()
+         (interactive)
+         (when-let* ((str (iedit-current-occurrence-string)))
+           (kill-new str)
+           (message "Copied to kill ring")))
+   "<tab>" #'iedit-toggle-selection
+   "n" #'evil-multiedit-next
+   "N" #'evil-multiedit-prev
+   "S" #'evil-multiedit--change-line))
 
 
 ;;; Completion
