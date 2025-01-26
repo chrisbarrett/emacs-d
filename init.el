@@ -1855,6 +1855,7 @@ file in your browser at the visited revision."
   :config
   (global-org-modern-mode +1)
   :custom
+  (org-modern-hide-stars nil)
   (org-modern-todo-faces '(("WAIT" warning :bold t :inverse-video t))))
 
 (use-package org-cliplink :ensure t
