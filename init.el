@@ -101,16 +101,16 @@
    :prefix "SPC"
    :prefix-command '+leader-key
 
-   "SPC" #'consult-buffer
-   "x" #'execute-extended-command
+   "SPC" '(consult-buffer :wk "buffers & files")
+   "x" '(execute-extended-command :wk "M-x")
    "r" #'vertico-repeat
-   ":" #'pp-eval-expression
-   ";" #'ielm
-   "d" #'dirvish
-   "u" #'universal-argument
-   "i" #'consult-imenu
-   "-" #'window-toggle-side-windows
-   "!" #'async-shell-command
+   ":" '(pp-eval-expression :wk "eval")
+   ";" '(ielm :wk "REPL")
+   "d" '(dirvish :wk "dir editor")
+   "u" '(universal-argument :wk "C-u")
+   "i" '(consult-imenu :wk "imenu")
+   "-" '(window-toggle-side-windows :wk "side windows")
+   "!" '(async-shell-command :wk "shell command")
 
    "'" (general-predicate-dispatch #'poporg-dwim
 
@@ -130,46 +130,48 @@
          (and (derived-mode-p 'prog-mode) (region-active-p)) #'edit-indirect-region
          (equal (buffer-name) "*Edit Formulas*") #'org-table-fedit-finish
          (derived-mode-p 'org-mode) #'org-edit-special
-         (and (derived-mode-p 'markdown-mode) (markdown-code-block-at-point-p))'markdown-edit-code-block)
+         (and (derived-mode-p 'markdown-mode) (markdown-code-block-at-point-p)) 'markdown-edit-code-block)
 
-   "/" #'consult-ripgrep
-   "*" (defun +consult-ripgrep-symbol ()
-         (interactive)
-         (consult-ripgrep nil (format "%s" (symbol-at-point))))
+   "/" '(consult-ripgrep :wk "search (rg)")
+   "*" (list (defun +consult-ripgrep-symbol ()
+               (interactive)
+               (consult-ripgrep nil (format "%s" (symbol-at-point))))
+             :wk "search (symbol)")
 
-   "<tab>" (defun +swap-buffers ()
-             "Switch between the previous buffer and the current one."
-             (interactive)
-             (switch-to-buffer nil))
+   "<tab>" (list (defun +swap-buffers ()
+                   "Switch between the previous buffer and the current one."
+                   (interactive)
+                   (switch-to-buffer nil))
+                 :wk "swap bufs")
 
-   "p"  '(nil :which-key "project")
+   "p"  '(nil :wk "project")
    "p" project-prefix-map
 
-   "h"  '(nil :which-key "help")
+   "h"  '(nil :wk "help")
    "h" help-map
 
-   "a"  '(nil :which-key "apps")
+   "a"  '(nil :wk "apps")
    "ac" #'quick-calc
    "aC" #'full-calc
    "ae" #'eshell
    "ar" (general-predicate-dispatch 'profiler-start
           (and (featurep 'profiler) (profiler-running-p)) #'+profiler-stop-and-report)
 
-   "ap"  '(nil :which-key "elpaca")
+   "ap"  '(nil :wk "elpaca")
    "app" #'elpaca-manager
    "apl" #'elpaca-log
    "api" #'elpaca-info
    "apb" #'elpaca-browse
    "apv" #'elpaca-visit
 
-   "b"  '(nil :which-key "buffers")
+   "b"  '(nil :wk "buffers")
    "bb" #'bury-buffer
    "bd" #'kill-current-buffer
    "bl" #'ibuffer
    "bn" #'next-buffer
    "bp" #'previous-buffer
 
-   "f"  '(nil :which-key "files")
+   "f"  '(nil :wk "files")
    "ff" #'find-file
    "fF" #'find-file-other-window
    "fs" #'save-buffer
@@ -206,16 +208,16 @@
               (find-alternate-file file)
             (user-error "Buffer is not visiting a file")))
 
-   "n"  '(nil :which-key "narrowing")
+   "n"  '(nil :wk "narrowing")
    "nf" #'narrow-to-defun
    "nr" #'narrow-to-region
    "nw" #'widen
 
-   "c"  '(nil :which-key "comments")
+   "c"  '(nil :wk "comments")
    "cr" #'comment-dwim
    "cl" #'comment-line
 
-   "g"  '(nil :which-key "git/goto")
+   "g"  '(nil :wk "git/goto")
    "gb" #'magit-blame
    "gd" #'magit-diff-buffer-file
    "gf" #'magit-file-dispatch
@@ -239,12 +241,7 @@
           (project-find-file-in  "flake.nix" nil
                                  (project-current nil "~/.config/nix-configuration")))
 
-   "gp" (defun +goto-project-file ()
-          (interactive)
-          (let ((proj (project-current nil (project-prompt-project-dir))))
-            (project-find-file-in nil nil proj)))
-
-   "o"  '(nil :which-key "org")
+   "o"  '(nil :wk "org")
    "oi" (defun +goto-org-roam-index ()
           (interactive)
           (require 'org-roam)
@@ -260,16 +257,26 @@
    "ok" #'org-capture
    "ol" #'org-store-link
    "of" #'+roam-node-find
-   "orr" #'org-roam-review
-   "orl" #'org-roam-links
    "os" #'org-roam-search
 
-   "e"  '(nil :which-key "errors")
+   "oc" '(nil :wk "clock")
+   "oci" #'timekeep-start
+   "oco" #'timekeep-stop
+   "ocr" #'org-resolve-clocks
+   "ocg" #'org-clock-goto
+
+   "or" '(nil :wk "roam/review")
+   "ord" #'org-roam-review-list-recently-added
+   "orl" #'org-roam-links
+   "orr" #'org-roam-review
+   "ort" #'org-roam-search-tags
+
+   "e"  '(nil :wk "errors")
    "el" #'consult-flymake
 
    "kr" #'consult-yank-pop
 
-   "t"  '(nil :which-key "toggles")
+   "t"  '(nil :wk "toggles")
    "td" #'dirvish-side
    "tf" #'global-display-fill-column-indicator-mode
    "ti" #'indent-bars-mode
@@ -278,7 +285,7 @@
    "ts" #'spell-fu-mode
    "tr" #'read-only-mode
 
-   "w"  '(nil :which-key "windows")
+   "w"  '(nil :wk "windows")
    "w-" #'+split-window-vertically-dwim
    "w/" #'+split-window-horizontally-dwim
    "w="  #'balance-windows
