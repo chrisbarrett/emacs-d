@@ -1125,6 +1125,7 @@ Runs `+escape-hook'."
   (corfu-quit-no-match t)
   (tab-always-indent 'complete)
   (corfu-popupinfo-delay '(1.0 . 0.5))
+  (global-corfu-modes '((not org-mode) t))
   :init
   (global-corfu-mode +1)
   (setq-hook! 'eshell-mode-hook corfu-auto nil)
