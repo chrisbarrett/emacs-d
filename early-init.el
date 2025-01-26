@@ -32,8 +32,20 @@
 
 ;;; Customise UI early in init sequence.
 
-;; Disable unneeded UI clutter.
-;;
+;; Make the window-borders invisible, use padding instead. Not sure if this is
+;; really usable yet, but it sure looks pretty.
+
+(modify-all-frames-parameters
+ '((right-divider-width . 10)
+   (internal-border-width . 10)))
+
+(set-face-background 'fringe (face-attribute 'default :background))
+(dolist (face '(window-divider window-divider-first-pixel window-divider-last-pixel))
+  (face-spec-reset-face face)
+  (set-face-foreground face (face-attribute 'default :background)))
+
+;; Disable unneeded UI clutter
+
 ;; Take a cue from Doom's playbook and avoid calling the functions which can
 ;; trigger window-system redraws; instead, modify the frame parameters directly.
 
