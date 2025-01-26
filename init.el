@@ -1537,6 +1537,7 @@ file in your browser at the visited revision."
 
   :config
   (+local-leader-set-key 'org-mode-map
+    "i" #'org-id-get-create
     "y" #'org-copy-subtree
     "x" #'org-cut-subtree
     "p" #'org-paste-subtree
