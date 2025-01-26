@@ -1575,11 +1575,14 @@ file in your browser at the visited revision."
   (org-link-set-parameters "id" :face '+org-id-link))
 
 (use-package org-capture
+  ;; Implements templated information capture into org-mode files.
   :config
   ;; Kill capture buffers by default (unless they've been visited)
   (org-capture-put :kill-buffer t))
 
 (use-package org-refile
+  ;; Move org-mode headings and their contents around in a structured way,
+  ;; both within the current file and to others.
   :custom
   (org-refile-targets
    '((nil :maxlevel . 3)
@@ -1640,6 +1643,8 @@ file in your browser at the visited revision."
       (kbd "/") #'org-agenda-filter)))
 
 (use-package org-agenda
+  ;; Aggregate TODOs and other tasks declared in org-mode files and display in a
+  ;; consolidated dashboard.
   :general
   ("C-c a" #'org-agenda)
   :config
@@ -1766,6 +1771,9 @@ file in your browser at the visited revision."
   )
 
 (use-package org-roam :ensure t
+  ;; Provides workflows for working with documents for atomic notes (e.g. a
+  ;; Zettelkasten); implements backlinks between documents for discovering
+  ;; connected notes.
   :preface
   (setq org-roam-directory "~/org/roam")
 
@@ -1834,9 +1842,13 @@ file in your browser at the visited revision."
    "C-j"     #'magit-section-forward
    "C-k"     #'magit-section-backward))
 
-(use-package poporg :ensure t)
+(use-package poporg :ensure t
+  ;; Easily pop open comments or strings for editing in a dedicated buffer.
+  )
 
 (use-package org-modern :ensure t
+  ;; Provides visual enhancements that make org-mode look less cluttered and
+  ;; more in-line with modern UX ideas.
   :after-call org-mode org-agenda
   :demand t
   :config
