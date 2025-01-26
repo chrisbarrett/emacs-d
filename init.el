@@ -1423,7 +1423,9 @@ file in your browser at the visited revision."
      (?B . warning)
      (?C . success)))
 
-  ;; (org-tags-column 0) ; REVISIT: Not sure what I want tags to do.
+  (org-tags-column 0)
+  (org-auto-align-tags nil)
+  (org-catch-invisible-edits 'show-and-error)
 
   ;; TODOs, checkboxes, stats, properties.
   (org-todo-keywords '((type "TODO(t)" "WAIT(w)" "|" "DONE(d)" "CANCELLED(c@)")))
