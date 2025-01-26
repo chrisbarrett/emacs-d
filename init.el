@@ -1840,6 +1840,14 @@ file in your browser at the visited revision."
 
 (use-package poporg :ensure t)
 
+(use-package org-modern :ensure t
+  :after-call org-mode org-agenda
+  :demand t
+  :config
+  (global-org-modern-mode +1)
+  :custom
+  (org-modern-todo-faces '(("WAIT" warning :bold t :inverse-video t))))
+
 
 ;;; Input methods
 
