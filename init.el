@@ -93,6 +93,35 @@
     minibuffer-local-isearch-map
     read-expression-map))
 
+;; Adapt the escape key customisation from Doom.
+
+(defvar +escape-hook nil
+  "Hook functions run until success when ESC is pressed.")
+
+(defun +escape (&optional interactive)
+  "Quit things, abort things, and finish things.
+Runs `+escape-hook'."
+  (interactive (list 'interactive))
+  (let ((inhibit-quit t))
+    (cond ((minibuffer-window-active-p (minibuffer-window))
+           ;; quit the minibuffer if open.
+           (when interactive
+             (setq this-command 'abort-recursive-edit))
+           (abort-recursive-edit))
+          ;; Run all escape hooks. If any returns non-nil, then stop there.
+          ((run-hook-with-args-until-success '+escape-hook))
+          ;; don't abort macros
+          ((or defining-kbd-macro executing-kbd-macro) nil)
+          ;; Back to the default
+          ((unwind-protect (keyboard-quit)
+             (when interactive
+               (setq this-command 'keyboard-quit)))))))
+
+(global-set-key [remap keyboard-quit] #'+escape)
+(global-set-key [remap abort-recursive-edit] #'+escape)
+(with-eval-after-load 'general
+  (general-define-key :keymaps +default-minibuffer-maps [escape] #'+escape))
+
 
 ;;; Leader key
 
@@ -859,7 +888,6 @@
 
   :general-config
   (:keymaps +default-minibuffer-maps
-            [escape] #'abort-recursive-edit
             "C-a"    #'move-beginning-of-line
             "C-r"    #'evil-paste-from-register
             "C-u"    #'evil-delete-back-to-indentation
@@ -936,33 +964,6 @@
   (evil-goggles-pulse nil)
   (evil-goggles-enable-delete nil)
   (evil-goggles-enable-change nil))
-
-;; Adapt the escape key customisation from Doom.
-
-(defvar +escape-hook nil
-  "Hook functions run until success when ESC is pressed.")
-
-(defun +escape (&optional interactive)
-  "Quit things, abort things, and finish things.
-Runs `+escape-hook'."
-  (interactive (list 'interactive))
-  (let ((inhibit-quit t))
-    (cond ((minibuffer-window-active-p (minibuffer-window))
-           ;; quit the minibuffer if open.
-           (when interactive
-             (setq this-command 'abort-recursive-edit))
-           (abort-recursive-edit))
-          ;; Run all escape hooks. If any returns non-nil, then stop there.
-          ((run-hook-with-args-until-success '+escape-hook))
-          ;; don't abort macros
-          ((or defining-kbd-macro executing-kbd-macro) nil)
-          ;; Back to the default
-          ((unwind-protect (keyboard-quit)
-             (when interactive
-               (setq this-command 'keyboard-quit)))))))
-
-(global-set-key [remap keyboard-quit] #'+escape)
-(keymap-set minibuffer-mode-map "<escape>" #'+escape)
 
 (use-package evil-multiedit :ensure t
   ;; Evil-compatible multiple cursors.
