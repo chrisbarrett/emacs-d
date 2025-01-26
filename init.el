@@ -746,7 +746,7 @@ Runs `+escape-hook'."
   (setq-hook! 'org-mode-hook
     spell-fu-faces-exclude '(org-meta-line org-link org-code org-block
                              org-block-begin-line org-block-end-line
-                             org-footnote)))
+                             org-footnote org-tag org-modern-tag)))
 
 (use-package flyspell-correct :ensure t
   ;; Provides a nicer command for working with spelling corrections.
