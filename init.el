@@ -741,6 +741,22 @@
    :keymaps 'elpaca-manager-mode-map
    "/" #'elpaca-ui-search))
 
+(use-package goto-addr
+  ;; Turns URLs in the buffer into clickable buttons.
+  :init
+  (defun +goto-address-maybe-h ()
+    (unless (derived-mode-p 'org-mode 'org-agenda-mode)
+      (goto-address)
+      (goto-address-mode +1)))
+  :hook ((prog-mode text-mode conf-mode) . +goto-address-maybe-h)
+
+  ;; Teach evil-ret to open URLs.
+  :init
+  (define-advice evil-ret (:before-until (&rest _) goto-addr)
+    (when-let* ((url (thing-at-point 'url)))
+      (browse-url url)
+      t)))
+
 ;; Teach Emacs that C-i and C-m do in fact exist.
 (pcase-dolist (`(,key ,fallback . ,events)
                '(([C-i] [?\C-i] tab kp-tab)
