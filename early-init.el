@@ -61,6 +61,9 @@
 ;; Sync the theme with the window system.
 (+theme-update)
 
+(set-face-attribute 'default nil :family "Fira Code")
+(set-face-attribute 'variable-pitch nil :family "Helvetica Neue")
+
 
 
 ;; Always prompt for "y" or "n", rather than "yes" or "no".
