@@ -32,34 +32,6 @@
 
 ;;; Customise UI early in init sequence.
 
-;; Make the window-borders invisible, use padding instead. Not sure if this is
-;; really usable yet, but it sure looks pretty.
-
-(modify-all-frames-parameters
- '((right-divider-width . 10)
-   (internal-border-width . 10)))
-
-(set-face-background 'fringe (face-attribute 'default :background))
-(dolist (face '(window-divider window-divider-first-pixel window-divider-last-pixel))
-  (face-spec-reset-face face)
-  (set-face-foreground face (face-attribute 'default :background)))
-
-;; Disable unneeded UI clutter
-
-;; Take a cue from Doom's playbook and avoid calling the functions which can
-;; trigger window-system redraws; instead, modify the frame parameters directly.
-
-(push '(menu-bar-lines . 0)   default-frame-alist)
-(push '(tool-bar-lines . 0)   default-frame-alist)
-(push '(vertical-scroll-bars) default-frame-alist)
-(when (equal system-type 'darwin)
-  (modify-all-frames-parameters '((undecorated . t))))
-
-(setq menu-bar-mode nil)
-(setq tool-bar-mode nil)
-(setq scroll-bar-mode nil)
-(setq frame-resize-pixelwise t)
-
 ;; Configure theme early to ensure we don't observe the change during the
 ;; startup process.
 
@@ -70,11 +42,50 @@
 (setq +theme-light 'modus-operandi)
 (setq +theme-dark 'modus-vivendi)
 
+(set-face-attribute 'default nil :family "Fira Code")
+(set-face-attribute 'variable-pitch nil :family "Helvetica Neue")
+
 ;; Sync the theme with the window system.
 (+theme-update)
 
-(set-face-attribute 'default nil :family "Fira Code")
-(set-face-attribute 'variable-pitch nil :family "Helvetica Neue")
+;; Make the window-borders appear as padding instead. Not sure if this is really
+;; usable yet, but it sure looks pretty.
+
+(defun +sync-frame-parameters (&optional in-early-init)
+  (modify-all-frames-parameters `((right-divider-width . 10)
+                                  (internal-border-width . 10)
+                                  ,@(when (equal system-type 'darwin)
+                                      '((undecorated . t)))))
+
+  ;; Themes aren't initialised until after early-init, so we can't access the
+  ;; background colour yet.
+  (unless in-early-init
+    (let ((bg (face-attribute 'default :background)))
+      (dolist (face '(fringe
+                      window-divider
+                      window-divider-first-pixel
+                      window-divider-last-pixel))
+        (face-spec-reset-face face)
+        (set-face-foreground face bg)))))
+
+(+sync-frame-parameters t)
+(add-hook '+theme-changed-hook #'+sync-frame-parameters)
+;; The minibuffer doesn't pick up the fringe parameters unless we sync again.
+(add-hook 'after-init-hook #'+sync-frame-parameters)
+
+;; Disable unneeded UI clutter
+
+;; Take a cue from Doom's playbook and avoid calling the functions which can
+;; trigger window-system redraws; instead, modify the frame parameters directly.
+
+(push '(menu-bar-lines . 0)   default-frame-alist)
+(push '(tool-bar-lines . 0)   default-frame-alist)
+(push '(vertical-scroll-bars) default-frame-alist)
+
+(setq menu-bar-mode nil)
+(setq tool-bar-mode nil)
+(setq scroll-bar-mode nil)
+(setq frame-resize-pixelwise t)
 
 
 
