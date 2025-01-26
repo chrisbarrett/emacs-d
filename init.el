@@ -84,6 +84,16 @@
             (add-hook 'server-visit-hook #'+run-switch-buffer-hooks-h)))
 
 
+
+(defvar +default-minibuffer-maps
+  '(minibuffer-local-map
+    minibuffer-local-ns-map
+    minibuffer-local-completion-map
+    minibuffer-local-must-match-map
+    minibuffer-local-isearch-map
+    read-expression-map))
+
+
 ;;; Leader key
 
 (use-package general :ensure (:wait t) :demand t
@@ -816,7 +826,29 @@
                 t)))
 
   :init
-  (evil-mode +1))
+  (evil-mode +1)
+
+  ;; Use more natural Emacs/readline keybindings in ex.
+  :general-config
+  (:keymaps '(evil-ex-completion-map evil-ex-search-keymap)
+            "C-a" #'evil-beginning-of-line
+            "C-b" #'evil-backward-char)
+
+  :config
+  (defun +delete-backward-word-no-kill (arg)
+    "Like `backward-kill-word', but doesn't affect the kill-ring."
+    (interactive "p")
+    (let ((kill-ring nil) (kill-ring-yank-pointer nil))
+      (ignore-errors (backward-kill-word arg))))
+
+  :general-config
+  (:keymaps +default-minibuffer-maps
+            [escape] #'abort-recursive-edit
+            "C-a"    #'move-beginning-of-line
+            "C-r"    #'evil-paste-from-register
+            "C-u"    #'evil-delete-back-to-indentation
+            "C-v"    #'yank
+            "C-w"    #'+delete-backward-word-no-kill))
 
 (use-package vundo :ensure
   (vundo :host github :repo "casouri/vundo")
