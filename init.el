@@ -298,6 +298,8 @@
    "wS" 'window-configuration-to-register
    "wt"  #'+toggle-window-dedication
    "ww" #'other-window
+
+   "z" '(global-text-scale-adjust :wk "text scaling")
    ))
 
 (defmacro +local-leader-set-key (keymaps &rest general-args)
