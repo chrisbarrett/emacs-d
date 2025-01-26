@@ -1387,7 +1387,6 @@ file in your browser at the visited revision."
 
 ;;; org-mode
 
-
 (use-package org :ensure t ; NB. installed from org package archive.
   ;; org-mode - the reason why I can probably never switch to another editor.
 
