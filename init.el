@@ -1775,6 +1775,12 @@ file in your browser at the visited revision."
   (use-package org-roam-links
     :commands (org-roam-links))
 
+  (use-package timekeep
+    :commands (timekeep-start timekeep-stop)
+    :general
+    ("<f12>" (general-predicate-dispatch 'timekeep-start
+               (and (fboundp 'org-clocking-p) (org-clocking-p)) 'timekeep-stop)))
+
   (use-package org-roam-rewrite
     :init
     (+local-leader-set-key 'org-mode-map
