@@ -1116,10 +1116,6 @@ Runs `+escape-hook'."
                             "<escape>" #'corfu-reset
                             "C-n" #'corfu-next
                             "C-p" #'corfu-previous)
-
-  ;; Make ESC dismiss corfu but stay in insert state.
-  (:keymaps 'corfu-map :states '(insert emacs)
-            "<escape>" #'corfu-reset)
   :custom
   (corfu-auto t)
   (corfu-quit-no-match t)
