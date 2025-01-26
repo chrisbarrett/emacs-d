@@ -1476,6 +1476,9 @@ file in your browser at the visited revision."
   ;; Prevent flickering when org-indent is enabled.
   (setq-hook! 'org-mode-hook show-paren-mode nil)
 
+  ;; Increase padding for readability.
+  (setq-hook! '(org-mode-hook org-agenda-mode-hook) line-spacing 0.1)
+
   ;; Automatically enter insert state when inserting new headings, logbook notes
   ;; or when using `org-capture'.
 
