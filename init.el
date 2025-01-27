@@ -591,9 +591,9 @@ Runs `+escape-hook'."
 
   :preface
   (use-package nerd-icons :ensure t
-    :demand t
     :after dirvish
-    :config
+    :functions nerd-icons-codicon nerd-icons-faicon
+    :init
     (setq dirvish-path-separators (list
                                    (format "  %s " (nerd-icons-codicon "nf-cod-home"))
                                    (format "  %s " (nerd-icons-codicon "nf-cod-root_folder"))
