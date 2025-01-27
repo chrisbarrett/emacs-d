@@ -864,7 +864,9 @@ Runs `+escape-hook'."
   :demand t
   :general-config
   (:states 'emacs "ESC ESC" #'evil-normal-state)
-  (:states '(insert normal) "C-x RET" #'insert-char)
+  (:states '(insert normal emacs)
+           "M-." #'xref-find-definitions
+           "C-x RET" #'insert-char)
   :custom
   (evil-symbol-word-search t)
   (evil-undo-system 'undo-redo)
@@ -1201,9 +1203,9 @@ Runs `+escape-hook'."
   ;; Embark provides a UI for performing contextual actions on selected items
   ;; within completing-read.
   :general
-  (:states 'normal "M-." #'embark-dwim)
-  ("C-@" #'embark-act
-   "M-." #'embark-dwim))
+  (:states '(normal emacs motion)
+           "C-@" #'embark-act
+           "C-t" #'embark-dwim))
 
 (use-package embark-consult :ensure t
   ;; Integration embark with consult
