@@ -1559,6 +1559,7 @@ file in your browser at the visited revision."
 
   :config
   (+local-leader-set-key 'org-mode-map
+    "A" #'org-archive-subtree
     "i" #'org-id-get-create
     "y" #'org-copy-subtree
     "x" #'org-cut-subtree
@@ -1770,6 +1771,12 @@ file in your browser at the visited revision."
               (org-fold-show-subtree)
               (org-display-outline-path)))
   )
+
+(use-package org-archive
+  ;; org-mode's glacier storage tier.
+  :custom
+  (org-archive-subtree-add-inherited-tags t)
+  (org-archive-location (file-name-concat org-directory "archive.org::datetree/")))
 
 (use-package org-roam :ensure t
   ;; Provides workflows for working with documents for atomic notes (e.g. a
