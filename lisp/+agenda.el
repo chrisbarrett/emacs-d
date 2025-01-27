@@ -62,12 +62,12 @@
 (defun +agenda-view-skip-function ()
   (let ((tags (org-get-tags)))
     (when (and (seq-contains-p tags "tickler")
-               (not (seq-contains-p tags "archived")))
+               (not (seq-contains-p tags "ARCHIVE")))
       (+agenda--skip-heading-safe))))
 
 (defun +agenda-next-actions-skip-function ()
   (cond
-   ;; Don't show things that will naturally show in the agenda.
+   ;; Scheduled items will show in the agenda view and should be skipped here.
    ((or (+agenda--any-scheduled-or-deadline-p)
         (+agenda--parent-scheduled-in-future-p))
     (+agenda--skip-heading-safe))
