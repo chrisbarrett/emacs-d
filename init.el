@@ -1192,7 +1192,10 @@ Runs `+escape-hook'."
 (use-package transient :ensure t
   ;; Magit depends on a more recent version of transient than the one that ships
   ;; with Emacs.
-  )
+  :custom
+  (transient-display-buffer-action '(display-buffer-below-selected))
+  :general-config
+  (:keymaps 'transient-map [escape] #'transient-quit-one))
 
 (use-package magit :ensure t
   ;; Magit is the definitive UX for working with git.
