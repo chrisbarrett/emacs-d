@@ -1473,7 +1473,8 @@ file in your browser at the visited revision."
   (org-catch-invisible-edits 'show-and-error)
 
   ;; TODOs, checkboxes, stats, properties.
-  (org-todo-keywords '((type "TODO(t)" "WAIT(w)" "|" "DONE(d)" "CANCELLED(c@)")))
+  (org-todo-keywords '((type "PROJECT(p)" "TODO(t)" "WAIT(w)" "|" "DONE(d)" "CANCELLED(c@)")))
+  (org-use-fast-todo-selection 'expert)
   (org-enforce-todo-dependencies t)
   (org-hierarchical-todo-statistics nil)
   (org-use-property-inheritance t)
@@ -1689,6 +1690,7 @@ file in your browser at the visited revision."
     :config
     (evil-org-agenda-set-keys)
     (evil-define-key 'motion org-agenda-mode-map
+      (kbd "v") #'org-agenda-view-mode-dispatch
       (kbd "SPC") nil
       (kbd "/") #'org-agenda-filter)))
 
@@ -1719,8 +1721,13 @@ file in your browser at the visited revision."
                                                              :fileskip0 t
                                                              :filetitle t))
                    (org-agenda-skip-function #'+agenda-view-skip-function))))
-         (next-actions '(tags-todo "-project-tickler-inbox+TODO=\"TODO\""
+
+         ;; TODO: A next action should:
+         ;; 1. be a leaf TODO
+         ;; 2. not be the top-most TODO with a :project: tag
+         (next-actions '(tags-todo "-tickler-inbox+TODO=\"TODO\""
                          ((org-agenda-overriding-header "Next Actions")
+                          (org-agenda-dim-blocked-tasks 'invisible)
                           (org-agenda-skip-function #'+agenda-next-actions-skip-function))))
 
          (inbox '(tags-todo "+inbox+TODO=\"TODO\""
@@ -1730,7 +1737,7 @@ file in your browser at the visited revision."
                       ((org-agenda-overriding-header "Delegated")
                        (org-agenda-skip-function '(org-agenda-skip-entry-if 'scheduled)))))
 
-         (projects '(tags-todo "+project+TODO=\"TODO\""
+         (projects '(tags-todo "+TODO=\"PROJECT\""
                      ((org-agenda-overriding-header "Projects"))))
 
          (tickler
@@ -1740,7 +1747,7 @@ file in your browser at the visited revision."
 
 
          (unprocessed-notes
-          '(tags-todo "+outline-project+TODO=\"TODO\""
+          '(tags-todo "+outline+TODO=\"TODO\""
             ((org-agenda-overriding-header "Unprocessed Notes")
              (org-agenda-skip-function #'+agenda-next-actions-skip-function))))
 
@@ -1755,18 +1762,15 @@ file in your browser at the visited revision."
                      (org-agenda-skip-deadline-prewarning-if-scheduled 'pre-scheduled)
                      (org-agenda-skip-scheduled-if-done t)
                      (org-agenda-start-on-weekday nil)
-                     (org-agenda-dim-blocked-tasks 'invisible)
+                     (org-agenda-dim-blocked-tasks t)
                      (org-agenda-sorting-strategy '((agenda time-up category-up priority-down todo-state-up)
                                                     (todo priority-down category-up scheduled-up)
                                                     (tags priority-down category-up)
                                                     (search category-up)))
                      (org-agenda-clock-report-header "\nClocking")
-                     (org-agenda-tags-column -100)
                      (org-agenda-use-time-grid nil)
-                     (org-agenda-start-with-log-mode '(closed state))
                      (org-agenda-show-future-repeats nil)
-                     (org-agenda-ignore-properties '(effort appt))
-                     (org-agenda-archives-mode t))))
+                     (org-agenda-ignore-properties '(effort appt)))))
 
      `(("p" "personal agenda" ,(list today next-actions inbox delegated projects tickler)
         (,@defaults
@@ -1905,11 +1909,19 @@ file in your browser at the visited revision."
   ;; more in-line with modern UX ideas.
   :after org
   :demand t
-  :config
-  (global-org-modern-mode +1)
   :custom
   (org-modern-hide-stars nil)
-  (org-modern-todo-faces '(("WAIT" warning :bold t :inverse-video t))))
+  :config
+  (global-org-modern-mode +1)
+  (custom-theme-set-faces 'user '(org-todo ((t (:bold t :inverse-video t)))))
+
+  (let ((custom-todos
+         '(("WAIT" warning org-todo)
+           ("PROJECT" font-lock-keyword-face org-todo))))
+
+    (setq org-modern-todo-faces custom-todos)
+    (setq org-todo-keyword-faces
+          (seq-map (apply-partially #'take 2) custom-todos))))
 
 (use-package org-cliplink :ensure t
   ;; Create org-mode links from URLs on the clipboard.
