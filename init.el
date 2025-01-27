@@ -578,6 +578,10 @@ Runs `+escape-hook'."
   (dired-listing-switches
    "--almost-all --human-readable --group-directories-first --no-group"))
 
+(use-package nerd-icons :ensure t
+  ;; Icons used by dirvish.
+  :autoload nerd-icons-codicon nerd-icons-faicon)
+
 (use-package dirvish :ensure t
   ;; Wrapper around `dired' that provides better UX.
   :general
@@ -589,20 +593,17 @@ Runs `+escape-hook'."
   (dirvish-attributes
    '(vc-state subtree-state nerd-icons collapse file-size file-time))
 
-  :preface
-  (use-package nerd-icons :ensure t
-    :after dirvish
-    :functions nerd-icons-codicon nerd-icons-faicon
-    :init
-    (setq dirvish-path-separators (list
-                                   (format "  %s " (nerd-icons-codicon "nf-cod-home"))
-                                   (format "  %s " (nerd-icons-codicon "nf-cod-root_folder"))
-                                   (format " %s " (nerd-icons-faicon "nf-fa-angle_right")))))
-  :config
-  (dirvish-peek-mode +1)
-  
   :init
-  (dirvish-override-dired-mode))
+  (dirvish-override-dired-mode)
+
+  :config
+  (setq dirvish-path-separators (list
+                                 (format "  %s " (nerd-icons-codicon "nf-cod-home"))
+                                 (format "  %s " (nerd-icons-codicon "nf-cod-root_folder"))
+                                 (format " %s " (nerd-icons-faicon "nf-fa-angle_right"))))
+  
+  :config
+  (dirvish-peek-mode +1))
 
 (keymap-global-set "C-c SPC"
                    (defun +insert-nbsp ()
