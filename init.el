@@ -1444,15 +1444,14 @@ file in your browser at the visited revision."
 
 ;;; org-mode
 
+;; org is a chonker; decompose the load process into smaller, incrementally
+;; loaded features so it's less noticeable.
+(+load-packages-incrementally '(calendar find-func format-spec org-macs org-compat org-faces org-entities
+                                org-list org-pcomplete org-src org-footnote org-macro ob org org-modern
+                                org-habit org-agenda org-capture))
+
 (use-package org :ensure t ; NB. installed from org package archive.
   ;; org-mode - the reason why I can probably never switch to another editor.
-
-  ;; org is a chonker; decompose the load process into smaller features so it's
-  ;; less noticeable.
-  :defer-incrementally
-  calendar find-func format-spec org-macs org-compat org-faces org-entities
-  org-list org-pcomplete org-src org-footnote org-macro ob org org-habit org-agenda
-  org-capture
 
   :hook ((org-mode . abbrev-mode)
          (org-mode . auto-fill-mode))
@@ -1917,7 +1916,7 @@ file in your browser at the visited revision."
 (use-package org-modern :ensure t
   ;; Provides visual enhancements that make org-mode look less cluttered and
   ;; more in-line with modern UX ideas.
-  :after-call org-mode org-agenda
+  :after org
   :demand t
   :config
   (global-org-modern-mode +1)
