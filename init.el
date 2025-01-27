@@ -1305,7 +1305,7 @@ file in your browser at the visited revision."
                    (if (and end-line (not (equal start-line end-line))) end-line)))
       (apply fn args))))
 
-(use-package forge
+(use-package forge :ensure t
   ;; Teach magit how to represent pull request on GitHub and other git hosting
   ;; services.
   :after-call magit-status ; avoids compilation until first use
