@@ -1349,12 +1349,7 @@ file in your browser at the visited revision."
             (root (project-root proj)))
        (if (file-directory-p (file-name-concat root ".git"))
            (magit-status-setup-buffer root)
-         (dirvish root)))))
-
-  :autoload project-remember-projects-under
-  :config
-  (project-remember-projects-under "~/.config")
-  (project-remember-projects-under "~/src"))
+         (dirvish root))))))
 
 
 ;;; Documentation systems
