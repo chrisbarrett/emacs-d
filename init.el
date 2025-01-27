@@ -1360,7 +1360,10 @@ file in your browser at the visited revision."
   :custom
   (help-window-select t)
   :general
-  ;; I bind C-h to better-jumper; use F2 as an alternative help commands
+  (:keymaps 'help-map
+            "c" #'describe-face
+            "P" #'describe-text-properties)
+  ;; I bind C-h to better-jumper; use F2 as an alternative help command prefix
   ;; instead.
   ([f2] help-map))
 
