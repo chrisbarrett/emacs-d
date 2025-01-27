@@ -445,6 +445,8 @@ Runs `+escape-hook'."
   :custom
   (sentence-end-double-space nil))
 
+(defvar +auto-save-dir (file-name-concat user-emacs-directory "autosave/"))
+
 (use-package files
   ;; General built-in file IO.
   :custom
@@ -458,23 +460,15 @@ Runs `+escape-hook'."
   (delete-old-versions t)
   (kept-old-versions 5)
   (kept-new-versions 5)
-  (backup-directory-alist (list (cons "." (file-name-concat user-emacs-directory "backup/"))))
+  (backup-directory-alist `(("." . ,+auto-save-dir)))
+  (auto-save-list-file-prefix (file-name-concat +auto-save-dir ".saves-"))
+  (auto-save-file-name-transforms `((".*" ,+auto-save-dir t)))
 
   :config
   (define-advice after-find-file (:around (fn &rest args) dont-block-on-autosave-exists)
     "Prevent the editor blocking to inform you when an autosave file exists."
     (cl-letf (((symbol-function #'sit-for) #'ignore))
       (apply fn args))))
-
-(use-package startup
-  :custom
-  (auto-save-list-file-prefix (file-name-concat user-emacs-directory "autosave/"))
-  :config
-  (setq auto-save-file-name-transforms
-        (list (list "\\`/[^/]*:\\([^/]*/\\)*\\([^/]*\\)\\'"
-                    ;; Prefix tramp autosaves to prevent conflicts with local ones
-                    (concat auto-save-list-file-prefix "tramp-\\2") t)
-              (list ".*" auto-save-list-file-prefix t))))
 
 (use-package tramp
   ;; Provides remote editing support, e.g. over SSH connections.
