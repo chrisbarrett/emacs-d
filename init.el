@@ -29,7 +29,12 @@
 (require 'use-package)
 
 (eval-and-compile
-  (require '+corelib (file-name-concat user-emacs-directory "lisp/+corelib.el")))
+  (add-to-list 'load-path (file-name-concat user-emacs-directory "lisp"))
+  (require '+corelib)
+  (require '+load-incrementally))
+
+(defvar org-directory "~/org")
+(defvar org-roam-directory "~/org/roam")
 
 ;; TODO: Remove once Emacs 30 is out of pretest.
 (when (eq emacs-major-version 30)
@@ -41,9 +46,6 @@
 (require 'server)
 (unless (server-running-p)
   (server-start))
-
-(eval-and-compile
-  (add-to-list 'load-path (file-name-concat user-emacs-directory "lisp")))
 
 (add-to-list 'trusted-content (file-name-concat user-emacs-directory "early-init.el"))
 (add-to-list 'trusted-content (file-name-concat user-emacs-directory "init.el"))
@@ -738,7 +740,7 @@ Runs `+escape-hook'."
             (defun +spell-fu-set-dictionaries ()
               (spell-fu-dictionary-add (spell-fu-get-ispell-dictionary "en_AU"))
               (spell-fu-dictionary-add (spell-fu-get-ispell-dictionary "fr"))
-              (spell-fu-dictionary-add (spell-fu-get-personal-dictionary "en-personal" "~/org/aspell.en.pws"))))
+              (spell-fu-dictionary-add (spell-fu-get-personal-dictionary "en-personal" (file-name-concat org-directory "aspell.en.pws")))))
 
   (unless (executable-find "aspell")
     (warn "Could not find aspell program; spell checking will not work"))
@@ -1350,8 +1352,7 @@ file in your browser at the visited revision."
   :autoload project-remember-projects-under
   :config
   (project-remember-projects-under "~/.config")
-  (project-remember-projects-under "~/src")
-  (project-remember-projects-under "~/org"))
+  (project-remember-projects-under "~/src"))
 
 
 ;;; Documentation systems
@@ -1455,9 +1456,6 @@ file in your browser at the visited revision."
 
   :hook ((org-mode . abbrev-mode)
          (org-mode . auto-fill-mode))
-
-  :preface
-  (setq org-directory "~/org")
 
   :custom
   (abbrev-file-name (file-name-concat org-directory "abbrev.el"))
@@ -1841,8 +1839,6 @@ file in your browser at the visited revision."
   ;; Provides workflows for working with documents for atomic notes (e.g. a
   ;; Zettelkasten); implements backlinks between documents for discovering
   ;; connected notes.
-  :preface
-  (setq org-roam-directory "~/org/roam")
 
   :defer-incrementally
   ansi-color dash f rx seq magit-section emacsql
