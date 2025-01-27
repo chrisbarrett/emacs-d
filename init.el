@@ -1453,7 +1453,7 @@ file in your browser at the visited revision."
 
   ;; visual settings
   (org-list-indent-offset 1)
-  (org-cycle-separator-lines 1)
+  (org-cycle-separator-lines 0)
   (org-ellipsis " …")
   (org-hide-emphasis-markers t)
   (org-pretty-entities t)
