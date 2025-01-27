@@ -793,7 +793,7 @@ Runs `+escape-hook'."
     (unless (derived-mode-p 'org-mode 'org-agenda-mode)
       (goto-address)
       (goto-address-mode +1)))
-  :hook ((prog-mode text-mode conf-mode) . +goto-address-maybe-h)
+  :hook ((prog-mode text-mode conf-mode magit-process-mode) . +goto-address-maybe-h)
 
   ;; Teach evil-ret to open URLs.
   :init
