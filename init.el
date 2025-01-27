@@ -802,6 +802,37 @@ Runs `+escape-hook'."
       (browse-url url)
       t)))
 
+(use-package better-jumper :ensure t
+  ;; Maintains a jump list so you can more easily get back to where you were if
+  ;; a command takes you somewhere else.
+  :demand t
+  :preface
+  (defun +set-jump-point ()
+    (when (get-buffer-window)
+      (better-jumper-set-jump))
+    nil)
+  :init
+  (better-jumper-mode +1)
+
+  :config
+  (add-hook 'kill-buffer-hook #'+set-jump-point)
+  (advice-add #'consult-imenu :before #'+set-jump-point)
+  (advice-add #'org-mark-ring-push :before #'+set-jump-point)
+  (add-hook 'org-open-at-point-functions #'+set-jump-point)
+
+  :general
+  (:states 'normal
+           "C-l" #'better-jumper-jump-forward
+           "C-h" #'better-jumper-jump-backward)
+
+  :general-config
+  ([remap evil-jump-forward]  #'better-jumper-jump-forward
+   [remap evil-jump-backward] #'better-jumper-jump-backward
+   [remap xref-pop-marker-stack] #'better-jumper-jump-backward
+   [remap xref-go-back] #'better-jumper-jump-backward
+   [remap pop-tag-mark] #'better-jumper-jump-backward
+   [remap xref-go-forward] #'better-jumper-jump-forward))
+
 ;; Teach Emacs that C-i and C-m do in fact exist.
 (pcase-dolist (`(,key ,fallback . ,events)
                '(([C-i] [?\C-i] tab kp-tab)
@@ -1327,7 +1358,11 @@ file in your browser at the visited revision."
 
 (use-package help
   :custom
-  (help-window-select t))
+  (help-window-select t)
+  :general
+  ;; I bind C-h to better-jumper; use F2 as an alternative help commands
+  ;; instead.
+  ([f2] help-map))
 
 (use-package eldoc
   ;; Display help hints in the echo area as you move around.
