@@ -1678,6 +1678,20 @@ file in your browser at the visited revision."
                 (setq-local org-habit-following-days following-days)
                 (setq-local org-habit-graph-column graph-column-adjusted)))))
 
+(use-package org-src
+  ;; Programming language source blocks.
+  :config
+  (let ((aliases
+         ;; TODO: Remap mode definitions so I don't have to maintain this
+         ;; myself..
+         '(("md" . markdown)
+           ("csharp" . csharp-ts-mode)
+           ("nix" . nix-ts)
+           ("yaml" . yaml-ts)
+           ("yml" . yaml-ts))))
+    (dolist (alias aliases)
+      (add-to-list 'org-src-lang-modes alias))))
+
 (use-package evil-org :ensure t
   ;; Provides extra evil keybindings for org-mode, org-agenda etc.
   :hook (org-mode . evil-org-mode)
