@@ -36,12 +36,18 @@
 (defvar org-directory "~/org")
 (defvar org-roam-directory "~/org/roam")
 
+
+;;; Bootstrap Elpaca
+
 ;; TODO: Remove once Emacs 30 is out of pretest.
 (when (eq emacs-major-version 30)
   (defvar elpaca-core-date 20241219))
 
-(require 'elpaca-bootstrap
-         (file-name-concat user-emacs-directory "elpaca-bootstrap.el"))
+(unless (featurep 'elpaca)
+  (load-file (file-name-concat user-emacs-directory "elpaca-bootstrap.el")))
+
+(elpaca elpaca-use-package
+  (elpaca-use-package-mode))
 
 (require 'server)
 (unless (server-running-p)
