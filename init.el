@@ -1204,7 +1204,11 @@ Runs `+escape-hook'."
             (defun +git-commit-initial-state-h ()
               (when (and (bound-and-true-p evil-mode)
                          (thing-at-point-looking-at (rx bol (* space) eol)))
-                (evil-insert-state)))))
+                (evil-insert-state))))
+  :custom
+  (magit-diff-refine-hunk t)
+  (magit-save-repository-buffers 'dontask)
+  (magit-revision-insert-related-refs nil))
 
 (use-package git-timemachine :ensure t
   :general-config
