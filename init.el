@@ -49,10 +49,6 @@
 (elpaca elpaca-use-package
   (elpaca-use-package-mode))
 
-(require 'server)
-(unless (server-running-p)
-  (server-start))
-
 (add-to-list 'trusted-content (file-name-concat user-emacs-directory "early-init.el"))
 (add-to-list 'trusted-content (file-name-concat user-emacs-directory "init.el"))
 (add-to-list 'trusted-content (file-name-concat user-emacs-directory "lisp/"))
@@ -835,6 +831,16 @@ Runs `+escape-hook'."
    [remap xref-go-back] #'better-jumper-jump-backward
    [remap pop-tag-mark] #'better-jumper-jump-backward
    [remap xref-go-forward] #'better-jumper-jump-forward))
+
+(use-package server
+  ;; Use existing Emacs instances to edit files as $EDITOR.
+  :if (display-graphic-p)
+  :init
+  (add-hook 'after-init-hook
+            (defun +start-server-h ()
+              (require 'server)
+              (unless (server-running-p)
+                (server-start)))))
 
 ;; Teach Emacs that C-i and C-m do in fact exist.
 (pcase-dolist (`(,key ,fallback . ,events)
