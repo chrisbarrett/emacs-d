@@ -49,14 +49,6 @@
 (elpaca elpaca-use-package
   (elpaca-use-package-mode))
 
-(add-to-list 'trusted-content (file-name-concat user-emacs-directory "early-init.el"))
-(add-to-list 'trusted-content (file-name-concat user-emacs-directory "init.el"))
-(add-to-list 'trusted-content (file-name-concat user-emacs-directory "lisp/"))
-
-(use-package find-func
-  :config
-  (add-to-list 'trusted-content (file-name-concat find-function-C-source-directory "../lisp/")))
-
 ;; Make sure I don't accidentally start loading super-expensive packages on startup.
 
 (defconst +expensive-packages '(org org-roam org-agenda forge))
@@ -865,6 +857,15 @@ Runs `+escape-hook'."
                                       key)
                              nil t)))
          key fallback))))
+
+;; TODO: Why is this bound on some installations but not others? 🤔
+(when (boundp 'trusted-content)
+  (add-to-list 'trusted-content (file-name-concat user-emacs-directory "early-init.el"))
+  (add-to-list 'trusted-content (file-name-concat user-emacs-directory "init.el"))
+  (add-to-list 'trusted-content (file-name-concat user-emacs-directory "lisp/"))
+  (use-package find-func
+    :config
+    (add-to-list 'trusted-content (file-name-concat find-function-C-source-directory "../lisp/"))))
 
 
 ;;; evil-mode
