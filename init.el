@@ -2028,6 +2028,9 @@ file in your browser at the visited revision."
     :config
     (org-roam-slipbox-tag-mode +1)))
 
+(let ((site-file (file-name-concat user-emacs-directory "site.el")))
+  (load site-file t nil nil t ))
+
 
 
 ;; Local Variables:
