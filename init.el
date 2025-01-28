@@ -10,19 +10,21 @@
 ;; - something like smartparens
 ;;     - maybe https://github.com/AmaiKinono/puni?
 ;;
+;; - formatting, e.g. apheleia
+;;
+;; - file templates & text snippets
+;;
+;;    It's possible file templates & text snippets could both be done by the same
+;;    system. Emacs has the following builtin-ones, which I will evaluate:
+;;
+;;    - abbrev
+;;    - expand
+;;    - skeleton
+;;    - tempo
+;;
 ;; - org-mode journalling
 ;;
-;; - file templates
-;;
-;; - text snippets
-;;
-;; It's possible file templates & text snippets could both be done by the same
-;; system. Emacs has the following builtin-ones, which I will evaluate:
-;;
-;; - abbrev
-;; - expand
-;; - skeleton
-;; - tempo
+;; - doom's black magic performance tweaks on startup
 
 ;;; Code:
 
