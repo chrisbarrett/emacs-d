@@ -914,10 +914,7 @@ Runs `+escape-hook'."
 (when (boundp 'trusted-content)
   (add-to-list 'trusted-content (file-name-concat user-emacs-directory "early-init.el"))
   (add-to-list 'trusted-content (file-name-concat user-emacs-directory "init.el"))
-  (add-to-list 'trusted-content (file-name-concat user-emacs-directory "lisp/"))
-  (use-package find-func
-    :config
-    (add-to-list 'trusted-content (file-name-concat find-function-C-source-directory "../lisp/"))))
+  (add-to-list 'trusted-content (file-name-concat user-emacs-directory "lisp/")))
 
 
 ;;; evil-mode
