@@ -717,13 +717,15 @@ Runs `+escape-hook'."
   (autoload 'comint-truncate-buffer "comint" nil t)
   (add-hook 'compilation-filter-hook #'comint-truncate-buffer))
 
-(use-package hide-mode-line :ensure
-  (hide-mode-line :host github :repo "hlissner/emacs-hide-mode-line")
+(use-package hide-mode-line :ensure (hide-mode-line
+                                     :host github
+                                     :repo "hlissner/emacs-hide-mode-line")
   ;; Disable the mode-line in situations where it's not useful.
   :hook ((completion-list-mode-hook Man-mode-hook) . hide-mode-line-mode))
 
-(use-package highlight-numbers :ensure
-  (highlight-numbers :host github :repo "Fanael/highlight-numbers")
+(use-package highlight-numbers :ensure (highlight-numbers
+                                        :host github
+                                        :repo "Fanael/highlight-numbers")
   ;; Ensure numbers always have syntax highlighting applied, even if a
   ;; major-mode neglects to configure that.
   :hook (prog-mode-hook conf-mode-hook)
@@ -1003,8 +1005,7 @@ Runs `+escape-hook'."
             "C-v"    #'yank
             "C-w"    #'+delete-backward-word-no-kill))
 
-(use-package vundo :ensure
-  (vundo :host github :repo "casouri/vundo")
+(use-package vundo :ensure (vundo :host github :repo "casouri/vundo")
   ;; Visualise the Emacs undo history.
   :general ("C-x u" #'vundo)
   :config
@@ -1458,7 +1459,6 @@ file in your browser at the visited revision."
             "cdk.out"
             "target"
             ".direnv"))
-
 
 
 ;;; projects
@@ -2099,10 +2099,9 @@ file in your browser at the visited revision."
 
 
 
-(use-package nursery :ensure
-  (nursery :host github :repo "chrisbarrett/nursery"
-           :files (:defaults "extensions/*"))
-
+(use-package nursery :ensure (nursery :host github
+                                      :repo "chrisbarrett/nursery"
+                                      :files (:defaults "extensions/*"))
   :init
   (use-package org-roam-review
     :commands (org-roam-review org-roam-review-list-recently-added)
