@@ -1862,7 +1862,8 @@ file in your browser at the visited revision."
   ("C-c a" #'org-agenda)
   :general-config
   (:keymaps 'org-agenda-mode-map :states 'motion
-            "J" #'org-agenda-goto-date)
+            "J" #'org-agenda-goto-date
+            [remap save-buffer] #'org-save-all-org-buffers)
 
   :custom
   (org-agenda-files (file-name-concat org-directory "org-agenda-files"))
