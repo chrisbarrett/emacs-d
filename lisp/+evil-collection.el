@@ -12,7 +12,6 @@
 
 ;;; Code:
 
-(require '+log)
 (require '+corelib)
 
 (autoload 'evil-collection-init "evil-collection")

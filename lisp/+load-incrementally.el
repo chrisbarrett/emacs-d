@@ -12,7 +12,7 @@
 
 ;;; Code:
 
-(require '+log)
+(require '+corelib)
 
 (eval-when-compile
   (require 'use-package-core))
