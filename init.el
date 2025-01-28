@@ -860,12 +860,10 @@ Runs `+escape-hook'."
 (use-package server
   ;; Use existing Emacs instances to edit files as $EDITOR.
   :if (display-graphic-p)
-  :init
-  (add-hook 'after-init-hook
-            (defun +start-server-h ()
-              (require 'server)
-              (unless (server-running-p)
-                (server-start)))))
+  :after-call +first-input-hook +first-file-hook
+  :config
+  (unless (server-running-p)
+    (server-start)))
 
 ;; Teach Emacs that C-i and C-m do in fact exist.
 (pcase-dolist (`(,key ,fallback . ,events)
