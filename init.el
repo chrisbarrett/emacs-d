@@ -1543,7 +1543,9 @@ file in your browser at the visited revision."
 
   (+local-leader-set-key 'emacs-lisp-mode-map
     "e" '(nil :which-key "eval")
-    "eb" #'eval-buffer)
+    "eb" (defun +eval-buffer ()
+           (interactive)
+           (message "eval buffer => %s" (eval-buffer))))
 
   (setq-hook! 'emacs-lisp-mode-hook
     evil-lookup-func #'+emacs-lisp-lookup-func)
