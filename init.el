@@ -26,6 +26,9 @@
 
 ;;; Code:
 
+(when (< emacs-major-version 30)
+  (user-error "Emacs 30 required"))
+
 (require 'use-package)
 
 (eval-and-compile
