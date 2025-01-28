@@ -1441,7 +1441,6 @@ file in your browser at the visited revision."
 
   :preface
   (setq forge-database-file (file-name-concat user-emacs-directory "forge/forge-database.sqlite"))
-
   :general
   (:keymaps 'magit-mode-map [remap magit-browse-thing] #'forge-browse)
   (:keymaps 'magit-remote-section-map [remap magit-browse-thing] #'forge-browse-remote)
@@ -1858,7 +1857,7 @@ file in your browser at the visited revision."
   (org-agenda-start-on-weekday nil)
   (org-agenda-tags-column 0)
   (org-archive-tag "ARCHIVED")
-  (org-agenda-inhibit-startup t)
+  (org-agenda-inhibit-startup nil)
   (org-agenda-custom-commands
    (let ((today '(agenda ""
                   ((org-agenda-overriding-header "Today")
@@ -1932,6 +1931,7 @@ file in your browser at the visited revision."
             :min-duration 0
             :max-gap 0)))))))
   :config
+  (require '+agenda)
 
   ;; Use page-break separator for sections
 
