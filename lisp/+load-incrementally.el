@@ -86,8 +86,6 @@ If this is a daemon session, load them all immediately instead."
                            nil #'+load-packages-incrementally
                            (cdr +load-packages--work-queue) t))))
 
-(add-hook 'after-init-hook #'+load-packages-incrementally-h)
-
 (defun +load-incrementally-setup-use-package-keywords ()
   (require 'use-package-core)
 

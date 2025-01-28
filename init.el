@@ -46,7 +46,6 @@
 (unless (featurep 'elpaca)
   (load-file (file-name-concat user-emacs-directory "elpaca-bootstrap.el")))
 
-(require 'elpaca)
 (elpaca elpaca-use-package
   (elpaca-use-package-mode))
 
@@ -60,6 +59,8 @@
               (warn "The following package(s) were loaded eagerly, rather than deferred: %S" loaded)))
           nil
           -99)
+
+(add-hook 'elpaca-after-init-hook #'+load-packages-incrementally-h)
 
 
 
