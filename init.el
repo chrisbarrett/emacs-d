@@ -865,6 +865,13 @@ Runs `+escape-hook'."
   (unless (server-running-p)
     (server-start)))
 
+(use-package wgrep :ensure t
+  ;; Display search results etc. in a buffer allowing direct edits to the
+  ;; underlying files.
+  :commands wgrep-change-to-wgrep-mode
+  :custom
+  (wgrep-auto-save-buffer t))
+
 ;; Teach Emacs that C-i and C-m do in fact exist.
 (pcase-dolist (`(,key ,fallback . ,events)
                '(([C-i] [?\C-i] tab kp-tab)
