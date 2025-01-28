@@ -1959,17 +1959,15 @@ file in your browser at the visited revision."
       (setq +org--agenda-update-process
             (start-process "update-org-agenda-files" nil +agenda-files-update-script))))
 
-  (add-hook 'org-mode-hook
-            (defun +update-org-agenda-files-h ()
-              (add-hook 'after-save-hook #'+org-agenda-update-files nil t)))
+  (add-hook! 'org-mode-hook
+    (add-hook 'after-save-hook #'+org-agenda-update-files nil t))
 
   ;; Reveal context around item on TAB
-  (add-hook 'org-agenda-after-show-hook
-            (defun +org-reveal-context-h ()
-              (org-overview)
-              (org-reveal)
-              (org-fold-show-subtree)
-              (org-display-outline-path)))
+  (add-hook! 'org-agenda-after-show-hook
+    (org-overview)
+    (org-reveal)
+    (org-fold-show-subtree)
+    (org-display-outline-path))
   )
 
 (use-package org-archive
