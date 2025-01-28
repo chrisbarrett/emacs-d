@@ -9,6 +9,21 @@
 ;; The two added keywords are `:defer-incrementally' and `:after-call'.
 ;;
 ;; This functionality is taken from Doom; see the use-package module.
+;;
+;; :after-call SYMBOL|LIST
+;;   Takes a symbol or list of symbols representing functions or hook variables.
+;;   The first time any of these functions or hooks are executed, the package is
+;;   loaded.
+;;
+;; :defer-incrementally SYMBOL|LIST|t
+;;   Takes a symbol or list of symbols representing packages that will be loaded
+;;   incrementally at startup before this one. This is helpful for large packages
+;;   like magit or org, which load a lot of dependencies on first load. This lets
+;;   you load them piece-meal during idle periods, so that when you finally do need
+;;   the package, it'll load quicker.
+;;
+;;   NAME is implicitly added if this property is present and non-nil. No need to
+;;   specify it. A value of `t' implies NAME.
 
 ;;; Code:
 
