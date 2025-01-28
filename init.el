@@ -56,12 +56,9 @@
 
 (defconst +expensive-packages '(org org-roam org-agenda forge))
 
-(add-hook 'after-init-hook
-          (defun +assert-packages-deferred ()
-            (when-let* ((loaded (seq-filter #'featurep +expensive-packages)))
-              (warn "The following package(s) were loaded eagerly, rather than deferred: %S" loaded)))
-          nil
-          -99)
+(add-transient-hook! 'after-init-hook
+  (when-let* ((loaded (seq-filter #'featurep +expensive-packages)))
+    (warn "The following package(s) were loaded eagerly, rather than deferred: %S" loaded)))
 
 (add-hook 'elpaca-after-init-hook #'+load-packages-incrementally-h)
 
@@ -89,11 +86,10 @@
                 (equal (old-selected-window) (minibuffer-window)))
       (run-hooks '+switch-window-hook))))
 
-(add-hook 'after-init-hook
-          (defun +install-ui-hooks-h ()
-            (add-hook 'window-selection-change-functions #'+run-switch-window-or-frame-hooks-h)
-            (add-hook 'window-buffer-change-functions #'+run-switch-buffer-hooks-h)
-            (add-hook 'server-visit-hook #'+run-switch-buffer-hooks-h)))
+(add-transient-hook! 'after-init-hook
+  (add-hook 'window-selection-change-functions #'+run-switch-window-or-frame-hooks-h)
+  (add-hook 'window-buffer-change-functions #'+run-switch-buffer-hooks-h)
+  (add-hook 'server-visit-hook #'+run-switch-buffer-hooks-h))
 
 
 ;; Adapt the escape key customisation from Doom.
