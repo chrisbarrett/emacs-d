@@ -600,6 +600,11 @@ Runs `+escape-hook'."
   (dired-listing-switches
    "--almost-all --human-readable --group-directories-first --no-group"))
 
+(use-package dired-aux
+  :custom
+  (dired-create-destination-dirs 'ask)
+  (dired-vc-rename-file t))
+
 (use-package nerd-icons :ensure t
   ;; Icon set used by various packages.
   :autoload nerd-icons-codicon nerd-icons-faicon)
@@ -626,7 +631,7 @@ Runs `+escape-hook'."
                                  (format "  %s " (nerd-icons-codicon "nf-cod-home"))
                                  (format "  %s " (nerd-icons-codicon "nf-cod-root_folder"))
                                  (format " %s " (nerd-icons-faicon "nf-fa-angle_right"))))
-  
+
   :config
   (dirvish-peek-mode +1))
 
