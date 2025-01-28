@@ -765,6 +765,16 @@ Runs `+escape-hook'."
 
 (setq redisplay-skip-fontification-on-input t)
 
+(use-package ispell
+  ;; Built-in spellchecker. I don't actually use it directly, but other packages reference its configuration.
+  :custom
+  (ispell-dictionary "en_AU")
+  (ispell-personal-dictionary (file-name-concat org-directory "aspell.en.pws"))
+  :config
+  (unless (executable-find "aspell")
+    (warn "Could not find aspell program; spell checking will not work"))
+  (ispell-set-spellchecker-params))
+
 (use-package spell-fu :ensure t
   ;; A more lightweight spell-checker than the built-in.
   :hook (text-mode-hook prog-mode-hook conf-mode-hook)
@@ -779,11 +789,7 @@ Runs `+escape-hook'."
   (add-hook 'spell-fu-mode-hook
             (defun +spell-fu-set-dictionaries ()
               (spell-fu-dictionary-add (spell-fu-get-ispell-dictionary "en_AU"))
-              (spell-fu-dictionary-add (spell-fu-get-ispell-dictionary "fr"))
-              (spell-fu-dictionary-add (spell-fu-get-personal-dictionary "en-personal" (file-name-concat org-directory "aspell.en.pws")))))
-
-  (unless (executable-find "aspell")
-    (warn "Could not find aspell program; spell checking will not work"))
+              (spell-fu-dictionary-add (spell-fu-get-ispell-dictionary "fr"))))
 
   (setq-hook! 'org-mode-hook
     spell-fu-faces-exclude '(org-meta-line org-link org-code org-block
@@ -793,8 +799,6 @@ Runs `+escape-hook'."
 (use-package flyspell-correct :ensure t
   ;; Provides a nicer command for working with spelling corrections.
   :after spell-fu
-  :config
-  (ispell-set-spellchecker-params)
   :general
   (:states 'normal "z SPC" #'flyspell-correct-at-point))
 
