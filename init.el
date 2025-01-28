@@ -606,6 +606,8 @@ Runs `+escape-hook'."
 
 (use-package dirvish :ensure t
   ;; Wrapper around `dired' that provides better UX.
+  :hook (+first-input-hook . dirvish-override-dired-mode)
+
   :general
   (:keymaps '(dirvish-mode-map dired-mode-map) :states 'normal
             "q" #'dirvish-quit)
@@ -614,9 +616,6 @@ Runs `+escape-hook'."
   :custom
   (dirvish-attributes
    '(vc-state subtree-state nerd-icons collapse file-size file-time))
-
-  :init
-  (dirvish-override-dired-mode)
 
   :config
   (setq dirvish-path-separators (list
