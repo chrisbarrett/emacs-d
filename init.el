@@ -10,6 +10,8 @@
 ;; - something like smartparens
 ;;     - maybe https://github.com/AmaiKinono/puni?
 ;;
+;; - eglot
+;;
 ;; - formatting, e.g. apheleia
 ;;
 ;; - file templates & text snippets
@@ -24,7 +26,9 @@
 ;;
 ;; - org-mode journalling
 ;;
-;; - doom's black magic performance tweaks on startup
+;; - diff-hl
+;;
+;; - any black magic performance tweaks in Doom
 
 ;;; Code:
 
