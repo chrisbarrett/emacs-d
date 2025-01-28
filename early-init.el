@@ -90,6 +90,13 @@
 (setq frame-resize-pixelwise t)
 
 
+;;; Customise native compilation
+
+;; Silence unactionable warnings.
+(setq native-comp-async-report-warnings-errors init-file-debug)
+(setq native-comp-warning-on-missing-source init-file-debug)
+
+
 
 ;; Always prompt for "y" or "n", rather than "yes" or "no".
 (setq use-short-answers t)
