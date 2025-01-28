@@ -716,7 +716,7 @@ Runs `+escape-hook'."
   :config
   (add-hook 'compilation-filter-hook #'ansi-color-compilation-filter)
 
-  ;; Automatically truncate long compilation bufers.
+  ;; Automatically truncate long compilation buffers.
   (autoload 'comint-truncate-buffer "comint" nil t)
   (add-hook 'compilation-filter-hook #'comint-truncate-buffer))
 
