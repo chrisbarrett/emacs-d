@@ -559,13 +559,6 @@ Runs `+escape-hook'."
                        (string-match-p (rx "/emacs/elpaca/") (buffer-file-name)))
               (read-only-mode +1))))
 
-(use-package minions :ensure t
-  ;; Hides minor modes, which are generally uninteresting and consume lots of
-  ;; space.
-  :demand t
-  :config
-  (minions-mode +1))
-
 (use-package page-break-lines :ensure t
   ;; Displays ^L page break characters as a horizontal rule. Useful for
   ;; demarcating sections of a file.
@@ -1481,6 +1474,27 @@ file in your browser at the visited revision."
             "cdk.out"
             "target"
             ".direnv"))
+
+
+;;; Modeline
+
+(use-package doom-modeline :ensure t
+  ;; The modeline from doom, packaged independently.
+  :hook elpaca-after-init-hook
+  :custom
+  (doom-modeline-bar-width 3)
+  (doom-modeline-buffer-encoding 'nondefault)
+  (doom-modeline-buffer-state-icon nil)
+  (doom-modeline-major-mode-icon nil)
+  (doom-modeline-check-simple-format t)
+  (doom-modeline-modal nil)
+  :config
+  (add-hook! 'magit-mode-hook
+    (defun +modeline-hide-in-non-status-buffer-h ()
+      "Show minimal modeline in magit-status buffer, no modeline elsewhere."
+      (if (eq major-mode 'magit-status-mode)
+          (doom-modeline-set-modeline 'magit)
+        (hide-mode-line-mode)))))
 
 
 ;;; projects
