@@ -630,6 +630,10 @@ Runs `+escape-hook'."
   :config
   (dirvish-peek-mode +1))
 
+(use-package diredfl :ensure t
+  ;; Add extra font-lock to dired/dirvish file listings.
+  :hook ((dired-mode-hook dirvish-directory-view-mode-hook) . diredfl-mode))
+
 (keymap-global-set "C-c SPC"
                    (defun +insert-nbsp ()
                      (interactive)
