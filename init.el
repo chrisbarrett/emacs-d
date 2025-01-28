@@ -786,10 +786,9 @@ Runs `+escape-hook'."
            "zx" #'spell-fu-word-remove)
 
   :config
-  (add-hook 'spell-fu-mode-hook
-            (defun +spell-fu-set-dictionaries ()
-              (spell-fu-dictionary-add (spell-fu-get-ispell-dictionary "en_AU"))
-              (spell-fu-dictionary-add (spell-fu-get-ispell-dictionary "fr"))))
+  (add-hook! 'spell-fu-mode-hook
+    (spell-fu-dictionary-add (spell-fu-get-ispell-dictionary "en_AU"))
+    (spell-fu-dictionary-add (spell-fu-get-ispell-dictionary "fr")))
 
   (setq-hook! 'org-mode-hook
     spell-fu-faces-exclude '(org-meta-line org-link org-code org-block
@@ -1081,11 +1080,10 @@ With optional prefix arg CONTINUE-P, keep profiling."
                                (?< . evil-surround-read-tag)))
 
   :config
-  (add-hook 'emacs-lisp-mode-hook
-            (defun +elisp-configure-evil-surround-h ()
-              (make-local-variable 'evil-surround-pairs-alist)
-              (setf (alist-get ?` evil-surround-pairs-alist) '("`" . "'"))
-              (setf (alist-get ?f evil-surround-pairs-alist) 'evil-surround-prefix-function))))
+  (add-hook! 'emacs-lisp-mode-hook
+    (make-local-variable 'evil-surround-pairs-alist)
+    (setf (alist-get ?` evil-surround-pairs-alist) '("`" . "'"))
+    (setf (alist-get ?f evil-surround-pairs-alist) 'evil-surround-prefix-function)))
 
 (use-package evil-goggles :ensure t
   ;; evil-goggles displays text highlights for changed regions.
@@ -1380,11 +1378,12 @@ With optional prefix arg CONTINUE-P, keep profiling."
 (use-package magit :ensure t
   ;; Magit is the definitive UX for working with git.
   :config
-  (add-hook 'git-commit-mode-hook
-            (defun +git-commit-initial-state-h ()
-              (when (and (bound-and-true-p evil-mode)
-                         (thing-at-point-looking-at (rx bol (* space) eol)))
-                (evil-insert-state))))
+  ;; Set initial evil state depending on whether the line is empty or not. Empty
+  ;; line = new commit message, whereas non-empty means we're editing an
+  ;; existing one.
+  (add-hook! 'git-commit-mode-hook
+    (when (thing-at-point-looking-at (rx bol (* space) eol))
+      (evil-insert-state)))
   :custom
   (magit-diff-refine-hunk t)
   (magit-save-repository-buffers 'dontask)
@@ -1667,12 +1666,11 @@ file in your browser at the visited revision."
   :config
 
   ;; Prefer inserting headings with M-RET
-  (add-hook 'org-metareturn-hook
-            (defun +org-metareturn-append-line-h ()
-              (when (org-in-item-p)
-                (org-insert-heading current-prefix-arg)
-                (evil-append-line 1)
-                t)))
+  (add-hook! 'org-metareturn-hook
+    (when (org-in-item-p)
+      (org-insert-heading current-prefix-arg)
+      (evil-append-line 1)
+      t))
 
   ;; Prevent flickering when org-indent is enabled.
   (setq-hook! 'org-mode-hook show-paren-mode nil)
@@ -2040,9 +2038,7 @@ file in your browser at the visited revision."
 
   ;; Work around clashes with evil bindings.
   :config
-  (add-hook 'org-roam-mode-hook
-            (defun +org-roam-detach-magit-section-mode-map-h ()
-              (set-keymap-parent org-roam-mode-map nil)))
+  (add-hook 'org-roam-mode-hook (set-keymap-parent org-roam-mode-map nil))
   :general-config
   (:keymaps 'org-roam-mode-map
    "M-p"     #'magit-section-backward-sibling
