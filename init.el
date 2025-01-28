@@ -336,9 +336,10 @@ Runs `+escape-hook'."
    "o"  '(nil :wk "org")
    "oi" (defun +goto-org-roam-index ()
           (interactive)
-          (require 'org-roam)
           (find-file (file-name-concat org-roam-directory "notes/index.org")))
-
+   "ot" (defun +goto-org-todos ()
+          (interactive)
+          (find-file (file-name-concat org-roam-directory "todos.org")))
    "oa" (defun +org-agenda-dwim ()
           (interactive)
           (require 'org)
