@@ -1577,10 +1577,8 @@ file in your browser at the visited revision."
 
 (use-package conf-mode
   ;; Unix configuration files
-
-  :init
-  ;; Fall back to conf-mode for rc files.
-  (add-to-list 'auto-mode-alist (rx "rc" eos) 'append))
+  :mode ("rc\\'")
+  )
 
 
 ;;; org-mode
