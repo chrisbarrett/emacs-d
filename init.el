@@ -69,7 +69,6 @@
 (add-hook 'elpaca-after-init-hook #'+load-packages-incrementally-h)
 
 
-
 ;;; Extra UI & session lifecycle hooks
 
 ;; These hooks are cribbed from Doom--they're a great pattern for deferred
@@ -933,6 +932,9 @@ With optional prefix arg CONTINUE-P, keep profiling."
   (add-to-list 'trusted-content (file-name-concat user-emacs-directory "early-init.el"))
   (add-to-list 'trusted-content (file-name-concat user-emacs-directory "init.el"))
   (add-to-list 'trusted-content (file-name-concat user-emacs-directory "lisp/")))
+
+;; Silence "For information about GNU Emacs and the GNU system..." on startup.
+(advice-add #'display-startup-echo-area-message :override #'ignore)
 
 
 ;;; evil-mode
