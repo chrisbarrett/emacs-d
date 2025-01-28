@@ -780,9 +780,8 @@ Runs `+escape-hook'."
 (use-package elpaca
   ;; Configure aspects of elpaca not required for initial package bootstrap.
   :general-config
-  (:states 'normal
-   :keymaps 'elpaca-manager-mode-map
-   "/" #'elpaca-ui-search))
+  (:states 'normal :keymaps 'elpaca-manager-mode-map "/" #'elpaca-ui-search)
+  (:keymaps 'elpaca-info-mode-map "q" #'quit-window))
 
 (use-package goto-addr
   ;; Turns URLs in the buffer into clickable buttons.
