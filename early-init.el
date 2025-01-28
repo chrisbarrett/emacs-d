@@ -20,6 +20,7 @@
 (setq use-package-always-defer t)
 (setq use-package-enable-imenu-support t)
 (setq use-package-minimum-reported-time 0.01)
+(setq use-package-hook-name-suffix nil)
 
 (add-hook 'after-init-hook
           (lambda ()

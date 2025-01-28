@@ -528,9 +528,9 @@ Runs `+escape-hook'."
       (with-current-buffer buf
 			   (+auto-revert-current-buffer-h))))
   :hook
-  (after-save . +auto-revert-visible-buffers-h)
-  (+switch-buffer . +auto-revert-current-buffer-h)
-  (+switch-window . +auto-revert-current-buffer-h)
+  (after-save-hook . +auto-revert-visible-buffers-h)
+  (+switch-buffer-hook . +auto-revert-current-buffer-h)
+  (+switch-window-hook . +auto-revert-current-buffer-h)
   :config
   (add-function :after after-focus-change-function #'+auto-revert-visible-buffers-h)
 
@@ -548,7 +548,7 @@ Runs `+escape-hook'."
 
 (use-package hideshow
   ;; Basic code folding.
-  :hook (prog-mode . hs-minor-mode))
+  :hook (prog-mode-hook . hs-minor-mode))
 
 (add-hook 'find-file-hook
           (defun +maybe-enable-readonly-mode-h ()
@@ -590,7 +590,7 @@ Runs `+escape-hook'."
   ;;
   ;; c.f. `next-error' and friends, which operate on compilation & grep results
   ;; across any number of buffers.
-  :hook (prog-mode . flymake-mode)
+  :hook (prog-mode-hook . flymake-mode)
   :general-config (:keymaps 'flymake-mode-map
                             "M-n" #'flymake-goto-next-error
                             "M-p" #'flymake-goto-prev-error))
@@ -708,13 +708,13 @@ Runs `+escape-hook'."
 (use-package hide-mode-line :ensure
   (hide-mode-line :host github :repo "hlissner/emacs-hide-mode-line")
   ;; Disable the mode-line in situations where it's not useful.
-  :hook ((completion-list-mode Man-mode) . hide-mode-line-mode))
+  :hook ((completion-list-mode-hook Man-mode-hook) . hide-mode-line-mode))
 
 (use-package highlight-numbers :ensure
   (highlight-numbers :host github :repo "Fanael/highlight-numbers")
   ;; Ensure numbers always have syntax highlighting applied, even if a
   ;; major-mode neglects to configure that.
-  :hook (prog-mode conf-mode)
+  :hook (prog-mode-hook conf-mode-hook)
   :custom (highlight-numbers-generic-regexp
            (rx symbol-start (+ digit) (? "." (* digit)) symbol-end)))
 
@@ -726,7 +726,7 @@ Runs `+escape-hook'."
 
 (use-package ws-butler :ensure t
   ;; Delete trailing whitespace on visited lines.
-  :hook (prog-mode text-mode conf-mode)
+  :hook (prog-mode-hook text-mode-hook conf-mode-hook)
   :config
   (pushnew! ws-butler-global-exempt-modes
             'special-mode
@@ -750,7 +750,7 @@ Runs `+escape-hook'."
 
 (use-package spell-fu :ensure t
   ;; A more lightweight spell-checker than the built-in.
-  :hook (text-mode prog-mode conf-mode)
+  :hook (text-mode-hook prog-mode-hook conf-mode-hook)
   :general
   (:states '(normal motion)
            "zn" #'spell-fu-goto-next-error
@@ -783,7 +783,7 @@ Runs `+escape-hook'."
 
 (use-package hl-todo :ensure t
   ;; Display TODO comments with special highlights.
-  :hook (prog-mode yaml-ts-mode conf-mode)
+  :hook (prog-mode-hook yaml-ts-mode-hook conf-mode-hook)
   :custom
   (hl-todo-highlight-punctuation ":")
   (hl-todo-keyword-faces
@@ -796,7 +796,7 @@ Runs `+escape-hook'."
 (use-package indent-bars :ensure t
   ;; Display indentation guides in buffers. Particularly useful for
   ;; indentation-sensitive language modes.
-  :hook (yaml-ts-mode python-ts-mode)
+  :hook (yaml-ts-mode-hook python-ts-mode-hook)
   :custom
   (indent-bars-starting-column 0)
   (indent-bars-width-frac 0.15)
@@ -817,7 +817,7 @@ Runs `+escape-hook'."
     (unless (derived-mode-p 'org-mode 'org-agenda-mode)
       (goto-address)
       (goto-address-mode +1)))
-  :hook ((prog-mode text-mode conf-mode magit-process-mode) . +goto-address-maybe-h)
+  :hook ((prog-mode-hook text-mode-hook conf-mode-hook magit-process-mode-hook) . +goto-address-maybe-h)
 
   ;; Teach evil-ret to open URLs.
   :init
@@ -1030,7 +1030,7 @@ Runs `+escape-hook'."
 (use-package evil-surround :ensure t
   ;; Evil-surround makes the S key work as an operator to surround an
   ;; object with, e.g., matched parentheses.
-  :hook ((text-mode prog-mode) . evil-surround-mode)
+  :hook ((text-mode-hook prog-mode-hook) . evil-surround-mode)
   ;; Use lowercase 's' for surround instead of 'S'.
   :general (:states '(visual) :keymaps 'evil-surround-mode-map "s" #'evil-surround-region)
   :custom
@@ -1099,7 +1099,7 @@ Runs `+escape-hook'."
 
 (use-package vertico :ensure t
   ;; Vertico provides a better completion UI than the built-in default.
-  :hook +first-input
+  :hook +first-input-hook
   :custom
   (vertico-preselect 'no-prompt)
   (vertico-cycle t)
@@ -1120,11 +1120,11 @@ Runs `+escape-hook'."
     ;; Extension that teaches vertico how to operate on filename
     ;; components in a more ergonomic way.
     :demand t
-    :hook (rfn-eshadow-update-overlay . vertico-directory-tidy))
+    :hook (rfn-eshadow-update-overlay-hook . vertico-directory-tidy))
 
   (use-package vertico-repeat
     ;; Quickly restore the previous vertico command you ran.
-    :hook (minibuffer-setup . vertico-repeat-save)
+    :hook (minibuffer-setup-hook . vertico-repeat-save)
     :config
     (with-eval-after-load 'savehist
       (add-to-list 'savehist-additional-variables 'vertico-repeat-history))))
@@ -1132,7 +1132,7 @@ Runs `+escape-hook'."
 (use-package marginalia :ensure t
   ;; Marginalia shows extra information alongside minibuffer items
   ;; during completion.
-  :hook +first-input)
+  :hook +first-input-hook)
 
 (use-package orderless :ensure t
   ;; Orderless allows you to filter completion candidates by typing
@@ -1292,7 +1292,7 @@ Runs `+escape-hook'."
   ;; Integration embark with consult
   :after (:any consult embark)
   :demand t
-  :hook (embark-collect-mode . consult-preview-at-point-mode))
+  :hook (embark-collect-mode-hook . consult-preview-at-point-mode))
 
 (pushnew! completion-ignored-extensions
           ".DS_Store"
@@ -1466,7 +1466,7 @@ file in your browser at the visited revision."
 
   ;; Not sure of the performance impact of this... leave off for now.
   ;;
-  ;; :hook (text-mode . visual-line-mode)
+  ;; :hook (text-mode-hook . visual-line-mode)
 
   :custom
   (text-mode-ispell-word-completion nil))
@@ -1532,8 +1532,8 @@ file in your browser at the visited revision."
 (use-package org :ensure t ; NB. installed from org package archive.
   ;; org-mode - the reason why I can probably never switch to another editor.
 
-  :hook ((org-mode . abbrev-mode)
-         (org-mode . auto-fill-mode))
+  :hook ((org-mode-hook . abbrev-mode)
+         (org-mode-hook . auto-fill-mode))
 
   :custom
   (abbrev-file-name (file-name-concat org-directory "abbrev.el"))
@@ -1781,7 +1781,7 @@ file in your browser at the visited revision."
 
 (use-package evil-org :ensure t
   ;; Provides extra evil keybindings for org-mode, org-agenda etc.
-  :hook (org-mode . evil-org-mode)
+  :hook (org-mode-hook . evil-org-mode)
   :custom
   (evil-org-key-theme '(todo navigation insert textobjects additional calendar))
   :init
@@ -2090,7 +2090,7 @@ file in your browser at the visited revision."
       "rD" #'org-roam-rewrite-remove))
 
   (use-package org-roam-dblocks
-    :hook (org-mode . org-roam-dblocks-autoupdate-mode))
+    :hook (org-mode-hook . org-roam-dblocks-autoupdate-mode))
 
   (use-package org-roam-slipbox
     :after org-roam
