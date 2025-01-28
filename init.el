@@ -614,8 +614,12 @@ Runs `+escape-hook'."
   (:keymaps 'dirvish-mode-map :states 'normal
             "<tab>" #'dirvish-layout-toggle)
   :custom
-  (dirvish-attributes
-   '(vc-state subtree-state nerd-icons collapse file-size file-time))
+  (dirvish-reuse-session nil)
+  (dirvish-attributes '(file-size nerd-icons subtree-state))
+  (dirvish-mode-line-format '(:left (sort file-time symlink) :right (omit yank index)))
+  (dirvish-subtree-always-show-state t)
+  (dirvish-hide-details '(dirvish dirvish-side))
+  (dirvish-hide-cursor '(dirvish dirvish-side))
 
   :config
   (setq dirvish-path-separators (list
