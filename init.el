@@ -318,14 +318,13 @@ Runs `+escape-hook'."
           (interactive)
           (display-buffer "*Messages*"))
 
-   "ge" (defun +goto-emacs-config-file ()
-          (interactive)
-          (project-find-file-in "init.el" nil
-                                (project-current nil user-emacs-directory)))
-
    "ge" (defun +goto-emacs-init-file ()
           (interactive)
           (find-file (file-name-concat user-emacs-directory "init.el")))
+
+   "gs" (defun +goto-emacs-site-file ()
+          (interactive)
+          (find-file (file-name-concat user-emacs-directory "site.el")))
 
    "gn" (defun +goto-nix-file ()
           (interactive)
