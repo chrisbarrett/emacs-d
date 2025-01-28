@@ -17,17 +17,19 @@
 
 ;;; Configure use-package
 
+(setq use-package-verbose init-file-debug)
 (setq use-package-always-defer t)
 (setq use-package-enable-imenu-support t)
 (setq use-package-minimum-reported-time 0.01)
 (setq use-package-hook-name-suffix nil)
 
-(add-hook 'after-init-hook
-          (lambda ()
-            ;; Enable this when the configuration reaches a steady state; it
-            ;; will make it much easier to read the macro-expanded output of
-            ;; use-package calls.
-            (setq use-package-expand-minimally t)))
+(unless init-file-debug
+  (add-hook 'after-init-hook
+            (lambda ()
+              ;; Enable this when the configuration reaches a steady state; it
+              ;; will make it much easier to read the macro-expanded output of
+              ;; use-package calls.
+              (setq use-package-expand-minimally t))))
 
 (require '+load-incrementally)
 (+load-incrementally-setup-use-package-keywords)
