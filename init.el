@@ -1926,7 +1926,7 @@ file in your browser at the visited revision."
                      (org-agenda-skip-scheduled-if-done t)
                      (org-agenda-start-on-weekday nil)
                      (org-agenda-dim-blocked-tasks t)
-                     (org-agenda-sorting-strategy '((agenda time-up habit-up category-up priority-down todo-state-up)
+                     (org-agenda-sorting-strategy '((agenda time-up habit-up priority-down category-up priority-down todo-state-up)
                                                     (todo priority-down category-up scheduled-up)
                                                     (tags priority-down category-up)
                                                     (search category-up)))
