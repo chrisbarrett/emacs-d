@@ -5,16 +5,17 @@
 
 /.org-id-locations
 /auto-save-list
+/autosave
 /eln-cache
+/elpa
 /elpaca
 /eshell/history
+/forge
 /history
+/org-roam.db
+/persist
+/places
 /projects
 /recentf
-/transient
-/places
-/org-roam.db
 /spell-fu
-/autosave
-/persist
-/forge
+/transient
