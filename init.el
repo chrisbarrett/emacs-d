@@ -2076,7 +2076,19 @@ file in your browser at the visited revision."
   (org-modern-hide-stars nil)
   :config
   (global-org-modern-mode +1)
-  (custom-theme-set-faces 'user '(org-todo ((t (:bold t :inverse-video t)))))
+  (custom-theme-set-faces 'user
+                          '(org-todo ((t (:bold t :inverse-video t))))
+                          ;; Based on `eldoc-highlight-function-argument'
+                          '(org-modern-date-active ((((background dark))
+                                                     (:foreground "#dfaf7a"
+                                                      :background "#381d0f"
+                                                      :weight light
+                                                      :inherit org-modern-label))
+                                                    (((background light))
+                                                     (:foreground "#884900"
+                                                      :background "#f8f0d0"
+                                                      :weight light
+                                                      :inherit org-modern-label)))))
 
   (let ((custom-todos
          '(("WAIT" warning org-todo)
