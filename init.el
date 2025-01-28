@@ -59,7 +59,7 @@
 
 ;; Make sure I don't accidentally start loading super-expensive packages on startup.
 
-(defconst +expensive-packages '(org org-roam org-agenda))
+(defconst +expensive-packages '(org org-roam org-agenda forge))
 
 (add-hook 'after-init-hook
           (defun +assert-packages-deferred ()
