@@ -601,7 +601,7 @@ Runs `+escape-hook'."
    "--almost-all --human-readable --group-directories-first --no-group"))
 
 (use-package nerd-icons :ensure t
-  ;; Icons used by dirvish.
+  ;; Icon set used by various packages.
   :autoload nerd-icons-codicon nerd-icons-faicon)
 
 (use-package dirvish :ensure t
@@ -1132,7 +1132,9 @@ Runs `+escape-hook'."
 (use-package marginalia :ensure t
   ;; Marginalia shows extra information alongside minibuffer items
   ;; during completion.
-  :hook +first-input-hook)
+  :hook +first-input-hook
+  :general
+  (:keymaps 'minibuffer-local-map "M-A" #'marginalia-cycle))
 
 (use-package orderless :ensure t
   ;; Orderless allows you to filter completion candidates by typing
@@ -1188,7 +1190,7 @@ Runs `+escape-hook'."
 
 (use-package corfu :ensure t
   ;; Corfu provides in-buffer completions as you type.
-  :demand t
+  :hook (+first-input-hook . global-corfu-mode)
   :general-config (:keymaps 'corfu-map
                             "RET" #'corfu-send
                             "<escape>" #'corfu-reset
@@ -1196,16 +1198,41 @@ Runs `+escape-hook'."
                             "C-p" #'corfu-previous)
   :custom
   (corfu-auto t)
+  (corfu-auto-delay 0.24)
   (corfu-quit-no-match t)
+  (corfu-cycle t)
+  (corfu-preselect 'prompt)
+  (corfu-count 16)
+  (corfu-max-width 120)
+  (corfu-on-exact-match nil)
+  (corfu-quit-at-boundary 'separator)
+  (corfu-quit-no-match 'separator)
   (tab-always-indent 'complete)
   (corfu-popupinfo-delay '(1.0 . 0.5))
-  (global-corfu-modes '((not org-mode) t))
+  (global-corfu-modes '((not org-mode help-mode) t))
   :init
-  (global-corfu-mode +1)
   (setq-hook! 'eshell-mode-hook corfu-auto nil)
-  (add-hook 'eshell-mode-hook (corfu-mode +1))
   :config
-  (corfu-popupinfo-mode +1))
+  (corfu-popupinfo-mode +1)
+  (add-hook 'evil-insert-state-exit-hook #'corfu-quit))
+
+(use-package nerd-icons-corfu :ensure t
+  ;; Adds icons to corfu popups.
+  :after corfu
+  :init
+  (add-to-list 'corfu-margin-formatters #'nerd-icons-corfu-formatter))
+
+(use-package cape :ensure t
+  ;; Adds useful functionality for `completion-at-point-functions'.
+  :init
+  (add-hook! 'prog-mode-hook
+    (add-hook 'completion-at-point-functions #'cape-file -10 t))
+  (add-hook! 'org-mode-hook
+    (add-hook 'completion-at-point-functions #'cape-elisp-block 0 t))
+
+  (advice-add #'comint-completion-at-point :around #'cape-wrap-nonexclusive)
+  (advice-add #'eglot-completion-at-point :around #'cape-wrap-nonexclusive)
+  (advice-add #'pcomplete-completions-at-point :around #'cape-wrap-nonexclusive))
 
 (use-package which-key
   ;; which-key displays a UI popup of available key commands as you type.
