@@ -829,6 +829,23 @@ Runs `+escape-hook'."
   (:states 'normal :keymaps 'elpaca-manager-mode-map "/" #'elpaca-ui-search)
   (:keymaps 'elpaca-info-mode-map "q" #'quit-window))
 
+(use-package profiler
+  :config
+  (defun +profiler-stop-and-report (&optional continue-p)
+    "Stop the profiler and show results.
+
+With optional prefix arg CONTINUE-P, keep profiling."
+    (interactive "P")
+    (let ((ran-p (profiler-running-p)))
+
+      (unless continue-p
+        (profiler-stop))
+      (profiler-report)
+      (when ran-p
+        (if continue-p
+            (message "Profiler still recording")
+          (message "Profiler stopped"))))))
+
 (use-package goto-addr
   ;; Turns URLs in the buffer into clickable buttons.
   :init
