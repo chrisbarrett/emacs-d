@@ -1099,12 +1099,12 @@ Runs `+escape-hook'."
 
 (use-package vertico :ensure t
   ;; Vertico provides a better completion UI than the built-in default.
-  :demand t
+  :hook +first-input
   :custom
   (vertico-preselect 'no-prompt)
   (vertico-cycle t)
   :general-config (:keymaps 'vertico-map
-                            "C-<return>" #'minibuffer-complete-and-exit
+                            "C-<return>" #'vertico-exit-input
                             "RET" #'vertico-directory-enter
                             "DEL" #'vertico-directory-delete-char
                             "C-l" #'vertico-insert
@@ -1132,16 +1132,12 @@ Runs `+escape-hook'."
 (use-package marginalia :ensure t
   ;; Marginalia shows extra information alongside minibuffer items
   ;; during completion.
-  :after vertico
-  :demand t
-  :init
-  (marginalia-mode +1))
+  :hook +first-input)
 
 (use-package orderless :ensure t
   ;; Orderless allows you to filter completion candidates by typing
   ;; space-separated terms in any order.
-  :after vertico
-  :demand t
+  :after-call +first-input-hook
   :custom
   (completion-category-defaults nil)
   (completion-styles '(orderless basic))
@@ -1231,12 +1227,48 @@ Runs `+escape-hook'."
 (use-package consult :ensure t
   ;; Consult provides commands for common tasks that leverage the Emacs
   ;; completion system. It composes well with the above packages.
+  :general
+  ([remap bookmark-jump]                 #'consult-bookmark
+   [remap evil-show-marks]               #'consult-mark
+   [remap evil-show-registers]           #'consult-register
+   [remap goto-line]                     #'consult-goto-line
+   [remap imenu]                         #'consult-imenu
+   [remap Info-search]                   #'consult-info
+   [remap locate]                        #'consult-locate
+   [remap load-theme]                    #'consult-theme
+   [remap recentf-open-files]            #'consult-recent-file
+   [remap switch-to-buffer]              #'consult-buffer
+   [remap switch-to-buffer-other-window] #'consult-buffer-other-window
+   [remap switch-to-buffer-other-frame]  #'consult-buffer-other-frame
+   [remap yank-pop]                      #'consult-yank-pop)
+
   :custom
   ;; Use Consult to select xref locations with preview
   (xref-show-xrefs-function #'consult-xref)
   (xref-show-definitions-function #'consult-xref)
+  (consult-narrow-key "<")
+
+  ;; Optimise for responsive input.
+  (consult-async-min-input 2)
+  (consult-async-refresh-delay  0.15)
+  (consult-async-input-throttle 0.2)
+  (consult-async-input-debounce 0.1)
+  (consult-fd-args
+   '((if (executable-find "fdfind" 'remote) "fdfind" "fd")
+     "--color=never"
+     ;; https://github.com/sharkdp/fd/issues/839
+     "--full-path --absolute-path"
+     "--hidden --exclude .git"))
 
   :config
+  (consult-customize
+   consult-ripgrep consult-git-grep consult-grep
+   consult-bookmark consult-recent-file
+   consult--source-recent-file consult--source-project-recent-file consult--source-bookmark
+   :preview-key "C-SPC")
+  (consult-customize
+   consult-theme
+   :preview-key (list "C-SPC" :debounce 0.5 'any))
 
   ;; Tweak the register preview for `consult-register-load',
   ;; `consult-register-store' and the built-in commands.  This improves the
@@ -1251,7 +1283,10 @@ Runs `+escape-hook'."
   :general
   (:states '(normal emacs motion)
            "C-@" #'embark-act
-           "C-t" #'embark-dwim))
+           "C-t" #'embark-dwim)
+  (:keymaps 'minibuffer-local-map
+            "C-c C-:" #'embark-export
+            "C-c C-l" #'embark-collect))
 
 (use-package embark-consult :ensure t
   ;; Integration embark with consult
