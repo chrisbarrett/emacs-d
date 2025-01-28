@@ -1845,8 +1845,9 @@ file in your browser at the visited revision."
   ;; consolidated dashboard.
   :general
   ("C-c a" #'org-agenda)
-  :config
-  (require '+agenda)
+  :general-config
+  (:keymaps 'org-agenda-mode-map :states 'motion
+            "J" #'org-agenda-goto-date)
 
   :custom
   (org-agenda-files (file-name-concat org-directory "org-agenda-files"))
