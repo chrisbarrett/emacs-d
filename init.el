@@ -1446,15 +1446,19 @@ file in your browser at the visited revision."
   :general-config
   (:keymaps 'forge-topic-list-mode-map :states 'normal "q" #'kill-current-buffer))
 
-;; Don't prompt when following links to files that are under version control.
-(setq vc-follow-symlinks t)
+(use-package vc
+  :custom
+  ;; Don't prompt when following links to files that are under version control.
+  (vc-follow-symlinks t)
+  ;; I literally only ever use Git these days.
+  (vc-handled-backends '(Git))
+  :config
+  (pushnew! vc-directory-exclusion-list
+            "node_modules"
+            "cdk.out"
+            "target"
+            ".direnv"))
 
-(pushnew! vc-directory-exclusion-list
-          "node_modules"
-          "cdk.out"
-          "target"
-          ".direnv"
-          )
 
 
 ;;; projects
