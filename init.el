@@ -1856,6 +1856,7 @@ file in your browser at the visited revision."
   (org-agenda-search-view-always-boolean t)
   (org-agenda-skip-unavailable-files t)
   (org-agenda-start-on-weekday nil)
+  (org-agenda-tags-column 0)
   (org-archive-tag "ARCHIVED")
   (org-agenda-inhibit-startup t)
   (org-agenda-custom-commands
