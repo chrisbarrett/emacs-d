@@ -1207,6 +1207,7 @@ word.  Fall back to regular `expreg-expand'."
   :init (savehist-mode +1)
   :custom
   (savehist-autosave-interval nil) ; on exit
+  (history-delete-duplicates t)
   :config
   (pushnew! savehist-additional-variables
             'kill-ring
