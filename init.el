@@ -901,8 +901,8 @@ With optional prefix arg CONTINUE-P, keep profiling."
 
   :general
   (:states 'normal
-           "C-l" #'better-jumper-jump-forward
-           "C-h" #'better-jumper-jump-backward)
+           "C-M-l" #'better-jumper-jump-forward
+           "C-M-h" #'better-jumper-jump-backward)
 
   :general-config
   ([remap evil-jump-forward]  #'better-jumper-jump-forward
