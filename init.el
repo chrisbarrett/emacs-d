@@ -1386,6 +1386,12 @@ word.  Fall back to regular `expreg-expand'."
           ".git/"
           )
 
+(use-package minibuf-eldef
+  ;; Set how default for empty input are displayed in the minibuffer.
+  :hook (after-init . minibuffer-electric-default-mode)
+  :custom
+  (minibuffer-default-prompt-format " [%s]"))
+
 
 ;;; VC & magit
 
