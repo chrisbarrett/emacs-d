@@ -912,8 +912,20 @@ With optional prefix arg CONTINUE-P, keep profiling."
   (add-hook 'imenu-after-jump-hook #'pulsar-recenter-top)
   (add-hook 'imenu-after-jump-hook #'pulsar-reveal-entry)
 
+  (delq! 'evil-goto-first-line pulsar-pulse-functions)
+  (delq! 'evil-goto-line pulsar-pulse-functions)
+
+  (define-advice evil-goto-line (:after (count) pulsar)
+    "Don't pulse if moving to the first or last line via gg/G."
+    (when (and pulsar-mode
+               count ; nil if going to end of buffer
+               (< 1 count ))
+      (pulsar-pulse-line)))
+
   (define-advice eval-region (:after (start end &rest _) pulsar)
-    (pulsar--pulse nil 'pulsar-yellow start end)))
+    "Pulse evaluated regions."
+    (when pulsar-mode
+      (pulsar--pulse nil 'pulsar-yellow start end))))
 
 ;; Teach Emacs that C-i and C-m do in fact exist.
 (pcase-dolist (`(,key ,fallback . ,events)
