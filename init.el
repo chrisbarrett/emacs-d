@@ -28,7 +28,8 @@
 ;;
 ;; - any black magic performance tweaks in Doom
 ;;
-;; - finish scraping prot's config (up to §5.7)
+;; - finish scraping prot's config for good ideas (up to §5.7)
+;;     - https://protesilaos.com/emacs/dotemacs
 
 ;;; Code:
 
