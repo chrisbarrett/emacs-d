@@ -1393,6 +1393,12 @@ word.  Fall back to regular `expreg-expand'."
   :custom
   (minibuffer-default-prompt-format " [%s]"))
 
+(use-package dabbrev
+  ;; Dynamically complete using identifier-like words entered in this or other
+  ;; buffers.
+  :custom
+  (dabbrev-abbrev-skip-leading-regexp "[$*/=~']"))
+
 
 ;;; VC & magit
 
