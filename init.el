@@ -925,6 +925,11 @@ With optional prefix arg CONTINUE-P, keep profiling."
                (< 1 count ))
       (pulsar-pulse-line)))
 
+  (define-advice evil-yank (:after (start end &rest _) pulsar)
+    "Pulse yanked lines & regions."
+    (when pulsar-mode
+      (pulsar--pulse nil 'pulsar-generic start end)))
+
   (define-advice eval-region (:after (start end &rest _) pulsar)
     "Pulse evaluated regions."
     (when pulsar-mode
