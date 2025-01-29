@@ -2144,7 +2144,7 @@ file in your browser at the visited revision."
 
   ;; Work around clashes with evil bindings.
   :config
-  (add-hook 'org-roam-mode-hook (set-keymap-parent org-roam-mode-map nil))
+  (add-hook! 'org-roam-mode-hook (set-keymap-parent org-roam-mode-map nil))
   :general-config
   (:keymaps 'org-roam-mode-map
    "M-p"     #'magit-section-backward-sibling
