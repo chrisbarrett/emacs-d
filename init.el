@@ -1754,7 +1754,8 @@ file in your browser at the visited revision."
   (org-catch-invisible-edits 'show-and-error)
 
   ;; TODOs, checkboxes, stats, properties.
-  (org-todo-keywords '((type "PROJECT(p)" "TODO(t)" "WAIT(w)" "|" "DONE(d)" "CANCELLED(c@)")))
+  (org-todo-keywords '((type "TODO(t)" "WAIT(w)" "|" "DONE(d)" "CANCELLED(c@)")
+                       (type "PROJECT(p)")))
   (org-use-fast-todo-selection 'expert)
   (org-enforce-todo-dependencies t)
   (org-hierarchical-todo-statistics nil)
