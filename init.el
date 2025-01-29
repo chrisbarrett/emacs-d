@@ -1588,7 +1588,13 @@ file in your browser at the visited revision."
     ;; Improve plist indentation
     :autoload +elisp--calculate-lisp-indent-a
     :init
-    (advice-add #'calculate-lisp-indent :override #'+elisp--calculate-lisp-indent-a)))
+    (advice-add #'calculate-lisp-indent :override #'+elisp--calculate-lisp-indent-a))
+
+  :custom
+  (define-advice eval-region (:around (fn &rest args) clear-visual-state)
+    (unwind-protect (apply fn args)
+      (when (eq evil-state 'visual)
+        (evil-normal-state)))))
 
 (use-package nix-ts-mode :ensure t
   :mode "\\.nix\\'")
