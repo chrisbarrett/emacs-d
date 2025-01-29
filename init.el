@@ -1496,6 +1496,15 @@ file in your browser at the visited revision."
           (doom-modeline-set-modeline 'magit)
         (hide-mode-line-mode)))))
 
+(use-package anzu :ensure t
+  ;; Display number of isearch results in the modeline
+  :after-call isearch-mode)
+
+(use-package evil-anzu
+  ;; Extends anzu to evil-mode commands.
+  :after-call evil-ex-start-search evil-ex-start-word-search evil-ex-search-activate-highlight
+  :config (global-anzu-mode +1))
+
 
 ;;; projects
 
