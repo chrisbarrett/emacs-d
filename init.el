@@ -908,6 +908,8 @@ With optional prefix arg CONTINUE-P, keep profiling."
 (use-package pulsar :ensure t
   ;; Temporarily highlights the current line after performing certain operations
   :hook (+first-input-hook . pulsar-global-mode)
+  :custom
+  (pulsar-iterations 5)
   :config
   (add-hook 'next-error-hook #'pulsar-pulse-line)
   (add-hook 'consult-after-jump-hook #'pulsar-recenter-top)
