@@ -551,9 +551,22 @@ Runs `+escape-hook'."
 
 (use-package elec-pair
   ;; Automatically insert matching pairs.
-  ;; TODO: replace with puni?
   :init
   (electric-pair-mode +1))
+
+(use-package lisp
+  ;; Despite its name, provides many programming-language generic features.
+  :general
+  (:keymaps 'prog-mode-map :states 'normal "(" 'backward-sexp ")" 'forward-sexp))
+
+(use-package puni :ensure t
+  ;; Provides structured editing commands.
+  :after-call +first-file-hook +first-buffer-hook
+  :config (puni-global-mode +1)
+  :general
+  (:keymaps 'puni-mode-map :states 'insert "C-w" #'puni-backward-kill-word)
+  (:keymaps 'puni-mode-map :states '(insert normal emacs) "C-k" #'puni-kill-line)
+  (:keymaps 'puni-mode-map :states '(visual) "C-k" #'puni-kill-active-region))
 
 (use-package hideshow
   ;; Basic code folding.
