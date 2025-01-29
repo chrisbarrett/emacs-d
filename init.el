@@ -4,32 +4,6 @@
 
 ;; This is the primary Emacs init file, loaded by the editor on startup. It is
 ;; loaded after early-init.el.
-;;
-;; TODO:
-;;
-;; - something like smartparens
-;;     - maybe https://github.com/AmaiKinono/puni?
-;;
-;; - eglot
-;;
-;; - formatting, e.g. apheleia
-;;
-;; - file templates & text snippets
-;;
-;;    It's possible file templates & text snippets could both be done by the same
-;;    system. Emacs has the following builtin-ones, which I will evaluate:
-;;
-;;    - abbrev
-;;    - expand
-;;    - skeleton
-;;    - tempo
-;;
-;; - org-mode journalling
-;;
-;; - any black magic performance tweaks in Doom
-;;
-;; - finish scraping prot's config for good ideas (up to §5.7)
-;;     - https://protesilaos.com/emacs/dotemacs
 
 ;;; Code:
 
