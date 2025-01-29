@@ -551,6 +551,7 @@ Runs `+escape-hook'."
 
 (use-package elec-pair
   ;; Automatically insert matching pairs.
+  :after-call +first-file-hook +first-buffer-hook
   :init
   (electric-pair-mode +1))
 
@@ -581,7 +582,7 @@ Runs `+escape-hook'."
 (use-package page-break-lines :ensure t
   ;; Displays ^L page break characters as a horizontal rule. Useful for
   ;; demarcating sections of a file.
-  :demand t
+  :after-call +first-file-hook +first-buffer-hook
   :config
   (global-page-break-lines-mode +1))
 
@@ -668,6 +669,7 @@ Runs `+escape-hook'."
   :general-config (:keymaps 'winner-mode-map
                             "C-," #'winner-undo
                             "C-." #'winner-redo)
+  :after-call +first-file-hook +first-buffer-hook
   :init
   (winner-mode +1)
   :custom
@@ -882,7 +884,7 @@ With optional prefix arg CONTINUE-P, keep profiling."
 (use-package better-jumper :ensure t
   ;; Maintains a jump list so you can more easily get back to where you were if
   ;; a command takes you somewhere else.
-  :demand t
+  :after-call +first-file-hook +first-buffer-hook
   :preface
   (defun +set-jump-point ()
     (when (get-buffer-window)
