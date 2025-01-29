@@ -27,6 +27,8 @@
 ;; - org-mode journalling
 ;;
 ;; - any black magic performance tweaks in Doom
+;;
+;; - finish scraping prot's config (up to §5.7)
 
 ;;; Code:
 
@@ -899,8 +901,10 @@ With optional prefix arg CONTINUE-P, keep profiling."
     (server-start)))
 
 (use-package wgrep :ensure t
-  ;; Display search results etc. in a buffer allowing direct edits to the
-  ;; underlying files.
+  ;; Adds a mode for grep-like results buffers that allows you to edit the
+  ;; underlying files directly.
+  ;;
+  ;; TODO: Replace with built-in `grep-edit-mode' once I'm on Emacs 31.
   :commands wgrep-change-to-wgrep-mode
   :custom
   (wgrep-auto-save-buffer t))
