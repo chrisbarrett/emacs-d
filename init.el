@@ -1119,6 +1119,31 @@ With optional prefix arg CONTINUE-P, keep profiling."
    "N" #'evil-multiedit-prev
    "S" #'evil-multiedit--change-line))
 
+(use-package expreg :ensure t
+  ;; Use tree-sitter to mark syntactic elements.
+  :general
+  (:states '(normal motion) "+" '+expreg-expand-dwim "-" 'expreg-contract)
+  :config
+  (defun +expreg-expand-n (n)
+    "Expand to N syntactic units, defaulting to 1 if none is provided interactively."
+    (interactive "p")
+    (dotimes (_ n)
+      (expreg-expand)))
+
+  (defun +expreg-expand-dwim ()
+    "Do-What-I-Mean `expreg-expand' to start with symbol or word.
+If over a real symbol, mark that directly, else start with a
+word.  Fall back to regular `expreg-expand'."
+    (interactive)
+    (when iedit-mode
+      (iedit-done))
+    (let ((symbol (bounds-of-thing-at-point 'symbol)))
+      (cond
+       ((equal (bounds-of-thing-at-point 'word) symbol)
+        (+expreg-expand-n 1))
+       (symbol (+expreg-expand-n 2))
+       (t (expreg-expand))))))
+
 
 ;;; Completion
 
