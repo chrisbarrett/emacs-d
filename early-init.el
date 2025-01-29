@@ -112,6 +112,9 @@
 
 (set-language-environment "UTF-8")
 
+;; Banish the customisation interface to the shadow realm.
+(setq custom-file (make-temp-file "emacs-custom-"))
+
 
 ;; Local Variables:
 ;; no-native-compile: t
