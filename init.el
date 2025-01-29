@@ -945,6 +945,10 @@ With optional prefix arg CONTINUE-P, keep profiling."
     (when pulsar-mode
       (pulsar--pulse nil 'pulsar-yellow start end))))
 
+(use-package so-long
+  ;; Improve performance of files with very long lines.
+  :hook (elpaca-after-init-hook . global-so-long-mode))
+
 ;; Teach Emacs that C-i and C-m do in fact exist.
 (pcase-dolist (`(,key ,fallback . ,events)
                '(([C-i] [?\C-i] tab kp-tab)
