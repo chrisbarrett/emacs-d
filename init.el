@@ -238,6 +238,22 @@ Runs `+escape-hook'."
    "h"  '(nil :wk "help")
    "h" help-map
 
+   "," '(nil :wk "structure")
+   ",n" #'puni-forward-sexp
+   ",p" #'puni-backward-sexp
+   ",<" #'puni-backward-sexp-or-up-list
+   ",c" #'puni-convolute
+   ",k" #'puni-splice-killing-forward
+   ",K" #'puni-splice-killing-backward
+   ",s" #'puni-splice
+   ",r" #'puni-raise
+   ",b" #'puni-barf-forward
+   ",B" #'puni-barf-backward
+   ",m" #'puni-slurp-forward
+   ",M" #'puni-slurp-backward
+   ",t" #'puni-transpose
+   ",x" #'puni-split
+
    "a"  '(nil :wk "apps")
    "ac" #'quick-calc
    "aC" #'full-calc
