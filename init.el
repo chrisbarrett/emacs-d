@@ -598,6 +598,10 @@ Runs `+escape-hook'."
 
 (use-package dired
   :custom
+  (dired-recursive-copies 'always)
+  (dired-recursive-deletes 'always)
+  (delete-by-moving-to-trash t)
+  (dired-auto-revert-buffer 'dired-directory-changed-p)
   (dired-listing-switches
    "--almost-all --human-readable --group-directories-first --no-group"))
 
