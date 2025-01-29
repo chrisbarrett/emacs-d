@@ -1688,6 +1688,16 @@ file in your browser at the visited revision."
   :mode ("rc\\'")
   )
 
+(use-package treesit-auto :ensure t
+  ;; Automatic installation of treesitter grammars.
+  :after-call +first-buffer-hook +first-file-hook
+  :commands global-treesit-auto-mode
+  :custom
+  (treesit-auto-install 'prompt)
+  :config
+  (treesit-auto-add-to-auto-mode-alist 'all)
+  (global-treesit-auto-mode +1))
+
 
 ;;; org-mode
 
