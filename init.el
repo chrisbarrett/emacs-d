@@ -955,6 +955,9 @@ With optional prefix arg CONTINUE-P, keep profiling."
 ;; Silence "For information about GNU Emacs and the GNU system..." on startup.
 (advice-add #'display-startup-echo-area-message :override #'ignore)
 
+;; Don't tell me what key I could have used instead of M-x.
+(advice-add #'execute-extended-command--describe-binding-msg :override #'ignore)
+
 
 ;;; evil-mode
 
