@@ -984,31 +984,9 @@ With optional prefix arg CONTINUE-P, keep profiling."
   (evil-want-keybinding nil)
 
   ;; Cursor customisation
-  :init
-  (custom-theme-set-faces 'user
-                          `(cursor
-                            ((((background dark))
-                              (:background "#51afef"))
-                             (((background light))
-                              (:background "#000000")))))
-
-  (defun +sync-evil-cursor-colors-with-theme ()
-    (put 'cursor 'evil-emacs-color  (face-foreground 'warning))
-    (put 'cursor 'evil-normal-color (face-background 'cursor)))
-
-  (advice-add '+theme-update :after #'+sync-evil-cursor-colors-with-theme)
-  (add-hook 'modus-themes-post-load-hook #'+sync-evil-cursor-colors-with-theme)
-  (+sync-evil-cursor-colors-with-theme)
-
-  (defun +evil-default-cursor-fn ()
-    (evil-set-cursor-color (get 'cursor 'evil-normal-color)))
-  (defun +evil-emacs-cursor-fn ()
-    (evil-set-cursor-color (get 'cursor 'evil-emacs-color)))
-
   :config
-  (setq evil-default-cursor '+evil-default-cursor-fn)
   (setq evil-normal-state-cursor 'box)
-  (setq evil-emacs-state-cursor  '(box +evil-emacs-cursor-fn))
+  (setq evil-emacs-state-cursor  'hollow)
   (setq evil-insert-state-cursor 'bar)
   (setq evil-visual-state-cursor 'hollow)
 
