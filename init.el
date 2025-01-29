@@ -479,6 +479,7 @@ Runs `+escape-hook'."
 (use-package files
   ;; General built-in file IO.
   :custom
+  (backup-inhibited t)
   (require-final-newline t)
   (find-file-visit-truename t)
   (make-backup-files nil)
