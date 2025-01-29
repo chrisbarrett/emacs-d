@@ -959,7 +959,13 @@ With optional prefix arg CONTINUE-P, keep profiling."
   (define-advice eval-region (:after (start end &rest _) pulsar)
     "Pulse evaluated regions."
     (when pulsar-mode
-      (pulsar--pulse nil 'pulsar-yellow start end))))
+      (pulsar--pulse nil 'pulsar-yellow start end)))
+
+  ;; NOTE: No idea whether there's a performance issue with doing this...
+  (define-advice eval-buffer (:after (&rest _) pulsar)
+    "Pulse evaluated regions."
+    (when pulsar-mode
+      (pulsar--pulse nil 'pulsar-yellow (point-min) (point-max)))))
 
 (use-package so-long
   ;; Improve performance of files with very long lines.
