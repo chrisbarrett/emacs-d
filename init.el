@@ -1777,7 +1777,6 @@ file in your browser at the visited revision."
   ;; interactive behaviour
   (org-bookmark-names-plist nil)
   (org-M-RET-may-split-line nil)
-  (org-blank-before-new-entry '((heading . t) (plain-list-item . auto)))
   (org-footnote-auto-adjust t)
   (org-insert-heading-respect-content t)
   (org-loop-over-headlines-in-active-region 'start-level)
