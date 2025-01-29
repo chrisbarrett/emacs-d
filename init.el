@@ -902,6 +902,19 @@ With optional prefix arg CONTINUE-P, keep profiling."
   :custom
   (wgrep-auto-save-buffer t))
 
+(use-package pulsar :ensure t
+  ;; Temporarily highlights the current line after performing certain operations
+  :hook (+first-input-hook . pulsar-global-mode)
+  :config
+  (add-hook 'next-error-hook #'pulsar-pulse-line)
+  (add-hook 'consult-after-jump-hook #'pulsar-recenter-top)
+  (add-hook 'consult-after-jump-hook #'pulsar-reveal-entry)
+  (add-hook 'imenu-after-jump-hook #'pulsar-recenter-top)
+  (add-hook 'imenu-after-jump-hook #'pulsar-reveal-entry)
+
+  (define-advice eval-region (:after (start end &rest _) pulsar)
+    (pulsar--pulse nil 'pulsar-yellow start end)))
+
 ;; Teach Emacs that C-i and C-m do in fact exist.
 (pcase-dolist (`(,key ,fallback . ,events)
                '(([C-i] [?\C-i] tab kp-tab)
@@ -1077,18 +1090,6 @@ With optional prefix arg CONTINUE-P, keep profiling."
     (make-local-variable 'evil-surround-pairs-alist)
     (setf (alist-get ?` evil-surround-pairs-alist) '("`" . "'"))
     (setf (alist-get ?f evil-surround-pairs-alist) 'evil-surround-prefix-function)))
-
-(use-package evil-goggles :ensure t
-  ;; evil-goggles displays text highlights for changed regions.
-  ;;
-  ;; cf. volatile-highlights or goggles for non-evil configurations.
-  :init
-  (evil-goggles-mode +1)
-  :custom
-  (evil-goggles-duration 0.1)
-  (evil-goggles-pulse nil)
-  (evil-goggles-enable-delete nil)
-  (evil-goggles-enable-change nil))
 
 (use-package evil-multiedit :ensure t
   ;; Evil-compatible multiple cursors.
