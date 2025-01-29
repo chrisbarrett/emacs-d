@@ -1538,6 +1538,13 @@ file in your browser at the visited revision."
                      'evil-delete
                      'evil-replace))
 
+(use-package man
+  ;; Built-in manpage reader.
+  :custom
+  ;; Note that man does not use `display-buffer-alist'; you customise
+  ;; `Man-notify-method' instead.
+  (Man-notify-method 'aggressive))
+
 
 ;;; Text & programming modes
 
