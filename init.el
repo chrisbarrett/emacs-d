@@ -1698,6 +1698,29 @@ file in your browser at the visited revision."
   (treesit-auto-add-to-auto-mode-alist 'all)
   (global-treesit-auto-mode +1))
 
+(use-package tempel :ensure t
+  ;; Text snippets.
+  :general
+  (:keymaps 'tempel-map
+   :states '(insert normal)
+   "C-g" #'tempel-done
+   "C-k" #'tempel-kill
+   "<tab>" #'tempel-next
+   "S-<tab>" #'tempel-previous)
+
+  (:keymaps 'tempel-map
+   :states 'normal
+   "cc" #'tempel-kill
+   "C" #'tempel-kill
+   "<escape>" #'tempel-done)
+
+  :custom
+  (tempel-path (file-name-concat user-emacs-directory "templates" "*.eld"))
+  :init
+  (add-hook! '(prog-mode-hook text-mode-hook config-mode-hook)
+    (setq-local completion-at-point-functions
+                (cons #'tempel-expand completion-at-point-functions))))
+
 
 ;;; org-mode
 
