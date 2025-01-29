@@ -399,6 +399,10 @@ Runs `+escape-hook'."
 
 ;;; General editing
 
+(custom-theme-set-faces 'user
+                        '(region ((t (:foreground unspecified :background unspecified :inherit modus-themes-search-lazy))))
+                        '(iedit-occurrence ((t (:inherit modus-themes-search-replace)))))
+
 (put 'narrow-to-region 'disabled nil)
 
 (setq-default fill-column 80)
