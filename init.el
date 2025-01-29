@@ -26,8 +26,6 @@
 ;;
 ;; - org-mode journalling
 ;;
-;; - diff-hl
-;;
 ;; - any black magic performance tweaks in Doom
 
 ;;; Code:
