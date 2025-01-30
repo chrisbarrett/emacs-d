@@ -1910,7 +1910,7 @@ file in your browser at the visited revision."
 
   (org-link-set-parameters "id" :face '+org-id-link)
 
-  (require 'ol-man)
+  (require 'ol-man))
 
 (use-package org-capture
   ;; Implements templated information capture into org-mode files.
