@@ -2213,6 +2213,8 @@ file in your browser at the visited revision."
   :demand t
   :custom
   (org-modern-hide-stars nil)
+  (org-modern-fold-stars
+   '(("▶" . "▼") ("▹" . "▿") ("▸" . "▾") ("⯈" . "⯆")))
   :config
   (global-org-modern-mode +1)
   (custom-theme-set-faces 'user
