@@ -1706,10 +1706,12 @@ file in your browser at the visited revision."
   :general
   (:keymaps 'tempel-map
    :states '(insert normal)
+   "C-n" #'tempel-next
+   "C-p" #'tempel-previous
    "C-g" #'tempel-done
    "C-k" #'tempel-kill
    "<tab>" #'tempel-next
-   "S-<tab>" #'tempel-previous)
+   "<backtab>" #'tempel-previous)
 
   (:keymaps 'tempel-map
    :states 'normal
