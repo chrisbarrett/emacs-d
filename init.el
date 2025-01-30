@@ -1721,8 +1721,7 @@ file in your browser at the visited revision."
   (tempel-path (file-name-concat user-emacs-directory "templates" "*.eld"))
   :init
   (add-hook! '(prog-mode-hook text-mode-hook config-mode-hook)
-    (setq-local completion-at-point-functions
-                (cons #'tempel-expand completion-at-point-functions))))
+    (add-hook 'completion-at-point-functions #'tempel-expand -90 t)))
 
 (use-package eglot
   ;; Emacs' built-in LSP integration.
