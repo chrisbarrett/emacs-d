@@ -291,8 +291,12 @@ Runs `+escape-hook'."
    "nr" #'narrow-to-region
    "nw" #'widen
 
-   "c"  '(nil :wk "comments")
+   "c"  '(nil :wk "code/comments")
+   "cm" #'xref-find-references
    "cr" #'comment-dwim
+   "cd" #'eglot-find-typeDefinition
+   "cc" #'eglot-find-declaration
+   "ci" #'eglot-find-implementation
    "cl" #'comment-line
 
    "g"  '(nil :wk "git/goto")
