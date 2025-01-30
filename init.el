@@ -219,13 +219,14 @@ Runs `+escape-hook'."
    ",c" #'puni-convolute
    ",k" #'puni-splice-killing-forward
    ",K" #'puni-splice-killing-backward
-   ",s" #'puni-splice
+   ",s" #'puni-splice-killing-backward
    ",r" #'puni-raise
    ",b" #'puni-barf-forward
    ",B" #'puni-barf-backward
    ",m" #'puni-slurp-forward
    ",M" #'puni-slurp-backward
    ",t" #'puni-transpose
+   ",u" #'puni-splice
    ",x" #'puni-split
 
    "a"  '(nil :wk "apps")
