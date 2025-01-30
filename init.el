@@ -1760,7 +1760,7 @@ file in your browser at the visited revision."
 
   ;; TODOs, checkboxes, stats, properties.
   (org-todo-keywords '((type "TODO(t)" "WAIT(w)" "|" "DONE(d)" "CANCELLED(c@)")
-                       (type "PROJECT(p)")))
+                       (type "PROJECT(p)" "|" "DONE(d)")))
   (org-use-fast-todo-selection 'expert)
   (org-enforce-todo-dependencies t)
   (org-hierarchical-todo-statistics nil)
