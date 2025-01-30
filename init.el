@@ -530,7 +530,7 @@ Runs `+escape-hook'."
     "Auto revert stale buffers in visible windows, if necessary."
     (dolist (buf (+visible-buffers))
       (with-current-buffer buf
-			   (+auto-revert-current-buffer-h))))
+	(+auto-revert-current-buffer-h))))
   :hook
   (after-save-hook . +auto-revert-visible-buffers-h)
   (+switch-buffer-hook . +auto-revert-current-buffer-h)
@@ -688,7 +688,7 @@ Runs `+escape-hook'."
   (define-advice save-place-alist-to-file (:around (fn &rest args) use-prin1-not-pp)
     "Use the faster prin1 for saving history."
     (cl-letf (((symbol-function #'pp) #'prin1))
-           (apply fn args))))
+      (apply fn args))))
 
 (use-package ediff
   ;; File diff UI.
@@ -821,11 +821,11 @@ Runs `+escape-hook'."
   :custom
   (hl-todo-highlight-punctuation ":")
   (hl-todo-keyword-faces
-        '(("TODO" warning bold)
-          ("FIXME" error bold)
-          ("HACK" font-lock-constant-face bold)
-          ("DEPRECATED" font-lock-doc-face bold)
-          ("NOTE" success bold))))
+   '(("TODO" warning bold)
+     ("FIXME" error bold)
+     ("HACK" font-lock-constant-face bold)
+     ("DEPRECATED" font-lock-doc-face bold)
+     ("NOTE" success bold))))
 
 (use-package indent-bars :ensure t
   ;; Display indentation guides in buffers. Particularly useful for
