@@ -1703,22 +1703,7 @@ file in your browser at the visited revision."
 
 (use-package tempel :ensure t
   ;; Text snippets.
-  :general
-  (:keymaps 'tempel-map
-   :states '(insert normal)
-   "C-n" #'tempel-next
-   "C-p" #'tempel-previous
-   "C-g" #'tempel-done
-   "C-k" #'tempel-kill
-   "<tab>" #'tempel-next
-   "<backtab>" #'tempel-previous)
-
-  (:keymaps 'tempel-map
-   :states 'normal
-   "cc" #'tempel-kill
-   "C" #'tempel-kill
-   "<escape>" #'tempel-done)
-
+  (:keymaps 'tempel-map :states 'normal "<escape>" #'tempel-done)
   :custom
   (tempel-path (file-name-concat user-emacs-directory "templates" "*.eld"))
   :init
