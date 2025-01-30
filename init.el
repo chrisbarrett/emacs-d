@@ -568,11 +568,12 @@ Runs `+escape-hook'."
   ;; Basic code folding.
   :hook (prog-mode-hook . hs-minor-mode))
 
-(add-hook 'find-file-hook
-          (defun +maybe-enable-readonly-mode-h ()
-            (when (and (buffer-file-name)
-                       (string-match-p (rx "/emacs/elpaca/") (buffer-file-name)))
-              (read-only-mode +1))))
+(defconst +read-only-file-patterns '("/emacs/elpaca/"
+                                     "/node_modules/"))
+
+(add-hook! 'find-file-hook
+  (when (string-match-p (regexp-opt +read-only-file-patterns) (buffer-file-name))
+    (read-only-mode +1)))
 
 (use-package page-break-lines :ensure t
   ;; Displays ^L page break characters as a horizontal rule. Useful for
