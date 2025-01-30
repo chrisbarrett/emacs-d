@@ -1908,7 +1908,9 @@ file in your browser at the visited revision."
     '((t (:weight semi-bold :inherit font-lock-variable-name-face)))
     "Face for ID links; these would typically be org-roam links.")
 
-  (org-link-set-parameters "id" :face '+org-id-link))
+  (org-link-set-parameters "id" :face '+org-id-link)
+
+  (require 'ol-man)
 
 (use-package org-capture
   ;; Implements templated information capture into org-mode files.
