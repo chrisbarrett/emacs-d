@@ -1724,6 +1724,12 @@ file in your browser at the visited revision."
     (setq-local completion-at-point-functions
                 (cons #'tempel-expand completion-at-point-functions))))
 
+(use-package eglot
+  ;; Emacs' built-in LSP integration.
+  :general (:keymaps 'eglot-mode-map
+            :states '(insert normal)
+            "M-RET" #'eglot-code-actions))
+
 
 ;;; org-mode
 
