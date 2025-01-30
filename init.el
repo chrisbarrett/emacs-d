@@ -954,13 +954,7 @@ With optional prefix arg CONTINUE-P, keep profiling."
   (define-advice eval-region (:after (start end &rest _) pulsar)
     "Pulse evaluated regions."
     (when pulsar-mode
-      (pulsar--pulse nil 'pulsar-yellow start end)))
-
-  ;; NOTE: No idea whether there's a performance issue with doing this...
-  (define-advice eval-buffer (:after (&rest _) pulsar)
-    "Pulse evaluated regions."
-    (when pulsar-mode
-      (pulsar--pulse nil 'pulsar-yellow (point-min) (point-max)))))
+      (pulsar--pulse nil 'pulsar-yellow start end))))
 
 (use-package so-long
   ;; Improve performance of files with very long lines.
@@ -1649,7 +1643,11 @@ file in your browser at the visited revision."
     "e" '(nil :which-key "eval")
     "eb" (defun +eval-buffer ()
            (interactive)
-           (message "eval buffer => %s" (eval-buffer))))
+           (let ((inhibit-redisplay t))
+             (call-interactively #'eval-buffer)
+             (message "Buffer evaluated" ))
+           (when pulsar-mode
+             (pulsar--pulse nil 'pulsar-yellow (point-min) (point-max)))))
 
   (setq-hook! 'emacs-lisp-mode-hook
     evil-lookup-func #'+emacs-lisp-lookup-func)
