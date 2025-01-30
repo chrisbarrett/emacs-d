@@ -1703,6 +1703,8 @@ file in your browser at the visited revision."
 
 (use-package tempel :ensure t
   ;; Text snippets.
+  ;;
+  ;; NB. Field navigation uses M-{ and M-}.
   (:keymaps 'tempel-map :states 'normal "<escape>" #'tempel-done)
   :custom
   (tempel-path (file-name-concat user-emacs-directory "templates" "*.eld"))
