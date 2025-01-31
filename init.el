@@ -1719,6 +1719,11 @@ file in your browser at the visited revision."
             :states '(insert normal)
             "M-RET" #'eglot-code-actions))
 
+(use-package apheleia :ensure t
+  :after-call +first-file-hook
+  :config
+  (apheleia-global-mode +1))
+
 
 ;;; org-mode
 
