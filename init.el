@@ -564,23 +564,12 @@ Runs `+escape-hook'."
   (:keymaps 'puni-mode-map :states '(insert normal emacs) "C-k" #'puni-kill-line)
   (:keymaps 'puni-mode-map :states '(visual) "C-k" #'puni-kill-active-region))
 
-(use-package hideshow
-  ;; Basic code folding.
-  :hook (prog-mode-hook . hs-minor-mode))
-
 (defconst +read-only-file-patterns '("/emacs/elpaca/"
                                      "/node_modules/"))
 
 (add-hook! 'find-file-hook
   (when (string-match-p (regexp-opt +read-only-file-patterns) (buffer-file-name))
     (read-only-mode +1)))
-
-(use-package page-break-lines :ensure t
-  ;; Displays ^L page break characters as a horizontal rule. Useful for
-  ;; demarcating sections of a file.
-  :after-call +first-file-hook +first-buffer-hook
-  :config
-  (global-page-break-lines-mode +1))
 
 (use-package recentf
   ;; Maintain a list of visited files.
@@ -596,64 +585,6 @@ Runs `+escape-hook'."
   (show-paren-delay 0.1)
   (show-paren-when-point-inside-paren t)
   (show-paren-when-point-in-periphery t))
-
-(use-package flymake
-  ;; Frontend for in-buffer error checking & navigation.
-  ;;
-  ;; c.f. `next-error' and friends, which operate on compilation & grep results
-  ;; across any number of buffers.
-  :hook (prog-mode-hook . flymake-mode)
-  :general-config (:keymaps 'flymake-mode-map
-                            "M-n" #'flymake-goto-next-error
-                            "M-p" #'flymake-goto-prev-error))
-
-(use-package dired
-  :custom
-  (dired-recursive-copies 'always)
-  (dired-recursive-deletes 'always)
-  (delete-by-moving-to-trash t)
-  (dired-auto-revert-buffer 'dired-directory-changed-p)
-  (dired-listing-switches
-   "--almost-all --human-readable --group-directories-first --no-group"))
-
-(use-package dired-aux
-  :custom
-  (dired-create-destination-dirs 'ask)
-  (dired-vc-rename-file t))
-
-(use-package nerd-icons :ensure t
-  ;; Icon set used by various packages.
-  :autoload nerd-icons-codicon nerd-icons-faicon)
-
-(use-package dirvish :ensure t
-  ;; Wrapper around `dired' that provides better UX.
-  :hook (+first-input-hook . dirvish-override-dired-mode)
-
-  :general
-  (:keymaps '(dirvish-mode-map dired-mode-map) :states 'normal
-            "q" #'dirvish-quit)
-  (:keymaps 'dirvish-mode-map :states 'normal
-            "<tab>" #'dirvish-layout-toggle)
-  :custom
-  (dirvish-reuse-session nil)
-  (dirvish-attributes '(file-size nerd-icons subtree-state))
-  (dirvish-mode-line-format '(:left (sort file-time symlink) :right (omit yank index)))
-  (dirvish-subtree-always-show-state t)
-  (dirvish-hide-details '(dirvish dirvish-side))
-  (dirvish-hide-cursor '(dirvish dirvish-side))
-
-  :config
-  (setq dirvish-path-separators (list
-                                 (format "  %s " (nerd-icons-codicon "nf-cod-home"))
-                                 (format "  %s " (nerd-icons-codicon "nf-cod-root_folder"))
-                                 (format " %s " (nerd-icons-faicon "nf-fa-angle_right"))))
-
-  :config
-  (dirvish-peek-mode +1))
-
-(use-package diredfl :ensure t
-  ;; Add extra font-lock to dired/dirvish file listings.
-  :hook ((dired-mode-hook dirvish-directory-view-mode-hook) . diredfl-mode))
 
 (keymap-global-set "C-c SPC"
                    (defun +insert-nbsp ()
@@ -734,38 +665,6 @@ Runs `+escape-hook'."
   (autoload 'comint-truncate-buffer "comint" nil t)
   (add-hook 'compilation-filter-hook #'comint-truncate-buffer))
 
-(use-package hide-mode-line :ensure (hide-mode-line
-                                     :host github
-                                     :repo "hlissner/emacs-hide-mode-line")
-  ;; Disable the mode-line in situations where it's not useful.
-  :hook ((completion-list-mode-hook Man-mode-hook) . hide-mode-line-mode))
-
-(use-package highlight-numbers :ensure (highlight-numbers
-                                        :host github
-                                        :repo "Fanael/highlight-numbers")
-  ;; Ensure numbers always have syntax highlighting applied, even if a
-  ;; major-mode neglects to configure that.
-  :hook (prog-mode-hook conf-mode-hook)
-  :custom (highlight-numbers-generic-regexp
-           (rx symbol-start (+ digit) (? "." (* digit)) symbol-end)))
-
-(use-package display-line-numbers
-  ;; Show line-numbers in the margin.
-  :init
-  (setq-default display-line-numbers-width 3)
-  (setq-default display-line-numbers-widen t))
-
-(use-package ws-butler :ensure t
-  ;; Delete trailing whitespace on visited lines.
-  :hook (prog-mode-hook text-mode-hook conf-mode-hook)
-  :config
-  (pushnew! ws-butler-global-exempt-modes
-            'special-mode
-            'comint-mode
-            'term-mode
-            'eshell-mode
-            'diff-mode))
-
 ;; Disable bidirectional text by default.
 (setq-default bidi-display-reordering 'left-to-right)
 (setq-default bidi-paragraph-direction 'left-to-right)
@@ -778,65 +677,6 @@ Runs `+escape-hook'."
 (setq fast-but-imprecise-scrolling t)
 
 (setq redisplay-skip-fontification-on-input t)
-
-(use-package ispell
-  ;; Built-in spellchecker. I don't actually use it directly, but other packages reference its configuration.
-  :custom
-  (ispell-dictionary "en_AU")
-  (ispell-personal-dictionary (file-name-concat org-directory "aspell.en.pws"))
-  :config
-  (unless (executable-find "aspell")
-    (warn "Could not find aspell program; spell checking will not work"))
-  (ispell-set-spellchecker-params))
-
-(use-package spell-fu :ensure t
-  ;; A more lightweight spell-checker than the built-in.
-  :hook (text-mode-hook prog-mode-hook conf-mode-hook)
-  :general
-  (:states '(normal motion)
-           "zn" #'spell-fu-goto-next-error
-           "zp" #'spell-fu-goto-previous-error
-           "zg" #'spell-fu-word-add
-           "zx" #'spell-fu-word-remove)
-
-  :config
-  (add-hook! 'spell-fu-mode-hook
-    (spell-fu-dictionary-add (spell-fu-get-ispell-dictionary "en_AU"))
-    (spell-fu-dictionary-add (spell-fu-get-ispell-dictionary "fr")))
-
-  (setq-hook! 'org-mode-hook
-    spell-fu-faces-exclude '(org-meta-line org-link org-code org-block
-                             org-block-begin-line org-block-end-line
-                             org-footnote org-tag org-modern-tag)))
-
-(use-package flyspell-correct :ensure t
-  ;; Provides a nicer command for working with spelling corrections.
-  :after spell-fu
-  :general
-  (:states 'normal "z SPC" #'flyspell-correct-at-point))
-
-(use-package hl-todo :ensure t
-  ;; Display TODO comments with special highlights.
-  :hook (prog-mode-hook yaml-ts-mode-hook conf-mode-hook)
-  :custom
-  (hl-todo-highlight-punctuation ":")
-  (hl-todo-keyword-faces
-   '(("TODO" warning bold)
-     ("FIXME" error bold)
-     ("HACK" font-lock-constant-face bold)
-     ("DEPRECATED" font-lock-doc-face bold)
-     ("NOTE" success bold))))
-
-(use-package indent-bars :ensure t
-  ;; Display indentation guides in buffers. Particularly useful for
-  ;; indentation-sensitive language modes.
-  :hook (yaml-ts-mode-hook python-ts-mode-hook)
-  :custom
-  (indent-bars-starting-column 0)
-  (indent-bars-width-frac 0.15)
-  (indent-bars-color-by-depth nil)
-  (indent-bars-color '(font-lock-comment-face :face-bg nil :blend 0.425))
-  (indent-bars-highlight-current-depth nil))
 
 (use-package elpaca
   ;; Configure aspects of elpaca not required for initial package bootstrap.
@@ -925,38 +765,6 @@ With optional prefix arg CONTINUE-P, keep profiling."
   :custom
   (wgrep-auto-save-buffer t))
 
-(use-package pulsar :ensure t
-  ;; Temporarily highlights the current line after performing certain operations
-  :hook (+first-input-hook . pulsar-global-mode)
-  :custom
-  (pulsar-iterations 5)
-  :config
-  (add-hook 'next-error-hook #'pulsar-pulse-line)
-  (add-hook 'consult-after-jump-hook #'pulsar-recenter-top)
-  (add-hook 'consult-after-jump-hook #'pulsar-reveal-entry)
-  (add-hook 'imenu-after-jump-hook #'pulsar-recenter-top)
-  (add-hook 'imenu-after-jump-hook #'pulsar-reveal-entry)
-
-  (delq! 'evil-goto-first-line pulsar-pulse-functions)
-  (delq! 'evil-goto-line pulsar-pulse-functions)
-
-  (define-advice evil-goto-line (:after (count) pulsar)
-    "Don't pulse if moving to the first or last line via gg/G."
-    (when (and pulsar-mode
-               count ; nil if going to end of buffer
-               (< 1 count ))
-      (pulsar-pulse-line)))
-
-  (define-advice evil-yank (:after (start end &rest _) pulsar)
-    "Pulse yanked lines & regions."
-    (when pulsar-mode
-      (pulsar--pulse nil 'pulsar-generic start end)))
-
-  (define-advice eval-region (:after (start end &rest _) pulsar)
-    "Pulse evaluated regions."
-    (when pulsar-mode
-      (pulsar--pulse nil 'pulsar-yellow start end))))
-
 (use-package so-long
   ;; Improve performance of files with very long lines.
   :hook (elpaca-after-init-hook . global-so-long-mode))
@@ -992,6 +800,186 @@ With optional prefix arg CONTINUE-P, keep profiling."
 
 ;; Don't tell me what key I could have used instead of M-x.
 (advice-add #'execute-extended-command--describe-binding-msg :override #'ignore)
+
+
+;;; Visual enhancements
+
+(use-package hideshow
+  ;; Basic code folding.
+  :hook (prog-mode-hook . hs-minor-mode))
+
+(use-package page-break-lines :ensure t
+  ;; Displays ^L page break characters as a horizontal rule. Useful for
+  ;; demarcating sections of a file.
+  :after-call +first-file-hook +first-buffer-hook
+  :config
+  (global-page-break-lines-mode +1))
+
+(use-package hide-mode-line :ensure (hide-mode-line
+                                     :host github
+                                     :repo "hlissner/emacs-hide-mode-line")
+  ;; Disable the mode-line in situations where it's not useful.
+  :hook ((completion-list-mode-hook Man-mode-hook) . hide-mode-line-mode))
+
+(use-package highlight-numbers :ensure (highlight-numbers
+                                        :host github
+                                        :repo "Fanael/highlight-numbers")
+  ;; Ensure numbers always have syntax highlighting applied, even if a
+  ;; major-mode neglects to configure that.
+  :hook (prog-mode-hook conf-mode-hook)
+  :custom (highlight-numbers-generic-regexp
+           (rx symbol-start (+ digit) (? "." (* digit)) symbol-end)))
+
+(use-package display-line-numbers
+  ;; Show line-numbers in the margin.
+  :init
+  (setq-default display-line-numbers-width 3)
+  (setq-default display-line-numbers-widen t))
+
+(use-package hl-todo :ensure t
+  ;; Display TODO comments with special highlights.
+  :hook (prog-mode-hook yaml-ts-mode-hook conf-mode-hook)
+  :custom
+  (hl-todo-highlight-punctuation ":")
+  (hl-todo-keyword-faces
+   '(("TODO" warning bold)
+     ("FIXME" error bold)
+     ("HACK" font-lock-constant-face bold)
+     ("DEPRECATED" font-lock-doc-face bold)
+     ("NOTE" success bold))))
+
+(use-package indent-bars :ensure t
+  ;; Display indentation guides in buffers. Particularly useful for
+  ;; indentation-sensitive language modes.
+  :hook (yaml-ts-mode-hook python-ts-mode-hook)
+  :custom
+  (indent-bars-starting-column 0)
+  (indent-bars-width-frac 0.15)
+  (indent-bars-color-by-depth nil)
+  (indent-bars-color '(font-lock-comment-face :face-bg nil :blend 0.425))
+  (indent-bars-highlight-current-depth nil))
+
+(use-package pulsar :ensure t
+  ;; Temporarily highlights the current line after performing certain operations
+  :hook (+first-input-hook . pulsar-global-mode)
+  :custom
+  (pulsar-iterations 5)
+  :config
+  (add-hook 'next-error-hook #'pulsar-pulse-line)
+  (add-hook 'consult-after-jump-hook #'pulsar-recenter-top)
+  (add-hook 'consult-after-jump-hook #'pulsar-reveal-entry)
+  (add-hook 'imenu-after-jump-hook #'pulsar-recenter-top)
+  (add-hook 'imenu-after-jump-hook #'pulsar-reveal-entry)
+
+  (delq! 'evil-goto-first-line pulsar-pulse-functions)
+  (delq! 'evil-goto-line pulsar-pulse-functions)
+
+  (define-advice evil-goto-line (:after (count) pulsar)
+    "Don't pulse if moving to the first or last line via gg/G."
+    (when (and pulsar-mode
+               count ; nil if going to end of buffer
+               (< 1 count ))
+      (pulsar-pulse-line)))
+
+  (define-advice evil-yank (:after (start end &rest _) pulsar)
+    "Pulse yanked lines & regions."
+    (when pulsar-mode
+      (pulsar--pulse nil 'pulsar-generic start end)))
+
+  (define-advice eval-region (:after (start end &rest _) pulsar)
+    "Pulse evaluated regions."
+    (when pulsar-mode
+      (pulsar--pulse nil 'pulsar-yellow start end))))
+
+
+;;; Spell-checking
+
+(use-package ispell
+  ;; Built-in spellchecker. I don't actually use it directly, but other packages reference its configuration.
+  :custom
+  (ispell-dictionary "en_AU")
+  (ispell-personal-dictionary (file-name-concat org-directory "aspell.en.pws"))
+  :config
+  (unless (executable-find "aspell")
+    (warn "Could not find aspell program; spell checking will not work"))
+  (ispell-set-spellchecker-params))
+
+(use-package spell-fu :ensure t
+  ;; A more lightweight spell-checker than the built-in.
+  :hook (text-mode-hook prog-mode-hook conf-mode-hook)
+  :general
+  (:states '(normal motion)
+           "zn" #'spell-fu-goto-next-error
+           "zp" #'spell-fu-goto-previous-error
+           "zg" #'spell-fu-word-add
+           "zx" #'spell-fu-word-remove)
+
+  :config
+  (add-hook! 'spell-fu-mode-hook
+    (spell-fu-dictionary-add (spell-fu-get-ispell-dictionary "en_AU"))
+    (spell-fu-dictionary-add (spell-fu-get-ispell-dictionary "fr")))
+
+  (setq-hook! 'org-mode-hook
+    spell-fu-faces-exclude '(org-meta-line org-link org-code org-block
+                             org-block-begin-line org-block-end-line
+                             org-footnote org-tag org-modern-tag)))
+
+(use-package flyspell-correct :ensure t
+  ;; Provides a nicer command for working with spelling corrections.
+  :after spell-fu
+  :general
+  (:states 'normal "z SPC" #'flyspell-correct-at-point))
+
+
+;;; Dired & dirvish
+
+(use-package dired
+  :custom
+  (dired-recursive-copies 'always)
+  (dired-recursive-deletes 'always)
+  (delete-by-moving-to-trash t)
+  (dired-auto-revert-buffer 'dired-directory-changed-p)
+  (dired-listing-switches
+   "--almost-all --human-readable --group-directories-first --no-group"))
+
+(use-package dired-aux
+  :custom
+  (dired-create-destination-dirs 'ask)
+  (dired-vc-rename-file t))
+
+(use-package nerd-icons :ensure t
+  ;; Icon set used by various packages.
+  :autoload nerd-icons-codicon nerd-icons-faicon)
+
+(use-package dirvish :ensure t
+  ;; Wrapper around `dired' that provides better UX.
+  :hook (+first-input-hook . dirvish-override-dired-mode)
+
+  :general
+  (:keymaps '(dirvish-mode-map dired-mode-map) :states 'normal
+            "q" #'dirvish-quit)
+  (:keymaps 'dirvish-mode-map :states 'normal
+            "<tab>" #'dirvish-layout-toggle)
+  :custom
+  (dirvish-reuse-session nil)
+  (dirvish-attributes '(file-size nerd-icons subtree-state))
+  (dirvish-mode-line-format '(:left (sort file-time symlink) :right (omit yank index)))
+  (dirvish-subtree-always-show-state t)
+  (dirvish-hide-details '(dirvish dirvish-side))
+  (dirvish-hide-cursor '(dirvish dirvish-side))
+
+  :config
+  (setq dirvish-path-separators (list
+                                 (format "  %s " (nerd-icons-codicon "nf-cod-home"))
+                                 (format "  %s " (nerd-icons-codicon "nf-cod-root_folder"))
+                                 (format " %s " (nerd-icons-faicon "nf-fa-angle_right"))))
+
+  :config
+  (dirvish-peek-mode +1))
+
+(use-package diredfl :ensure t
+  ;; Add extra font-lock to dired/dirvish file listings.
+  :hook ((dired-mode-hook dirvish-directory-view-mode-hook) . diredfl-mode))
 
 
 ;;; evil-mode
@@ -1702,6 +1690,44 @@ file in your browser at the visited revision."
   (treesit-auto-add-to-auto-mode-alist 'all)
   (global-treesit-auto-mode +1))
 
+(use-package flymake
+  ;; Frontend for in-buffer error checking & navigation.
+  ;;
+  ;; c.f. `next-error' and friends, which operate on compilation & grep results
+  ;; across any number of buffers.
+  :hook (prog-mode-hook . flymake-mode)
+  :general-config (:keymaps 'flymake-mode-map
+                            "M-n" #'flymake-goto-next-error
+                            "M-p" #'flymake-goto-prev-error))
+
+(use-package eglot
+  ;; Emacs' built-in LSP integration.
+  :general (:keymaps 'eglot-mode-map
+            :states '(insert normal)
+            "M-RET" #'eglot-code-actions))
+
+
+;;; Code formatting
+
+(use-package apheleia :ensure t
+  :after-call +first-file-hook
+  :config
+  (apheleia-global-mode +1))
+
+(use-package ws-butler :ensure t
+  ;; Delete trailing whitespace on visited lines.
+  :hook (prog-mode-hook text-mode-hook conf-mode-hook)
+  :config
+  (pushnew! ws-butler-global-exempt-modes
+            'special-mode
+            'comint-mode
+            'term-mode
+            'eshell-mode
+            'diff-mode))
+
+
+;;; Templating
+
 (use-package tempel :ensure t
   ;; Text snippets.
   ;;
@@ -1712,17 +1738,6 @@ file in your browser at the visited revision."
   :init
   (add-hook! '(prog-mode-hook text-mode-hook config-mode-hook)
     (add-hook 'completion-at-point-functions #'tempel-expand -90 t)))
-
-(use-package eglot
-  ;; Emacs' built-in LSP integration.
-  :general (:keymaps 'eglot-mode-map
-            :states '(insert normal)
-            "M-RET" #'eglot-code-actions))
-
-(use-package apheleia :ensure t
-  :after-call +first-file-hook
-  :config
-  (apheleia-global-mode +1))
 
 
 ;;; org-mode
