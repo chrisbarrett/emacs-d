@@ -373,6 +373,13 @@ Runs `+escape-hook'."
    "ts" #'spell-fu-mode
    "tr" #'read-only-mode
 
+   "T" (defun +goto-mode-template-file ()
+         (interactive)
+         (let* ((modes (nreverse (parent-mode-list major-mode)))
+                (mode (completing-read "Snippets table for mode: " modes nil t))
+                (filename (format "%s.eld" (string-remove-suffix "-mode" mode))))
+           (find-file (file-name-concat user-emacs-directory "templates" filename))))
+
    "w"  '(nil :wk "windows")
    "w-" #'+split-window-vertically-dwim
    "w/" #'+split-window-horizontally-dwim
