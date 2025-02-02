@@ -2330,7 +2330,9 @@ file in your browser at the visited revision."
     :after org-roam
     :demand t
     :config
-    (org-roam-slipbox-tag-mode +1)))
+    (org-roam-slipbox-tag-mode +1)
+    (+local-leader-set-key 'org-mode-map
+      "rR" #'org-roam-slipbox-refile)))
 
 (let ((site-file (file-name-concat user-emacs-directory "site.el")))
   (load site-file t nil nil t ))
