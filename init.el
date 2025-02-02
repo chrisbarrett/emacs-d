@@ -1739,6 +1739,24 @@ file in your browser at the visited revision."
   (add-hook! '(prog-mode-hook text-mode-hook config-mode-hook)
     (add-hook 'completion-at-point-functions #'tempel-expand -90 t)))
 
+(use-package autoinsert
+  :after-call +first-buffer-hook +first-file-hook
+  :custom
+  (auto-insert-directory (file-name-concat user-emacs-directory "file-templates/"))
+  (auto-insert-alist nil)
+  (auto-insert-query nil)
+  :init
+  (defmacro +define-file-template (mode-or-regexp template-file-name)
+    (let ((template-file (file-name-concat auto-insert-directory template-file-name)))
+      `(define-auto-insert ,mode-or-regexp (lambda ()
+                                             (skeleton-insert
+                                              (with-temp-buffer
+                                                (insert-file-contents ,template-file)
+                                                (read (buffer-string))))))))
+  :config
+  (auto-insert-mode +1)
+  (+define-file-template (rx ".el" eos) "emacs-lisp.eld"))
+
 
 ;;; org-mode
 
