@@ -64,7 +64,7 @@
 ;; These are set up to run just once by other hooks.
 
 (+run-hook-once '+first-buffer-hook '(+switch-buffer-hook find-file-hook))
-(+run-hook-once '+first-file-hook '(+switch-file-hook dired-initial-position-hook))
+(+run-hook-once '+first-file-hook '(find-file-hook dired-initial-position-hook))
 (+run-hook-once '+first-input-hook '(pre-command-hook))
 
 ;; The remaining hooks are executed routinely throughout the session.
