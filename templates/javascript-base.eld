@@ -24,3 +24,9 @@ typescript-ts-base-mode js-base-mode
 
 (cl "class " p " {" n> q n "}" >)
 (ecl "export class " p " {" n> q n "}" >)
+
+(ds "describe(\"" p "\", () => {"
+    n> q n "});" >)
+
+(it "it(\"" p "\", () => {"
+    n> q n "});" >)
