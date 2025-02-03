@@ -1968,6 +1968,10 @@ file in your browser at the visited revision."
 
 (use-package org-capture
   ;; Implements templated information capture into org-mode files.
+  :custom
+  (org-capture-templates `(("t" "Todo" entry (file+headline "roam/todos.org" "Inbox")
+                            "* TODO %?")))
+
   :config
   ;; Kill capture buffers by default (unless they've been visited)
   (org-capture-put :kill-buffer t))
