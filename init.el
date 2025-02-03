@@ -1393,7 +1393,8 @@ word.  Fall back to regular `expreg-expand'."
   (:states '(normal emacs motion)
            "C-@" #'embark-act
            "C-t" #'embark-dwim)
-  (:keymaps 'minibuffer-local-map
+  (:keymaps +default-minibuffer-maps
+            "C-@" #'embark-act
             "C-c C-:" #'embark-export
             "C-c C-l" #'embark-collect))
 
