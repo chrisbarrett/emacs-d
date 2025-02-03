@@ -1395,8 +1395,8 @@ word.  Fall back to regular `expreg-expand'."
            "C-t" #'embark-dwim)
   (:keymaps +default-minibuffer-maps
             "C-@" #'embark-act
-            "C-c C-:" #'embark-export
-            "C-c C-l" #'embark-collect))
+            "C-c C-e" #'embark-export
+            "C-c C-c" #'embark-collect))
 
 (use-package embark-consult :ensure t
   ;; Integration embark with consult
