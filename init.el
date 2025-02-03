@@ -359,6 +359,11 @@ Runs `+escape-hook'."
    "orr" #'org-roam-review
    "ort" #'org-roam-search-tags
 
+   "j" '(nil :wk "journal")
+   "jn" #'org-journal-new-entry
+   "jd" #'org-journal-new-date-entry
+   "js" #'org-journal-new-scheduled-entry
+
    "e"  '(nil :wk "errors")
    "el" #'consult-flymake
 
@@ -1775,7 +1780,7 @@ file in your browser at the visited revision."
 ;; loaded features so it's less noticeable.
 (+load-packages-incrementally '(calendar find-func format-spec org-macs org-compat org-faces org-entities
                                 org-list org-pcomplete org-src org-footnote org-macro ob org org-modern
-                                org-habit org-agenda org-capture))
+                                org-habit org-agenda org-capture org-journal))
 
 (use-package org :ensure t ; NB. installed from org package archive.
   ;; org-mode - the reason why I can probably never switch to another editor.
@@ -2291,6 +2296,15 @@ file in your browser at the visited revision."
 (use-package org-cliplink :ensure t
   ;; Create org-mode links from URLs on the clipboard.
   :general (:keymaps 'org-mode-map "C-c l" #'org-cliplink))
+
+(use-package org-journal :ensure t
+  ;; Utilities to use org-mode for journalling.
+  :custom
+  (org-journal-dir (file-name-concat org-directory "journal/"))
+  (org-journal-file-format "%Y.org")
+  (org-journal-file-type 'yearly)
+  (org-journal-date-format "%F %A")
+  (org-journal-enable-agenda-integration t))
 
 
 ;;; Input methods
