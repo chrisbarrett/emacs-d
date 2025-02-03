@@ -1709,9 +1709,13 @@ file in your browser at the visited revision."
 
 (use-package eglot
   ;; Emacs' built-in LSP integration.
-  :general (:keymaps 'eglot-mode-map
-            :states '(insert normal)
-            "M-RET" #'eglot-code-actions))
+  :general
+  (:keymaps 'eglot-mode-map
+   :states '(insert normal)
+   "M-RET" #'eglot-code-actions)
+  (:keymaps 'eglot-mode-map
+   :states '(normal)
+   "C-c C-r" #'eglot-rename))
 
 
 ;;; Code formatting
