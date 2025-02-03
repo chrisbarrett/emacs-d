@@ -2026,7 +2026,10 @@ file in your browser at the visited revision."
          ;; TODO: Remap mode definitions so I don't have to maintain this
          ;; myself..
          '(("md" . markdown)
-           ("csharp" . csharp-ts-mode)
+           ("csharp" . csharp-ts)
+           ("dockerfile" . dockerfile-ts)
+           ("ts" . typescript-ts)
+           ("typescript" . typescript-ts)
            ("nix" . nix-ts)
            ("yaml" . yaml-ts)
            ("yml" . yaml-ts))))
