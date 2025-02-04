@@ -1968,13 +1968,19 @@ file in your browser at the visited revision."
 
   (require 'ol-man))
 
+(defun +define-capture-template (key desc type target template-string &rest kvps)
+  (with-eval-after-load 'org-capture
+    (setf (alist-get key org-capture-templates nil nil #'equal)
+          (append (list desc type target template-string) kvps))))
+
 (use-package org-capture
   ;; Implements templated information capture into org-mode files.
   :custom
-  (org-capture-templates `(("t" "Todo" entry (file+headline "roam/todos.org" "Inbox")
-                            "* TODO %?")))
-
+  (org-capture-templates nil)
   :config
+  (+define-capture-template "t" "Todo" 'entry '(file+headline "roam/todos.org" "Inbox")
+                            "* TODO %?")
+
   ;; Kill capture buffers by default (unless they've been visited)
   (org-capture-put :kill-buffer t))
 
