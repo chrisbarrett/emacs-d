@@ -2321,7 +2321,18 @@ file in your browser at the visited revision."
   (org-journal-file-format "%Y.org")
   (org-journal-file-type 'yearly)
   (org-journal-date-format "%F %A")
-  (org-journal-enable-agenda-integration t))
+  (org-journal-enable-agenda-integration t)
+
+  ;; Integrate org-journal with org-capture
+  :init
+  (defun +org-journal-find-location ()
+    (org-journal-new-entry t)
+    (unless (eq org-journal-file-type 'daily)
+      (org-narrow-to-subtree))
+    (goto-char (point-max)))
+  :config
+  (+define-capture-template "j" "Journal Entry" 'entry '(function +org-journal-find-location)
+                            "*** %(format-time-string org-journal-time-format)%?"))
 
 
 ;;; Input methods
