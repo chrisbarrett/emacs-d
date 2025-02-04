@@ -1910,10 +1910,12 @@ file in your browser at the visited revision."
   :config
   (defun +org-cut-subtree-or-cancel-note ()
     (interactive)
-    (if org-finish-function
-        (org-finish-function
-	 (let ((org-note-abort t)) (funcall org-finish-function)))
-      (org-cut-subtree)))
+    (cond (org-finish-function
+           (let ((org-note-abort t)) (funcall org-finish-function)))
+          (org-capture-mode
+           (org-capture-kill))
+          (t
+           (org-cut-subtree))))
 
   ;; Highlight broken file links.
   (org-link-set-parameters
