@@ -256,6 +256,7 @@ Runs `+escape-hook'."
    "fs" #'save-buffer
    "fR" #'rename-visited-file
    "fr" #'recentf
+   "fw" #'write-file
 
    "fD" (defun +delete-file-and-buffer ()
           (interactive)
