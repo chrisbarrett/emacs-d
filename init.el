@@ -19,6 +19,7 @@
 
 (defvar org-directory "~/org")
 (defvar org-roam-directory "~/org/roam")
+(defvar org-default-notes-file "~/org/notes.org")
 
 
 ;;; Bootstrap Elpaca
@@ -329,6 +330,9 @@ Runs `+escape-hook'."
                                  (project-current nil "~/.config/nix-configuration")))
 
    "o"  '(nil :wk "org")
+   "on" (defun +org-goto-notes ()
+          (interactive)
+          (find-file org-default-notes-file))
    "oi" (defun +goto-org-roam-index ()
           (interactive)
           (find-file (file-name-concat org-roam-directory "notes/index.org")))
@@ -359,11 +363,6 @@ Runs `+escape-hook'."
    "orl" #'org-roam-links
    "orr" #'org-roam-review
    "ort" #'org-roam-search-tags
-
-   "j" '(nil :wk "journal")
-   "jn" #'org-journal-new-entry
-   "jd" #'org-journal-new-date-entry
-   "js" #'org-journal-new-scheduled-entry
 
    "e"  '(nil :wk "errors")
    "el" #'consult-flymake
@@ -1782,7 +1781,7 @@ file in your browser at the visited revision."
 ;; loaded features so it's less noticeable.
 (+load-packages-incrementally '(calendar find-func format-spec org-macs org-compat org-faces org-entities
                                 org-list org-pcomplete org-src org-footnote org-macro ob org org-modern
-                                org-habit org-agenda org-capture org-journal))
+                                org-habit org-agenda org-capture))
 
 (use-package org :ensure t ; NB. installed from org package archive.
   ;; org-mode - the reason why I can probably never switch to another editor.
@@ -1971,6 +1970,7 @@ file in your browser at the visited revision."
   (require 'ol-man))
 
 (defun +define-capture-template (key desc type target template-string &rest kvps)
+  "See `org-capture-templates' for documentation about the arguments."
   (with-eval-after-load 'org-capture
     (setf (alist-get key org-capture-templates nil nil #'equal)
           (append (list desc type target template-string) kvps))))
@@ -1980,8 +1980,29 @@ file in your browser at the visited revision."
   :custom
   (org-capture-templates nil)
   :config
-  (+define-capture-template "t" "Todo" 'entry '(file+headline "roam/todos.org" "Inbox")
-                            "* TODO %?")
+  (+define-capture-template "t" "Todo" 'entry '(file+olp+datetree org-default-notes-file)
+                            "* TODO %?"
+                            :tree-type '(month day))
+  (+define-capture-template "n" "Note" 'entry '(file+olp+datetree org-default-notes-file)
+                            "* %T %?"
+                            :tree-type '(month day))
+  (+define-capture-template "p" "Postmortem" 'entry '(file+olp+datetree org-default-notes-file)
+                            "* %T %? :pm:
+** Description
+# What happened?
+** Background & Context
+# What was the context? What was I doing when this happened, and what
+# contributed to this?
+** Timeline
+# What happened? Give a play-by-play.
+** Effects
+# What were the consequences or after-effects?
+** Mitigations
+# What could I do to lessen the severity or chance of this happening again?
+"
+                            :jump-to-captured t
+                            :tree-type '(month day))
+
 
   ;; Kill capture buffers by default (unless they've been visited)
   (org-capture-put :kill-buffer t))
@@ -2098,16 +2119,14 @@ file in your browser at the visited revision."
                                                              :filetitle t))
                    (org-agenda-skip-function #'+agenda-view-skip-function))))
 
-         ;; TODO: A next action should:
-         ;; 1. be a leaf TODO
-         ;; 2. not be the top-most TODO with a :project: tag
          (next-actions '(tags-todo "-tickler-inbox+TODO=\"TODO\""
                          ((org-agenda-overriding-header "Next Actions")
                           (org-agenda-dim-blocked-tasks 'invisible)
                           (org-agenda-skip-function #'+agenda-next-actions-skip-function))))
 
          (inbox '(tags-todo "+inbox+TODO=\"TODO\""
-                  ((org-agenda-overriding-header "Inbox"))))
+                  ((org-agenda-overriding-header "Inbox")
+                   (org-agenda-skip-function '(org-agenda-skip-entry-if 'scheduled)))))
 
          (delegated '(todo "WAIT"
                       ((org-agenda-overriding-header "Delegated")
@@ -2313,26 +2332,6 @@ file in your browser at the visited revision."
 (use-package org-cliplink :ensure t
   ;; Create org-mode links from URLs on the clipboard.
   :general (:keymaps 'org-mode-map "C-c l" #'org-cliplink))
-
-(use-package org-journal :ensure t
-  ;; Utilities to use org-mode for journalling.
-  :custom
-  (org-journal-dir (file-name-concat org-directory "journal/"))
-  (org-journal-file-format "%Y.org")
-  (org-journal-file-type 'yearly)
-  (org-journal-date-format "%F %A")
-  (org-journal-enable-agenda-integration t)
-
-  ;; Integrate org-journal with org-capture
-  :init
-  (defun +org-journal-find-location ()
-    (org-journal-new-entry t)
-    (unless (eq org-journal-file-type 'daily)
-      (org-narrow-to-subtree))
-    (goto-char (point-max)))
-  :config
-  (+define-capture-template "j" "Journal Entry" 'entry '(function +org-journal-find-location)
-                            "*** %(format-time-string org-journal-time-format)%?"))
 
 
 ;;; Input methods
