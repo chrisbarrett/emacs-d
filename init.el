@@ -2228,6 +2228,7 @@ file in your browser at the visited revision."
   ;; Provides workflows for working with documents for atomic notes (e.g. a
   ;; Zettelkasten); implements backlinks between documents for discovering
   ;; connected notes.
+  :after org
 
   :defer-incrementally
   ansi-color dash f rx seq magit-section emacsql
