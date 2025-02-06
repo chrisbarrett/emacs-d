@@ -1969,25 +1969,19 @@ file in your browser at the visited revision."
 
   (require 'ol-man))
 
-(defun +define-capture-template (key desc type target template-string &rest kvps)
-  "See `org-capture-templates' for documentation about the arguments."
-  (with-eval-after-load 'org-capture
-    (setf (alist-get key org-capture-templates nil nil #'equal)
-          (append (list desc type target template-string) kvps))))
-
 (use-package org-capture
   ;; Implements templated information capture into org-mode files.
   :custom
-  (org-capture-templates nil)
-  :config
-  (+define-capture-template "t" "Todo" 'entry '(file+olp+datetree org-default-notes-file)
-                            "* TODO %?"
-                            :tree-type '(month day))
-  (+define-capture-template "n" "Note" 'entry '(file+olp+datetree org-default-notes-file)
-                            "* %T %?"
-                            :tree-type '(month day))
-  (+define-capture-template "p" "Postmortem" 'entry '(file+olp+datetree org-default-notes-file)
-                            "* %T %? :pm:
+  (org-capture-templates
+   (cl-flet ((notes-datetree (key desc template &rest kvps)
+               (append
+                (list key desc 'entry '(file+olp+datetree org-default-notes-file) template)
+                '(:tree-type (month day))
+                kvps)))
+     (list (notes-datetree "t" "Todo" "* TODO %?")
+           (notes-datetree "n" "Note" "* %T %?")
+           (notes-datetree "l" "Link" "* %T %(org-cliplink-capture)\n%?")
+           (notes-datetree "p" "Postmortem" "* %T %? :pm:
 ** Description
 # What happened?
 ** Background & Context
@@ -2000,11 +1994,8 @@ file in your browser at the visited revision."
 ** Mitigations
 # What could I do to lessen the severity or chance of this happening again?
 "
-                            :jump-to-captured t
-                            :tree-type '(month day))
-
-
-  ;; Kill capture buffers by default (unless they've been visited)
+                           :jump-to-captured t))))
+  :config
   (org-capture-put :kill-buffer t))
 
 (use-package org-refile
