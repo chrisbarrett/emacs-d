@@ -415,6 +415,11 @@ Runs `+escape-hook'."
 
 (put 'narrow-to-region 'disabled nil)
 
+;; Since I use evil, I have no need for the usual rectangular selection
+;; keybinding.
+(when (equal system-type 'darwin)
+  (keymap-global-set "C-x SPC" #'ns-do-show-character-palette))
+
 (setq-default fill-column 80)
 (setq ring-bell-function #'ignore)
 
