@@ -165,15 +165,25 @@ Runs `+escape-hook'."
    :prefix-command '+leader-key
 
    "SPC" '(consult-buffer :wk "buffers & files")
-   "x" '(execute-extended-command :wk "M-x")
-   "r" #'vertico-repeat
+   "!" '(async-shell-command :wk "shell command")
+   "-" '(window-toggle-side-windows :wk "side windows")
    ":" '(pp-eval-expression :wk "eval")
    ";" '(ielm :wk "REPL")
    "d" '(dirvish :wk "dir editor")
-   "u" '(universal-argument :wk "C-u")
    "i" '(consult-imenu :wk "imenu")
-   "-" '(window-toggle-side-windows :wk "side windows")
-   "!" '(async-shell-command :wk "shell command")
+   "r" #'vertico-repeat
+   "s" '(save-buffer :wk "save buf")
+   "S" '(save-some-buffers :wk "save some bufs...")
+   "u" '(universal-argument :wk "C-u")
+   "x" '(execute-extended-command :wk "M-x")
+   "T" (list (defun +goto-mode-template-file ()
+               (interactive)
+               (let* ((modes (nreverse (parent-mode-list major-mode)))
+                      (mode (completing-read "Snippets table for mode: " modes nil t))
+                      (filename (format "%s.eld" (string-remove-suffix "-mode" mode))))
+                 (find-file (file-name-concat user-emacs-directory "templates" filename))))
+             :wk "edit templates...")
+
 
    "'" (general-predicate-dispatch #'poporg-dwim
 
@@ -377,13 +387,6 @@ Runs `+escape-hook'."
    "tm" #'toggle-input-method
    "ts" #'spell-fu-mode
    "tr" #'read-only-mode
-
-   "T" (defun +goto-mode-template-file ()
-         (interactive)
-         (let* ((modes (nreverse (parent-mode-list major-mode)))
-                (mode (completing-read "Snippets table for mode: " modes nil t))
-                (filename (format "%s.eld" (string-remove-suffix "-mode" mode))))
-           (find-file (file-name-concat user-emacs-directory "templates" filename))))
 
    "w"  '(nil :wk "windows")
    "w-" #'+split-window-vertically-dwim
