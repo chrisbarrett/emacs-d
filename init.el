@@ -13,13 +13,16 @@
 (require 'use-package)
 
 (eval-and-compile
-  (add-to-list 'load-path (file-name-concat user-emacs-directory "lisp"))
+  (defvar +lisp-dir (file-name-concat user-emacs-directory "lisp"))
+  (add-to-list 'load-path +lisp-dir)
   (require '+corelib)
   (require '+load-incrementally))
 
 (defvar org-directory "~/org")
 (defvar org-roam-directory "~/org/roam")
 (defvar org-default-notes-file "~/org/notes.org")
+
+(defvar +templates-dir (file-name-concat user-emacs-directory "templates"))
 
 
 ;;; Bootstrap Elpaca
@@ -813,7 +816,7 @@ With optional prefix arg CONTINUE-P, keep profiling."
 (when (boundp 'trusted-content)
   (add-to-list 'trusted-content (file-name-concat user-emacs-directory "early-init.el"))
   (add-to-list 'trusted-content (file-name-concat user-emacs-directory "init.el"))
-  (add-to-list 'trusted-content (file-name-concat user-emacs-directory "lisp/")))
+  (add-to-list 'trusted-content (file-name-concat +lisp-dir "lisp/")))
 
 ;; Silence "For information about GNU Emacs and the GNU system..." on startup.
 (advice-add #'display-startup-echo-area-message :override #'ignore)
@@ -1759,7 +1762,7 @@ file in your browser at the visited revision."
   ;; NB. Field navigation uses M-{ and M-}.
   (:keymaps 'tempel-map :states 'normal "<escape>" #'tempel-done)
   :custom
-  (tempel-path (file-name-concat user-emacs-directory "templates" "*.eld"))
+  (tempel-path (file-name-concat +templates-dir "*.eld"))
   :init
   (add-hook! '(prog-mode-hook text-mode-hook config-mode-hook)
     (add-hook 'completion-at-point-functions #'tempel-expand -90 t)))
