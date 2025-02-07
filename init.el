@@ -824,6 +824,12 @@ With optional prefix arg CONTINUE-P, keep profiling."
 ;; Don't tell me what key I could have used instead of M-x.
 (advice-add #'execute-extended-command--describe-binding-msg :override #'ignore)
 
+(use-package eshell
+  ;; Emacs' built-in shell combining Emacs Lisp evaluation with Unix shell
+  ;; features.
+  :config
+  (require '+eshell))
+
 
 ;;; Visual enhancements
 
