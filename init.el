@@ -1691,7 +1691,11 @@ file in your browser at the visited revision."
         (evil-normal-state)))))
 
 (use-package nix-ts-mode :ensure t
-  :mode "\\.nix\\'")
+  :mode "\\.nix\\'"
+  :config
+  (setq-hook! 'nix-ts-mode-hook apheleia-formatter 'nixpkgs-fmt)
+  (with-eval-after-load 'apheleia
+    (add-to-list 'apheleia-formatters '(nixpkgs-fmt "nixpkgs-fmt"))))
 
 (use-package hexl
   :general-config
