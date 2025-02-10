@@ -32,5 +32,6 @@ typescript-ts-base-mode js-base-mode
 (it "it(\"" p "\", () => {"
     n> q n "});" >)
 
+(im "import " p " from \"" q "\";")
 (iz "import { z } from \"zod\";")
 (iv "import VError from \"verror\";")
