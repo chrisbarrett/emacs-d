@@ -835,6 +835,13 @@ With optional prefix arg CONTINUE-P, keep profiling."
   ;; at point, e.g. UpperCamelCase, lowerCamelCase, etc.
   :general (:states '(normal insert) "M--" #'string-inflection-all-cycle))
 
+(use-package envrc :ensure t
+  ;; Adds direnv support.
+  :hook (+first-file-hook . envrc-global-mode)
+  :custom
+  (envrc-show-summary-in-minibuffer nil) ; very noisy.
+  )
+
 
 ;;; Visual enhancements
 
