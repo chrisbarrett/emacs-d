@@ -830,6 +830,11 @@ With optional prefix arg CONTINUE-P, keep profiling."
   :config
   (require '+eshell))
 
+(use-package string-inflection :ensure t
+  ;; Provides commands for cycling different string casing styles for the ident
+  ;; at point, e.g. UpperCamelCase, lowerCamelCase, etc.
+  :general (:states '(normal insert) "M--" #'string-inflection-all-cycle))
+
 
 ;;; Visual enhancements
 
