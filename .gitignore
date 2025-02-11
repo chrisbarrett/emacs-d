@@ -2,6 +2,7 @@
 *.eln
 
 /site.el
+/site/*
 
 /.org-id-locations
 /auto-save-list

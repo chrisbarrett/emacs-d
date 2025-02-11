@@ -22,6 +22,7 @@
 (defvar org-roam-directory "~/org/roam")
 (defvar org-default-notes-file "~/org/notes.org")
 
+(defvar +site-files-directory (file-name-concat user-emacs-directory "site/"))
 (defvar +templates-dir (file-name-concat user-emacs-directory "templates"))
 
 
@@ -335,7 +336,8 @@ Runs `+escape-hook'."
 
    "gs" (defun +goto-emacs-site-file ()
           (interactive)
-          (find-file (file-name-concat user-emacs-directory "site.el")))
+          (find-file
+           (read-file-name "Site file: " +site-files-directory)))
 
    "gn" (defun +goto-nix-file ()
           (interactive)
@@ -2429,8 +2431,13 @@ file in your browser at the visited revision."
     (+local-leader-set-key 'org-mode-map
       "rR" #'org-roam-slipbox-refile)))
 
-(let ((site-file (file-name-concat user-emacs-directory "site.el")))
-  (load site-file t nil nil t ))
+
+
+;;; Load site files
+
+(dolist (file (directory-files +site-files-directory))
+  (when (file-regular-p file)
+    (load file t nil nil t)))
 
 
 
