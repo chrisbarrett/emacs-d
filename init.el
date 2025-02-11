@@ -2435,9 +2435,10 @@ file in your browser at the visited revision."
 
 ;;; Load site files
 
-(dolist (file (directory-files +site-files-directory))
-  (when (file-regular-p file)
-    (load file t nil nil t)))
+(when (file-directory-p +site-files-directory)
+  (dolist (file (directory-files +site-files-directory))
+    (when (file-regular-p file)
+      (load file t nil nil t))))
 
 
 
