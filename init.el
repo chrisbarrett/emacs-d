@@ -18,12 +18,12 @@
   (require '+corelib)
   (require '+load-incrementally))
 
-(defvar org-directory "~/org")
-(defvar org-roam-directory "~/org/roam")
+(defvar org-directory "~/org/")
+(defvar org-roam-directory "~/org/roam/")
 (defvar org-default-notes-file "~/org/notes.org")
 
 (defvar +site-files-directory (file-name-concat user-emacs-directory "site/"))
-(defvar +templates-dir (file-name-concat user-emacs-directory "templates"))
+(defvar +templates-dir (file-name-concat user-emacs-directory "templates/"))
 
 
 ;;; Bootstrap Elpaca
