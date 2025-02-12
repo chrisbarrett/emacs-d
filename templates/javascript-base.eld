@@ -35,3 +35,5 @@ typescript-ts-base-mode js-base-mode
 (im "import " p " from \"" q "\";")
 (iz "import { z } from \"zod\";")
 (iv "import VError from \"verror\";")
+
+(try "try {" n> p n "}" > " catch (cause) {" n> q n "}" >)
