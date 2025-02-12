@@ -24,6 +24,7 @@
 
 (defvar +site-files-directory (file-name-concat user-emacs-directory "site/"))
 (defvar +templates-dir (file-name-concat user-emacs-directory "templates/"))
+(defvar +ligatures-dir (file-name-concat user-emacs-directory "ligatures/"))
 
 
 ;;; Bootstrap Elpaca
@@ -843,6 +844,22 @@ With optional prefix arg CONTINUE-P, keep profiling."
   :custom
   (envrc-show-summary-in-minibuffer nil) ; very noisy.
   )
+
+(use-package ligature :ensure t
+  ;; Teach Emacs how to display ligatures when available.
+  :after-call +first-buffer-hook +first-file-hook
+  :config
+
+  (defun +read-ligatures (file)
+    (with-temp-buffer
+      (insert-file-contents-literally (file-name-concat +ligatures-dir file))
+      (read (current-buffer))))
+
+  (ligature-set-ligatures 't '("www"))
+  (ligature-set-ligatures 'prog-mode (+read-ligatures "prog-mode.eld"))
+  (ligature-set-ligatures '(text-mode org-agenda-mode) (+read-ligatures "text-mode.eld"))
+
+  (global-ligature-mode t))
 
 
 ;;; Visual enhancements
