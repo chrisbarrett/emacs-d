@@ -2032,6 +2032,7 @@ file in your browser at the visited revision."
                 kvps)))
      (list (notes-datetree "t" "Todo" "* TODO %?")
            (notes-datetree "n" "Note" "* %T %?")
+           (notes-datetree "N" "Note (setting time)" "* %^T %?")
            (notes-datetree "l" "Link" "* %T %(org-cliplink-capture)\n%?")
            (notes-datetree "p" "Postmortem" "* %T %? :pm:
 ** Description
