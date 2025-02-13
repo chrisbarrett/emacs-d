@@ -2036,11 +2036,14 @@ file in your browser at the visited revision."
            (notes-datetree "N" "Note (setting time)" "* %^T %?")
            (notes-datetree "l" "Link" "* %T %(org-cliplink-capture)\n%?")
            (notes-datetree "f" "French study" "* %T French study :french:
-** Preparation (15 mins)%?
+:PROPERTIES:
+:CATEGORY: french
+:END:
+** TODO 📚 Preparation (15 mins)%?
 # Read a chapter from a grammar primer, then prime vocab w Anki
-** Intensive Reading (30 mins)
+** TODO 🔍 Intensive Reading (30 mins)
 # Ideas: [[https://www.youtube.com/@hugodecrypteactus][Hugo Décrypte]], [[https://www.youtube.com/@LesRevuesduMonde][Les Revues du Monde]], [[https://www.youtube.com/@NotaBonus][Nota Bonus]].
-** Free-Flow Immersion (15 mins)
+** TODO 🎧 Free-Flow Immersion (15 mins)
 # Re-watch intensive reading content from a previous day.
 "
                            :clock-in t
