@@ -393,6 +393,7 @@ Runs `+escape-hook'."
    "tm" #'toggle-input-method
    "ts" #'spell-fu-mode
    "tr" #'read-only-mode
+   "th" '(hl-line-mode :wk "highlight line")
 
    "w"  '(nil :wk "windows")
    "w-" #'+split-window-vertically-dwim
