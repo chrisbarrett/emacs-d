@@ -381,19 +381,19 @@ Runs `+escape-hook'."
    "ort" #'org-roam-search-tags
 
    "e"  '(nil :wk "errors")
-   "el" #'consult-flymake
+   "el" '(consult-flymake :wk "error list")
 
    "kr" #'consult-yank-pop
 
    "t"  '(nil :wk "toggles")
-   "td" #'dirvish-side
-   "tf" #'global-display-fill-column-indicator-mode
-   "ti" #'indent-bars-mode
-   "tl" #'global-display-line-numbers-mode
-   "tm" #'toggle-input-method
-   "ts" #'spell-fu-mode
-   "tr" #'read-only-mode
+   "td" '(dirvish-side :wk "dirvish (side window)")
    "th" '(hl-line-mode :wk "highlight line")
+   "tf" '(global-display-fill-column-indicator-mode :wk "fill column indicator")
+   "ti" '(indent-bars-mode :wk "indent bars")
+   "tl" '(global-display-line-numbers-mode :wk "line numbers")
+   "tm" '(toggle-input-method :wk "input method")
+   "ts" '(spell-fu-mode :wk "spellchecks")
+   "tr" '(read-only-mode :wk "readonly")
 
    "w"  '(nil :wk "windows")
    "w-" #'+split-window-vertically-dwim
