@@ -604,13 +604,6 @@ Runs `+escape-hook'."
   (:keymaps 'puni-mode-map :states '(insert normal emacs) "C-k" #'puni-kill-line)
   (:keymaps 'puni-mode-map :states '(visual) "C-k" #'puni-kill-active-region))
 
-(defconst +read-only-file-patterns '("/emacs/elpaca/"
-                                     "/node_modules/"))
-
-(add-hook! 'find-file-hook
-  (when (string-match-p (regexp-opt +read-only-file-patterns) (buffer-file-name))
-    (read-only-mode +1)))
-
 (use-package recentf
   ;; Maintain a list of visited files.
   :after-call recentf consult-buffer
@@ -874,6 +867,37 @@ With optional prefix arg CONTINUE-P, keep profiling."
   (ligature-set-ligatures '(text-mode org-agenda-mode) (+read-ligatures "text-mode.eld"))
 
   (global-ligature-mode t))
+
+
+;;; Open some files as read-only, e.g. vendored deps.
+
+(defun +file-should-be-opened-read-only-p (file)
+  (let ((file (file-truename file)))
+    (and
+     ;; matches truthy
+     (string-match-p (rx (or
+                          ;;; These files should be read-only...
+
+                          "/vendor/"
+                          "/elpaca/"
+                          "/node_modules/"
+
+                          ))
+                     file)
+     (not
+      ;; matches falsey
+      (string-match-p (rx (or
+                           ;;; ...except when they match these patterns.
+
+                           "/.git/" ; Ensure we can still use git.
+                           "/emacs/elpaca/repos/nursery/" ; My nursery repo is pulled in by elpaca
+
+                           ))
+                      file)))))
+
+(add-hook! 'find-file-hook
+  (when (+file-should-be-opened-read-only-p (buffer-file-name))
+    (read-only-mode +1)))
 
 
 ;;; Visual enhancements
