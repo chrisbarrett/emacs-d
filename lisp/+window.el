@@ -10,7 +10,11 @@ With prefix arg ARG, don't select the new window."
   (let ((target-window (next-window)))
     (set-window-buffer target-window (other-buffer))
     (unless arg
-      (select-window target-window))))
+      (select-window target-window)))
+
+  (run-hook-with-args 'window-selection-change-functions nil)
+  (recenter)
+  (balance-windows (window-parent)))
 
 ;;;###autoload
 (defun +split-window-vertically-dwim (&optional arg)
@@ -22,7 +26,11 @@ With prefix arg ARG, don't select the new window."
   (let ((target-window (next-window)))
     (set-window-buffer target-window (other-buffer))
     (unless arg
-      (select-window target-window))))
+      (select-window target-window)))
+
+  (run-hook-with-args 'window-selection-change-functions nil)
+  (recenter)
+  (balance-windows (window-parent)))
 
 ;;;###autoload
 (defun +toggle-window-dedication ()
