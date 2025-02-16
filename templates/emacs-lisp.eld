@@ -55,3 +55,4 @@ emacs-lisp-mode
 (m "(message \"" p "\" " q ")")
 
 (up "(use-package " q ")")
+(in "(interactive)")
