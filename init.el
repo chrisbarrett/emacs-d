@@ -13,7 +13,7 @@
 (require 'use-package)
 
 (eval-and-compile
-  (defvar +lisp-dir (file-name-concat user-emacs-directory "lisp"))
+  (defvar +lisp-dir (file-name-concat user-emacs-directory "lisp/"))
   (add-to-list 'load-path +lisp-dir)
   (require '+corelib)
   (require '+load-incrementally))
