@@ -2230,6 +2230,7 @@ file in your browser at the visited revision."
    (let ((today '(agenda ""
                   ((org-agenda-overriding-header "Today")
                    (org-agenda-use-time-grid t)
+                   (org-agenda-remove-tags t)
                    (org-agenda-clockreport-parameter-plist '(:compact t
                                                              :link t
                                                              :maxlevel 3
