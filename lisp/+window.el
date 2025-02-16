@@ -1,6 +1,5 @@
 ;; -*- lexical-binding: t; -*-
 
-;;;###autoload
 (defun +split-window-horizontally-dwim (&optional arg)
   "When splitting window, show the other buffer in the new window.
 
@@ -16,7 +15,6 @@ With prefix arg ARG, don't select the new window."
   (recenter)
   (balance-windows (window-parent)))
 
-;;;###autoload
 (defun +split-window-vertically-dwim (&optional arg)
   "When splitting window, show the other buffer in the new window.
 
@@ -32,7 +30,6 @@ With prefix arg ARG, don't select the new window."
   (recenter)
   (balance-windows (window-parent)))
 
-;;;###autoload
 (defun +toggle-window-dedication ()
   "Toggle whether the current window is dedicated to its current buffer."
   (interactive)
@@ -43,7 +40,6 @@ With prefix arg ARG, don't select the new window."
              (if was-dedicated "no longer " "")
              (buffer-name))))
 
-;;;###autoload
 (defun +delete-nondedicated-windows ()
   "Delete windows that are not dedicated."
   (interactive)
