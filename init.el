@@ -1743,7 +1743,18 @@ file in your browser at the visited revision."
            (when pulsar-mode
              (pulsar--pulse nil 'pulsar-yellow (point-min) (point-max)))))
 
+  (defun +elisp-set-flymake-load-path ()
+    (if-let* ((file (buffer-file-name))
+              (this-dir (expand-file-name (file-name-directory file)))
+              (emacs-config-dirs (seq-map #'expand-file-name
+                                          (list user-emacs-directory
+                                                +lisp-dir))))
+        (if (member this-dir emacs-config-dirs)
+            load-path
+          '("./"))))
+
   (setq-hook! 'emacs-lisp-mode-hook
+    elisp-flymake-byte-compile-load-path (+elisp-set-flymake-load-path)
     evil-lookup-func #'+emacs-lisp-lookup-func)
 
   :init
