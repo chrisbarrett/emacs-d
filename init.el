@@ -1261,6 +1261,12 @@ word.  Fall back to regular `expreg-expand'."
        (symbol (+expreg-expand-n 2))
        (t (expreg-expand))))))
 
+(use-package evil-anzu :ensure t
+  ;; Show an indication in the modeline of how many evil-search hits are in the
+  ;; buffer, and which one point last moved to.
+  :after-call evil-ex-start-search evil-ex-start-word-search evil-ex-search-activate-highlight
+  :config (global-anzu-mode +1))
+
 
 ;;; Completion
 
