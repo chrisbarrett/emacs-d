@@ -54,4 +54,15 @@ With prefix arg ARG, don't select the new window."
                   (window-dedicated-p win))
         (delete-window win)))))
 
+(defun +clone-indirect-buffer-of-region (beg end &optional display)
+  (interactive (list (region-beginning) (region-end) t))
+  (deactivate-mark)
+  (let ((old-buf (current-buffer))
+        (new-buf))
+    (narrow-to-region beg end)
+    (setq new-buf (clone-indirect-buffer nil display))
+    (with-current-buffer old-buf
+      (widen))
+    new-buf))
+
 (provide '+window)

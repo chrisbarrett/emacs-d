@@ -265,6 +265,10 @@ Runs `+escape-hook'."
    "bl" '(ibuffer :wk "list")
    "bn" '(next-buffer :wk "next")
    "bp" '(previous-buffer :wk "prev")
+   "bc" (list
+         (general-predicate-dispatch #'clone-indirect-buffer
+           (region-active-p) #'+clone-indirect-buffer-of-region)
+         :wk "clone indirect")
 
    "f"  '(nil :wk "files")
    "ff" '(find-file :wk "find")
