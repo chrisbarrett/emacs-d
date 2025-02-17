@@ -37,3 +37,13 @@ typescript-ts-base-mode js-base-mode
 (iv "import VError from \"verror\";")
 
 (try "try {" n> p n "}" > " catch (cause) {" n> q n "}" >)
+
+(sw "switch (" p ") {" n>
+    "case " p ": {" > n>
+    q n "}" >
+    n "}" >
+    )
+
+(ca "case " p ": {" n>
+    q n
+    "}" >)
