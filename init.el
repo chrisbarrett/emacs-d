@@ -872,6 +872,12 @@ With optional prefix arg CONTINUE-P, keep profiling."
 
   (global-ligature-mode t))
 
+(use-package align
+  ;; Emacs has an extensible mode-specific alignment system. In this age of code
+  ;; formatters it's not terribly useful, but I do use `align-regexp' from
+  ;; time-to-time.
+  :general ("C-x a a" #'align-regexp))
+
 
 ;;; Open some files as read-only, e.g. vendored deps.
 
