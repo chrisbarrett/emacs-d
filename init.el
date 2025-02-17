@@ -404,13 +404,14 @@ Runs `+escape-hook'."
 
    "t"  '(nil :wk "toggles")
    "td" '(dirvish-side :wk "dirvish (side window)")
-   "th" '(hl-line-mode :wk "highlight line")
+   "th" '(global-hl-line-mode :wk "highlight line")
    "tf" '(global-display-fill-column-indicator-mode :wk "fill column indicator")
    "ti" '(indent-bars-mode :wk "indent bars")
    "tl" '(global-display-line-numbers-mode :wk "line numbers")
    "tm" '(toggle-input-method :wk "input method")
    "ts" '(spell-fu-mode :wk "spellchecks")
    "tr" '(read-only-mode :wk "readonly")
+   "tw" '(whitespace-mode :wk "whitespace")
 
    "w"  '(nil :wk "windows")
    "w-" '(+split-window-vertically-dwim :wk "vsplit")
@@ -998,6 +999,18 @@ With optional prefix arg CONTINUE-P, keep profiling."
     "Pulse evaluated regions."
     (when pulsar-mode
       (pulsar--pulse nil 'pulsar-yellow start end))))
+
+(use-package hl-line
+  ;; Highlight the current line.
+  :custom
+  (hl-line-sticky-flag nil))
+
+(use-package whitespace
+  ;; Visualise whitespace characters.
+  :config
+  (delq! 'newline whitespace-style)
+  (delq! 'newline-mark whitespace-style)
+  )
 
 
 ;;; Spell-checking
