@@ -500,6 +500,7 @@ Runs `+escape-hook'."
 
 (use-package window
   ;; Window management stuff that's not in the C layer.
+  :general ("M-o" #'other-window)
 
   ;; Prefer vertical splits--better when the Emacs GUI window is wide rather
   ;; than tall.
