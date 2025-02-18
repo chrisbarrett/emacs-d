@@ -2109,9 +2109,14 @@ file in your browser at the visited revision."
                 '(:tree-type (month day))
                 kvps)))
      (list (notes-datetree "t" "Todo" "* TODO %?")
-           (notes-datetree "T" "Todo (work)" "* TODO %?          :%(timekeep-work-tag):work:")
            (notes-datetree "n" "Note" "* %T %?")
            (notes-datetree "N" "Note (setting time)" "* %^T %?")
+
+           '("w" "work")
+           (notes-datetree "wt" "Todo" "* TODO %?               :%(timekeep-work-tag):work:")
+           (notes-datetree "ww" "Note" "* %T %?                 :%(timekeep-work-tag):work:")
+           (notes-datetree "wW" "Note (setting time)" "* %^T %? :%(timekeep-work-tag):work:")
+
            (notes-datetree "l" "Link" "* %T %(org-cliplink-capture)\n%?")
            (notes-datetree "f" "French study" "* %T French study :french:
 :PROPERTIES:
