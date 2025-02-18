@@ -171,6 +171,7 @@ Runs `+escape-hook'."
 
    "SPC" '(consult-buffer :wk "buffers & files")
    "!" '(async-shell-command :wk "shell command")
+   "|" '(rotate-layout :wk "rotate window layout")
    "-" '(window-toggle-side-windows :wk "side windows")
    ":" '(pp-eval-expression :wk "eval")
    ";" '(ielm :wk "REPL")
@@ -879,6 +880,11 @@ With optional prefix arg CONTINUE-P, keep profiling."
   ;; formatters it's not terribly useful, but I do use `align-regexp' from
   ;; time-to-time.
   :general ("C-x a a" #'align-regexp))
+
+(use-package rotate :ensure t
+  ;; Provides a few commands for arranging windows in pre-configured
+  ;; layouts--very handy.
+  :commands (rotate-layout))
 
 
 ;;; Open some files as read-only, e.g. vendored deps.
