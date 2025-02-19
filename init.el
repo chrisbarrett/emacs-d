@@ -1734,6 +1734,10 @@ file in your browser at the visited revision."
                      'evil-delete
                      'evil-replace))
 
+(use-package info
+  ;; Emacs' built-in system for reading texinfo manuals.
+  :general (:keymaps 'help-map "s" #'info-apropos))
+
 (use-package man
   ;; Built-in manpage reader.
   :custom
