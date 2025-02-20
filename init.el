@@ -2135,9 +2135,9 @@ file in your browser at the visited revision."
 :END:
 ** TODO 📚 Preparation (15 mins)%?
 # Read a chapter from a grammar primer, then prime vocab w Anki
-** TODO 🔍 Intensive Reading (30 mins)
+** TODO 🔍 Intensive Reading (15 mins)
 # Ideas: [[https://www.youtube.com/@hugodecrypteactus][Hugo Décrypte]], [[https://www.youtube.com/@LesRevuesduMonde][Les Revues du Monde]], [[https://www.youtube.com/@NotaBonus][Nota Bonus]].
-** TODO 🎧 Free-Flow Immersion (15 mins)
+** TODO 🎧 Free-Flow Immersion (30 mins)
 # Re-watch intensive reading content from a previous day.
 "
                            :clock-in t
