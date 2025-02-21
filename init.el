@@ -2208,6 +2208,13 @@ file in your browser at the visited revision."
                 (setq-local org-habit-following-days following-days)
                 (setq-local org-habit-graph-column graph-column-adjusted)))))
 
+(use-package org-clock
+  ;; Provides time-tracking support for org-mode.
+  :init
+  (add-transient-hook! 'org-mode-hook #'org-clock-persistence-insinuate)
+  :custom
+  (org-clock-persist t))
+
 (use-package org-src
   ;; Programming language source blocks.
   :config
