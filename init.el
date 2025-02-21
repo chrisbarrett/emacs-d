@@ -429,7 +429,11 @@ Runs `+escape-hook'."
    "ww" '(other-window :wk "other")
 
    "z" '(global-text-scale-adjust :wk "text scaling")
-   ))
+   )
+
+  ;; Support multiple SPC-u calls in sequence to chain universal-argument calls.
+
+  (keymap-set universal-argument-map "SPC u" #'universal-argument-more))
 
 (defmacro +local-leader-set-key (keymaps &rest general-args)
   (declare (indent 1))
