@@ -387,10 +387,20 @@ Runs `+escape-hook'."
    "ow" '(timekeep-visit-node :wk "work file")
 
    "oc" '(nil :wk "clock")
-   "oci" '(timekeep-start :wk "start clocking")
-   "oco" '(timekeep-stop :wk "stop clocking")
+   "occ" '(org-clock-in-last :wk "clock in (last)")
+   "ocd" (list (general-predicate-dispatch #'org-clock-display
+                 (not (derived-mode-p 'org-mode))
+                 (defun +org-clock-display-last (&optional arg)
+                   "Jump to the latest clock and display clocking info in that buffer."
+                   (interactive "P")
+                   (org-clock-goto arg)
+                   (org-clock-display)))
+               :wk "display")
+   "oci" '(org-clock-in :wk "clock in")
+   "oco" '(org-clock-out :wk "clock out")
    "ocr" '(org-resolve-clocks :wk "resolve")
    "ocg" '(org-clock-goto :wk "goto clock")
+   "ocq" '(org-clock-cancel :wk "cancel")
 
    "or" '(nil :wk "roam/review")
    "ord" '(org-roam-review-list-recently-added :wk "list recent")
