@@ -2113,7 +2113,9 @@ file in your browser at the visited revision."
     "x" #'org-cut-subtree
     "p" #'org-paste-subtree
     "t" #'org-show-todo-tree)
-  )
+
+  (custom-theme-set-faces 'user
+                          '(org-footnote ((t (:underline nil))))))
 
 (use-package ol
   ;; Hyperlink functionality in org-mode
