@@ -1021,6 +1021,11 @@ With optional prefix arg CONTINUE-P, keep profiling."
     (when pulsar-mode
       (pulsar--pulse nil 'pulsar-generic start end)))
 
+  (define-advice evil-jump-item (:after (&rest _) pulsar)
+    "Pulse if jumping to a different line."
+    (unless (region-active-p)
+      (pulsar-pulse-line)))
+
   ;; Show a pulse indicating success or failure of eval-expression, eval-region,
   ;; etc.
 
