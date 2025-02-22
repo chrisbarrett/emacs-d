@@ -1359,8 +1359,40 @@ word.  Fall back to regular `expreg-expand'."
 ;;; Navigation
 
 (use-package avy :ensure t
-  ;; Jump to things by typing a few letters.
-  :general ("M-h" #'avy-goto-char-timer))
+  ;; Jump to things or execute other actions by typing a few letters.
+  :general ("M-h" #'avy-goto-char-timer)
+
+  ;; Customise the action keys to make actions a bit more vimmy.
+
+  :config
+  (defun +avy-action-change-move (pt)
+    "Delete the thing at PT and enter insert state."
+    (goto-char pt)
+    (avy-forward-item)
+    (kill-region pt (point))
+    (evil-insert-state)
+    (point))
+
+  (defun +avy-action-evil-lookup (pt)
+    "Look up the definition of thing at PT with evil."
+    (save-excursion
+      (goto-char pt)
+      (avy-forward-item)
+      (evil-lookup))
+    t)
+
+  :custom
+  (avy-dispatch-alist '((?x . avy-action-kill-stay)
+                        (?d . avy-action-kill-move)
+                        (?c . +avy-action-change-move)
+                        (?t . avy-action-teleport)
+                        (?v . avy-action-mark)
+                        (?y . avy-action-copy)
+                        (?p . avy-action-yank)
+                        (?P . avy-action-yank-line)
+                        (?i . avy-action-ispell)
+                        (?K . +avy-action-evil-lookup)
+                        (? . avy-action-zap-to-char))))
 
 (use-package ace-window :ensure t
   ;; Jump to specific windows
