@@ -29,6 +29,16 @@ emacs-lisp-mode
 (dc "(defconst " q ")")
 (d "(defun " p " (" p ")" n> q ")")
 (dm "(defmacro " p " (" p ")" n> q ")")
+(da "(define-advice " (p "TARGET-FN") " (:" (p "WHERE" where) " ("
+    ;; Generate arg-list based on advice type.
+    (pcase where
+      ("around"
+       "fn &rest args")
+      ("filter-return"
+       "result")
+      (_ "&rest args"))
+
+    ") " (p "NAME") ")" n> q ")")
 
 (atl "(add-to-list '" q ")")
 (as "(cl-assert " p " t " "\"" p "\")")
@@ -46,6 +56,7 @@ emacs-lisp-mode
 
 (lbp "(line-beginning-position)")
 (lep "(line-end-position)")
+(pt "(point)")
 (pm "(point-min)")
 (pM "(point-max)")
 (wcb "(with-current-buffer " p n> q ")")
