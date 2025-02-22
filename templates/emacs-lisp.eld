@@ -56,3 +56,4 @@ emacs-lisp-mode
 
 (up "(use-package " q ")")
 (in "(interactive)")
+(gc "(goto-char " q ")")
