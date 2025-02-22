@@ -622,8 +622,12 @@ Runs `+escape-hook'."
   :config (puni-global-mode +1)
   :general
   (:keymaps 'puni-mode-map :states 'insert "C-w" #'puni-backward-kill-word)
-  (:keymaps 'puni-mode-map :states '(insert normal emacs) "C-k" #'puni-kill-line)
-  (:keymaps 'puni-mode-map :states '(visual) "C-k" #'puni-kill-active-region))
+  (:keymaps 'puni-mode-map :states '(visual) "C-k" #'puni-kill-active-region)
+  (:keymaps 'puni-mode-map :states '(insert normal emacs)
+            "C-k" #'puni-kill-line
+            "M-(" #'puni-wrap-round
+            "M-[" #'puni-wrap-square
+            "M-S-{" #'puni-wrap-curly))
 
 (use-package recentf
   ;; Maintain a list of visited files.
