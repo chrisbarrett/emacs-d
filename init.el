@@ -1392,7 +1392,15 @@ word.  Fall back to regular `expreg-expand'."
                         (?P . avy-action-yank-line)
                         (?i . avy-action-ispell)
                         (?K . +avy-action-evil-lookup)
-                        (? . avy-action-zap-to-char))))
+                        (? . avy-action-zap-to-char)))
+
+  ;; Integrate with pulsar
+
+  :config
+  (define-advice avy-process (:filter-return (result) pulse)
+    (when (eq t result)
+      (pulsar-pulse-line-red))
+    result))
 
 (use-package ace-window :ensure t
   ;; Jump to specific windows
