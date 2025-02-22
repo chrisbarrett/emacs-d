@@ -1364,24 +1364,8 @@ word.  Fall back to regular `expreg-expand'."
   :general ("M-h" #'avy-goto-char-timer)
 
   ;; Customise the action keys to make actions a bit more vimmy.
-
   :config
-  (defun +avy-action-change-move (pt)
-    "Delete the thing at PT and enter insert state."
-    (goto-char pt)
-    (avy-forward-item)
-    (kill-region pt (point))
-    (evil-insert-state)
-    (point))
-
-  (defun +avy-action-evil-lookup (pt)
-    "Look up the definition of thing at PT with evil."
-    (save-excursion
-      (goto-char pt)
-      (avy-forward-item)
-      (evil-lookup))
-    t)
-
+  (require '+avy)
   :custom
   (avy-dispatch-alist '((?x . avy-action-kill-stay)
                         (?d . avy-action-kill-move)
@@ -1398,21 +1382,43 @@ word.  Fall back to regular `expreg-expand'."
   ;; Integrate with pulsar
 
   :config
-  (defun +avy-pulse-move (fn pt)
-    (let ((buf (current-buffer))
-          (win (selected-window)))
-      (funcall fn pt)
-      (with-selected-window win
-        (with-current-buffer buf
+  (with-eval-after-load 'pulsar
+    (define-advice avy-process (:filter-return (result) pulse-red-on-no-matches)
+      (when (eq t result)
+        (when pulsar-mode
+          (pulsar-pulse-line-red)))
+      result)
+
+    (defun +avy-pulse-for-move (&rest _)
+      (when pulsar-mode
+        (pulsar-pulse-line)))
+
+    (advice-add #'avy-action-goto :after #'+avy-pulse-for-move)
+
+    (defun +avy-pulse-for-change (&rest _)
+      (when pulsar-mode
+        (pulsar-pulse-line-magenta)))
+
+    (advice-add #'avy-action-kill-move :after #'+avy-pulse-for-change)
+    (advice-add #'+avy-action-change-move :after #'+avy-pulse-for-change)
+
+    (defun +avy-pulse-for-change-elsewhere (fn pt)
+      (+with-clean-up-in-starting-buffer-and-window (funcall fn pt)
+        (when pulsar-mode
           (goto-char pt)
-          (pulsar-pulse-line)))))
+          (pulsar-pulse-line-magenta))))
 
-  (define-advice avy-process (:filter-return (result) pulse)
-    (when (eq t result)
-      (pulsar-pulse-line-red))
-    result)
+    (advice-add #'avy-action-kill-stay :around #'+avy-pulse-for-change-elsewhere)
 
-  (advice-add #'avy-action-goto :after #'+avy-pulse-move))
+    (defun +avy-pulse-for-action-elsewhere (fn pt)
+      (+with-clean-up-in-starting-buffer-and-window (funcall fn pt)
+        (when pulsar-mode
+          (goto-char pt)
+          (pulsar-pulse-line-green))))
+
+    (advice-add #'+avy-action-evil-lookup :around #'+avy-pulse-for-action-elsewhere)
+    (advice-add #'avy-action-copy :around #'+avy-pulse-for-action-elsewhere)
+    (advice-add #'avy-action-ispell :around #'+avy-pulse-for-action-elsewhere)))
 
 (use-package ace-window :ensure t
   ;; Jump to specific windows
