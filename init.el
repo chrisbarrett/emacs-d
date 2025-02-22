@@ -648,8 +648,8 @@ Runs `+escape-hook'."
 (use-package winner
   ;; Provides undo/redo for buffer & window layout changes.
   :general-config (:keymaps 'winner-mode-map
-                            "C-," #'winner-undo
-                            "C-." #'winner-redo)
+                            "M-<" #'winner-undo
+                            "M->" #'winner-redo)
   :after-call +first-file-hook +first-buffer-hook
   :init
   (winner-mode +1)
@@ -791,8 +791,8 @@ With optional prefix arg CONTINUE-P, keep profiling."
 
   :general
   (:states 'normal
-           "C-M-l" #'better-jumper-jump-forward
-           "C-M-h" #'better-jumper-jump-backward)
+           "C-." #'better-jumper-jump-forward
+           "C-," #'better-jumper-jump-backward)
 
   :general-config
   ([remap evil-jump-forward]  #'better-jumper-jump-forward
