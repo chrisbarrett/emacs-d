@@ -25,10 +25,10 @@ emacs-lisp-mode
 (pl "(pcase-let (" p ")" n> q ")")
 (pla "(pcase-lambda (" p ")" n> q ")")
 
-(v "(defvar " q ")")
-(dc "(defconst " q ")")
-(d "(defun " p " (" p ")" n> q ")")
-(dm "(defmacro " p " (" p ")" n> q ")")
+(v "(defvar " (q "NAME") ")")
+(dc "(defconst " (q "NAME") ")")
+(d "(defun " (p "NAME") " (" p ")" n> q ")")
+(dm "(defmacro " (p "NAME") " (" p ")" n> q ")")
 (da "(define-advice " (p "TARGET-FN") " (:" (p "WHERE" where) " ("
     ;; Generate arg-list based on advice type.
     (pcase where
@@ -43,15 +43,15 @@ emacs-lisp-mode
 (atl "(add-to-list '" q ")")
 (as "(cl-assert " p " t " "\"" p "\")")
 
-(a "(with-eval-after-load '" q ")")
+(a "(with-eval-after-load '" (p "FEATURE") n> q ")")
 (ewc "(eval-when-compile" n> q ")")
 (eac "(eval-and-compile" n> q ")")
 (r "(require '" q ")")
-(al "(autoload '" (p "Identifier" sym) " "
+(al "(autoload '" (p "IDENT" sym) " "
     "\""
     (if-let* ((file (symbol-file (if (stringp sym) (intern sym) sym))))
         (file-name-sans-extension (file-name-nondirectory file))
-      "")
+      "FEAT")
     "\")")
 
 (lbp "(line-beginning-position)")
