@@ -1327,8 +1327,6 @@ buffer modifications have happened."
 
 (use-package expreg :ensure t
   ;; Use tree-sitter to mark syntactic elements.
-  :general
-  (:states '(normal motion) "+" '+expreg-expand-dwim "-" 'expreg-contract)
   :config
   (defun +expreg-expand-n (n)
     "Expand to N syntactic units, defaulting to 1 if none is provided interactively."
@@ -1361,7 +1359,7 @@ word.  Fall back to regular `expreg-expand'."
 
 (use-package avy :ensure t
   ;; Jump to things or execute other actions by typing a few letters.
-  :general ("M-h" #'avy-goto-char-timer)
+  :general ("M-g" #'avy-goto-char-timer)
 
   ;; Customise the action keys to make actions a bit more vimmy.
   :config
@@ -1378,8 +1376,8 @@ word.  Fall back to regular `expreg-expand'."
                         (?i . avy-action-ispell)
                         (?K . +avy-action-evil-lookup)
                         (? . avy-action-zap-to-char)))
-
-  ;; Integrate with pulsar
+  
+  ;; Integrate avy with pulsar for better visual feedback
 
   :config
   (with-eval-after-load 'pulsar
@@ -1419,6 +1417,13 @@ word.  Fall back to regular `expreg-expand'."
     (advice-add #'+avy-action-evil-lookup :around #'+avy-pulse-for-action-elsewhere)
     (advice-add #'avy-action-copy :around #'+avy-pulse-for-action-elsewhere)
     (advice-add #'avy-action-ispell :around #'+avy-pulse-for-action-elsewhere)))
+
+;; Use +/- to mark syntactic elements with tree-sitter. However, if I don't have
+;; a selection, make - call avy.
+(general-define-key :states '(normal motion)
+                    "-" (general-predicate-dispatch #'avy-goto-char-timer
+                          (region-active-p) #'expreg-contract)
+                    "+" #'+expreg-expand-dwim)
 
 (use-package ace-window :ensure t
   ;; Jump to specific windows
@@ -2696,7 +2701,6 @@ file in your browser at the visited revision."
     (org-roam-slipbox-tag-mode +1)
     (+local-leader-set-key 'org-mode-map
       "rR" #'org-roam-slipbox-refile)))
-
 
 
 ;;; Load site files
