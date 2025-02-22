@@ -1397,10 +1397,21 @@ word.  Fall back to regular `expreg-expand'."
   ;; Integrate with pulsar
 
   :config
+  (defun +avy-pulse-move (fn pt)
+    (let ((buf (current-buffer))
+          (win (selected-window)))
+      (funcall fn pt)
+      (with-selected-window win
+        (with-current-buffer buf
+          (goto-char pt)
+          (pulsar-pulse-line)))))
+
   (define-advice avy-process (:filter-return (result) pulse)
     (when (eq t result)
       (pulsar-pulse-line-red))
-    result))
+    result)
+
+  (advice-add #'avy-action-goto :after #'+avy-pulse-move))
 
 (use-package ace-window :ensure t
   ;; Jump to specific windows
