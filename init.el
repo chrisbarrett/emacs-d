@@ -1016,10 +1016,59 @@ With optional prefix arg CONTINUE-P, keep profiling."
     (when pulsar-mode
       (pulsar--pulse nil 'pulsar-generic start end)))
 
-  (define-advice eval-region (:after (start end &rest _) pulsar)
+  ;; Show a pulse indicating success or failure of eval-expression, eval-region,
+  ;; etc.
+
+  :preface
+  (defmacro +with-eval-pulse (start end &rest body)
+    "Pulse a part of the buffer to indicate whether a command completed or signalled an error.
+
+START and END are the buffer locations to pulse after evaluating BODY.
+
+START & END are evaluated after BODY has completed, and thus after any
+buffer modifications have happened."
+    (declare (indent 2))
+    (let ((gfailed (gensym "failed-"))
+          (gerr (gensym "err-"))
+          (gstart (gensym "start-"))
+          (gend (gensym "end-")))
+      `(let (,gfailed)
+         (unwind-protect
+             (condition-case ,gerr
+                 (progn ,@body)
+               (t
+                (setq ,gfailed t)
+                (signal (car ,gerr) (cdr ,gerr))))
+           (deactivate-mark)
+           (when pulsar-mode
+             (let ((,gstart ,start)
+                   (,gend ,end))
+               (when (and ,gstart ,gend)
+                 (pulsar--pulse nil
+                                (if ,gfailed 'pulsar-red 'pulsar-green)
+                                ,gstart
+                                ,gend))))))))
+
+  :config
+  (define-advice eval-region (:around (fn start end &rest args) pulsar)
     "Pulse evaluated regions."
-    (when pulsar-mode
-      (pulsar--pulse nil 'pulsar-yellow start end))))
+    (+with-eval-pulse start end
+      (apply fn start end args)))
+
+  (define-advice eval-buffer (:around (fn &rest args) pulsar)
+    "Pulse evaluated regions."
+    (+with-eval-pulse (point-min) (point-max)
+      (apply fn args)))
+
+  (define-advice eval-last-sexp (:around (fn &rest args) pulsar)
+    "Pulse evaluated expressions."
+    (pcase-let ((`(,start . ,end) (or (bounds-of-thing-at-point 'sexp)
+                                      (cons (ignore-errors (save-excursion
+                                                             (backward-sexp)
+                                                             (point)))
+                                            (point)))))
+      (+with-eval-pulse start end
+        (apply fn args)))))
 
 (use-package hl-line
   ;; Highlight the current line.
@@ -1310,6 +1359,17 @@ word.  Fall back to regular `expreg-expand'."
   ;; buffer, and which one point last moved to.
   :after-call evil-ex-start-search evil-ex-start-word-search evil-ex-search-activate-highlight
   :config (global-anzu-mode +1))
+
+
+;;; Navigation
+
+(use-package avy :ensure t
+  ;; Jump to things by typing a few letters.
+  :general ("M-h" #'avy-goto-char-timer))
+
+(use-package ace-window :ensure t
+  ;; Jump to specific windows
+  :general ("M-o" #'ace-window))
 
 
 ;;; Completion
