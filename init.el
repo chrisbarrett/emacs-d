@@ -1055,11 +1055,6 @@ buffer modifications have happened."
     (+with-eval-pulse start end
       (apply fn start end args)))
 
-  (define-advice eval-buffer (:around (fn &rest args) pulsar)
-    "Pulse evaluated regions."
-    (+with-eval-pulse (point-min) (point-max)
-      (apply fn args)))
-
   (define-advice eval-last-sexp (:around (fn &rest args) pulsar)
     "Pulse evaluated expressions."
     (pcase-let ((`(,start . ,end) (or (bounds-of-thing-at-point 'sexp)
