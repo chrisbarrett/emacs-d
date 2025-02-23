@@ -2418,17 +2418,6 @@ file in your browser at the visited revision."
          (projects '(tags-todo "+TODO=\"PROJECT\""
                      ((org-agenda-overriding-header "Projects"))))
 
-         (tickler
-          '(todo "TODO"
-            ((org-agenda-overriding-header "Tickler")
-             (org-agenda-skip-function #'+agenda-tickler-section-skip-function))))
-
-
-         (unprocessed-notes
-          '(tags-todo "+outline+TODO=\"TODO\""
-            ((org-agenda-overriding-header "Unprocessed Notes")
-             (org-agenda-skip-function #'+agenda-next-actions-skip-function))))
-
          (defaults `((org-agenda-todo-ignore-scheduled 'future)
                      (org-agenda-span 'day)
                      (org-agenda-window-setup 'only-window)
@@ -2450,10 +2439,10 @@ file in your browser at the visited revision."
                      (org-agenda-show-future-repeats nil)
                      (org-agenda-ignore-properties '(effort appt)))))
 
-     `(("p" "personal agenda" ,(list today next-actions inbox delegated projects tickler)
+     `(("p" "personal agenda" ,(list today next-actions inbox delegated projects)
         (,@defaults
          (org-agenda-tag-filter-preset '("-work" "-ignore"))))
-       ("w" "work agenda" ,(list today next-actions inbox delegated projects tickler unprocessed-notes)
+       ("w" "work agenda" ,(list today next-actions inbox delegated projects)
         (,@defaults
          (org-agenda-tag-filter-preset (list "-ignore" (format "+%s" (timekeep-work-tag))))
          (org-agenda-clock-consistency-checks

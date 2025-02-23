@@ -54,11 +54,6 @@
 
 
 
-(defun +agenda-tickler-section-skip-function ()
-  (when (or (+agenda--scheduled-in-future-p)
-            (not (seq-contains-p (org-get-tags) "tickler")))
-    (+agenda--skip-heading-safe)))
-
 (defun +agenda-view-skip-function ()
   (let ((tags (org-get-tags)))
     (when (seq-contains-p tags "ARCHIVE")
