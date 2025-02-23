@@ -2435,7 +2435,7 @@ file in your browser at the visited revision."
                      (org-agenda-start-day nil)
                      (org-agenda-include-diary nil)
                      (org-agenda-insert-diary-extract-time nil)
-                     (org-agenda-show-inherited-tags nil)
+                     (org-agenda-show-inherited-tags t)
                      (org-agenda-skip-deadline-if-done t)
                      (org-agenda-skip-deadline-prewarning-if-scheduled 'pre-scheduled)
                      (org-agenda-skip-scheduled-if-done t)
