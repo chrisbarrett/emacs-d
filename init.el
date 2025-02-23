@@ -1055,8 +1055,7 @@ With optional prefix arg CONTINUE-P, keep profiling."
   ;; Visualise whitespace characters.
   :config
   (delq! 'newline whitespace-style)
-  (delq! 'newline-mark whitespace-style)
-  )
+  (delq! 'newline-mark whitespace-style))
 
 
 ;;; Spell-checking
