@@ -2165,7 +2165,7 @@ file in your browser at the visited revision."
     (interactive)
     (cond (org-finish-function
            (let ((org-note-abort t)) (funcall org-finish-function)))
-          (org-capture-mode
+          ((bound-and-true-p org-capture-mode)
            (org-capture-kill))
           (t
            (org-cut-subtree))))
