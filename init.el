@@ -998,14 +998,16 @@ With optional prefix arg CONTINUE-P, keep profiling."
   :hook (+first-input-hook . pulsar-global-mode)
   :custom
   (pulsar-iterations 5)
+  (pulsar-pulse-on-window-change t)
   :config
+  (require '+pulsar)
+
   (add-hook 'next-error-hook #'pulsar-pulse-line)
   (add-hook 'consult-after-jump-hook #'pulsar-recenter-top)
   (add-hook 'consult-after-jump-hook #'pulsar-reveal-entry)
   (add-hook 'imenu-after-jump-hook #'pulsar-recenter-top)
   (add-hook 'imenu-after-jump-hook #'pulsar-reveal-entry)
 
-  (add-to-list 'pulsar-pulse-functions 'quit-window)
   (delq! 'evil-goto-first-line pulsar-pulse-functions)
   (delq! 'evil-goto-line pulsar-pulse-functions)
 
@@ -1028,37 +1030,6 @@ With optional prefix arg CONTINUE-P, keep profiling."
 
   ;; Show a pulse indicating success or failure of eval-expression, eval-region,
   ;; etc.
-
-  :preface
-  (defmacro +with-eval-pulse (start end &rest body)
-    "Pulse a part of the buffer to indicate whether a command completed or signalled an error.
-
-START and END are the buffer locations to pulse after evaluating BODY.
-
-START & END are evaluated after BODY has completed, and thus after any
-buffer modifications have happened."
-    (declare (indent 2))
-    (let ((gfailed (gensym "failed-"))
-          (gerr (gensym "err-"))
-          (gstart (gensym "start-"))
-          (gend (gensym "end-")))
-      `(let (,gfailed)
-         (unwind-protect
-             (condition-case ,gerr
-                 (progn ,@body)
-               (t
-                (setq ,gfailed t)
-                (signal (car ,gerr) (cdr ,gerr))))
-           (deactivate-mark)
-           (when pulsar-mode
-             (let ((,gstart ,start)
-                   (,gend ,end))
-               (when (and ,gstart ,gend)
-                 (pulsar--pulse nil
-                                (if ,gfailed 'pulsar-red 'pulsar-green)
-                                ,gstart
-                                ,gend))))))))
-
   :config
   (define-advice eval-region (:around (fn start end &rest args) pulsar)
     "Pulse evaluated regions."
