@@ -61,8 +61,7 @@
 
 (defun +agenda-view-skip-function ()
   (let ((tags (org-get-tags)))
-    (when (and (seq-contains-p tags "tickler")
-               (not (seq-contains-p tags "ARCHIVE")))
+    (when (seq-contains-p tags "ARCHIVE")
       (+agenda--skip-heading-safe))))
 
 (defun +agenda-next-actions-skip-function ()

@@ -2393,7 +2393,14 @@ file in your browser at the visited revision."
                                                              :maxlevel 3
                                                              :fileskip0 t
                                                              :filetitle t))
-                   (org-agenda-skip-function #'+agenda-view-skip-function))))
+                   (org-agenda-skip-function #'+agenda-view-skip-function)
+                   (org-super-agenda-groups
+                    '((:name "Agenda" :time-grid t)
+                      (:name "French Study" :category "french")
+                      (:name "Habits" :habit t)
+                      (:name "Birthdays" :category "birthdays")
+                      (:name "Delegated" :todo "WAIT")
+                      (:name "Tickler" :tag "tickler"))))))
 
          (next-actions '(tags-todo "-tickler-inbox+TODO=\"TODO\""
                          ((org-agenda-overriding-header "Next Actions")
@@ -2493,6 +2500,15 @@ file in your browser at the visited revision."
     (org-fold-show-subtree)
     (org-display-outline-path))
   )
+(use-package org-super-agenda :ensure t
+  ;; Group items in the agenda
+  :after org-agenda
+  :demand t
+  :config
+  (org-super-agenda-mode +1)
+  ;; Clear the keymap to ensure the regular evil keybindings for org-agenda
+  ;; work.
+  (setq org-super-agenda-header-map (make-sparse-keymap)))
 
 (use-package org-archive
   ;; org-mode's glacier storage tier.
