@@ -2385,14 +2385,14 @@ file in your browser at the visited revision."
   (org-agenda-inhibit-startup nil)
   (org-agenda-custom-commands
    (let ((today '(agenda ""
-                  ((org-agenda-overriding-header "Today")
+                  ((org-agenda-overriding-header "Agenda")
                    (org-agenda-use-time-grid t)
-                   (org-agenda-remove-tags t)
                    (org-agenda-clockreport-parameter-plist '(:compact t
                                                              :link t
                                                              :maxlevel 3
                                                              :fileskip0 t
                                                              :filetitle t))
+                   (org-agenda-show-inherited-tags t)
                    (org-agenda-skip-function #'+agenda-view-skip-function)
                    (org-super-agenda-groups
                     '((:name "Agenda" :time-grid t)
@@ -2413,6 +2413,7 @@ file in your browser at the visited revision."
 
          (delegated '(todo "WAIT"
                       ((org-agenda-overriding-header "Delegated")
+                       (org-agenda-remove-tags nil)
                        (org-agenda-skip-function '(org-agenda-skip-entry-if 'scheduled)))))
 
          (projects '(tags-todo "+TODO=\"PROJECT\""
@@ -2423,8 +2424,9 @@ file in your browser at the visited revision."
                      (org-agenda-window-setup 'only-window)
                      (org-agenda-start-day nil)
                      (org-agenda-include-diary nil)
+                     (org-agenda-remove-tags t)
                      (org-agenda-insert-diary-extract-time nil)
-                     (org-agenda-show-inherited-tags t)
+                     (org-agenda-show-inherited-tags nil)
                      (org-agenda-skip-deadline-if-done t)
                      (org-agenda-skip-deadline-prewarning-if-scheduled 'pre-scheduled)
                      (org-agenda-skip-scheduled-if-done t)
@@ -2493,6 +2495,8 @@ file in your browser at the visited revision."
   ;; Group items in the agenda
   :after org-agenda
   :demand t
+  :custom
+  (org-super-agenda-hide-empty-groups t)
   :config
   (org-super-agenda-mode +1)
   ;; Clear the keymap to ensure the regular evil keybindings for org-agenda
