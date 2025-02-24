@@ -263,7 +263,8 @@ Runs `+escape-hook'."
 
    "b"  '(nil :wk "buffers")
    "bb" '(bury-buffer :wk "bury")
-   "bd" '(kill-current-buffer :wk "kill")
+   "bd" '(bury-buffer :wk "bury")
+   "bD" '(kill-current-buffer :wk "kill")
    "bl" '(ibuffer :wk "list")
    "bn" '(next-buffer :wk "next")
    "bp" '(previous-buffer :wk "prev")
