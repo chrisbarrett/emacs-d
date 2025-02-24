@@ -2417,7 +2417,8 @@ file in your browser at the visited revision."
                    (org-agenda-show-inherited-tags t)
                    (org-agenda-skip-function #'+agenda-view-skip-function)
                    (org-super-agenda-groups
-                    '((:name "Agenda" :time-grid t)
+                    `((:name "Agenda" :time-grid t)
+                      (:name "Forming" :and (:habit t :regexp ,(rx "->")))
                       (:name "French Study" :category "french")
                       (:name "Habits" :habit t)
                       (:name "Birthdays" :category "birthdays")
