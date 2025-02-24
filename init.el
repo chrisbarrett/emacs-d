@@ -278,6 +278,7 @@ Runs `+escape-hook'."
    "fR" '(rename-visited-file :wk "rename")
    "fr" '(recentf :wk "recent")
    "fw" '(write-file :wk "write copy")
+   "fo" '(ff-find-other-file :wk "other file")
 
    "fD" (list (defun +delete-file-and-buffer ()
                 (interactive)
