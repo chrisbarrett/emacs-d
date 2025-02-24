@@ -1117,6 +1117,12 @@ With optional prefix arg CONTINUE-P, keep profiling."
   ;; Icon set used by various packages.
   :autoload nerd-icons-codicon nerd-icons-faicon)
 
+(use-package wdired
+  ;; Makes dired buffers directly editable; the changes are interpreted into
+  ;; operations on the corresponding file names.
+  :general
+  (:keymaps 'dired-mode-map "C-c C-e" #'wdired-change-to-wdired-mode))
+
 (use-package dirvish :ensure t
   ;; Wrapper around `dired' that provides better UX.
   :hook (+first-input-hook . dirvish-override-dired-mode)
