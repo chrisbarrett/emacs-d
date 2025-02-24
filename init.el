@@ -433,7 +433,7 @@ Runs `+escape-hook'."
    "wO"  '(delete-other-windows :wk "delete (+dedicated)")
    "wq" '(delete-window :wk "delete")
    "wr" '(evil-window-rotate-downwards :wk "rotate")
-   "ws" '(consult-register :wk "registers")
+   "ws" '(consult-register-load :wk "registers")
    "wS" '(window-configuration-to-register :wk "save to reg")
    "wt"  '(+toggle-window-dedication :wk "toggle dedication")
    "ww" '(other-window :wk "other")
