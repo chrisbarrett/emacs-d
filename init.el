@@ -278,7 +278,7 @@ Runs `+escape-hook'."
    "fR" '(rename-visited-file :wk "rename")
    "fr" '(recentf :wk "recent")
    "fw" '(write-file :wk "write copy")
-   "fo" '(ff-find-other-file :wk "other file")
+   "fo" '(find-sibling-file :wk "other file")
 
    "fD" (list (defun +delete-file-and-buffer ()
                 (interactive)
@@ -557,6 +557,19 @@ Runs `+escape-hook'."
   (backup-directory-alist `(("." . ,+auto-save-dir)))
   (auto-save-list-file-prefix (file-name-concat +auto-save-dir ".saves-"))
   (auto-save-file-name-transforms `((".*" ,+auto-save-dir t)))
+
+  ;; Used by `find-sibling-file' to figure out what files are related.
+  (find-sibling-rules
+   `(
+     ;; Tests -> impl in TS
+     ,(list (rx (group (+? any)) (or ".test" ".integration") ".ts" eos)
+            (rx (backref 1) ".ts"))
+
+     ;; Impl -> tests in TS
+     ,(list (rx (group (+? any)) ".ts" eos)
+            (rx (backref 1) ".test.ts")
+            (rx (backref 1) ".integration.ts"))
+     ))
 
   :config
   (define-advice after-find-file (:around (fn &rest args) dont-block-on-autosave-exists)
