@@ -2008,6 +2008,7 @@ file in your browser at the visited revision."
 ;;; Code formatting
 
 (use-package apheleia :ensure t
+  ;; Apply code formatting on save. Works for a range of languages.
   :after-call +first-file-hook
   :config
   (apheleia-global-mode +1))
@@ -2325,6 +2326,8 @@ file in your browser at the visited revision."
   "Hide the consistency graph if `org-habit-graph-column' is less than this.")
 
 (use-package org-habit
+  ;; Declare certain tasks in the agenda as 'habits'; these have a graph
+  ;; displayed beside them to help visualise your consistency.
   :after-call org-agenda
   :custom
   (org-habit-graph-column 72)
