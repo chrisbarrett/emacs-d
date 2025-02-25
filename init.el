@@ -2353,19 +2353,17 @@ file in your browser at the visited revision."
 (use-package org-src
   ;; Programming language source blocks.
   :config
-  (let ((aliases
-         ;; TODO: Remap mode definitions so I don't have to maintain this
-         ;; myself..
-         '(("md" . markdown)
-           ("csharp" . csharp-ts)
-           ("dockerfile" . dockerfile-ts)
-           ("ts" . typescript-ts)
-           ("typescript" . typescript-ts)
-           ("nix" . nix-ts)
-           ("yaml" . yaml-ts)
-           ("yml" . yaml-ts))))
-    (dolist (alias aliases)
-      (add-to-list 'org-src-lang-modes alias))))
+  ;; TODO: Remap mode definitions so I don't have to maintain this
+  ;; myself...
+  (pushnew! org-src-lang-modes
+            '("md" . markdown)
+            '("csharp" . csharp-ts)
+            '("dockerfile" . dockerfile-ts)
+            '("ts" . typescript-ts)
+            '("typescript" . typescript-ts)
+            '("nix" . nix-ts)
+            '("yaml" . yaml-ts)
+            '("yml" . yaml-ts)))
 
 (use-package evil-org :ensure t
   ;; Provides extra evil keybindings for org-mode, org-agenda etc.
