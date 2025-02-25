@@ -1336,7 +1336,7 @@ With optional prefix arg CONTINUE-P, keep profiling."
 
 (use-package expreg :ensure t
   ;; Use tree-sitter to mark syntactic elements.
-  :config
+  :init
   (defun +expreg-expand-n (n)
     "Expand to N syntactic units, defaulting to 1 if none is provided interactively."
     (interactive "p")
