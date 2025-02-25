@@ -457,7 +457,9 @@ Runs `+escape-hook'."
 
 (custom-theme-set-faces 'user
                         '(region ((t (:foreground unspecified :background unspecified :inherit modus-themes-search-lazy))))
-                        '(iedit-occurrence ((t (:inherit modus-themes-search-replace)))))
+                        '(iedit-occurrence ((t (:inherit modus-themes-search-replace))))
+                        ;; Dim delimiters like commas, semicolons, etc.
+                        '(font-lock-delimiter-face ((t (:inherit shadow)))))
 
 (put 'narrow-to-region 'disabled nil)
 
