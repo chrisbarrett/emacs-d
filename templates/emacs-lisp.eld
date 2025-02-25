@@ -25,8 +25,8 @@ emacs-lisp-mode
 (pl "(pcase-let (" p ")" n> q ")")
 (pla "(pcase-lambda (" p ")" n> q ")")
 
-(v "(defvar " (q "NAME") ")")
-(dc "(defconst " (q "NAME") ")")
+(v "(defvar " (p "NAME") " " (p "VALUE") ")")
+(dc "(defconst " (p "NAME") " " (p "VALUE") ")")
 (d "(defun " (p "NAME") " (" p ")" n> q ")")
 (dm "(defmacro " (p "NAME") " (" p ")" n> q ")")
 (da "(define-advice " (p "TARGET-FN") " (:" (p "WHERE" where) " ("
