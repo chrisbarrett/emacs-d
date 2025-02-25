@@ -2272,19 +2272,6 @@ file in your browser at the visited revision."
            (notes-datetree "wW" "Note (setting time)" "* %^T %? :%(timekeep-work-tag):work:")
 
            (notes-datetree "l" "Link" "* %T %(org-cliplink-capture)\n%?")
-           (notes-datetree "f" "French study" "* %T French study :french:
-:PROPERTIES:
-:CATEGORY: french
-:END:
-** TODO 📚 Preparation (15 mins)%?
-# Read a chapter from a grammar primer, then prime vocab w Anki
-** TODO 🔍 Intensive Reading (15 mins)
-# Ideas: [[https://www.youtube.com/@hugodecrypteactus][Hugo Décrypte]], [[https://www.youtube.com/@LesRevuesduMonde][Les Revues du Monde]], [[https://www.youtube.com/@NotaBonus][Nota Bonus]].
-** TODO 🎧 Free-Flow Immersion (30 mins)
-# Re-watch intensive reading content from a previous day.
-"
-                           :clock-in t
-                           :clock-resume t)
            (notes-datetree "p" "Postmortem" "* %T %? :pm:
 ** Description
 # What happened?
