@@ -1068,9 +1068,9 @@ With optional prefix arg CONTINUE-P, keep profiling."
   (delq! 'newline-mark whitespace-style))
 
 (use-package paren
+  ;; Provides `show-paren-mode', which highlights the matched pair at point.
   :custom
   (show-paren-delay 0.1)
-  (show-paren-style 'expression)
   (show-paren-when-point-inside-paren t)
   (show-paren-when-point-in-periphery t))
 
