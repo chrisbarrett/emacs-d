@@ -237,6 +237,7 @@ Runs `+escape-hook'."
    ",c" '(puni-convolute :wk "convolute")
    ",k" '(puni-splice-killing-forward :wk "splice-killing-forward")
    ",K" '(puni-splice-killing-backward :wk "splice-killing-backward")
+   ;; TODO: define a killing-around variant.
    ",s" '(puni-splice-killing-backward :wk "splice-killing-backward")
    ",r" '(puni-raise :wk "raise")
    ",b" '(puni-barf-forward :wk "barf-forward")
