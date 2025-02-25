@@ -1663,7 +1663,7 @@ word.  Fall back to regular `expreg-expand'."
             "C-c C-c" #'embark-collect))
 
 (use-package embark-consult :ensure t
-  ;; Integration embark with consult
+  ;; Integrate embark with consult
   :after (:any consult embark)
   :demand t
   :hook (embark-collect-mode-hook . consult-preview-at-point-mode))
@@ -1723,8 +1723,7 @@ word.  Fall back to regular `expreg-expand'."
    "gtc" #'git-timemachine-show-commit)
 
   :config
-  ;; Ensure git-timemachine uses `delay-mode-hooks', which can suppress
-  ;; font-lock.
+  ;; git-timemachine uses `delay-mode-hooks', which can suppress font-lock.
   (add-hook 'git-timemachine-mode-hook #'font-lock-mode)
   ;; Ensure evil keymaps are applied
   (add-hook 'git-timemachine-mode-hook #'evil-normalize-keymaps)
