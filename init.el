@@ -1074,6 +1074,11 @@ With optional prefix arg CONTINUE-P, keep profiling."
   (show-paren-when-point-inside-paren t)
   (show-paren-when-point-in-periphery t))
 
+(use-package paren-face :ensure t
+  ;; Adds a face for parentheses in lisps. I hijack it to dim semicolons and
+  ;; other non-critical syntax elements in other langs.
+  :hook (lisp-data-mode-hook . paren-face-mode))
+
 
 ;;; Spell-checking
 
