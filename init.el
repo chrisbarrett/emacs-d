@@ -654,13 +654,6 @@ Runs `+escape-hook'."
   :config
   (recentf-mode +1))
 
-(use-package paren
-  :custom
-  (show-paren-delay 0.1)
-  (show-paren-style 'expression)
-  (show-paren-when-point-inside-paren t)
-  (show-paren-when-point-in-periphery t))
-
 (keymap-global-set "C-c SPC"
                    (defun +insert-nbsp ()
                      (interactive)
@@ -1073,6 +1066,13 @@ With optional prefix arg CONTINUE-P, keep profiling."
   :config
   (delq! 'newline whitespace-style)
   (delq! 'newline-mark whitespace-style))
+
+(use-package paren
+  :custom
+  (show-paren-delay 0.1)
+  (show-paren-style 'expression)
+  (show-paren-when-point-inside-paren t)
+  (show-paren-when-point-in-periphery t))
 
 
 ;;; Spell-checking
