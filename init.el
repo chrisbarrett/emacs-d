@@ -1860,10 +1860,7 @@ file in your browser at the visited revision."
   (:keymaps 'help-map
             "c" #'describe-face
             "P" #'describe-text-properties
-            "G" #'find-library)
-  ;; I bind C-h to better-jumper; use F2 as an alternative help command prefix
-  ;; instead.
-  ([f2] help-map))
+            "G" #'find-library))
 
 (use-package eldoc
   ;; Display help hints in the echo area as you move around.
