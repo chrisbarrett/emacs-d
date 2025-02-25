@@ -657,6 +657,7 @@ Runs `+escape-hook'."
 (use-package paren
   :custom
   (show-paren-delay 0.1)
+  (show-paren-style 'expression)
   (show-paren-when-point-inside-paren t)
   (show-paren-when-point-in-periphery t))
 
