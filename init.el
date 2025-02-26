@@ -1858,6 +1858,7 @@ file in your browser at the visited revision."
   (help-window-select t)
   :general
   (:keymaps 'help-map
+            "h" nil ; view-hello-file: never intended, always annoying
             "c" #'describe-face
             "P" #'describe-text-properties
             "G" #'find-library))
