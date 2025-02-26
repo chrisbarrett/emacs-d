@@ -15,6 +15,8 @@ typescript-ts-base-mode js-base-mode
 (afun "async function " p "(" p ") {" n> q n "}" >)
 (eafun "export async function " p "(" p ") {" n> q n "}" >)
 
+(for "for (const " (p "VAR") " of " (p "VALUE") ") {" n> q n "}" >)
+
 (r "return " q ";")
 (i "if (" p ") {" n> q n "}" >)
 (ei "else if (" p ") {" n q "}" >)
