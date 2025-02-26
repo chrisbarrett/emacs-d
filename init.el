@@ -2357,6 +2357,7 @@ file in your browser at the visited revision."
             '("ts" . typescript-ts)
             '("typescript" . typescript-ts)
             '("nix" . nix-ts)
+            '("json" . json-ts)
             '("yaml" . yaml-ts)
             '("yml" . yaml-ts)))
 
