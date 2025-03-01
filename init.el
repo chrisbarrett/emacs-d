@@ -639,7 +639,7 @@ Runs `+escape-hook'."
 (use-package puni :ensure t
   ;; Provides structured editing commands.
   :after-call +first-file-hook +first-buffer-hook
-  :config (puni-global-mode +1)
+  :hook (text-mode-hook prog-mode-hook conf-mode-hook)
   :general
   (:keymaps 'puni-mode-map :states 'insert "C-w" #'puni-backward-kill-word)
   (:keymaps 'puni-mode-map :states '(visual) "C-k" #'puni-kill-active-region)
