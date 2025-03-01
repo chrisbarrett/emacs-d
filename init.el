@@ -2750,76 +2750,51 @@ file in your browser at the visited revision."
 ;; these buffers.
 
 (setq display-buffer-alist
-      `(
-        ;; Left side - Search results, shells, REPLs & debuggers. Generally,
-        ;; things that define a temporary context change.
+      (append
 
-        (,(rx bos
-              (or
-               "*Backtrace*"
-               "*eshell*"
-               "*ielm*"
-               ))
-         (display-buffer-reuse-window display-buffer-in-side-window)
-         (side . left)
-         (slot . 0))
+       ;; Left side - Search results, shells, REPLs & debuggers. Generally,
+       ;; things that define a temporary context change.
 
-        (,(rx bos
-              (or
-               "*org-roam-search*"
-               "CAPTURE-"
-               ))
-         (display-buffer-reuse-window display-buffer-in-side-window)
-         (side . left)
-         (slot . 0)
-         (window-width . 80))
+       (cl-labels ((left (pred &rest overrides)
+                     (cons pred `((display-buffer-reuse-window display-buffer-in-side-window)
+                                  ,@overrides
+                                  (side . left)
+                                  (slot . 0)))))
+         (list
+          (left (rx bos "*Backtrace*" eos))
+          (left (rx bos "*eshell*" eos))
+          (left (rx bos "*ielm*" eos))
+          (left (rx bos "*org-roam-search*" eos) '(window-width . 80))
+          (left (rx bos "CAPTURE-") '(window-width . 80))))
 
-        ;; Right side - documentation, reference buffers & command outputs.
+       ;; Right side - documentation, reference buffers & command outputs.
 
-        (,(rx bos
-              (or
-               (and "*help*" eos)
-               "*Man "
-               (and "*org-roam*" eos)
-               ))
-         (display-buffer-reuse-window display-buffer-in-side-window)
-         (side . right)
-         (slot . 0)
-         (window-width . 80))
+       (cl-labels ((right (pred &rest overrides)
+                     (cons pred `((display-buffer-reuse-window display-buffer-in-side-window)
+                                  ,@overrides
+                                  (side . right)
+                                  (slot . 0)))))
+         (list
+          (right (rx bos "*org-roam*" eos) '(window-width . 80))
+          (right (rx bos "*help*" eos) '(window-width . 80))
+          (right (rx bos "*Man ") '(window-width . 80))
+          (right (rx bos "*shell command output*" eos))
+          (right (rx bos "*async shell command*" eos))))
 
-        (,(rx bos
-              (or
-               "*shell command output*"
-               "*async shell command*"
-               )
-              eos)
-         (display-buffer-reuse-window display-buffer-in-side-window)
-         (side . right)
-         (slot . 0))
+       
+       ;; Bottom - Prompts, warnings, errors, compilation buffers.
 
-        ;; Bottom - Prompts, warnings, errors, compilation buffers.
+       (cl-labels ((bottom (pred &rest overrides)
+                     (cons pred `((display-buffer-reuse-window display-buffer-in-side-window)
+                                  ,@overrides
+                                  (side . bottom)
+                                  (slot . 0)))))
+         (list
+          (bottom (rx bos " *Agenda Commands*" eos))
+          (bottom (rx bos "*Org Select*" eos))
+          (bottom (rx bos "*compilation*" eos))
+          (bottom (rx bos "*warnings*" eos))))))
 
-        (,(rx bos
-              (or
-               "*compilation*"
-               "*warnings*"
-               )
-              eos)
-         (display-buffer-reuse-window display-buffer-in-side-window)
-         (side . bottom)
-         (slot . 0)
-         (window-height . 0.3))
-
-        (,(rx bos
-              (or
-               "*Agenda Commands*"
-               "*Org Select*"
-               )
-              eos)
-         (display-buffer-reuse-window display-buffer-in-side-window)
-         (side . bottom)
-         (slot . 0))
-        ))
 
 ;; Then, customise what display-buffer will do for all buffers not matching the
 ;; above rules.
