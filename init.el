@@ -1707,7 +1707,7 @@ word.  Fall back to regular `expreg-expand'."
   ;; line = new commit message, whereas non-empty means we're editing an
   ;; existing one.
   (add-hook! 'git-commit-mode-hook
-    (when (thing-at-point-looking-at (rx bol (* space) eol))
+    (when (and (bolp) (eolp))
       (evil-insert-state)))
   :custom
   (magit-diff-refine-hunk t)
