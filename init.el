@@ -183,6 +183,7 @@ Runs `+escape-hook'."
    "S" '(save-some-buffers :wk "save some bufs...")
    "u" '(universal-argument :wk "C-u")
    "x" '(execute-extended-command :wk "M-x")
+   "K" 'man
    "T" (list (defun +goto-mode-template-file ()
                (interactive)
                (let* ((modes (nreverse (parent-mode-list major-mode)))
