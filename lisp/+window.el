@@ -1,5 +1,23 @@
 ;; -*- lexical-binding: t; -*-
 
+(defun +sibling-file-or-other-buffer ()
+  (let ((sibling (when-let* ((file (buffer-file-name)))
+                   (save-excursion
+                     (ignore-errors
+                       (find-sibling-file file))))))
+    (cond
+     ;; Don't show sibling again if it's already visible
+     ((get-buffer-window sibling)
+      (other-buffer))
+     (sibling
+      sibling)
+     (t
+      ;; Show some buffer that's not already visible.
+      (or (seq-find (lambda (it)
+                      (null (get-buffer-window it)))
+                    (buffer-list))
+          (other-buffer))))))
+
 (defun +split-window-horizontally-dwim (&optional arg)
   "When splitting window, show the other buffer in the new window.
 
@@ -7,7 +25,7 @@ With prefix arg ARG, don't select the new window."
   (interactive "P")
   (split-window-horizontally)
   (let ((target-window (next-window)))
-    (set-window-buffer target-window (other-buffer))
+    (set-window-buffer target-window (+sibling-file-or-other-buffer))
     (unless arg
       (select-window target-window)))
 
@@ -22,7 +40,7 @@ With prefix arg ARG, don't select the new window."
   (interactive "P")
   (split-window-vertically)
   (let ((target-window (next-window)))
-    (set-window-buffer target-window (other-buffer))
+    (set-window-buffer target-window (+sibling-file-or-other-buffer))
     (unless arg
       (select-window target-window)))
 
