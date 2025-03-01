@@ -975,6 +975,10 @@ With optional prefix arg CONTINUE-P, keep profiling."
           Man-mode-hook
           debugger-mode-hook
           ielm-mode-hook
+          eshell-mode-hook
+          compilation-mode-hook
+          help-mode-hook
+          shell-command-mode-hook
           )
          . hide-mode-line-mode))
 
