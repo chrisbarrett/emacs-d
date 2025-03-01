@@ -2027,6 +2027,14 @@ file in your browser at the visited revision."
    "C-c C-r" #'eglot-rename))
 
 
+;;; Debuggers
+
+(use-package debug
+  :config
+  (define-advice debugger-record-expression (:after (&rest _) display-buffer)
+    (display-buffer debugger-record-buffer)))
+
+
 ;;; Code formatting
 
 (use-package apheleia :ensure t
