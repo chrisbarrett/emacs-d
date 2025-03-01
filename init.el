@@ -2700,6 +2700,7 @@ file in your browser at the visited revision."
   :init
   (use-package org-roam-review
     :commands (org-roam-review org-roam-review-list-recently-added)
+    :hook (org-roam-review-mode . toggle-truncate-lines)
     :general-config
     (:states '(normal) :keymaps 'org-roam-review-mode-map
              ;; "TAB" 'magit-section-cycle
