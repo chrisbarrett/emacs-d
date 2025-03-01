@@ -2775,10 +2775,14 @@ file in your browser at the visited revision."
                                   (side . left)
                                   (slot . 0)))))
          (list
-          (left (rx bos "*Backtrace*" eos))
+          (left (rx bos "*Backtrace*" eos) '(slot . 0))
+          (left (rx bos "*Debugger-record*" eos)
+                '(slot . 1)
+                '(window-height . 0.3))
+
           (left (rx bos "*eshell*" eos))
           (left (rx bos "*ielm*" eos))
-          (left (rx bos "*org-roam-search*" eos) '(window-width . 80))
+          (left (rx bos "*org-roam-search") '(window-width . 80))
           (left (rx bos "CAPTURE-") '(window-width . 80))))
 
        ;; Right side - documentation, reference buffers & command outputs.
