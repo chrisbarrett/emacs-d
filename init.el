@@ -1878,7 +1878,9 @@ file in your browser at the visited revision."
   ;; Emacs' built-in system for reading texinfo manuals.
   :general
   (:keymaps 'help-map "s" #'info-apropos)
-  (:keymaps 'Info-mode-map :states 'normal "^" #'Info-up))
+  (:keymaps 'Info-mode-map :states 'normal "^" #'Info-up
+            "C-n" #'Info-forward-node
+            "C-p" #'Info-backward-node))
 
 (use-package man
   ;; Built-in manpage reader.
