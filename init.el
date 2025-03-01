@@ -2704,7 +2704,8 @@ file in your browser at the visited revision."
     :general-config
     (:states '(normal) :keymaps 'org-roam-review-mode-map
              ;; "TAB" 'magit-section-cycle
-             "g r" 'org-roam-review-refresh))
+             "/"   #'org-roam-review-modify-tags
+             "g r" #'org-roam-review-refresh))
 
   (use-package org-roam-search
     :commands (org-roam-search))
