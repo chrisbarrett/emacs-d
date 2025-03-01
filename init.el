@@ -2381,15 +2381,21 @@ file in your browser at the visited revision."
   ;; TODO: Remap mode definitions so I don't have to maintain this
   ;; myself...
   (pushnew! org-src-lang-modes
-            '("md" . markdown)
+            '("cs" . csharp-ts)
             '("csharp" . csharp-ts)
+            '("docker" . dockerfile-ts)
             '("dockerfile" . dockerfile-ts)
+            '("json" . json-ts)
+            '("md" . markdown)
+            '("nix" . nix-ts)
+            '("rs" . rust-ts)
+            '("rust" . rust-ts)
+            '("sh" . bash-ts)
             '("ts" . typescript-ts)
             '("typescript" . typescript-ts)
-            '("nix" . nix-ts)
-            '("json" . json-ts)
             '("yaml" . yaml-ts)
-            '("yml" . yaml-ts)))
+            '("yml" . yaml-ts)
+            ))
 
 (use-package evil-org :ensure t
   ;; Provides extra evil keybindings for org-mode, org-agenda etc.
