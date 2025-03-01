@@ -971,7 +971,12 @@ With optional prefix arg CONTINUE-P, keep profiling."
                                      :host github
                                      :repo "hlissner/emacs-hide-mode-line")
   ;; Disable the mode-line in situations where it's not useful.
-  :hook ((completion-list-mode-hook Man-mode-hook) . hide-mode-line-mode))
+  :hook ((completion-list-mode-hook
+          Man-mode-hook
+          debugger-mode-hook
+          ielm-mode-hook
+          )
+         . hide-mode-line-mode))
 
 (use-package highlight-numbers :ensure (highlight-numbers
                                         :host github
