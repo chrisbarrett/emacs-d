@@ -2710,6 +2710,79 @@ file in your browser at the visited revision."
       "rR" #'org-roam-slipbox-refile)))
 
 
+;;; The Dark Pit of Display Buffer and Despair
+
+;; Emacs' window management system is designed around the 'principle of most
+;; surprise'. As you edit, Emacs wants to show you buffers, but how it choses
+;; which window to display that buffer feels totally unpredictable.
+
+;; Sometimes Emacs pops up a new one. Sometimes it re-uses an existing one. Why
+;; did it pick that one? I dunno, it depends on each individual command how it
+;; implemented buffer display. Sometimes you can quit the window with 'q';
+;; sometimes you can't. Sometimes it will save & restore your window state on
+;; quit, sometimes it scrambles it. Occasionally it will even use a *new frame*
+;; (shudder).
+
+;; You can improve the situation with `display-buffer-alist' and a lot of elbow
+;; grease, but Emacs has the spirit of a wild stallion that can never be truly
+;; tamed.
+
+;; When I'm editing, I generally want a single main buffer to focus on, or two
+;; displayed side-by-side. Sometimes it makes sense to pop up another window for
+;; a short time, e.g. when looking up docs, running a couple of shell commands,
+;; or doing a compilation. I teach `display-buffer' to use side windows for
+;; these buffers.
+
+(setq display-buffer-alist
+      `(
+        ;; Left side
+
+        (,(rx bos "*eshell*" eos)
+         (display-buffer-reuse-window display-buffer-in-side-window)
+         (side . left)
+         (slot . 0))
+
+        ;; Right side
+
+        (,(rx bos "*" (or "shell command output" "async shell command") "*" eos)
+         (display-buffer-reuse-window display-buffer-in-side-window)
+         (side . right)
+         (slot . 0))
+
+        (,(rx (or (and bos "*" (or "help") "*" eos)
+                  (and bos "*Man ")))
+         (display-buffer-reuse-window display-buffer-in-side-window)
+         (side . right)
+         (slot . 0)
+         (window-width . 80))
+
+        ;; Bottom
+
+        (,(rx bos "*compilation*" eos)
+         (display-buffer-reuse-window display-buffer-in-side-window)
+         (side . bottom)
+         (slot . 0)
+         (window-height . 0.3))))
+
+;; Then, customise what display-buffer will do for all buffers not matching the
+;; above rules.
+
+;; In particular, prevent display-buffer from ever popping open another frame.
+
+(setq display-buffer-fallback-action
+      `((display-buffer--maybe-same-window
+         display-buffer-reuse-window
+         display-buffer--maybe-pop-up-window
+         display-buffer-in-previous-window
+         display-buffer-use-some-window
+         ,(defun +display-buffer-fallback (buffer &rest _)
+            (when-let* ((win (split-window-sensibly)))
+              (with-selected-window win
+                (switch-to-buffer buffer)
+                (help-window-setup (selected-window))))
+            t))))
+
+
 ;;; Load site files
 
 (when (file-directory-p +site-files-directory)
