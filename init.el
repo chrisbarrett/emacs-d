@@ -1859,6 +1859,7 @@ file in your browser at the visited revision."
 ;;; Documentation systems
 
 (use-package help
+  ;; Defines the main help functionality for Emacs & Emacs-Lisp.
   :custom
   (help-window-select t)
   :general
@@ -1867,6 +1868,10 @@ file in your browser at the visited revision."
             "c" #'describe-face
             "P" #'describe-text-properties
             "G" #'find-library))
+
+(use-package help-mode
+  ;; Major-mode for help buffers.
+  :general (:keymaps 'help-mode-map :states 'normal "^" #'help-go-back))
 
 (use-package eldoc
   ;; Display help hints in the echo area as you move around.
