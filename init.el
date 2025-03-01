@@ -2789,6 +2789,7 @@ file in your browser at the visited revision."
                                   (slot . 0)))))
          (list
           (right (rx bos "*org-roam*" eos) '(window-width . 80))
+          (right (rx bos "*org-roam-links*" eos) '(window-width . 80))
           (right (rx bos "*help*" eos) '(window-width . 80))
           (right (rx bos "*Man ") '(window-width . 80))
           (right (rx bos "*shell command output*" eos))
