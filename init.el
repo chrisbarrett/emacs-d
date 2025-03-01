@@ -2751,14 +2751,15 @@ file in your browser at the visited revision."
 
 (setq display-buffer-alist
       `(
-        ;; Left side
+        ;; Left side - Search results, shells, REPLs & debuggers. Generally,
+        ;; things that define a temporary context change.
 
         (,(rx bos
               (or
+               "*Backtrace*"
                "*eshell*"
                "*ielm*"
-               )
-              eos)
+               ))
          (display-buffer-reuse-window display-buffer-in-side-window)
          (side . left)
          (slot . 0))
@@ -2766,24 +2767,14 @@ file in your browser at the visited revision."
         (,(rx bos
               (or
                "*org-roam-search*"
-               )
-              eos)
+               "CAPTURE-"
+               ))
          (display-buffer-reuse-window display-buffer-in-side-window)
          (side . left)
          (slot . 0)
          (window-width . 80))
 
-        ;; Right side
-
-        (,(rx bos
-              (or
-               "*shell command output*"
-               "*async shell command*"
-               )
-              eos)
-         (display-buffer-reuse-window display-buffer-in-side-window)
-         (side . right)
-         (slot . 0))
+        ;; Right side - documentation, reference buffers & command outputs.
 
         (,(rx bos
               (or
@@ -2796,17 +2787,39 @@ file in your browser at the visited revision."
          (slot . 0)
          (window-width . 80))
 
-        ;; Bottom
+        (,(rx bos
+              (or
+               "*shell command output*"
+               "*async shell command*"
+               )
+              eos)
+         (display-buffer-reuse-window display-buffer-in-side-window)
+         (side . right)
+         (slot . 0))
+
+        ;; Bottom - Prompts, warnings, errors, compilation buffers.
 
         (,(rx bos
               (or
                "*compilation*"
+               "*warnings*"
                )
               eos)
          (display-buffer-reuse-window display-buffer-in-side-window)
          (side . bottom)
          (slot . 0)
-         (window-height . 0.3))))
+         (window-height . 0.3))
+
+        (,(rx bos
+              (or
+               "*Agenda Commands*"
+               "*Org Select*"
+               )
+              eos)
+         (display-buffer-reuse-window display-buffer-in-side-window)
+         (side . bottom)
+         (slot . 0))
+        ))
 
 ;; Then, customise what display-buffer will do for all buffers not matching the
 ;; above rules.
