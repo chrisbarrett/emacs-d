@@ -2538,6 +2538,7 @@ file in your browser at the visited revision."
     (org-fold-show-subtree)
     (org-display-outline-path))
   )
+
 (use-package org-super-agenda :ensure t
   ;; Group items in the agenda
   :after org-agenda
