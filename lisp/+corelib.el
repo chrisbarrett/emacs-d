@@ -177,7 +177,6 @@ TRIGGER-HOOK is a list of quoted hooks and/or sharp-quoted functions."
        fn (lambda (&rest _)
             ;; Only trigger this after Emacs has initialized.
             (when (and (not running?)
-                       ; (not (doom-context-p 'startup))
                        (or (daemonp)
                            ;; In some cases, hooks may be lexically unset to
                            ;; inhibit them during expensive batch operations on
