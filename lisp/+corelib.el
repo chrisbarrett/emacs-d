@@ -302,4 +302,7 @@ the falsey partition."
             sequence)
     (cons truthy falsey)))
 
+(defmacro alist-set! (alist key value)
+  `(setf (alist-get ,key ,alist nil nil #'equal) ,value))
+
 (provide '+corelib)
