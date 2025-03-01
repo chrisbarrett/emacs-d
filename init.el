@@ -916,7 +916,11 @@ With optional prefix arg CONTINUE-P, keep profiling."
 (use-package rotate :ensure t
   ;; Provides a few commands for arranging windows in pre-configured
   ;; layouts--very handy.
-  :commands (rotate-layout))
+  ;;
+  ;; TODO: Define my own version that ignores side-windows when re-arranging.
+  :commands (rotate-layout)
+  :config
+  (setq rotate-functions '(rotate:even-horizontal rotate:even-vertical)))
 
 
 ;;; Open some files as read-only, e.g. vendored deps.
