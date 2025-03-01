@@ -2748,20 +2748,44 @@ file in your browser at the visited revision."
       `(
         ;; Left side
 
-        (,(rx bos "*eshell*" eos)
+        (,(rx bos
+              (or
+               "*eshell*"
+               "*ielm*"
+               )
+              eos)
          (display-buffer-reuse-window display-buffer-in-side-window)
          (side . left)
          (slot . 0))
 
+        (,(rx bos
+              (or
+               "*org-roam-search*"
+               )
+              eos)
+         (display-buffer-reuse-window display-buffer-in-side-window)
+         (side . left)
+         (slot . 0)
+         (window-width . 80))
+
         ;; Right side
 
-        (,(rx bos "*" (or "shell command output" "async shell command") "*" eos)
+        (,(rx bos
+              (or
+               "*shell command output*"
+               "*async shell command*"
+               )
+              eos)
          (display-buffer-reuse-window display-buffer-in-side-window)
          (side . right)
          (slot . 0))
 
-        (,(rx (or (and bos "*" (or "help") "*" eos)
-                  (and bos "*Man ")))
+        (,(rx bos
+              (or
+               (and "*help*" eos)
+               "*Man "
+               (and "*org-roam*" eos)
+               ))
          (display-buffer-reuse-window display-buffer-in-side-window)
          (side . right)
          (slot . 0)
@@ -2769,7 +2793,11 @@ file in your browser at the visited revision."
 
         ;; Bottom
 
-        (,(rx bos "*compilation*" eos)
+        (,(rx bos
+              (or
+               "*compilation*"
+               )
+              eos)
          (display-buffer-reuse-window display-buffer-in-side-window)
          (side . bottom)
          (slot . 0)
