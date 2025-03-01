@@ -1885,8 +1885,8 @@ file in your browser at the visited revision."
 (use-package man
   ;; Built-in manpage reader.
   :custom
-  ;; Note that man does not use `display-buffer-alist'; you customise
-  ;; `Man-notify-method' instead.
+  ;; Tell man to use pop-to-buffer under the hood, which uses display-buffer and
+  ;; selects the window.
   (Man-notify-method 'aggressive))
 
 
