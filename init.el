@@ -2794,8 +2794,6 @@ file in your browser at the visited revision."
           (left (rx bos "*Debugger-record*" eos)
                 '(slot . 1)
                 '(window-height . 0.3))
-
-          (left (rx bos "*eshell*" eos))
           (left (rx bos "*ielm*" eos))
           (left (rx bos "*org-roam-search") '(window-width . 80))
           (left (rx bos "CAPTURE-") '(window-width . 80))))
@@ -2826,6 +2824,7 @@ file in your browser at the visited revision."
                                   (side . bottom)
                                   (slot . 0)))))
          (list
+          (bottom (rx bos "*eshell*" eos))
           (bottom (rx bos " *Agenda Commands*" eos))
           (bottom (rx bos "*Org Select*" eos))
           (bottom (rx bos "*Org-Babel Error Output*" eos))
