@@ -2732,7 +2732,16 @@ file in your browser at the visited revision."
         (gptel-make-anthropic "Claude"
           :stream t
           :key (lambda ()
-                 (auth-source-pick-first-password :host "api.anthropic.com")))))
+                 (auth-source-pick-first-password :host "api.anthropic.com"))))
+
+  ;; Prevent transient from creating extra windows due to conflicts with custom
+  ;; display-buffer rules. See:
+  ;; https://github.com/magit/transient/discussions/358
+  (setq transient-display-buffer-action
+        '(display-buffer-below-selected
+          (dedicated . t)
+          (inhibit-same-window . t)))
+  )
 
 (use-package nursery :ensure (nursery :host github
                                       :repo "chrisbarrett/nursery"
