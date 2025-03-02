@@ -2026,6 +2026,10 @@ file in your browser at the visited revision."
    :states '(normal)
    "C-c C-r" #'eglot-rename))
 
+;; Use tree-sitter modes.
+
+(alist-set! major-mode-remap-alist #'c-mode #'c-ts-mode)
+
 
 ;;; Debuggers
 
