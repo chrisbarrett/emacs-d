@@ -363,6 +363,15 @@ Runs `+escape-hook'."
                                        (project-current nil "~/.config/nix-configuration")))
               :wk "nix config file...")
 
+   "L" '(gptel-menu :wk "LLM menu")
+   "l" '(nil :wk "LLMs")
+   "la" '(gptel-add :wk "add/remove from context")
+   "lf" '(gptel-add-file :wk "add file to context")
+   "ls" '(gptel-send :wk "send")
+   "l?" '(gptel-menu :wk "menu")
+   "ll" '(gptel :wk "open chat")
+   "lw" '(gptel :wk "rewrite")
+
    "o"  '(nil :wk "org")
    "on" (list (defun +org-goto-notes ()
                 (interactive)
@@ -2709,6 +2718,22 @@ file in your browser at the visited revision."
 
 
 
+(use-package gptel :ensure t
+  ;; Provides LLM integrations.
+  :hook (gptel-mode-hook . visual-line-mode)
+  :general
+  ("C-c s" #'gptel-menu)
+  ("C-c C-s" #'gptel-send)
+  :custom
+  (gptel-model 'claude-3-7-sonnet-20250219)
+  (gptel-default-mode 'org-mode)
+  :config
+  (setq gptel-backend
+        (gptel-make-anthropic "Claude"
+          :stream t
+          :key (lambda ()
+                 (auth-source-pick-first-password :host "api.anthropic.com")))))
+
 (use-package nursery :ensure (nursery :host github
                                       :repo "chrisbarrett/nursery"
                                       :files (:defaults "extensions/*"))
@@ -2806,6 +2831,7 @@ file in your browser at the visited revision."
                                   (side . right)
                                   (slot . 0)))))
          (list
+          (right (rx bos "*claude*") '(window-width . 80))
           (right (rx bos "*org-roam*" eos) '(window-width . 80))
           (right (rx bos "*org-roam-links*" eos) '(window-width . 80))
           (right (rx bos "*help*" eos) '(window-width . 80))
