@@ -2139,7 +2139,7 @@ file in your browser at the visited revision."
   (org-log-into-drawer t)
 
   ;; babel & src support
-  (org-edit-src-content-indentation 2)
+  (org-edit-src-content-indentation 0)
   (org-src-preserve-indentation nil)
   (org-src-window-setup 'other-window)
   (org-confirm-babel-evaluate nil)
@@ -2650,9 +2650,9 @@ file in your browser at the visited revision."
   (org-modern-fold-stars
    '(("▶" . "▼") ("▹" . "▿") ("▸" . "▾") ("⯈" . "⯆")))
   (org-modern-block-name
-   `(("src" . ("" "  ◌"))
+   `(("src" . ("" "◌"))
      ("quote" . ("" ""))
-     ("example" . ("" "  ◌"))))
+     ("example" . ("" "◌"))))
   :config
   (global-org-modern-mode +1)
   (custom-theme-set-faces 'user
