@@ -387,9 +387,7 @@ Runs `+escape-hook'."
               :wk "todos")
    "oa" (list (defun +org-agenda-dwim ()
                 (interactive)
-                (require 'org)
-                (require 'org-clock)
-                (org-agenda nil (if (org-clocking-p) "w" "p")))
+                (org-agenda nil "p"))
               :wk "agenda")
 
    "og" '(org-capture-goto-last-stored :wk "goto captured")
