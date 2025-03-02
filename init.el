@@ -2809,6 +2809,7 @@ file in your browser at the visited revision."
           (right (rx bos "*help*" eos) '(window-width . 80))
           (right (rx bos "*Man ") '(window-width . 80))
           (right (rx bos "*shell command output*" eos))
+          (right (rx bos "*Org babel results*" eos))
           (right (rx bos "*async shell command*" eos))))
 
        
