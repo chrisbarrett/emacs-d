@@ -2135,7 +2135,7 @@ file in your browser at the visited revision."
   (org-log-into-drawer t)
 
   ;; babel & src support
-  (org-edit-src-content-indentation 0)
+  (org-edit-src-content-indentation 2)
   (org-src-preserve-indentation nil)
   (org-src-window-setup 'other-window)
   (org-confirm-babel-evaluate nil)
