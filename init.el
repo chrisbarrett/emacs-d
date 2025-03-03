@@ -2729,6 +2729,7 @@ file in your browser at the visited revision."
   (gptel-model 'claude-3-7-sonnet-20250219)
   (gptel-default-mode 'org-mode)
   :config
+  (alist-set! gptel-prompt-prefix-alist 'org-mode "* ")
   (setq gptel-backend
         (gptel-make-anthropic "Claude"
           :stream t
