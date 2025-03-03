@@ -2859,6 +2859,7 @@ file in your browser at the visited revision."
                                   (slot . 0)))))
          (list
           (bottom (rx bos "*eshell*" eos))
+          (bottom (rx bos "*eldoc*" eos))
           (bottom (rx bos " *Agenda Commands*" eos))
           (bottom (rx bos "*Org Select*" eos))
           (bottom (rx bos "*Org-Babel Error Output*" eos))
