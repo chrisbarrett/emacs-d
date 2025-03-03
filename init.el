@@ -2720,6 +2720,7 @@ file in your browser at the visited revision."
   ;; Provides LLM integrations.
   :hook (gptel-mode-hook . visual-line-mode)
   :general
+  (:keymaps 'gptel-mode-map :states '(normal insert) "C-c C-s" #'gptel-send)
   ("C-c s" #'gptel-menu)
   ("C-c C-s" #'gptel-send)
   :custom
