@@ -2817,59 +2817,64 @@ file in your browser at the visited revision."
 ;; these buffers.
 
 (setq display-buffer-alist
-      (append
+      (cl-labels ((mode-active-p (mode)
+                    (cl-assert (symbolp mode))
+                    (lambda (buf _action)
+                      (with-current-buffer buf
+                        (and (boundp mode) (eval mode))))))
+        (append
 
-       ;; Left side - Search results, shells, REPLs & debuggers. Generally,
-       ;; things that define a temporary context change.
+         ;; Left side - Search results, shells, REPLs & debuggers. Generally,
+         ;; things that define a temporary context change.
 
-       (cl-labels ((left (pred &rest overrides)
-                     (cons pred `((display-buffer-reuse-window display-buffer-in-side-window)
-                                  ,@overrides
-                                  (side . left)
-                                  (slot . 0)))))
-         (list
-          (left (rx bos "*Backtrace*" eos) '(slot . 0))
-          (left (rx bos "*Debugger-record*" eos)
-                '(slot . 1)
-                '(window-height . 0.3))
-          (left (rx bos "*ielm*" eos))
-          (left (rx bos "*org-roam-search") '(window-width . 80))
-          (left (rx bos "CAPTURE-") '(window-width . 80))))
+         (cl-labels ((left (pred &rest overrides)
+                       (cons pred `((display-buffer-reuse-window display-buffer-in-side-window)
+                                    ,@overrides
+                                    (side . left)
+                                    (slot . 0)))))
+           (list
+            (left (rx bos "*Backtrace*" eos) '(slot . 0))
+            (left (rx bos "*Debugger-record*" eos)
+                  '(slot . 1)
+                  '(window-height . 0.3))
+            (left (rx bos "*ielm*" eos))
+            (left (rx bos "*org-roam-search") '(window-width . 80))
+            (left (rx bos "CAPTURE-") '(window-width . 80))))
 
-       ;; Right side - documentation, reference buffers & command outputs.
+         ;; Right side - documentation, reference buffers & command outputs.
 
-       (cl-labels ((right (pred &rest overrides)
-                     (cons pred `((display-buffer-reuse-window display-buffer-in-side-window)
-                                  ,@overrides
-                                  (side . right)
-                                  (slot . 0)))))
-         (list
-          (right (rx bos "*claude*") '(window-width . 80))
-          (right (rx bos "*org-roam*" eos) '(window-width . 80))
-          (right (rx bos "*org-roam-links*" eos) '(window-width . 80))
-          (right (rx bos "*help*" eos) '(window-width . 80))
-          (right (rx bos "*Man ") '(window-width . 80))
-          (right (rx bos "*WoMan ") '(window-width . 80))
-          (right (rx bos "*shell command output*" eos))
-          (right (rx bos "*Org babel results*" eos))
-          (right (rx bos "*async shell command*" eos))))
+         (cl-labels ((right (pred &rest overrides)
+                       (cons pred `((display-buffer-reuse-window display-buffer-in-side-window)
+                                    ,@overrides
+                                    (side . right)
+                                    (slot . 0)))))
+           (list
+            (right (mode-active-p 'gptel-mode) '(window-width . 80))
+            (right (rx bos "*org-roam*" eos) '(window-width . 80))
+            (right (rx bos "*org-roam-links*" eos) '(window-width . 80))
+            (right (rx bos "*help*" eos) '(window-width . 80))
+            (right (rx bos "*Man ") '(window-width . 80))
+            (right (rx bos "*WoMan ") '(window-width . 80))
+            (right (rx bos "*shell command output*" eos))
+            (right (rx bos "*Org babel results*" eos))
+            (right (rx bos "*async shell command*" eos))))
 
-       
-       ;; Bottom - Prompts, warnings, errors, compilation buffers.
+         
+         ;; Bottom - Prompts, warnings, errors, compilation buffers.
 
-       (cl-labels ((bottom (pred &rest overrides)
-                     (cons pred `((display-buffer-reuse-window display-buffer-in-side-window)
-                                  ,@overrides
-                                  (side . bottom)
-                                  (slot . 0)))))
-         (list
-          (bottom (rx bos "*eshell*" eos))
-          (bottom (rx bos "*eldoc*" eos))
-          (bottom (rx bos " *Agenda Commands*" eos))
-          (bottom (rx bos "*Org Select*" eos))
-          (bottom (rx bos "*Org-Babel Error Output*" eos))
-          (bottom (rx bos "*compilation*" eos))
-          (bottom (rx bos "*warnings*" eos))))))
+         (cl-labels ((bottom (pred &rest overrides)
+                       (cons pred `((display-buffer-reuse-window display-buffer-in-side-window)
+                                    ,@overrides
+                                    (side . bottom)
+                                    (slot . 0)))))
+           (list
+            (bottom (rx bos "*eshell*" eos))
+            (bottom (rx bos "*eldoc*" eos))
+            (bottom (rx bos " *Agenda Commands*" eos))
+            (bottom (rx bos "*Org Select*" eos))
+            (bottom (rx bos "*Org-Babel Error Output*" eos))
+            (bottom (rx bos "*compilation*" eos))
+            (bottom (rx bos "*warnings*" eos)))))))
 
 
 ;; Then, customise what display-buffer will do for all buffers not matching the
