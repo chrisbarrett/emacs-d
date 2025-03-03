@@ -1883,9 +1883,9 @@ file in your browser at the visited revision."
   :general
   (:keymaps 'help-map
             "h" nil ; view-hello-file: never intended, always annoying
+            "l" #'find-library
             "c" #'describe-face
-            "P" #'describe-text-properties
-            "G" #'find-library))
+            "P" #'describe-text-properties))
 
 (use-package help-mode
   ;; Major-mode for help buffers.
