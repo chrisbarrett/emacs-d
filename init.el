@@ -987,6 +987,7 @@ With optional prefix arg CONTINUE-P, keep profiling."
           compilation-mode-hook
           help-mode-hook
           shell-command-mode-hook
+          gptel-mode-hook
           )
          . hide-mode-line-mode))
 
