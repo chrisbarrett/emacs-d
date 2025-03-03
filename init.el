@@ -470,6 +470,7 @@ Runs `+escape-hook'."
                         ;; Dim delimiters like commas, semicolons, etc.
                         '(font-lock-delimiter-face ((t (:inherit shadow)))))
 
+(put 'erase-buffer 'disabled nil)
 (put 'narrow-to-region 'disabled nil)
 
 ;; Since I use evil, I have no need for the usual rectangular selection
