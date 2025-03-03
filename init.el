@@ -2736,6 +2736,8 @@ file in your browser at the visited revision."
           :key (lambda ()
                  (auth-source-pick-first-password :host "api.anthropic.com"))))
 
+  (add-hook 'gptel-mode-hook 'evil-insert-state)
+
   ;; Prevent transient from creating extra windows due to conflicts with custom
   ;; display-buffer rules. See:
   ;; https://github.com/magit/transient/discussions/358
