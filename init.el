@@ -170,6 +170,7 @@ Runs `+escape-hook'."
    :prefix-command '+leader-key
 
    "SPC" '(consult-buffer :wk "buffers & files")
+   "RET" '(gptel-menu :wk "LLM...")
    "." '(other-window-prefix :wk "in other window...")
    "!" '(async-shell-command :wk "shell command")
    "|" '(rotate-layout :wk "rotate window layout")
