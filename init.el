@@ -1921,6 +1921,11 @@ file in your browser at the visited revision."
   ;; selects the window.
   (Man-notify-method 'aggressive))
 
+(use-package imenu
+  ;; Emacs' built-in navigator for points of interest in a buffer.
+  :general-config
+  (:keymaps 'Info-mode-map [remap consult-imenu] #'Info-menu))
+
 
 ;;; Text & programming modes
 
