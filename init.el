@@ -163,6 +163,7 @@ Runs `+escape-hook'."
   :config
   (require '+window)
   (require '+roam)
+  (require '+edit-cmds)
 
   (general-define-key
    :states '(normal motion)
@@ -237,6 +238,9 @@ Runs `+escape-hook'."
    ",p" '(puni-backward-sexp :wk "backward-sexp")
    ",<" '(puni-backward-sexp-or-up-list :wk "backward-sexp-or-up-list")
    ",c" '(puni-convolute :wk "convolute")
+   ",d" '(+forward-kill-sexp :wk "kill sexp forward")
+   ",D" '(+backward-kill-sexp :wk "kill sexp back")
+   
    ",k" '(puni-splice-killing-forward :wk "splice-killing-forward")
    ",K" '(puni-splice-killing-backward :wk "splice-killing-backward")
    ;; TODO: define a killing-around variant.
@@ -653,7 +657,7 @@ Runs `+escape-hook'."
   (:keymaps 'puni-mode-map :states 'insert "C-w" #'puni-backward-kill-word)
   (:keymaps 'puni-mode-map :states '(visual) "C-k" #'puni-kill-active-region)
   (:keymaps 'puni-mode-map :states '(insert normal emacs)
-            "C-k" #'puni-kill-line
+            "C-k" #'+kill-line
             "M-(" #'puni-wrap-round
             "M-[" #'puni-wrap-square
             "M-S-{" #'puni-wrap-curly))
