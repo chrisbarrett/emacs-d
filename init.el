@@ -993,6 +993,7 @@ With optional prefix arg CONTINUE-P, keep profiling."
           help-mode-hook
           shell-command-mode-hook
           gptel-mode-hook
+          org-roam-mode-hook
           )
          . hide-mode-line-mode))
 
