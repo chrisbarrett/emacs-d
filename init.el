@@ -1586,14 +1586,50 @@ word.  Fall back to regular `expreg-expand'."
   :general
   (:keymaps 'minibuffer-local-map "M-A" #'marginalia-cycle))
 
-(use-package orderless :ensure t
-  ;; Orderless allows you to filter completion candidates by typing
-  ;; space-separated terms in any order.
-  :after-call +first-input-hook
+(use-package minibuffer
+  ;; Customise minibuffer completion behaviour.
+  ;;
+  ;; The configuration that determines which style to use is rather subtle; see
+  ;; § 5.4.1:
+  ;; https://protesilaos.com/emacs/dotemacs#h:14b09958-279e-4069-81e3-5a16c9b69892
+  ;;
+  ;; Briefly, use the following approach:
+  ;;
+  ;; 1. Prefer explicit and prefix matches first, falling back to orderless
+  ;; matching last.
+  ;;
+  ;; 2. Override this behaviour explicitly for a few select types of completion.
+
   :custom
+  ;; To determine a completion style when entering text in the minibuffer,
+  ;; consult `completion-category-overrides' according to the type of thing
+  ;; we're trying to complete. Fall back to `completion-styles' if there are no
+  ;; specific style set for that type.
+  ;;
+  ;; Completion strategies are tried in order until a match is found. Putting
+  ;; orderless last means more precise approaches are tried first.
+  ;;
+  ;; See `completion-styles-alist' for the behaviour of specific completion
+  ;; styles.
+
+  (completion-category-overrides
+   '((file (styles . (basic partial-completion orderless)))
+     (bookmark (styles . (basic substring)))
+     (library (styles . (basic substring)))
+     (imenu (styles . (basic substring orderless)))
+     (kill-ring (styles . (emacs22 orderless)))
+     (eglot (styles . (emacs22 substring orderless)))))
+
+  (completion-styles '(basic substring initials flex orderless))
+
+  ;; Disable any out-of-the-box defaults.
   (completion-category-defaults nil)
-  (completion-styles '(orderless basic))
-  (completion-category-overrides '((file (styles partial-completion)))))
+
+  :init
+  (use-package orderless :ensure t
+    ;; Orderless allows you to filter completion candidates by typing
+    ;; space-separated terms in any order.
+    :after-call +first-input-hook))
 
 (use-package savehist
   ;; Persists Emacs completion history. Used by vertico.
