@@ -1050,6 +1050,11 @@ With optional prefix arg CONTINUE-P, keep profiling."
   (add-hook 'imenu-after-jump-hook #'pulsar-recenter-top)
   (add-hook 'imenu-after-jump-hook #'pulsar-reveal-entry)
 
+
+  (define-advice flymake-goto-next-error (:after (&rest _) pulsar)
+    (when pulsar-mode
+      (pulsar-pulse-line-red)))
+
   (delq! 'evil-goto-first-line pulsar-pulse-functions)
   (delq! 'evil-goto-line pulsar-pulse-functions)
 
