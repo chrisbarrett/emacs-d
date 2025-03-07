@@ -996,6 +996,11 @@ With optional prefix arg CONTINUE-P, keep profiling."
         ;; `fill-region-as-paragraph' is too greedy.
         (funcall fn beg end)))))
 
+(use-package proced
+  ;; User-process management UI.
+  :custom
+  (proced-enable-color-flag t))
+
 
 ;;; Open some files as read-only, e.g. vendored deps.
 
