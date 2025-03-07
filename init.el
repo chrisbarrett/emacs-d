@@ -505,8 +505,12 @@ Runs `+escape-hook'."
 (blink-cursor-mode -1)
 (setq blink-matching-paren nil)
 (setq x-stretch-cursor nil)
+(setq delete-pair-blink-delay 0.1)
 
 (setq use-dialog-box nil)
+
+(setq next-error-recenter '(4))
+(setq find-library-include-other-files nil)
 
 ;; Show keystrokes in minibuffer pretty much immediately.
 (setq echo-keystrokes 0.02)
