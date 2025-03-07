@@ -97,8 +97,12 @@
 ;;; Customise native compilation
 
 ;; Silence unactionable warnings.
-(setq native-comp-async-report-warnings-errors init-file-debug)
-(setq native-comp-warning-on-missing-source init-file-debug)
+
+(let ((ncomp-warn-level (if init-file-debug
+                            t
+                          'silent)))
+  (setq native-comp-async-report-warnings-errors ncomp-warn-level)
+  (setq native-comp-warning-on-missing-source ncomp-warn-level))
 
 
 
