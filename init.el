@@ -431,6 +431,7 @@ Runs `+escape-hook'."
    "kr" '(consult-yank-pop :wk "kill-ring")
 
    "t"  '(nil :wk "toggles")
+   "tb" '(breadcrumb-mode :wk "breadcrumbs (header)")
    "td" '(dirvish-side :wk "dirvish (side window)")
    "th" '(global-hl-line-mode :wk "highlight line")
    "tf" '(global-display-fill-column-indicator-mode :wk "fill column indicator")
@@ -1181,6 +1182,10 @@ With optional prefix arg CONTINUE-P, keep profiling."
   ;; Adds a face for parentheses in lisps. I hijack it to dim semicolons and
   ;; other non-critical syntax elements in other langs.
   :hook (lisp-data-mode-hook . paren-face-mode))
+
+(use-package breadcrumb :ensure t
+  :custom
+  (breadcrumb-idle-time 0.3))
 
 
 ;;; Spell-checking
