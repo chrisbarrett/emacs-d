@@ -2707,6 +2707,9 @@ file in your browser at the visited revision."
 ;;; Input methods
 
 (setq default-input-method "french-postfix")
+(setq default-transient-input-method default-input-method)
+
+(keymap-global-set "M-i" 'activate-transient-input-method)
 
 (with-eval-after-load "quail/latin-post"
   (eval-and-compile
