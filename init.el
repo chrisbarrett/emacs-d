@@ -1295,6 +1295,7 @@ With optional prefix arg CONTINUE-P, keep profiling."
   (:states '(insert normal emacs)
            "M-." #'xref-find-definitions
            "C-x RET" #'insert-char)
+  (:states 'insert "RET" 'comment-indent-new-line)
   :custom
   (evil-symbol-word-search t)
   (evil-undo-system 'undo-redo)
