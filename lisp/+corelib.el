@@ -305,4 +305,61 @@ the falsey partition."
 (defmacro alist-set! (alist key value)
   `(setf (alist-get ,key ,alist nil nil #'equal) ,value))
 
+
+
+(defvar-local +sppss-memo-last-point nil)
+(defvar-local +sppss-memo-last-result nil)
+
+(defun +sppss-memo-reset-h (&rest _ignored)
+  "Reset memoization as a safety precaution.
+
+IGNORED is a dummy argument used to eat up arguments passed from
+the hook where this is executed."
+  (setq +sppss-memo-last-point nil
+        +sppss-memo-last-result nil))
+
+(defun +syntax-ppss (&optional p)
+  "Memoize the last result of `syntax-ppss'.
+
+P is the point at which we run `syntax-ppss'"
+  (let ((p (or p (point)))
+        (mem-p +sppss-memo-last-point))
+    (if (and (eq p (nth 0 mem-p))
+             (eq (point-min) (nth 1 mem-p))
+             (eq (point-max) (nth 2 mem-p)))
+        +sppss-memo-last-result
+      ;; Add hook to reset memoization if necessary
+      (unless +sppss-memo-last-point
+        (add-hook 'before-change-functions #'+sppss-memo-reset-h t t))
+      (setq +sppss-memo-last-point (list p (point-min) (point-max))
+            +sppss-memo-last-result (syntax-ppss p)))))
+
+(defun +point-in-comment-p (&optional pt)
+  (let ((pt (or pt (point))))
+    (ignore-errors
+      (save-excursion
+        ;; We cannot be in a comment if we are inside a string
+        (unless (nth 3 (+syntax-ppss pt))
+          (or (nth 4 (+syntax-ppss pt))
+              ;; this also test opening and closing comment delimiters... we
+              ;; need to chack that it is not newline, which is in "comment
+              ;; ender" class in elisp-mode, but we just want it to be treated
+              ;; as whitespace
+              (and (< pt (point-max))
+                   (memq (char-syntax (char-after pt)) '(?< ?>))
+                   (not (eq (char-after pt) ?\n)))
+              ;; we also need to test the special syntax flag for comment
+              ;; starters and enders, because `syntax-ppss' does not yet know if
+              ;; we are inside a comment or not (e.g. / can be a division or
+              ;; comment starter...).
+              (when-let ((s (car (syntax-after pt))))
+                (or (and (/= 0 (logand (ash 1 16) s))
+                         (nth 4 (syntax-ppss (+ pt 2))))
+                    (and (/= 0 (logand (ash 1 17) s))
+                         (nth 4 (syntax-ppss (+ pt 1))))
+                    (and (/= 0 (logand (ash 1 18) s))
+                         (nth 4 (syntax-ppss (- pt 1))))
+                    (and (/= 0 (logand (ash 1 19) s))
+                         (nth 4 (syntax-ppss (- pt 2))))))))))))
+
 (provide '+corelib)
