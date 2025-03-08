@@ -1667,14 +1667,13 @@ word.  Fall back to regular `expreg-expand'."
   :config
   (define-advice completing-read-multiple (:filter-args (args) crm-indicator)
     "Display the separator during `completing-read-multiple'."
-    (cons (format "[CRM%s] %s"
-                  (replace-regexp-in-string
-                   (rx (or (and bos "[" (*? any) "]*")
-                           (and "[" (*? any) "]*" eos)))
-                   ""
-                   crm-separator)
-                  (car args))
-          (cdr args))))
+    (let ((sans-brackets
+           (replace-regexp-in-string (rx (or (and bos "[" (*? any) "]*")
+                                             (and "[" (*? any) "]*" eos)))
+                                     ""
+                                     crm-separator)))
+      (cons (format "[CRM %s] %s" (propertize sans-brackets 'face 'error) (car args))
+            (cdr args)))))
 
 (use-package corfu :ensure t
   ;; Corfu provides in-buffer completions as you type.
