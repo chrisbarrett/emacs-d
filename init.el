@@ -1002,6 +1002,11 @@ With optional prefix arg CONTINUE-P, keep profiling."
   :custom
   (proced-enable-color-flag t))
 
+(use-package replace
+  ;; Defines search+replace functionality, including `occur'.
+  :hook
+  (occur-mode-hook . hl-line-mode))
+
 
 ;;; Open some files as read-only, e.g. vendored deps.
 
