@@ -1827,7 +1827,11 @@ word.  Fall back to regular `expreg-expand'."
   ;; Dynamically complete using identifier-like words entered in this or other
   ;; buffers.
   :custom
-  (dabbrev-abbrev-skip-leading-regexp "[$*/=~']"))
+  (dabbrev-abbrev-skip-leading-regexp "[$*/=~']")
+  (dabbrev-upcase-means-case-search t)
+  :config
+  (pushnew! dabbrev-ignored-buffer-modes
+            'docview-mode 'pdf-view-mode))
 
 
 ;;; VC & magit
