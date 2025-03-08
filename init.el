@@ -1025,7 +1025,6 @@ With optional prefix arg CONTINUE-P, keep profiling."
 
                            "/.git/" ; Ensure we can still use git.
                            "/emacs/elpaca/repos/nursery/" ; My nursery repo is pulled in by elpaca
-
                            ))
                       file)))))
 
