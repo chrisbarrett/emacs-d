@@ -846,15 +846,6 @@ With optional prefix arg CONTINUE-P, keep profiling."
   (unless (server-running-p)
     (server-start)))
 
-(use-package wgrep :ensure t
-  ;; Adds a mode for grep-like results buffers that allows you to edit the
-  ;; underlying files directly.
-  ;;
-  ;; TODO: Replace with built-in `grep-edit-mode' once I'm on Emacs 31.
-  :commands wgrep-change-to-wgrep-mode
-  :custom
-  (wgrep-auto-save-buffer t))
-
 (use-package so-long
   ;; Improve performance of files with very long lines.
   :hook (elpaca-after-init-hook . global-so-long-mode))
@@ -1006,6 +997,27 @@ With optional prefix arg CONTINUE-P, keep profiling."
   ;; Defines search+replace functionality, including `occur'.
   :hook
   (occur-mode-hook . hl-line-mode))
+
+(use-package grep
+  ;; Buffers showing filesystem search results. The default program is grep;
+  ;; change it to ripgrep.
+  :custom
+  (grep-use-headings t)
+  (grep-template "rg --line-number --with-filename --null --regexp <R> <F>"))
+
+(use-package wgrep :ensure t
+  ;; Adds a mode for grep-like results buffers that allows you to edit the
+  ;; underlying files directly.
+  ;;
+  ;; TODO: Replace with built-in `grep-edit-mode' once I'm on Emacs 31.
+  :commands wgrep-change-to-wgrep-mode
+  :custom
+  (wgrep-auto-save-buffer t))
+
+(use-package xref
+  ;; Provides the interface for navigating symbol definitions & references, etc.
+  :custom
+  (xref-search-program 'ripgrep))
 
 
 ;;; Open some files as read-only, e.g. vendored deps.
