@@ -1,4 +1,5 @@
 org-mode
+(q "#+begin_quote " n> q n "#+end_quote" >)
 (s "#+begin_src " p n q n "#+end_src")
 (sh "#+begin_src sh" n> q n "#+end_src")
 (el "#+begin_src emacs-lisp" n> q n "#+end_src")
