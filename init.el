@@ -937,7 +937,7 @@ With optional prefix arg CONTINUE-P, keep profiling."
   :custom
   (comment-empty-lines t)
   (comment-multi-line t)
-  (comment-style 'multi-line)
+  (comment-style 'extra-line)
   :config
   (setq-default comment-column 0)
   (with-eval-after-load 'evil
