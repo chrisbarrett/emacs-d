@@ -1079,6 +1079,7 @@ With optional prefix arg CONTINUE-P, keep profiling."
           Man-mode-hook
           debugger-mode-hook
           ielm-mode-hook
+          calendar-mode-hook
           eshell-mode-hook
           compilation-mode-hook
           help-mode-hook
@@ -2854,6 +2855,16 @@ file in your browser at the visited revision."
   ;; Create org-mode links from URLs on the clipboard.
   :general (:keymaps 'org-mode-map "C-c l" #'org-cliplink))
 
+(use-package calendar
+  ;; The calendar widget used in org-mode.
+  :custom
+  (calendar-mode-line-format nil)
+  (calendar-date-style 'iso)
+  (calendar-mark-holidays-flag t)
+  (calendar-week-start-day 1)
+  :config
+  (setf (car calendar-time-display-form) '24-hours))
+
 
 ;;; Input methods
 
@@ -3040,6 +3051,7 @@ file in your browser at the visited revision."
            (list
             (bottom (rx bos "*eshell*" eos))
             (bottom (rx bos "*eldoc*" eos))
+            (bottom (rx bos "*calendar*" eos))
             (bottom (rx bos " *Agenda Commands*" eos))
             (bottom (rx bos "*Org Select*" eos))
             (bottom (rx bos "*Org Note*" eos))
