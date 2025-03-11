@@ -2027,6 +2027,7 @@ file in your browser at the visited revision."
 
 (use-package help
   ;; Defines the main help functionality for Emacs & Emacs-Lisp.
+  :hook (help-mode-hook . turn-on-visual-line-mode)
   :custom
   (help-window-select t)
   :general
