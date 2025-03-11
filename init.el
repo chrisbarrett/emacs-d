@@ -1891,7 +1891,8 @@ word.  Fall back to regular `expreg-expand'."
   (magit-bury-buffer-function #'magit-restore-window-configuration)
   (magit-diff-refine-hunk t)
   (magit-save-repository-buffers 'dontask)
-  (magit-revision-insert-related-refs nil))
+  (magit-revision-insert-related-refs nil)
+  (magit-format-file-function #'magit-format-file-nerd-icons))
 
 (use-package git-timemachine :ensure t
   :general-config
