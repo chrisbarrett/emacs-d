@@ -1137,11 +1137,16 @@ With optional prefix arg CONTINUE-P, keep profiling."
   (require '+pulsar)
 
   (add-hook 'next-error-hook #'pulsar-pulse-line)
-  (add-hook 'consult-after-jump-hook #'pulsar-recenter-top)
-  (add-hook 'consult-after-jump-hook #'pulsar-reveal-entry)
-  (add-hook 'imenu-after-jump-hook #'pulsar-recenter-top)
-  (add-hook 'imenu-after-jump-hook #'pulsar-reveal-entry)
 
+  (dolist (hook '(consult-after-jump-hook
+                  imenu-after-jump-hook))
+    (add-hook hook #'pulsar-recenter-top)
+    (add-hook hook #'pulsar-reveal-entry))
+
+  (dolist (hook '(org-agenda-after-show-hook
+                  org-follow-link-hook))
+    (add-hook hook #'pulsar-recenter-center)
+    (add-hook hook #'pulsar-reveal-entry))
 
   (define-advice flymake-goto-next-error (:after (&rest _) pulsar)
     (when pulsar-mode
