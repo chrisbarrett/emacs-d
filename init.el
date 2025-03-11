@@ -3033,6 +3033,7 @@ file in your browser at the visited revision."
             (bottom (rx bos "*eldoc*" eos))
             (bottom (rx bos " *Agenda Commands*" eos))
             (bottom (rx bos "*Org Select*" eos))
+            (bottom (rx bos "*Org Note*" eos))
             (bottom (rx bos "*Org-Babel Error Output*" eos))
             (bottom (rx bos "*compilation*" eos))
             (bottom (rx bos "*warnings*" eos)))))))
