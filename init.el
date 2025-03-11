@@ -1548,7 +1548,13 @@ word.  Fall back to regular `expreg-expand'."
 
     (advice-add #'+avy-action-evil-lookup :around #'+avy-pulse-for-action-elsewhere)
     (advice-add #'avy-action-copy :around #'+avy-pulse-for-action-elsewhere)
-    (advice-add #'avy-action-ispell :around #'+avy-pulse-for-action-elsewhere)))
+    (advice-add #'avy-action-ispell :around #'+avy-pulse-for-action-elsewhere))
+
+  ;; KLUDGE: Pre-configure indentation for dynamically-loaded macro. Ensures
+  ;; Apheleia applies correct indentation if I touch this file without avy being
+  ;; loaded in the editing session.
+  :init
+  (function-put '+with-clean-up-in-starting-buffer-and-window 'lisp-indent-function 1))
 
 ;; Use +/- to mark syntactic elements with tree-sitter. However, if I don't have
 ;; a selection, make - call avy.
