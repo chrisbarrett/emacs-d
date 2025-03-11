@@ -2988,6 +2988,7 @@ file in your browser at the visited revision."
          (cl-labels ((left (pred &rest overrides)
                        (cons pred `((display-buffer-reuse-window display-buffer-in-side-window)
                                     ,@overrides
+                                    (dedicated . t)
                                     (side . left)
                                     (slot . 0)))))
            (list
@@ -3004,6 +3005,7 @@ file in your browser at the visited revision."
          (cl-labels ((right (pred &rest overrides)
                        (cons pred `((display-buffer-reuse-window display-buffer-in-side-window)
                                     ,@overrides
+                                    (dedicated . t)
                                     (side . right)
                                     (slot . 0)))))
            (list
@@ -3024,6 +3026,7 @@ file in your browser at the visited revision."
                        (cons pred `((display-buffer-reuse-window display-buffer-in-side-window)
                                     ,@overrides
                                     (side . bottom)
+                                    (dedicated . t)
                                     (slot . 0)))))
            (list
             (bottom (rx bos "*eshell*" eos))
