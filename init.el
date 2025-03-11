@@ -3035,8 +3035,18 @@ file in your browser at the visited revision."
             (bottom (rx bos "*Org Select*" eos))
             (bottom (rx bos "*Org Note*" eos))
             (bottom (rx bos "*Org-Babel Error Output*" eos))
-            (bottom (rx bos "*compilation*" eos))
-            (bottom (rx bos "*warnings*" eos)))))))
+            (bottom (rx bos "*compilation*" eos))))
+
+         ;; Buffers that should never pop up.
+
+         (cl-labels ((suppress (pred &rest overrides)
+                       (cons pred
+                             `((display-buffer-no-window)
+                               ,@overrides
+                               (allow-no-window . t)))))
+           (list
+            (suppress (rx bos "*warnings*" eos))
+            (suppress (rx bos "*async-native-compile-Log*" eos)))))))
 
 
 ;; Then, customise what display-buffer will do for all buffers not matching the
