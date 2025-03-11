@@ -2299,6 +2299,7 @@ file in your browser at the visited revision."
   (org-startup-with-inline-images t)
   (org-fontify-quote-and-verse-blocks t)
   (org-fontify-whole-heading-line t)
+  (org-indent-indentation-per-level 3)
   (org-priority-faces
    '((?A . error)
      (?B . warning)
