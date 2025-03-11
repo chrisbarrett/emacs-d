@@ -2321,7 +2321,7 @@ file in your browser at the visited revision."
   ;; babel & src support
   (org-edit-src-content-indentation 0)
   (org-src-preserve-indentation nil)
-  (org-src-window-setup 'other-window)
+  (org-src-window-setup 'plain)
   (org-confirm-babel-evaluate nil)
   (org-link-elisp-confirm-function nil)
   (org-babel-default-header-args:emacs-lisp '((:lexical . "yes")))
