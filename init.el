@@ -2314,6 +2314,7 @@ file in your browser at the visited revision."
                        (type "PROJECT(p)" "|" "DONE(d!)")))
   (org-use-fast-todo-selection 'expert)
   (org-enforce-todo-dependencies t)
+  (org-enforce-todo-checkbox-dependencies t)
   (org-hierarchical-todo-statistics nil)
   (org-use-property-inheritance t)
   (org-log-into-drawer t)
