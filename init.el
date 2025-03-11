@@ -2338,6 +2338,7 @@ file in your browser at the visited revision."
   (org-insert-heading-respect-content t)
   (org-loop-over-headlines-in-active-region 'start-level)
   (org-return-follows-link t)
+  (org-track-ordered-property-with-tag t)
 
   ;; Custom links
 
