@@ -1027,6 +1027,11 @@ With optional prefix arg CONTINUE-P, keep profiling."
   :custom
   (xref-search-program 'ripgrep))
 
+(use-package indent
+  ;; Indentation behaviour.
+  :custom
+  (tab-first-completion 'word-or-paren-or-punct))
+
 
 ;;; Open some files as read-only, e.g. vendored deps.
 
