@@ -711,8 +711,16 @@ Runs `+escape-hook'."
     (cl-letf (((symbol-function #'pp) #'prin1))
       (apply fn args))))
 
+(use-package diff
+  ;; Support for Unix diff files.
+  :custom
+  (diff-default-read-only t)
+  (diff-advance-after-apply-hunk t)
+  (diff-font-lock-prettify t)
+  (diff-font-lock-syntax 'hunk-also))
+
 (use-package ediff
-  ;; File diff UI.
+  ;; Interactive file diff & merge UI.
   :custom
   (ediff-diff-options "-w")
   (ediff-split-window-function #'split-window-horizontally)
