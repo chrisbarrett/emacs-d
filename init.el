@@ -3059,6 +3059,7 @@ file in your browser at the visited revision."
 ;; Apply a few more editor settings that are tightly coupled to display-buffer.
 
 (setq window-combination-resize t)
+(setq switch-to-buffer-in-dedicated-window 'pop)
 
 
 ;;; Load site files
