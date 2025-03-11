@@ -2331,6 +2331,7 @@ file in your browser at the visited revision."
                               (shell . t)))
 
   ;; interactive behaviour
+  (org-imenu-depth 5)
   (org-bookmark-names-plist nil)
   (org-M-RET-may-split-line nil)
   (org-footnote-auto-adjust t)
