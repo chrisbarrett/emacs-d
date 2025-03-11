@@ -1206,7 +1206,8 @@ With optional prefix arg CONTINUE-P, keep profiling."
   :custom
   (show-paren-delay 0.1)
   (show-paren-when-point-inside-paren t)
-  (show-paren-when-point-in-periphery t))
+  (show-paren-when-point-in-periphery t)
+  (show-paren-context-when-offscreen 'overlay))
 
 (use-package paren-face :ensure t
   ;; Adds a face for parentheses in lisps. I hijack it to dim semicolons and
