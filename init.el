@@ -2206,6 +2206,10 @@ file in your browser at the visited revision."
    :states '(normal)
    "C-c C-r" #'eglot-rename))
 
+(use-package markdown
+  :custom
+  (markdown-fontify-code-blocks-natively t))
+
 ;; Use tree-sitter modes.
 
 (alist-set! major-mode-remap-alist #'c-mode #'c-ts-mode)
