@@ -427,6 +427,8 @@ Runs `+escape-hook'."
 
    "e"  '(nil :wk "errors")
    "el" '(consult-flymake :wk "error list")
+   "en" '(next-error :wk "next error")
+   "ep" '(previous-error :wk "prev error")
 
    "kr" '(consult-yank-pop :wk "kill-ring")
 
