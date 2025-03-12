@@ -3033,7 +3033,9 @@ file in your browser at the visited revision."
                                     (side . left)
                                     (slot . 0)))))
            (list
-            (left (rx bos "*Backtrace*" eos) '(slot . 0))
+            (left '(derived-mode . grep-mode) '(window-width 80))
+            (left (rx bos "*Embark Export: ") '(window-width 80))
+            (left (rx bos "*Backtrace*" eos))
             (left (rx bos "*Debugger-record*" eos)
                   '(slot . 1)
                   '(window-height . 0.3))
