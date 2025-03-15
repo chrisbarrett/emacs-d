@@ -3026,8 +3026,20 @@ file in your browser at the visited revision."
                         (and (boundp mode) (eval mode))))))
         (append
 
-         ;; Left side - Search results, shells, REPLs & debuggers. Generally,
-         ;; things that define a temporary context change.
+         ;; Top side - debugger stacks
+
+         (cl-labels ((top (pred &rest overrides)
+                       (cons pred `((display-buffer-reuse-window display-buffer-in-side-window)
+                                    ,@overrides
+                                    (dedicated . t)
+                                    (window-height . 0.2)
+                                    (side . top)
+                                    (slot . 0)))))
+           (list
+            (top (rx bos "*Backtrace*" eos))))
+
+         ;; Left side - Search results, shells, REPLs, debugger ancillary
+         ;; buffers. Generally, things that define a temporary context change.
 
          (cl-labels ((left (pred &rest overrides)
                        (cons pred `((display-buffer-reuse-window display-buffer-in-side-window)
@@ -3038,7 +3050,6 @@ file in your browser at the visited revision."
            (list
             (left '(derived-mode . grep-mode) '(window-width 80))
             (left (rx bos "*Embark Export: ") '(window-width 80))
-            (left (rx bos "*Backtrace*" eos))
             (left (rx bos "*Debugger-record*" eos)
                   '(slot . 1)
                   '(window-height . 0.3))
