@@ -1156,7 +1156,13 @@ With optional prefix arg CONTINUE-P, keep profiling."
 
   (define-advice flymake-goto-next-error (:after (&rest _) pulsar)
     (when pulsar-mode
-      (pulsar-pulse-line-red)))
+      (pcase (cl-loop for o in (overlays-at (point))
+                      for diag = (overlay-get o 'flymake-diagnostic)
+                      when diag
+                      return (flymake--severity (flymake-diagnostic-type diag)))
+        (3 (pulsar-pulse-line-red))
+        (2 (pulsar-pulse-line-yellow))
+        (_ (pulsar-pulse-line-cyan)))))
 
   (delq! 'evil-goto-first-line pulsar-pulse-functions)
   (delq! 'evil-goto-line pulsar-pulse-functions)
