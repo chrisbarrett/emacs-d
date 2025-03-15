@@ -4,6 +4,7 @@ emacs-lisp-mode
 (sl "(setq-local " p ")")
 (l "(let ((" p "))" n> q ")")
 (la "(lambda (" p ")" n> q ")")
+(it "(lambda (it)" n> q ")")
 
 (i "(if " q ")")
 (w "(when " q ")")
@@ -68,3 +69,4 @@ emacs-lisp-mode
 (up "(use-package " q ")")
 (in "(interactive)")
 (gc "(goto-char " q ")")
+(ah "(add-hook '" (p "HOOK") " " (p "FN") q ")")
