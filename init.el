@@ -2248,29 +2248,27 @@ file in your browser at the visited revision."
   ;; Show keybindings in the header line for Backtrace buffers.
 
   (defconst +debugger-mode-line-format
-    (cl-labels ((key (key desc)
-                  (concat (propertize key 'face 'which-key-key-face) ":" desc))
-                (section (title &rest children)
-                  (apply #'concat "| " (propertize title 'face 'bold-italic) " " children))
+    (cl-labels ((low-emphasis (str)
+                  (propertize str 'face 'parenthesis))
+                (key (key desc)
+                  (concat (propertize key 'face 'which-key-key-face) (low-emphasis ":") " " desc))
+                (group (&rest children)
+                  (concat (low-emphasis "|") "  " (apply #'distribute children)))
                 (distribute (&rest strs)
                   (string-join strs "  ")))
-      (distribute " "
-                  (propertize " " 'face 'font-lock-builtin-face)
-                  (section "control"
-                           (distribute
-                            (key "c" "continue")
-                            (key "d" "step")
-                            (key "r" "return")))
-                  (section "frame"
-                           (distribute
-                            (key "t" "debug on jump")
-                            (key "u" "clear debug")
-                            (key "J" "jump")
-                            (key "L" "locals")))
-                  (section "eval"
-                           (distribute
-                            (key "E" "eval")
-                            (key "R" "eval & record"))))))
+      (distribute
+       (propertize "  " 'face 'font-lock-builtin-face)
+       (group
+        (key "d" "step")
+        (key "c" "continue")
+        (key "r" "return"))
+       (group
+        (key "t" "toggle debug on exit frame")
+        (key "J" "jump")
+        (key "L" "locals"))
+       (group
+        (key "E" "eval")
+        (key "R" "eval & record")))))
 
   (setq-hook! 'debugger-mode-hook
     mode-line-format +debugger-mode-line-format))
