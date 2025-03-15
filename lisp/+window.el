@@ -1,5 +1,7 @@
 ;; -*- lexical-binding: t; -*-
 
+(require 'cl-lib)
+
 (defun +sibling-file-or-other-buffer ()
   (let ((sibling (when-let* ((file (buffer-file-name)))
                    (save-excursion

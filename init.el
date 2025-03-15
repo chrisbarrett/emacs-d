@@ -1084,7 +1084,6 @@ With optional prefix arg CONTINUE-P, keep profiling."
   ;; Disable the mode-line in situations where it's not useful.
   :hook ((completion-list-mode-hook
           Man-mode-hook
-          debugger-mode-hook
           ielm-mode-hook
           calendar-mode-hook
           eshell-mode-hook
@@ -2225,9 +2224,44 @@ file in your browser at the visited revision."
 ;;; Debuggers
 
 (use-package debug
+  :general
+  (:keymaps 'debugger-mode-map :states 'normal
+            "t" #'debugger-frame
+            "u" #'debugger-frame-clear)
+
   :config
   (define-advice debugger-record-expression (:after (&rest _) display-buffer)
-    (display-buffer debugger-record-buffer)))
+    (display-buffer debugger-record-buffer))
+
+  ;; Show keybindings in the header line for Backtrace buffers.
+
+  (defconst +debugger-mode-line-format
+    (cl-labels ((key (key desc)
+                  (concat (propertize key 'face 'which-key-key-face) ":" desc))
+                (section (title &rest children)
+                  (apply #'concat "| " (propertize title 'face 'bold-italic) " " children))
+                (distribute (&rest strs)
+                  (string-join strs "  ")))
+      (distribute " "
+                  (propertize " " 'face 'font-lock-builtin-face)
+                  (section "control"
+                           (distribute
+                            (key "c" "continue")
+                            (key "d" "step")
+                            (key "r" "return")))
+                  (section "frame"
+                           (distribute
+                            (key "t" "debug on jump")
+                            (key "u" "clear debug")
+                            (key "J" "jump")
+                            (key "L" "locals")))
+                  (section "eval"
+                           (distribute
+                            (key "E" "eval")
+                            (key "R" "eval & record"))))))
+
+  (setq-hook! 'debugger-mode-hook
+    mode-line-format +debugger-mode-line-format))
 
 
 ;;; Code formatting
