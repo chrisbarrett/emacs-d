@@ -2236,10 +2236,23 @@ file in your browser at the visited revision."
 ;;; Debuggers
 
 (use-package debug
+  ;; The built-in debugger for the Emacs Lisp runtime.
+  :init
+  (defun +debugger-toggle-on-exit-frame ()
+    (interactive)
+    (let ((enabled-for-line (save-excursion
+                              (goto-char (line-beginning-position))
+                              (looking-at (rx (* space) "*" (+ space))))))
+      (cond
+       (enabled-for-line
+        (debugger-frame-clear)
+        (message "debug on exit for frame disabled"))
+       (t
+        (debugger-frame)
+        (message "debug on exit for frame enabled")))))
+
   :general
-  (:keymaps 'debugger-mode-map :states 'normal
-            "t" #'debugger-frame
-            "u" #'debugger-frame-clear)
+  (:keymaps 'debugger-mode-map :states 'normal "t" #'+debugger-toggle-on-exit-frame)
 
   :config
   (define-advice debugger-record-expression (:after (&rest _) display-buffer)
