@@ -2929,6 +2929,9 @@ file in your browser at the visited revision."
   (gptel-default-mode 'org-mode)
   :config
   (alist-set! gptel-prompt-prefix-alist 'org-mode "* ")
+  (setq-hook! 'gptel-mode-hook
+    org-pretty-entities-include-sub-superscripts nil)
+
   (setq gptel-backend
         (gptel-make-anthropic "Claude"
           :stream t
