@@ -957,7 +957,7 @@ With optional prefix arg CONTINUE-P, keep profiling."
 
     ;; Taken from doom, which itself adapts solutions in this github issue:
     ;; https://github.com/emacs-evil/evil/issues/606
-    
+
     (define-advice evil-join (:around (fn beg end) join-comments)
       (if-let* (((not (= (line-end-position) (point-max))))
                 (cend (save-excursion (goto-char end) (line-end-position)))
@@ -1529,7 +1529,7 @@ word.  Fall back to regular `expreg-expand'."
                         (?i . avy-action-ispell)
                         (?K . +avy-action-evil-lookup)
                         (? . avy-action-zap-to-char)))
-  
+
   ;; Integrate avy with pulsar for better visual feedback
 
   :config
@@ -2107,6 +2107,12 @@ file in your browser at the visited revision."
 
   :custom
   (text-mode-ispell-word-completion nil))
+
+(use-package lisp-mode
+  ;; General configuration for all derived lisp modes.
+  :config
+  (add-hook! '(lisp-data-mode-hook emacs-lisp-mode-hook)
+    (add-hook 'before-save-hook #'check-parens nil t)))
 
 (use-package elisp-mode
   :general-config (:keymaps 'emacs-lisp-mode-map "C-c RET" #'pp-macroexpand-last-sexp)
