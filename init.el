@@ -2295,7 +2295,18 @@ file in your browser at the visited revision."
   :config
   (apheleia-global-mode +1))
 
-(use-package ws-butler :ensure t
+;; By default, trim trailing whitespace aggressively.
+
+(defvar-local +trim-trailing-whitespace-aggressively t)
+
+(add-hook! 'before-save-hook
+  (when +trim-trailing-whitespace-aggressively
+    (delete-trailing-whitespace)))
+
+;; TODO: Evaluate whether ws-butler is something I need. Do I ever work in
+;; codebases where I want to preserve existing trailing whitespace?
+
+(use-package ws-butler :ensure t :disabled t
   ;; Delete trailing whitespace on visited lines.
   :hook (prog-mode-hook text-mode-hook conf-mode-hook)
   :config
