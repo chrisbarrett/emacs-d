@@ -240,7 +240,7 @@ Runs `+escape-hook'."
    ",c" '(puni-convolute :wk "convolute")
    ",d" '(+forward-kill-sexp :wk "kill sexp forward")
    ",D" '(+backward-kill-sexp :wk "kill sexp back")
-   
+
    ",k" '(puni-splice-killing-forward :wk "splice-killing-forward")
    ",K" '(puni-splice-killing-backward :wk "splice-killing-backward")
    ;; TODO: define a killing-around variant.
@@ -3144,7 +3144,7 @@ file in your browser at the visited revision."
             (right (rx bos "*Org babel results*" eos))
             (right (rx bos "*async shell command*" eos))))
 
-         
+
          ;; Bottom - Prompts, warnings, errors, compilation buffers.
 
          (cl-labels ((bottom (pred &rest overrides)
