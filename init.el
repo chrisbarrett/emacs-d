@@ -395,6 +395,7 @@ Runs `+escape-hook'."
                 (org-agenda nil "p"))
               :wk "agenda")
 
+   "oj" '(consult-org-agenda :wk "agenda file heading...")
    "og" '(org-capture-goto-last-stored :wk "goto captured")
    "ov" '(org-tags-view :wk "search by tag")
    "ok" #'org-capture
