@@ -2955,6 +2955,13 @@ file in your browser at the visited revision."
   :config
   (setf (car calendar-time-display-form) '24-hours))
 
+(use-package git-auto-commit-mode :ensure t
+  ;; Provides a minor mode that automatically commits files as you edit--this is
+  ;; useful mainly for my org files, where I don't care about commit messages
+  ;; and just want a git history.
+  :custom
+  (gac-silent-message-p t))
+
 
 ;;; Input methods
 
