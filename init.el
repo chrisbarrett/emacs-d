@@ -1345,7 +1345,7 @@ With optional prefix arg CONTINUE-P, keep profiling."
   (evil-undo-system 'undo-redo)
   (evil-v$-excludes-newline t)
   (evil-want-C-g-bindings)
-  (evil-want-C-u-delete t)
+  (evil-want-C-u-delete nil)
   (evil-want-C-u-scroll t)
   (evil-want-C-w-delete t)
   (evil-want-Y-yank-to-eol t)
