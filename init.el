@@ -2847,6 +2847,10 @@ file in your browser at the visited revision."
   (org-archive-subtree-add-inherited-tags t)
   (org-archive-location (file-name-concat org-directory "archive.org::datetree/")))
 
+(use-package org-duration
+  :custom
+  (org-duration-format 'h:mm))
+
 (use-package org-roam :ensure t
   ;; Provides workflows for working with documents for atomic notes (e.g. a
   ;; Zettelkasten); implements backlinks between documents for discovering
