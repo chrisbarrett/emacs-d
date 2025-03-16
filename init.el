@@ -1380,7 +1380,8 @@ With optional prefix arg CONTINUE-P, keep profiling."
   :general-config
   (:keymaps '(evil-ex-completion-map evil-ex-search-keymap)
             "C-a" #'evil-beginning-of-line
-            "C-b" #'evil-backward-char)
+            "C-b" #'evil-backward-char
+            "C-f" #'evil-forward-char)
 
   :config
   (defun +delete-backward-word-no-kill (arg)
