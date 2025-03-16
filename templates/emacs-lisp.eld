@@ -45,6 +45,7 @@ emacs-lisp-mode
 (as "(cl-assert " p " t " "\"" p "\")")
 
 (a "(with-eval-after-load '" (p "FEATURE") n> q ")")
+(se "(save-excursion" n> q ")")
 (ewc "(eval-when-compile" n> q ")")
 (eac "(eval-and-compile" n> q ")")
 (r "(require '" q ")")
