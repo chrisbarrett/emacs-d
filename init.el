@@ -1235,7 +1235,8 @@ With optional prefix arg CONTINUE-P, keep profiling."
 ;;; Spell-checking
 
 (use-package ispell
-  ;; Built-in spellchecker. I don't actually use it directly, but other packages reference its configuration.
+  ;; Built-in spellchecker. I don't actually use it directly, but other packages
+  ;; reference its configuration.
   :custom
   (ispell-dictionary "en_AU")
   (ispell-personal-dictionary (file-name-concat org-directory "aspell.en.pws"))
@@ -1871,7 +1872,7 @@ word.  Fall back to regular `expreg-expand'."
           )
 
 (use-package minibuf-eldef
-  ;; Set how default for empty input are displayed in the minibuffer.
+  ;; Set how the default option for empty input is displayed in the minibuffer.
   :hook (after-init . minibuffer-electric-default-mode)
   :custom
   (minibuffer-default-prompt-format " [%s]"))
@@ -1890,6 +1891,9 @@ word.  Fall back to regular `expreg-expand'."
 ;;; VC & magit
 
 (use-package transient :ensure t
+  ;; Lib for showing pop-up menus of key commands, often with switches to modify
+  ;; behaviour.
+  ;;
   ;; Magit depends on a more recent version of transient than the one that ships
   ;; with Emacs.
   :custom
@@ -1980,7 +1984,7 @@ file in your browser at the visited revision."
       (apply fn args))))
 
 (use-package forge :ensure t
-  ;; Teach magit how to represent pull request on GitHub and other git hosting
+  ;; Teach magit how to work with pull requests on GitHub and other git hosting
   ;; services.
   :after-call magit-status ; avoids compilation until first use
 
