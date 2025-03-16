@@ -2599,7 +2599,27 @@ file in your browser at the visited revision."
 ** Mitigations
 # What could I do to lessen the severity or chance of this happening again?
 "
-                           :jump-to-captured t))))
+                           :jump-to-captured t)
+           ;; NOTE: Will probably change to fortnightly as habit is ingrained.
+           (notes-datetree "r" "Language Learning Review" "* %T Language learning review :learning:
+#+BEGIN: clocktable :scope agenda :match \"french\" :tstart \"[%(org-read-date nil nil \"-mon\")]\" :tend \"[%(org-read-date nil nil \"mon\")]\" :step day :stepskip0 t :formatter +clocktable-fmt-daily-log
+#+END:
+
+** How many days in this last week did I study?
+
+** Am I happy with my effort this week?
+
+** Is there anything affecting the consistency of my learning routine?
+
+** Do I feel like I made progress this week?
+
+** What was interesting this week?
+
+** What went well this week?
+
+** What's one change I could make next week to improve my studies?
+"
+                           :immediate-finish t :jump-to-captured t))))
   :config
   (org-capture-put :kill-buffer t))
 
@@ -2657,7 +2677,9 @@ file in your browser at the visited revision."
   :init
   (add-transient-hook! 'org-mode-hook #'org-clock-persistence-insinuate)
   :custom
-  (org-clock-persist t))
+  (org-clock-persist t)
+  :after
+  (require '+clockreport))
 
 (use-package org-src
   ;; Programming language source blocks.
