@@ -3223,8 +3223,8 @@ file in your browser at the visited revision."
 ;;; Load site files
 
 (when (file-directory-p +site-files-directory)
-  (dolist (file (directory-files +site-files-directory))
-    (when (file-regular-p file)
+  (dolist (file (directory-files +site-files-directory t (rx ".el" eos)))
+    (unless (file-directory-p file)
       (load file t nil nil t))))
 
 
