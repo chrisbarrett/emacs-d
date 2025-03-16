@@ -1452,8 +1452,9 @@ With optional prefix arg CONTINUE-P, keep profiling."
   :config
   (add-hook! 'emacs-lisp-mode-hook
     (make-local-variable 'evil-surround-pairs-alist)
-    (setf (alist-get ?` evil-surround-pairs-alist) '("`" . "'"))
-    (setf (alist-get ?f evil-surround-pairs-alist) 'evil-surround-prefix-function)))
+    (alist-set! evil-surround-pairs-alist ?` '("`" . "'"))
+    (alist-set! evil-surround-pairs-alist ?' '("`" . "'"))
+    (alist-set! evil-surround-pairs-alist ?f #'evil-surround-prefix-function)))
 
 (use-package evil-multiedit :ensure t
   ;; Evil-compatible multiple cursors.
