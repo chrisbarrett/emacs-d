@@ -1441,8 +1441,11 @@ With optional prefix arg CONTINUE-P, keep profiling."
   :general (:states '(visual) :keymaps 'evil-surround-mode-map "s" #'evil-surround-region)
   :custom
   (evil-surround-pairs-alist '((?\( . ("(" . ")"))
+                               (?\) . ("(" . ")"))
                                (?\[ . ("[" . "]"))
+                               (?\] . ("[" . "]"))
                                (?\{ . ("{" . "}"))
+                               (?\} . ("{" . "}"))
                                (?# . ("#{" . "}"))
                                (?> . ("<" . ">"))
                                (?f . evil-surround-function)
