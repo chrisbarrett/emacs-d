@@ -25,3 +25,9 @@ typescript-ts-base-mode
     "  export type In = z.input<typeof " q ">;" n
     "}" >
     )
+
+(verr "export class " (p "NAME" name) " extends VError {" n>
+      "static override readonly name = `" (s name) "`;" n>
+      "override readonly name = " (s name) ".name;" n
+      "}" >
+      )
