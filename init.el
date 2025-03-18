@@ -3031,10 +3031,15 @@ file in your browser at the visited revision."
 (use-package gptel :ensure t
   ;; Provides LLM integrations.
   :hook (gptel-mode-hook . visual-line-mode)
+  :init
+  (defun +gptel-send ()
+    (interactive)
+    (unless (region-active-p)
+      (goto-char (line-end-position)))
+    (gptel-send)
+    (evil-normal-state))
   :general
-  (:keymaps 'gptel-mode-map :states '(normal insert) "C-c C-s" #'gptel-send)
-  ("C-c s" #'gptel-menu)
-  ("C-c C-s" #'gptel-send)
+  (:keymaps 'gptel-mode-map :states '(normal insert) "C-c C-s" #'+gptel-send)
   :custom
   (gptel-model 'claude-3-7-sonnet-20250219)
   (gptel-default-mode 'org-mode)
@@ -3058,7 +3063,19 @@ file in your browser at the visited revision."
         '(display-buffer-below-selected
           (dedicated . t)
           (inhibit-same-window . t)))
-  )
+
+  ;; Pulse the part of the buffer being sent to the LLM.
+
+  (define-advice gptel-send (:after (&optional show-transient) pulse)
+    (when (bound-and-true-p pulsar-mode)
+      (unless show-transient
+        (let ((pulsar-region-face 'pulsar-green))
+          (cond ((region-active-p)
+                 (pulsar-pulse-region))
+                (gptel-mode
+                 (pulsar-pulse-line-green))
+                (t
+                 (pulsar--pulse nil 'pulsar-green (point-min) (point)))))))))
 
 (use-package nursery :ensure (nursery :host github
                                       :repo "chrisbarrett/nursery"
