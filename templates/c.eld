@@ -26,3 +26,12 @@ c-mode c-ts-base-mode
 (ca "case " p ": {" n>
     q n
     "}" >)
+
+(st "struct " (p "NAME") "{" n>
+    q n
+    "};" >)
+
+(tst "typedef struct " (p "NAME" name) "{" n>
+    q n
+    "} " > (s name) ";")
+(p "printf(\"" (p "FORMAT") "\"" q ");")
