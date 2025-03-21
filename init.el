@@ -2952,6 +2952,11 @@ file in your browser at the visited revision."
   ;; Easily pop open comments or strings for editing in a dedicated buffer.
   )
 
+(use-package org-cycle
+  :config
+  (add-hook! 'org-cycle-hook
+    (org-cycle-hide-drawers 'all)))
+
 (use-package org-modern :ensure t
   ;; Provides visual enhancements that make org-mode look less cluttered and
   ;; more in-line with modern UX ideas.
