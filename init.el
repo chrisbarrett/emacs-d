@@ -3077,7 +3077,7 @@ file in your browser at the visited revision."
         (let ((pulsar-region-face 'pulsar-green))
           (cond ((region-active-p)
                  (pulsar-pulse-region))
-                (gptel-mode
+                ((and gptel-mode (org-at-heading-p))
                  (pulsar-pulse-line-green))
                 (t
                  (pulsar--pulse nil 'pulsar-green (point-min) (point)))))))))
