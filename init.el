@@ -2997,6 +2997,11 @@ file in your browser at the visited revision."
   :config
   (setf (car calendar-time-display-form) '24-hours))
 
+(use-package ox-gfm :ensure t
+  ;; Exporter backend for github-flavoured markdown.
+  :after ox
+  :demand t)
+
 
 ;;; Input methods
 
