@@ -1,6 +1,10 @@
 c-mode c-ts-base-mode
 
+(s "signed " q)
+(u "unsigned " q)
+
 (in "#include " q)
+(d "#define" q)
 
 (main "int main(void) {" n>
         q n>
@@ -27,11 +31,20 @@ c-mode c-ts-base-mode
     q n
     "}" >)
 
-(st "struct " (p "NAME") "{" n>
+(st "struct " (p "NAME") " {" n>
     q n
     "};" >)
 
-(tst "typedef struct " (p "NAME" name) "{" n>
+(tst "typedef struct " (p "NAME" name) " {" n>
     q n
     "} " > (s name) ";")
+
+(un "union " (p "NAME") " {" n>
+    q n
+    "};" >)
+
+(tun "typedef union " (p "NAME" name) " {" n>
+    q n
+    "} " > (s name) ";")
+
 (p "printf(\"" (p "FORMAT") "\"" q ");")
