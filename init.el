@@ -2423,6 +2423,7 @@ file in your browser at the visited revision."
   (org-confirm-babel-evaluate nil)
   (org-link-elisp-confirm-function nil)
   (org-babel-default-header-args:emacs-lisp '((:lexical . "yes")))
+  (org-babel-default-header-args:C '((:includes . "<stdio.h> <stdlib.h> <stdint.h> <assert.h>")))
   (org-babel-python-command "python3")
   (org-babel-load-languages '((emacs-lisp . t)
                               (C . t)
