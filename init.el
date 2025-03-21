@@ -2565,7 +2565,13 @@ file in your browser at the visited revision."
 
   (org-link-set-parameters "id" :face '+org-id-link)
 
-  (require 'ol-man))
+  (require 'ol-man)
+
+  ;; Make RET follow ID links in the same window.
+
+  (define-advice org-id-open (:around (orig-fun id &optional argument) follow-links-same-window)
+    (let ((org-link-frame-setup '((file . find-file))))
+      (funcall orig-fun id argument))))
 
 (use-package org-capture
   ;; Implements templated information capture into org-mode files.
