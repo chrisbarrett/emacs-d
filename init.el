@@ -1225,7 +1225,11 @@ With optional prefix arg CONTINUE-P, keep profiling."
 (use-package paren-face :ensure t
   ;; Adds a face for parentheses in lisps. I hijack it to dim semicolons and
   ;; other non-critical syntax elements in other langs.
-  :hook (lisp-data-mode-hook . paren-face-mode))
+  :hook (lisp-data-mode-hook c-ts-base-mode-hook)
+
+  :config
+  (setq-hook! 'c-ts-base-mode-hook
+    paren-face-regexp (rx (any ";,"))))
 
 (use-package breadcrumb :ensure t
   :custom
