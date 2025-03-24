@@ -2689,7 +2689,7 @@ file in your browser at the visited revision."
   (add-transient-hook! 'org-mode-hook #'org-clock-persistence-insinuate)
   :custom
   (org-clock-persist t)
-  :after
+  :config
   (require '+clockreport))
 
 (use-package org-src
