@@ -3179,7 +3179,7 @@ file in your browser at the visited revision."
                         (and (boundp mode) (eval mode))))))
         (append
 
-         ;; Top side - debugger stacks
+         ;; Top side - wide-screen, modal contexts
 
          (cl-labels ((top (pred &rest overrides)
                        (cons pred `((display-buffer-reuse-window display-buffer-in-side-window)
@@ -3189,6 +3189,7 @@ file in your browser at the visited revision."
                                     (side . top)
                                     (slot . 0)))))
            (list
+            (top (rx bos "CAPTURE-") '(window-height . 0.6))
             (top (rx bos "*Backtrace*" eos))))
 
          ;; Left side - Search results, shells, REPLs, debugger ancillary
@@ -3207,8 +3208,7 @@ file in your browser at the visited revision."
                   '(slot . 1)
                   '(window-height . 0.3))
             (left (rx bos "*ielm*" eos))
-            (left (rx bos "*org-roam-search") '(window-width . 80))
-            (left (rx bos "CAPTURE-") '(window-width . 80))))
+            (left (rx bos "*org-roam-search") '(window-width . 80))))
 
          ;; Right side - documentation, reference buffers & command outputs.
 
