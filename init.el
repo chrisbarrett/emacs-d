@@ -2253,6 +2253,10 @@ file in your browser at the visited revision."
 
 (alist-set! major-mode-remap-alist #'c-mode #'c-ts-mode)
 
+;; Make shell-scripts etc executable on save.
+
+(add-hook 'after-save-hook #'executable-make-buffer-file-executable-if-script-p)
+
 
 ;;; Debuggers
 
