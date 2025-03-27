@@ -49,3 +49,8 @@ typescript-ts-base-mode js-base-mode
 (ca "case " p ": {" n>
     q n
     "}" >)
+
+(ctor "constructor(" p ") {" n>
+        "super(" p ");" n>
+        q n
+      "}" > )
