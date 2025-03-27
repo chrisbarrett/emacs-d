@@ -2615,6 +2615,26 @@ file in your browser at the visited revision."
 # What could I do to lessen the severity or chance of this happening again?
 "
                            :jump-to-captured t)
+           (notes-datetree "j" "Journal" "* %T Journal :journal:
+Some prompts to reflect on:
+
+** What made me feel alive today?
+%?
+
+** What felt energising? What felt draining?
+
+** What made me feel like I had to mask?
+
+** What helped me feel at ease and authentic?
+
+** What was a challenge I faced today?
+# How did I respond? What does it reveal about my strengths, weaknesses and
+# boundaries?
+
+** How would I describe myself today?
+# How does this compare to a month ago? A year ago?
+
+")
            ;; NOTE: Will probably change to fortnightly as habit is ingrained.
            (notes-datetree "r" "Language Learning Review" "* %T Language learning review :learning:
 #+BEGIN: clocktable :scope agenda :match \"french\" :tstart \"[%(org-read-date nil nil \"-mon\")]\" :tend \"[%(org-read-date nil nil \"mon\")]\" :step day :stepskip0 t :formatter +clocktable-fmt-daily-log
