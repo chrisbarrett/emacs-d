@@ -1,0 +1,17 @@
+* %T Language learning review :learning:
+#+BEGIN: clocktable :scope agenda :match "french" :tstart "[%(org-read-date nil nil "-mon")]" :tend "[%(org-read-date nil nil "mon")]" :step day :stepskip0 t :formatter +clocktable-fmt-daily-log
+#+END:
+
+** How many days in this last week did I study?
+
+** Am I happy with my effort this week?
+
+** Is there anything affecting the consistency of my learning routine?
+
+** Do I feel like I made progress this week?
+
+** What was interesting this week?
+
+** What went well this week?
+
+** What's one change I could make next week to improve my studies?

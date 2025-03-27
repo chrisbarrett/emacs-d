@@ -2590,7 +2590,12 @@ file in your browser at the visited revision."
                (append
                 (list key desc 'entry '(file+olp+datetree org-default-notes-file) template)
                 '(:tree-type (month day))
-                kvps)))
+                kvps))
+             (template-file (name)
+               (let ((filepath (file-name-concat user-emacs-directory "capture-templates" name)))
+                 (with-temp-buffer
+                   (insert-file-contents filepath)
+                   (buffer-string)))))
      (list (notes-datetree "t" "Todo" "* TODO %?")
            (notes-datetree "n" "Note" "* %T %?")
            (notes-datetree "N" "Note (setting time)" "* %^T %?")
@@ -2601,59 +2606,10 @@ file in your browser at the visited revision."
            (notes-datetree "wW" "Note (setting time)" "* %^T %? :%(timekeep-work-tag):work:")
 
            (notes-datetree "l" "Link" "* %T %(org-cliplink-capture)\n%?")
-           (notes-datetree "p" "Postmortem" "* %T %? :pm:
-** Description
-# What happened?
-** Background & Context
-# What was the context? What was I doing when this happened, and what
-# contributed to this?
-** Timeline
-# What happened? Give a play-by-play.
-** Effects
-# What were the consequences or after-effects?
-** Mitigations
-# What could I do to lessen the severity or chance of this happening again?
-"
-                           :jump-to-captured t)
-           (notes-datetree "j" "Journal" "* %T Journal :journal:
-Some prompts to reflect on:
-
-** What made me feel alive today?
-%?
-
-** What felt energising? What felt draining?
-
-** What made me feel like I had to mask?
-
-** What helped me feel at ease and authentic?
-
-** What was a challenge I faced today?
-# How did I respond? What does it reveal about my strengths, weaknesses and
-# boundaries?
-
-** How would I describe myself today?
-# How does this compare to a month ago? A year ago?
-
-")
-           ;; NOTE: Will probably change to fortnightly as habit is ingrained.
-           (notes-datetree "r" "Language Learning Review" "* %T Language learning review :learning:
-#+BEGIN: clocktable :scope agenda :match \"french\" :tstart \"[%(org-read-date nil nil \"-mon\")]\" :tend \"[%(org-read-date nil nil \"mon\")]\" :step day :stepskip0 t :formatter +clocktable-fmt-daily-log
-#+END:
-
-** How many days in this last week did I study?
-
-** Am I happy with my effort this week?
-
-** Is there anything affecting the consistency of my learning routine?
-
-** Do I feel like I made progress this week?
-
-** What was interesting this week?
-
-** What went well this week?
-
-** What's one change I could make next week to improve my studies?
-"
+           (notes-datetree "p" "Postmortem" (template-file "postmortem.org") :jump-to-captured t)
+           (notes-datetree "j" "Journal" (template-file "journal.org"))
+           (notes-datetree "r" "Language Learning Review"
+                           (template-file "language-learning-review.org")
                            :immediate-finish t :jump-to-captured t))))
   :config
   (org-capture-put :kill-buffer t))

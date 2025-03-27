@@ -1,0 +1,12 @@
+* %T %? :pm:
+** Description
+# What happened?
+** Background & Context
+# What was the context? What was I doing when this happened, and what
+# contributed to this?
+** Timeline
+# What happened? Give a play-by-play.
+** Effects
+# What were the consequences or after-effects?
+** Mitigations
+# What could I do to lessen the severity or chance of this happening again?
