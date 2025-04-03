@@ -2362,17 +2362,20 @@ file in your browser at the visited revision."
   (auto-insert-directory (file-name-concat user-emacs-directory "file-templates/"))
   (auto-insert-alist nil)
   (auto-insert-query nil)
-  :init
-  (defmacro +define-file-template (mode-or-regexp template-file-name)
-    (let ((template-file (file-name-concat auto-insert-directory template-file-name)))
-      `(define-auto-insert ,mode-or-regexp (lambda ()
-                                             (skeleton-insert
-                                              (with-temp-buffer
-                                                (insert-file-contents ,template-file)
-                                                (read (buffer-string))))))))
   :config
-  (auto-insert-mode +1)
-  (+define-file-template (rx ".el" eos) "emacs-lisp.eld"))
+  (auto-insert-mode +1))
+
+(use-package +file-templates
+  :after autoinsert
+  :demand t
+  :config
+  (+define-file-template (rx ".el" eos) "emacs-lisp.eld")
+
+  (+define-file-template-dispatcher 'typescript-ts-mode
+    ((string-match-p "construct" (buffer-file-name))
+     "ts-cdk-construct.eld")
+    ((string-match-p "stack" (buffer-file-name))
+     "ts-cdk-stack.eld")))
 
 
 ;;; org-mode

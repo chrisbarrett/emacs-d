@@ -1,14 +1,21 @@
-(
- ";" ;; First element is ignored if it is a comment for some reason.
- ";;; " (file-name-nondirectory (buffer-file-name)) " --- DESC -*- lexical-binding: t; -*-" \n
- \n
- ";;; Commentary:" \n
- \n
- ";;; Code:" \n
- \n
- _ \n
- \n
- "(provide '" (file-name-sans-extension (file-name-nondirectory (buffer-file-name))) ")" \n
- \n 
- ";;; " (file-name-nondirectory (buffer-file-name)) " ends here"
- )
+(nil
+ '(progn
+    (setq file-name (file-name-nondirectory (buffer-file-name)))
+    (setq feature-name (file-name-sans-extension file-name)))
+
+ ";;; " file-name " --- DESC -*- lexical-binding: t; -*-
+
+;;; Commentary:
+
+;;; Code:
+
+" _ "
+
+(provide '" feature-name ")
+
+;;; " file-name " ends here"
+
+
+ '(progn
+    (makunbound 'file-name)
+    (makunbound 'feature-name)))
