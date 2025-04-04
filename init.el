@@ -2091,7 +2091,12 @@ file in your browser at the visited revision."
 
 (use-package help-mode
   ;; Major-mode for help buffers.
-  :general (:keymaps 'help-mode-map :states 'normal "^" #'help-go-back))
+  :general (:keymaps 'help-mode-map :states 'normal
+                     "^" #'help-go-back
+                     "M-n" #'forward-button
+                     "M-p" #'backward-button
+                     "C-n" #'forward-button
+                     "C-p" #'backward-button))
 
 (use-package eldoc
   ;; Display help hints in the echo area as you move around.
