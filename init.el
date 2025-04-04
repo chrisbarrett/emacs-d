@@ -2632,8 +2632,8 @@ file in your browser at the visited revision."
 
            '("w" "work")
            (notes-datetree "wt" "Todo" "* TODO %?               :%(timekeep-work-tag):work:")
-           (notes-datetree "ww" "Note" "* %T %?                 :%(timekeep-work-tag):work:")
-           (notes-datetree "wW" "Note (setting time)" "* %^T %? :%(timekeep-work-tag):work:")
+           (notes-datetree "wn" "Note" "* %T %?                 :%(timekeep-work-tag):work:")
+           (notes-datetree "wN" "Note (setting time)" "* %^T %? :%(timekeep-work-tag):work:")
 
            (notes-datetree "l" "Link" "* %T %(org-cliplink-capture)\n%?")
            (notes-datetree "p" "Postmortem" (template-file "postmortem.org") :jump-to-captured t)
