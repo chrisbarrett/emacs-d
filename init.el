@@ -1279,6 +1279,7 @@ With optional prefix arg CONTINUE-P, keep profiling."
 ;;; Dired & dirvish
 
 (use-package dired
+  :hook (dired-mode-hook . dired-hide-details-mode)
   :custom
   (dired-recursive-copies 'always)
   (dired-recursive-deletes 'always)
