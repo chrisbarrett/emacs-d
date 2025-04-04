@@ -1,4 +1,15 @@
-;; -*- lexical-binding: t; -*-
+;;; +roam.el --- Supporting functions for org-roam -*- lexical-binding: t; -*-
+
+;;; Commentary:
+
+;;; Code:
+
+(require 'subr-x)
+(require 'cl-lib)
+
+(cl-eval-when (compile)
+  (require 'org-clock)
+  (require 'org-roam))
 
 (defun +roam-node-find (&optional other-window)
   "Find an org-roam node. See `org-roam-node-find'.
@@ -16,4 +27,31 @@ window."
                                                                  "private")))))
                           (null (seq-intersection tags disallowed))))))
 
+(defun +roam-node-title-hierarchy (node)
+  (thread-last
+    (append (list (org-roam-node-file-title node))
+            (org-roam-node-olp node)
+            (list (org-roam-node-title node)))
+    (seq-filter #'stringp)
+    (seq-mapcat (lambda (it) (split-string it ":")))
+    (seq-map #'string-trim)
+    (seq-uniq)))
+
+(defun +roam-node-title-or-olp (node &optional full-olp)
+  (funcall (if (or full-olp current-prefix-arg)
+               #'org-roam-node-formatted-olp
+             #'org-roam-node-title)
+           node))
+
+(with-eval-after-load 'org-roam
+  (cl-defmethod org-roam-node-formatted-olp ((node org-roam-node))
+    (pcase-let ((`(,title . ,rest) (nreverse (+roam-node-title-hierarchy node))))
+      (let ((prefix (seq-map (lambda (it) (propertize it 'face 'org-property-value)) (nreverse rest)))
+            (title (propertize title 'face 'org-roam-title)))
+
+        (string-join (append prefix (list title))
+                     (propertize ": " 'face 'org-property-value))))))
+
 (provide '+roam)
+
+;;; +roam.el ends here

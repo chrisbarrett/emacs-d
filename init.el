@@ -2961,7 +2961,19 @@ file in your browser at the visited revision."
    "zm"      #'magit-section-show-level-2-all
    "zr"      #'magit-section-show-level-4-all
    "C-j"     #'magit-section-forward
-   "C-k"     #'magit-section-backward))
+   "C-k"     #'magit-section-backward)
+
+  :config
+  (require '+roam)
+  (setq org-roam-node-formatter #'+roam-node-title-or-olp)
+  (setq org-roam-review-title-formatter #'org-roam-node-formatted-olp)
+
+  ;; Customise completion UI
+  (setq org-roam-node-display-template
+        (concat
+         "${formatted-olp:*} "
+         (propertize "@${slipbox:9}" 'face 'org-tag)
+         "${tags:*}")))
 
 (use-package poporg :ensure t
   ;; Easily pop open comments or strings for editing in a dedicated buffer.
