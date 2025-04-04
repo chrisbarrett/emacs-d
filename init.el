@@ -1281,6 +1281,7 @@ With optional prefix arg CONTINUE-P, keep profiling."
 ;;; Dired & dirvish
 
 (use-package dired
+  ;; Emacs' built-in file management interface.
   :hook
   (dired-mode-hook . dired-hide-details-mode)
   (dired-mode-hook . hl-line-mode)
@@ -1303,6 +1304,10 @@ With optional prefix arg CONTINUE-P, keep profiling."
 (use-package nerd-icons :ensure t
   ;; Icon set used by various packages.
   :autoload nerd-icons-codicon nerd-icons-faicon)
+
+(use-package nerd-icons-dired :ensure t
+  ;; Show icons in dired.
+  :hook dired-mode-hook)
 
 (use-package wdired
   ;; Makes dired buffers directly editable; the changes are interpreted into
