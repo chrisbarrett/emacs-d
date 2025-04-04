@@ -1281,7 +1281,9 @@ With optional prefix arg CONTINUE-P, keep profiling."
 ;;; Dired & dirvish
 
 (use-package dired
-  :hook (dired-mode-hook . dired-hide-details-mode)
+  :hook
+  (dired-mode-hook . dired-hide-details-mode)
+  (dired-mode-hook . hl-line-mode)
   :custom
   (dired-garbage-files-regexp (rx (or ".log" ".toc" ".dvi" ".bak" ".orig" ".rej" ".aux" ".DS_Store")
                                   eos))
