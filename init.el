@@ -2914,7 +2914,6 @@ file in your browser at the visited revision."
       :immediate-finish t
       :unnarrowed t)))
   (org-roam-extract-new-file-path "notes/${slug}.org")
-  (org-roam-completion-everywhere t)
   (org-roam-mode-sections '((org-roam-backlinks-section :unique t)
                             (org-roam-reflinks-section)))
   ;; prefer faster utilities
