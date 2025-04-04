@@ -1285,6 +1285,7 @@ With optional prefix arg CONTINUE-P, keep profiling."
   (dired-recursive-copies 'always)
   (dired-recursive-deletes 'always)
   (delete-by-moving-to-trash t)
+  (dired-dwim-target t)
   (dired-auto-revert-buffer 'dired-directory-changed-p)
   (dired-listing-switches
    "--almost-all --human-readable --group-directories-first --no-group"))
