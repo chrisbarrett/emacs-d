@@ -1283,6 +1283,8 @@ With optional prefix arg CONTINUE-P, keep profiling."
 (use-package dired
   :hook (dired-mode-hook . dired-hide-details-mode)
   :custom
+  (dired-garbage-files-regexp (rx (or ".log" ".toc" ".dvi" ".bak" ".orig" ".rej" ".aux" ".DS_Store")
+                                  eos))
   (dired-recursive-copies 'always)
   (dired-recursive-deletes 'always)
   (delete-by-moving-to-trash t)
