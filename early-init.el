@@ -44,7 +44,7 @@
 (setq modus-themes-bold-constructs nil)
 
 (require '+theme)
-(setq +theme-light 'modus-operandi)
+(setq +theme-light 'modus-operandi-tinted)
 (setq +theme-dark 'modus-vivendi)
 
 (set-face-attribute 'default nil :family "Fira Code")
