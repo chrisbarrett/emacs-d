@@ -178,7 +178,8 @@ Runs `+escape-hook'."
    "-" '(window-toggle-side-windows :wk "side windows")
    ":" '(pp-eval-expression :wk "eval")
    ";" '(ielm :wk "REPL")
-   "d" '(dirvish :wk "dir editor")
+   ;; "d" '(dirvish :wk "dir editor")
+   "d" '(dired-jump :wk "dir editor")
    "i" '(consult-imenu :wk "imenu")
    "r" #'vertico-repeat
    "s" '(save-buffer :wk "save buf")
@@ -1304,6 +1305,7 @@ With optional prefix arg CONTINUE-P, keep profiling."
   (:keymaps 'dired-mode-map "C-c C-e" #'wdired-change-to-wdired-mode))
 
 (use-package dirvish :ensure t
+  :disabled t
   ;; Wrapper around `dired' that provides better UX.
   :hook (+first-input-hook . dirvish-override-dired-mode)
 
