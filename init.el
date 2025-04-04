@@ -882,11 +882,10 @@ With optional prefix arg CONTINUE-P, keep profiling."
                              nil t)))
          key fallback))))
 
-;; TODO: Why is this bound on some installations but not others? 🤔
 (when (boundp 'trusted-content)
   (add-to-list 'trusted-content (file-name-concat user-emacs-directory "early-init.el"))
   (add-to-list 'trusted-content (file-name-concat user-emacs-directory "init.el"))
-  (add-to-list 'trusted-content (file-name-concat +lisp-dir "lisp/")))
+  (add-to-list 'trusted-content +lisp-dir))
 
 ;; Silence "For information about GNU Emacs and the GNU system..." on startup.
 (advice-add #'display-startup-echo-area-message :override #'ignore)
