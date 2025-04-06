@@ -914,6 +914,35 @@ With optional prefix arg CONTINUE-P, keep profiling."
   (envrc-show-summary-in-minibuffer nil) ; very noisy.
   )
 
+(use-package exec-path-from-shell :ensure t
+  ;; Use the shell to get some environment vars; necessary when the window
+  ;; system runs Emacs under a very different process environment.
+  ;;
+  ;; Also, turns out we need this for direnv to work right in compilation buffers.
+  :after-call +first-buffer-hook +first-file-hook
+  :if (memq system-type '(darwin x))
+  :demand t
+  :config
+  ;; Get compilation working
+  ;;
+  ;; https://github.com/purcell/envrc/issues/92#issuecomment-2415612472
+  (pushnew! exec-path-from-shell-variables
+            "SSH_AUTH_SOCK"
+            "SSH_AGENT_PID"
+            "XDG_DATA_DIRS"
+            "XDG_CONFIG_DIRS"
+            "__NIX_DARWIN_SET_ENVIRONMENT_DONE"
+            "__HM_SESS_VARS_SOURCED"
+            "NIX_USER_PROFILE_DIR"
+            "NIX_SSL_CERT_FILE"
+            "NIX_PROFILES"
+            "NIX_PATH")
+
+  ;; Speed up by using a non-interactive shell.
+  (delq! "-i" exec-path-from-shell-arguments)
+
+  (exec-path-from-shell-initialize))
+
 (use-package ligature :ensure t
   ;; Teach Emacs how to display ligatures when available.
   :after-call +first-buffer-hook +first-file-hook
