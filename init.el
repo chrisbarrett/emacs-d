@@ -1361,7 +1361,14 @@ With optional prefix arg CONTINUE-P, keep profiling."
   (:states '(insert normal emacs)
            "M-." #'xref-find-definitions
            "C-x RET" #'insert-char)
-  (:states 'insert "RET" 'comment-indent-new-line)
+  ;; `comment-indent-new-line' is a nicer default--it inserts comment delimiters
+  ;; for you when you do a newline in a comment. However, it breaks
+  ;; electric-pair's special newline padding functionality, so only call it if
+  ;; we're actually on a comment.
+  (:states 'insert "RET"
+           (general-predicate-dispatch #'newline-and-indent
+             (nth 4 (syntax-ppss)) ; at a comment?
+             #'comment-indent-new-line))
   :custom
   (evil-symbol-word-search t)
   (evil-undo-system 'undo-redo)
