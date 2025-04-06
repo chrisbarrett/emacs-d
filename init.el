@@ -2216,6 +2216,24 @@ file in your browser at the visited revision."
   (with-eval-after-load 'apheleia
     (add-to-list 'apheleia-formatters '(nixpkgs-fmt "nixpkgs-fmt"))))
 
+(use-package c-ts-mode
+  :general
+  (:keymaps 'c-ts-mode-map :states 'insert
+            "<" #'+c-electric-left-angle-bracket)
+  :init
+  (defun +c-electric-left-angle-bracket (&optional arg)
+    (interactive "P")
+    (let* ((current-line (buffer-substring (line-beginning-position) (line-end-position)))
+           (include-line-p (string-match-p (rx bol (* space) "#" (* space) "include" symbol-end)
+                                           current-line)))
+      (cond (include-line-p
+             (just-one-space)
+             (insert "<")
+             (save-excursion
+               (insert ">")))
+            (t
+             (call-interactively #'self-insert-command))))))
+
 (use-package hexl
   :general-config
   (:states 'normal
