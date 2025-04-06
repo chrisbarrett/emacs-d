@@ -178,8 +178,11 @@ Runs `+escape-hook'."
    "-" '(window-toggle-side-windows :wk "side windows")
    ":" '(pp-eval-expression :wk "eval")
    ";" '(ielm :wk "REPL")
-   ;; "d" '(dirvish :wk "dir editor")
-   "d" '(dired-jump :wk "dir editor")
+   "d" (list (general-predicate-dispatch #'dired-jump
+               current-prefix-arg #'dired
+               ;; If already in dired, open elsewhere with completing-read.
+               (derived-mode-p 'dired-mode) #'dired)
+             :wk "dir editor")
    "i" '(consult-imenu :wk "imenu")
    "r" #'vertico-repeat
    "s" '(save-buffer :wk "save buf")
