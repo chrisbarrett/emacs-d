@@ -1289,6 +1289,7 @@ With optional prefix arg CONTINUE-P, keep profiling."
                                   eos))
   (dired-recursive-copies 'always)
   (dired-recursive-deletes 'always)
+  (dired-kill-when-opening-new-dired-buffer t)
   (delete-by-moving-to-trash t)
   (dired-dwim-target t)
   (dired-auto-revert-buffer 'dired-directory-changed-p)
