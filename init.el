@@ -1080,7 +1080,8 @@ With optional prefix arg CONTINUE-P, keep profiling."
   ;; demarcating sections of a file.
   :after-call +first-file-hook +first-buffer-hook
   :config
-  (global-page-break-lines-mode +1))
+  (global-page-break-lines-mode +1)
+  (pushnew! page-break-lines-modes 'makefile-mode))
 
 (use-package hide-mode-line :ensure (hide-mode-line
                                      :host github
