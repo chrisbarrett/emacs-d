@@ -2429,6 +2429,7 @@ file in your browser at the visited revision."
   :demand t
   :config
   (+define-file-template (rx ".el" eos) "emacs-lisp.eld")
+  (+define-file-template (rx "flake.nix" eos) "flake.eld")
 
   (+define-file-template-dispatcher 'typescript-ts-mode
     ((string-match-p "construct" (buffer-file-name))
