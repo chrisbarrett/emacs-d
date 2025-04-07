@@ -2257,6 +2257,11 @@ file in your browser at the visited revision."
   (with-eval-after-load 'apheleia
     (add-to-list 'apheleia-formatters '(nixpkgs-fmt "nixpkgs-fmt"))))
 
+(use-package yaml-ts-mode
+  :config
+  (setq-hook! 'yaml-ts-mode-hook
+    tab-width 2))
+
 (use-package c-ts-mode
   :general
   (:keymaps 'c-ts-mode-map :states 'insert
