@@ -3055,6 +3055,10 @@ file in your browser at the visited revision."
   ;; Easily pop open comments or strings for editing in a dedicated buffer.
   )
 
+(use-package edit-indirect :ensure t
+  ;; used by poporg
+  )
+
 (use-package org-cycle
   :config
   (add-hook! 'org-cycle-hook
