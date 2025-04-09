@@ -2305,7 +2305,7 @@ file in your browser at the visited revision."
 
 (use-package conf-mode
   ;; Unix configuration files
-  :mode ("rc\\'")
+  :mode ("rc\\'" "\\.dockerignore\\'" "\\.gitignore\\'")
   )
 
 (use-package treesit-auto :ensure t
@@ -2341,6 +2341,8 @@ file in your browser at the visited revision."
 (use-package markdown
   :custom
   (markdown-fontify-code-blocks-natively t))
+
+(use-package hcl-mode :ensure t)
 
 ;; Use tree-sitter modes.
 
