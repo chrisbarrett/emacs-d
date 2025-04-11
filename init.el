@@ -2670,7 +2670,10 @@ file in your browser at the visited revision."
     "t" #'org-show-todo-tree)
 
   (custom-theme-set-faces 'user
-                          '(org-footnote ((t (:underline nil))))))
+                          '(org-footnote ((t (:underline nil))))
+                          '(org-document-title ((t (:height 2.0)))))
+
+  )
 
 (use-package ol
   ;; Hyperlink functionality in org-mode
