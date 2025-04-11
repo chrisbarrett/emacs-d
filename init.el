@@ -3055,7 +3055,12 @@ file in your browser at the visited revision."
         (concat
          "${formatted-olp:*} "
          (propertize "@${slipbox:9}" 'face 'org-tag)
-         "${tags:*}")))
+         "${tags:*}"))
+
+  ;; I use lines starting with `LINKS:' to create backlinks. Highlight these.
+  (font-lock-add-keywords 'org-mode
+                          `((,(rx bol "LINKS:") 0 '(face org-special-keyword) prepend)))
+  )
 
 (use-package poporg :ensure t
   ;; Easily pop open comments or strings for editing in a dedicated buffer.
