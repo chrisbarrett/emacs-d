@@ -2802,6 +2802,7 @@ file in your browser at the visited revision."
             '("csharp" . csharp-ts)
             '("docker" . dockerfile-ts)
             '("dockerfile" . dockerfile-ts)
+            '("elixir" . elixir-ts)
             '("json" . json-ts)
             '("md" . markdown)
             '("nix" . nix-ts)
