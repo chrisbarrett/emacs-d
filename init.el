@@ -2673,6 +2673,12 @@ file in your browser at the visited revision."
                           '(org-footnote ((t (:underline nil))))
                           '(org-document-title ((t (:height 2.0)))))
 
+  ;; `org-hidden-keywords' does not hide the spaces between the keyword and the
+  ;; value. I just do the hiding myself.
+  (font-lock-add-keywords 'org-mode
+                          `((,(rx bol "#+title:" (+ space)) 0
+                             '(face nil invisible t) prepend)))
+
   )
 
 (use-package ol
