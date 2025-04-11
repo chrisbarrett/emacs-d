@@ -2344,6 +2344,11 @@ file in your browser at the visited revision."
 
 (use-package hcl-mode :ensure t)
 
+(use-package elixir-ts-mode
+  :config
+  (with-eval-after-load 'eglot
+    (add-to-list 'eglot-server-programs '(elixir-ts-mode "elixir-ls"))))
+
 ;; Use tree-sitter modes.
 
 (alist-set! major-mode-remap-alist #'c-mode #'c-ts-mode)
