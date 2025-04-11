@@ -2699,10 +2699,8 @@ file in your browser at the visited revision."
                 '(:tree-type (month day))
                 kvps))
              (template-file (name)
-               (let ((filepath (file-name-concat user-emacs-directory "capture-templates" name)))
-                 (with-temp-buffer
-                   (insert-file-contents filepath)
-                   (buffer-string)))))
+               `(file ,(file-name-concat user-emacs-directory "capture-templates" name))))
+
      (list (notes-datetree "t" "Todo" "* TODO %?")
            (notes-datetree "n" "Note" "* %T %?")
            (notes-datetree "N" "Note (setting time)" "* %^T %?")
@@ -2713,12 +2711,18 @@ file in your browser at the visited revision."
            (notes-datetree "wN" "Note (setting time)" "* %^T %? :%(timekeep-work-tag):work:")
 
            (notes-datetree "l" "Link" "* %T %(org-cliplink-capture)\n%?")
+
+           `("L" "Litnote" plain
+             (function +capture-litnote-function) ,(template-file "litnote.org")
+             :immediate-finish t :jump-to-captured t)
+
            (notes-datetree "p" "Postmortem" (template-file "postmortem.org") :jump-to-captured t)
            (notes-datetree "j" "Journal" (template-file "journal.org"))
            (notes-datetree "r" "Language Learning Review"
                            (template-file "language-learning-review.org")
                            :immediate-finish t :jump-to-captured t))))
   :config
+  (require '+capture)
   (org-capture-put :kill-buffer t))
 
 (use-package org-refile
