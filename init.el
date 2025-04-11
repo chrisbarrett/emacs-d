@@ -2868,6 +2868,8 @@ file in your browser at the visited revision."
                     `((:name "Agenda" :time-grid t)
                       (:name "Forming" :and (:habit t :regexp ,(rx "->")))
                       (:name "French Study" :category "french")
+                      (:name "Cooking" :and (:habit t :tag "cooking"))
+                      (:name "Chores" :and (:habit t :tag "chore"))
                       (:name "Habits" :habit t)
                       (:name "Birthdays" :category "birthdays")
                       (:name "Delegated" :todo "WAIT")
