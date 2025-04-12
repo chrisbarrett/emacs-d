@@ -439,7 +439,6 @@ Runs `+escape-hook'."
 
    "t"  '(nil :wk "toggles")
    "tb" '(breadcrumb-mode :wk "breadcrumbs (header)")
-   "td" '(dirvish-side :wk "dirvish (side window)")
    "th" '(global-hl-line-mode :wk "highlight line")
    "tf" '(global-display-fill-column-indicator-mode :wk "fill column indicator")
    "ti" '(indent-bars-mode :wk "indent bars")
@@ -1310,7 +1309,7 @@ With optional prefix arg CONTINUE-P, keep profiling."
   (:states 'normal "z SPC" #'flyspell-correct-at-point))
 
 
-;;; Dired & dirvish
+;;; Dired
 
 (use-package dired
   ;; Emacs' built-in file management interface.
@@ -1348,36 +1347,9 @@ With optional prefix arg CONTINUE-P, keep profiling."
   :general
   (:keymaps 'dired-mode-map "C-c C-e" #'wdired-change-to-wdired-mode))
 
-(use-package dirvish :ensure t
-  :disabled t
-  ;; Wrapper around `dired' that provides better UX.
-  :hook (+first-input-hook . dirvish-override-dired-mode)
-
-  :general
-  (:keymaps '(dirvish-mode-map dired-mode-map) :states 'normal
-            "q" #'dirvish-quit)
-  (:keymaps 'dirvish-mode-map :states 'normal
-            "<tab>" #'dirvish-layout-toggle)
-  :custom
-  (dirvish-reuse-session nil)
-  (dirvish-attributes '(file-size nerd-icons subtree-state))
-  (dirvish-mode-line-format '(:left (sort file-time symlink) :right (omit yank index)))
-  (dirvish-subtree-always-show-state t)
-  (dirvish-hide-details '(dirvish dirvish-side))
-  (dirvish-hide-cursor '(dirvish dirvish-side))
-
-  :config
-  (setq dirvish-path-separators (list
-                                 (format "  %s " (nerd-icons-codicon "nf-cod-home"))
-                                 (format "  %s " (nerd-icons-codicon "nf-cod-root_folder"))
-                                 (format " %s " (nerd-icons-faicon "nf-fa-angle_right"))))
-
-  :config
-  (dirvish-peek-mode +1))
-
 (use-package diredfl :ensure t
-  ;; Add extra font-lock to dired/dirvish file listings.
-  :hook ((dired-mode-hook dirvish-directory-view-mode-hook) . diredfl-mode))
+  ;; Add extra font-lock to dired file listings.
+  :hook (dired-mode-hook))
 
 
 ;;; evil-mode
@@ -2123,7 +2095,7 @@ file in your browser at the visited revision."
             (root (project-root proj)))
        (if (file-directory-p (file-name-concat root ".git"))
            (magit-status-setup-buffer root)
-         (dirvish root))))))
+         (dired root))))))
 
 
 ;;; Documentation systems
