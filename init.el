@@ -1280,7 +1280,13 @@ With optional prefix arg CONTINUE-P, keep profiling."
   :config
   (unless (executable-find "aspell")
     (warn "Could not find aspell program; spell checking will not work"))
-  (ispell-set-spellchecker-params))
+  (ispell-set-spellchecker-params)
+
+  ;; Treat aspell dictionaries as UTF-8. Note that aspell itself needs the
+  ;; `utf-8' token in the header line for a dictionary file to use UTF-8
+  ;; encoding.
+  (add-to-list 'file-coding-system-alist
+               (cons (rx "aspell." (+? nonl) ".pws" eos) 'utf-8-unix)))
 
 (use-package spell-fu :ensure t
   ;; A more lightweight spell-checker than the built-in.
