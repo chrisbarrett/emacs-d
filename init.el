@@ -2326,6 +2326,7 @@ file in your browser at the visited revision."
 (use-package hcl-mode :ensure t)
 
 (use-package elixir-ts-mode
+  :mode ("\\.ex\\'" "\\.exs\\'")
   :config
   (with-eval-after-load 'eglot
     (add-to-list 'eglot-server-programs '(elixir-ts-mode "elixir-ls"))))
