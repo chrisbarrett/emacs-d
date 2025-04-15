@@ -2364,7 +2364,30 @@ file in your browser at the visited revision."
     (add-to-list 'eglot-server-programs '(elixir-ts-mode "elixir-ls")))
 
   (alist-set! compilation-error-regexp-alist-alist 'elixir-mix
-              (list (rx line-start (* space)
+              (list (rx line-start (* space) (or
+                                              (group-n 10 "warning")
+                                              (group-n 11 "info")
+                                              "error")
+
+                        ":" (* space) (group-n 12 (+ nonl)) ; message
+                        "\n"
+                        (? (and (* space) "hint:" (* space) (+ nonl)
+                                "\n"))
+
+                        ;; Source context lines
+                        (+ (* space)
+                           (or
+                            (and
+                             (? (+ digit) (+ space)) ; line number prefix
+                             "│"
+                             (* nonl))
+                            (and (* space) "..." (* nonl))
+
+
+                            )
+                           "\n")
+
+                        line-start (* space)
                         "└─ "
                         (group-n 1 (+? nonl)) ; file
                         ":"
@@ -2373,7 +2396,7 @@ file in your browser at the visited revision."
                         (group-n 3 (+ digit)) ; col
                         ":"
                         (+ nonl))
-                    1 2 3))
+                    1 2 3 '(10 . 11) 12))
 
   (add-to-list 'compilation-error-regexp-alist 'elixir-mix))
 
