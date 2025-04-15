@@ -2356,7 +2356,21 @@ file in your browser at the visited revision."
   (pushnew! +project-root-marker-files "mix.exs")
   :config
   (with-eval-after-load 'eglot
-    (add-to-list 'eglot-server-programs '(elixir-ts-mode "elixir-ls"))))
+    (add-to-list 'eglot-server-programs '(elixir-ts-mode "elixir-ls")))
+
+  (alist-set! compilation-error-regexp-alist-alist 'elixir-mix
+              (list (rx line-start (* space)
+                        "└─ "
+                        (group-n 1 (+? nonl)) ; file
+                        ":"
+                        (group-n 2 (+ digit)) ; line
+                        ":"
+                        (group-n 3 (+ digit)) ; col
+                        ":"
+                        (+ nonl))
+                    1 2 3))
+
+  (add-to-list 'compilation-error-regexp-alist 'elixir-mix))
 
 (use-package erlang
   :ensure t
