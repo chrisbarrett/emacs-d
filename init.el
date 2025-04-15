@@ -773,6 +773,10 @@ Runs `+escape-hook'."
     (setq next-error-message-highlight t)
     (add-hook 'next-error-hook #'pulsar-pulse-line-red))
 
+  ;; Change to look like a highlighted-line, rather than a visual selection.
+  (custom-theme-set-faces 'user
+                          '(next-error-message ((t (:inherit hl-line)))))
+
   ;; Automatically truncate long compilation buffers.
   (autoload 'comint-truncate-buffer "comint" nil t)
   (add-hook 'compilation-filter-hook #'comint-truncate-buffer))
