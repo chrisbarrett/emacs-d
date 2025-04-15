@@ -770,6 +770,7 @@ Runs `+escape-hook'."
     (delq! 'next-error-recenter pulsar-pulse-functions)
     (delq! 'previous-error pulsar-pulse-functions)
     (setq next-error-highlight nil)
+    (setq next-error-message-highlight t)
     (add-hook 'next-error-hook #'pulsar-pulse-line-red))
 
   ;; Automatically truncate long compilation buffers.
