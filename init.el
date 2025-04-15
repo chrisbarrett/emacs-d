@@ -765,6 +765,13 @@ Runs `+escape-hook'."
   :config
   (add-hook 'compilation-filter-hook #'ansi-color-compilation-filter)
 
+  (with-eval-after-load 'pulsar
+    (delq! 'next-error pulsar-pulse-functions)
+    (delq! 'next-error-recenter pulsar-pulse-functions)
+    (delq! 'previous-error pulsar-pulse-functions)
+    (setq next-error-highlight nil)
+    (add-hook 'next-error-hook #'pulsar-pulse-line-red))
+
   ;; Automatically truncate long compilation buffers.
   (autoload 'comint-truncate-buffer "comint" nil t)
   (add-hook 'compilation-filter-hook #'comint-truncate-buffer))
@@ -1174,8 +1181,6 @@ With optional prefix arg CONTINUE-P, keep profiling."
   (pulsar-pulse-on-window-change t)
   :config
   (require '+pulsar)
-
-  (add-hook 'next-error-hook #'pulsar-pulse-line)
 
   (dolist (hook '(consult-after-jump-hook
                   imenu-after-jump-hook))
