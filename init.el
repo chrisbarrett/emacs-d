@@ -2330,6 +2330,16 @@ file in your browser at the visited revision."
   (with-eval-after-load 'eglot
     (add-to-list 'eglot-server-programs '(elixir-ts-mode "elixir-ls"))))
 
+(use-package erlang
+  :ensure t
+  :mode (("\\.erl\\'" . erlang-mode)
+         ("\\.hrl\\'" . erlang-mode))
+  :init
+  (with-eval-after-load 'dired
+    (pushnew! completion-ignored-extensions ".jam" ".vee" ".beam"))
+  (with-eval-after-load 'dired-x
+    (pushnew! dired-omit-extensions ".jam" ".vee" ".beam")))
+
 ;; Use tree-sitter modes.
 
 (alist-set! major-mode-remap-alist #'c-mode #'c-ts-mode)
