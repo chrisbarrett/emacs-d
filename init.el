@@ -2094,6 +2094,8 @@ file in your browser at the visited revision."
 
 ;;; projects
 
+(defconst +project-root-marker-files '(".git"))
+
 (use-package project
   ;; Emacs' built-in project lib
   :custom
@@ -2104,7 +2106,23 @@ file in your browser at the visited revision."
             (root (project-root proj)))
        (if (file-directory-p (file-name-concat root ".git"))
            (magit-status-setup-buffer root)
-         (dired root))))))
+         (dired root)))))
+
+  ;; Teach project.el to detect project roots based on the presence of certain
+  ;; files.
+  ;;
+  ;; Adapted from: https://andreyor.st/posts/2022-07-16-project-el-enhancements/
+
+  :config
+  (add-to-list 'project-find-functions
+               (defun +project-find-root-by-marker-file (&optional start)
+                 (when-let* ((root (locate-dominating-file
+                                    (or start default-directory)
+                                    (lambda (dir)
+                                      (seq-find (lambda (filename)
+                                                  (file-exists-p (file-name-concat dir filename)))
+                                                +project-root-marker-files)))))
+                   (cons 'transient (expand-file-name root))))))
 
 
 ;;; Documentation systems
@@ -2233,6 +2251,8 @@ file in your browser at the visited revision."
 
 (use-package nix-ts-mode :ensure t
   :mode "\\.nix\\'"
+  :init
+  (pushnew! +project-root-marker-files "flake.nix")
   :config
   (setq-hook! 'nix-ts-mode-hook apheleia-formatter 'nixpkgs-fmt)
   (with-eval-after-load 'apheleia
@@ -2327,6 +2347,8 @@ file in your browser at the visited revision."
 
 (use-package elixir-ts-mode
   :mode ("\\.ex\\'" "\\.exs\\'")
+  :init
+  (pushnew! +project-root-marker-files "mix.exs")
   :config
   (with-eval-after-load 'eglot
     (add-to-list 'eglot-server-programs '(elixir-ts-mode "elixir-ls"))))
