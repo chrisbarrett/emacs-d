@@ -17,6 +17,7 @@ emacs-lisp-mode
 
 (p "(progn" n> q ")")
 (p1 "(prog1 " p n> q ")")
+(ie "(ignore-errors" n> q ")")
 
 (dl "(dolist (" p ")" n> q ")")
 
