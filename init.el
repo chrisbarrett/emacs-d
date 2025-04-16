@@ -1081,7 +1081,6 @@ With optional prefix arg CONTINUE-P, keep profiling."
 
 (use-package bufler :ensure t
   ;; A better buffer list than the default.
-  :hook +first-input-hook
   :config
   (bufler-defauto-group nix-store-path
     (when-let* ((filename (or (buffer-file-name buffer)
