@@ -589,20 +589,6 @@ Runs `+escape-hook'."
   (backup-directory-alist `(("." . ,+auto-save-dir)))
   (auto-save-list-file-prefix (file-name-concat +auto-save-dir ".saves-"))
   (auto-save-file-name-transforms `((".*" ,+auto-save-dir t)))
-
-  ;; Used by `find-sibling-file' to figure out what files are related.
-  (find-sibling-rules
-   `(
-     ;; Tests -> impl in TS
-     ,(list (rx (group (+? any)) (or ".test" ".integration") ".ts" eos)
-            (rx (backref 1) ".ts"))
-
-     ;; Impl -> tests in TS
-     ,(list (rx (group (+? any)) ".ts" eos)
-            (rx (backref 1) ".test.ts")
-            (rx (backref 1) ".integration.ts"))
-     ))
-
   :config
   (define-advice after-find-file (:around (fn &rest args) dont-block-on-autosave-exists)
     "Prevent the editor blocking to inform you when an autosave file exists."
@@ -2354,6 +2340,17 @@ file in your browser at the visited revision."
   :config
   (setq-hook! 'yaml-ts-mode-hook
     tab-width 2))
+
+(use-package typescript-ts-mode
+  :config
+  (pushnew! find-sibling-rules
+            ;; Tests -> impl
+            (list (rx (group (+? any)) (or ".test" ".integration") ".ts" eos)
+                  (rx (backref 1) ".ts"))
+            ;; Impl -> tests
+            (list (rx (group (+? any)) ".ts" eos)
+                  (rx (backref 1) ".test.ts")
+                  (rx (backref 1) ".integration.ts"))))
 
 (use-package c-ts-mode
   :general
