@@ -2442,6 +2442,19 @@ file in your browser at the visited revision."
   (with-eval-after-load 'eglot
     (add-to-list 'eglot-server-programs '(elixir-ts-mode "elixir-ls")))
 
+  ;; Switching between files & tests
+
+  (pushnew! find-sibling-rules
+            ;; Impl -> tests
+            (list (rx (group-n 1 (+? nonl)) "/lib/" (group-n 2 (+? any)) ".ex" eos)
+                  (rx (backref 1) "/test/" (backref 2) "_test.exs"))
+
+            ;; Tests -> impl
+            (list (rx (group-n 1 (+? nonl)) "/test/" (group-n 2 (+? any)) "_test.exs" eos)
+                  (rx (backref 1) "/lib/" (backref 2) ".ex")))
+
+  ;; Compilation buffer support
+
   (alist-set! compilation-error-regexp-alist-alist 'elixirc
               (list (rx line-start
                         "** (" (+? alnum) ") "
