@@ -262,6 +262,7 @@ Runs `+escape-hook'."
    "ac" #'quick-calc
    "aC" #'full-calc
    "ae" #'eshell
+   "as" #'mistty
    "ar" (general-predicate-dispatch 'profiler-start
           (and (featurep 'profiler) (profiler-running-p)) #'+profiler-stop-and-report)
 
@@ -913,6 +914,16 @@ With optional prefix arg CONTINUE-P, keep profiling."
   ;; features.
   :config
   (require '+eshell))
+
+(use-package mistty :ensure t
+  :general
+  (:keymaps 'project-prefix-map "s"
+            (defun +project-mistty ()
+              (interactive)
+              (let ((default-directory (project-root (project-current t))))
+                (mistty))))
+  (with-eval-after-load 'evil
+    (evil-set-initial-state 'mistty-mode 'insert)))
 
 (use-package string-inflection :ensure t
   ;; Provides commands for cycling different string casing styles for the ident
@@ -3512,6 +3523,7 @@ file in your browser at the visited revision."
            (list
             (bottom '(derived-mode . inferior-emacs-lisp-mode))
             (bottom '(derived-mode . inf-elixir-mode))
+            (bottom '(derived-mode . mistty-mode))
             (bottom (rx bos "*eshell*" eos))
             (bottom (rx bos "*eldoc*" eos))
             (bottom (rx bos "*calendar*" eos))
