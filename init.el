@@ -3293,8 +3293,9 @@ file in your browser at the visited revision."
   (calendar-date-style 'iso)
   (calendar-mark-holidays-flag t)
   (calendar-week-start-day 1)
-  :config
-  (setf (car calendar-time-display-form) '24-hours))
+  ;; :config
+  ;; (setf (car calendar-time-display-form) '24-hours)
+  )
 
 (use-package ox-gfm :ensure t
   ;; Exporter backend for github-flavoured markdown.
