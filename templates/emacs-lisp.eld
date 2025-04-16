@@ -3,8 +3,7 @@ emacs-lisp-mode
 (s "(setq " p ")")
 (sl "(setq-local " p ")")
 (l "(let ((" p "))" n> q ")")
-(la "(lambda (" p ")" n> q ")")
-(it "(lambda (it)" n> q ")")
+(it "(lambda (" (p "it") ")" n> q ")")
 
 (i "(if " q ")")
 (w "(when " q ")")
