@@ -3464,8 +3464,8 @@ file in your browser at the visited revision."
             (top (rx bos "CAPTURE-") '(window-height . 0.6))
             (top (rx bos "*Backtrace*" eos))))
 
-         ;; Left side - Search results, shells, REPLs, debugger ancillary
-         ;; buffers. Generally, things that define a temporary context change.
+         ;; Left side - Search results, debugger ancillary buffers. Generally,
+         ;; things that define a temporary context change.
 
          (cl-labels ((left (pred &rest overrides)
                        (cons pred `((display-buffer-reuse-window display-buffer-in-side-window)
@@ -3479,8 +3479,6 @@ file in your browser at the visited revision."
             (left (rx bos "*Debugger-record*" eos)
                   '(slot . 1)
                   '(window-height . 0.3))
-            (left '(derived-mode . inferior-emacs-lisp-mode))
-            (left '(derived-mode . inf-elixir-mode))
             (left (rx bos "*org-roam-search") '(window-width . 80))))
 
          ;; Right side - documentation, reference buffers & command outputs.
@@ -3512,6 +3510,8 @@ file in your browser at the visited revision."
                                     (dedicated . t)
                                     (slot . 0)))))
            (list
+            (bottom '(derived-mode . inferior-emacs-lisp-mode))
+            (bottom '(derived-mode . inf-elixir-mode))
             (bottom (rx bos "*eshell*" eos))
             (bottom (rx bos "*eldoc*" eos))
             (bottom (rx bos "*calendar*" eos))
