@@ -2482,6 +2482,8 @@ file in your browser at the visited revision."
 
   (add-to-list 'compilation-error-regexp-alist 'elixir-mix))
 
+(use-package inf-elixir :ensure t)
+
 (use-package erlang
   :ensure t
   :mode (("\\.erl\\'" . erlang-mode)
