@@ -7,17 +7,43 @@
 
 ;;; Code:
 
+(require 'cl-lib)
+
+(cl-eval-when (compile)
+  (require 'eshell))
+
+(autoload 'eshell/cd "em-dirs")
 (autoload 'project-root "project")
 
-(defun eshell/j (&rest query)
-  "Jump to a directory with fasd QUERY."
-  (let* ((command `("fasd" "-ld" ,@(mapcar #'shell-quote-argument query)))
-         (output (shell-command-to-string (string-join command " ")))
-         (matches (nreverse (split-string output "\n" t))))
-    (if-let* ((dir (car matches)))
-        (eshell/cd dir)
-      (let ((message-log-max))
-        (message "No fasd match")))))
+
+;;; Teach eshell to use Zoxide for quickly jumping around; this aligns it with
+;;; the behaviour my external shell.
+
+(defun +zoxide-query (query)
+  (with-temp-buffer
+    (call-process "zoxide" nil t nil "query" "--exclude" default-directory "--" query)
+    (when (string-match-p "no match found" (buffer-string))
+      (user-error "%s" (string-trim (buffer-string))))
+    (goto-char (point-min))
+    (buffer-substring (line-beginning-position) (line-end-position))))
+
+(defun +zoxide-add (dir)
+  (call-process "zoxide" nil 0 nil "add" dir))
+
+(defvar +eshell-suppress-zoxide-updates-p nil
+  "Let-bound to t when programmatically cd'ing around.")
+
+(defun eshell/j (query &rest _)
+  (let ((+eshell-suppress-zoxide-updates-p t))
+    (eshell/cd (+zoxide-query query))))
+
+(define-advice eshell/cd (:after (&rest args) update-zoxide)
+  "Teach eshell to update Zoxide's index."
+  (unless +eshell-suppress-zoxide-updates-p
+    (when args
+      (+zoxide-add default-directory))))
+
+
 
 (defun eshell/g ()
   "Navigate to the Git root."
