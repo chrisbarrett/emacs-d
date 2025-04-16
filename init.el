@@ -1386,10 +1386,10 @@ With optional prefix arg CONTINUE-P, keep profiling."
   ;; for you when you do a newline in a comment. However, it breaks
   ;; electric-pair's special newline padding functionality, so only call it if
   ;; we're actually on a comment.
-  (:states 'insert "RET"
-           (general-predicate-dispatch #'newline-and-indent
-             (nth 4 (syntax-ppss)) ; at a comment?
-             #'comment-indent-new-line))
+  (:states 'insert :keymaps '(prog-mode-map text-mode-map)
+           "RET" (general-predicate-dispatch #'newline-and-indent
+                   (nth 4 (syntax-ppss)) ; at a comment?
+                   #'comment-indent-new-line))
   :custom
   (evil-symbol-word-search t)
   (evil-undo-system 'undo-redo)
