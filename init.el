@@ -2280,6 +2280,9 @@ file in your browser at the visited revision."
 (use-package elisp-mode
   :general-config (:keymaps 'emacs-lisp-mode-map "C-c RET" #'pp-macroexpand-last-sexp)
 
+  ;; Make lambdas look like λ.
+  :hook (emacs-lisp-mode-hook . prettify-symbols-mode)
+
   :config
   (defun +emacs-lisp-lookup-func ()
     (describe-symbol (symbol-at-point)))
