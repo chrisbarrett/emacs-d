@@ -1203,7 +1203,12 @@ With optional prefix arg CONTINUE-P, keep profiling."
            (auto-mode))
 
           (auto-directory)
-          (auto-mode))))
+          (auto-mode)))
+
+  ;; Pre-register indentation for `bufler-defauto-group'; stops inconsistent
+  ;; indentation being applied before bufler is loaded.
+  :init
+  (put 'bufler-defauto-group 'lisp-indent-function 'defun))
 
 
 ;;; Open some files as read-only, e.g. vendored deps.
