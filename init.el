@@ -2538,19 +2538,21 @@ file in your browser at the visited revision."
                                               (group-n 11 "info")
                                               "error")
 
-                        ":" (* space) (group-n 12 (+ nonl)) ; message
+                        ":" (* space) (group-n 12 (+? nonl)) ; message
+                        (? " Did you mean:")
                         "\n"
                         (? (and (* space) "hint:" (* space) (+ nonl)
                                 "\n"))
 
                         ;; Source context lines
                         (+ (* space)
-                           (or
-                            (and
-                             (? (+ digit) (+ space)) ; line number prefix
-                             "│"
-                             (* nonl))
-                            (and (* space) "..." (* nonl)))
+                           (? (or
+                               (and
+                                (? (+ digit) (+ space)) ; line number prefix
+                                "│"
+                                (* nonl))
+                               (and "*" (+ space) (* nonl)) ; suggested identifier
+                               (and (* space) "..." (* nonl))))
                            "\n")
 
                         line-start (* space)
