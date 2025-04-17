@@ -2697,8 +2697,16 @@ file in your browser at the visited revision."
   :after autoinsert
   :demand t
   :config
+  (require 'string-inflection nil t)
+
   (+define-file-template (rx ".el" eos) "emacs-lisp.eld")
   (+define-file-template (rx "flake.nix" eos) "flake.eld")
+
+  (+define-file-template-dispatcher 'elixir-ts-mode
+    ((string-match-p "/lib/" (buffer-file-name))
+     "elixir-lib.eld")
+    ((string-match-p (rx "/test/" (+? nonl) ".exs" eos) (buffer-file-name))
+     "elixir-test.eld"))
 
   (+define-file-template-dispatcher 'typescript-ts-mode
     ((string-match-p "construct" (buffer-file-name))
