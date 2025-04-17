@@ -305,6 +305,12 @@ the falsey partition."
 (defmacro alist-set! (alist key value)
   `(setf (alist-get ,key ,alist nil nil #'equal) ,value))
 
+(defun +read-eld (file)
+  "Read Lisp data FILE into memory."
+  (with-temp-buffer
+    (insert-file-contents-literally (file-name-concat user-emacs-directory file))
+    (read (current-buffer))))
+
 
 
 (defvar-local +sppss-memo-last-point nil)
