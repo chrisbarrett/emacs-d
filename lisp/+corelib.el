@@ -302,6 +302,33 @@ the falsey partition."
             sequence)
     (cons truthy falsey)))
 
+(defun +split-with (pred sequence)
+  "Split SEQUENCE into two according to PRED.
+
+Returns two lists; the first contains every item up until PRED returns
+nil. The second list contains that element and all subsequent elements."
+  (let ((continue t)
+        (prefix))
+    (while (and sequence continue)
+      (let ((item (car sequence)))
+        (cond
+         ((funcall pred item)
+          (push item prefix)
+          (pop sequence))
+         (t
+          (setq continue nil)))))
+
+    (list (nreverse prefix) sequence)))
+
+(defun +tree-map (fn tree)
+  "Perform a pre-order traversal of TREE using FN."
+  (let ((current (funcall fn tree)))
+    (if (listp current)
+        (seq-map (lambda (it)
+                   (+tree-map fn it))
+                 current)
+      current)))
+
 (defmacro alist-set! (alist key value)
   `(setf (alist-get ,key ,alist nil nil #'equal) ,value))
 
