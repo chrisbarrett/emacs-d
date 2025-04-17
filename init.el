@@ -2080,7 +2080,21 @@ file in your browser at the visited revision."
    "M-RET" #'eglot-code-actions)
   (:keymaps 'eglot-mode-map
    :states '(normal)
-   "C-c C-r" #'eglot-rename))
+   "C-c C-r" #'eglot-rename)
+
+  ;; Make RET open markdown links in the eldoc buffer.
+  ;;
+  ;; https://github.com/joaotavora/eglot/discussions/1238
+  :config
+  (defun +eglot-open-link ()
+    (interactive)
+    (if-let* ((url (get-text-property (point) 'help-echo)))
+        (browse-url url)
+      (user-error "No URL at point")))
+
+  (define-advice eldoc-display-in-buffer (:after (&rest _) update-keymap)
+    (with-current-buffer eldoc--doc-buffer
+      (general-define-key :keymaps 'local :states 'motion "RET" #'+eglot-open-link))))
 
 (use-package markdown
   :custom
