@@ -606,12 +606,31 @@ With optional prefix arg CONTINUE-P, keep profiling."
   (require '+eshell))
 
 (use-package mistty :ensure t
+  ;; A better frontend for term.el.
   :general
   (:keymaps 'project-prefix-map "s"
             (defun +project-mistty ()
               (interactive)
               (let ((default-directory (project-root (project-current t))))
                 (mistty))))
+
+  ;; Forward control keys to the terminal in insert state.
+  (:keymaps 'mistty-prompt-map :states 'insert
+            "C-a" #'mistty-send-key
+            "C-b" #'mistty-send-key
+            "C-c" #'mistty-send-key
+            "C-d" #'mistty-send-key
+            "C-e" #'mistty-send-key
+            "C-f" #'mistty-send-key
+            "C-h" #'mistty-send-key
+            "C-k" #'mistty-send-key
+            "C-l" #'mistty-send-key
+            "C-n" #'mistty-send-key
+            "C-p" #'mistty-send-key
+            "C-r" #'mistty-send-key
+            "C-u" #'mistty-send-key
+            "C-w" #'mistty-send-key
+            "C-z" #'mistty-send-key)
   :config
   (with-eval-after-load 'evil
     (evil-set-initial-state 'mistty-mode 'insert)))
