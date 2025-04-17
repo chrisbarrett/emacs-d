@@ -1,4 +1,12 @@
-;; +corelib.el --- Utils copied from Doom -*- lexical-binding: t; -*-
+;; +corelib.el --- General re-usable functions and macros.  -*- lexical-binding: t; -*-
+
+;;; Commentary:
+
+;; A mix of utils copied from Doom, collection utilities, and other things
+;; needed to boot the configuration without depending on downloaded 3rd-party
+;; packages.
+
+;;; Code:
 
 (require 'cl-lib)
 (require 'subr-x)
@@ -287,7 +295,7 @@ If FETCHER is a function, ELT is used as the key in LIST (an alist)."
                         elt)
                      ,list)))
 
-(defun +partition-by (pred sequence)
+(defun +separate (pred sequence)
   "Partition SEQUENCE by applying PRED to each element.
 Elements are partitioned according to whether the result is truthy or
 nil.
@@ -319,6 +327,67 @@ nil. The second list contains that element and all subsequent elements."
           (setq continue nil)))))
 
     (list (nreverse prefix) sequence)))
+
+(defun +chunk-by (pred sequence)
+  "Split SEQUENCE into separate chunks according to PRED.
+
+Every time PRED returns non-nil, the list is split into a new chunk."
+
+  ;; (+chunk-by #'numberp ())
+  ;; (+chunk-by #'numberp '(1))
+  ;; (+chunk-by #'numberp '(1 2))
+  ;; (+chunk-by #'numberp '(1 a 2 b))
+  ;; (+chunk-by #'numberp '(a 1 b 2))
+  ;; (+chunk-by #'numberp '(1 a a 2 b))
+  ;; (+chunk-by #'numberp '(a a 1 2 b 3))
+
+  (cl-labels ((loop (unprocessed acc current-chunk)
+                (pcase-exhaustive (cons unprocessed current-chunk)
+                  (`(() . ())
+                   (nreverse acc))
+
+                  (`(() . ,current-chunk)
+                   (nreverse (cons (nreverse current-chunk) acc)))
+
+                  (`((,h . ,tl) . ())
+                   (loop tl nil (list h)))
+
+                  (`((,h . ,tl) . ,current-chunk)
+                   (if (funcall pred h)
+                       (loop tl
+                             (cons (nreverse current-chunk) acc)
+                             (list h))
+                     (loop tl
+                           acc
+                           (cons h current-chunk)))))))
+    (loop sequence nil nil)))
+
+(defun +alist-from-hash-table (hash-table)
+  "Convert HASH-TABLE into an alist."
+
+  ;; (+alist-from-hash-table (let ((ht (make-hash-table)))
+  ;;                           (puthash :foo t ht)
+  ;;                           (puthash :bar t ht)
+  ;;                           ht))
+
+  (let ((result))
+    (dolist (key (hash-table-keys hash-table))
+      (push (cons key (gethash key hash-table))
+            result))
+    (nreverse result)))
+
+(defun +plist-from-hash-table (hash-table)
+  "Convert HASH-TABLE into an plist."
+
+  ;; (+plist-from-hash-table (let ((ht (make-hash-table)))
+  ;;                           (puthash :foo 'foo ht)
+  ;;                           (puthash :bar 'bar ht)
+  ;;                           ht))
+
+  (let ((result))
+    (dolist (key (hash-table-keys hash-table))
+      (setq result (cons (gethash key hash-table) (cons key result))))
+    (nreverse result)))
 
 (defun +tree-map (fn tree)
   "Perform a pre-order traversal of TREE using FN."

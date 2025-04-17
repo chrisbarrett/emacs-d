@@ -16,7 +16,8 @@
   (defvar +lisp-dir (file-name-concat user-emacs-directory "lisp/"))
   (add-to-list 'load-path +lisp-dir)
   (require '+corelib)
-  (require '+load-incrementally))
+  (require '+load-incrementally)
+  (require '+compile))
 
 (defvar org-directory "~/org/")
 (defvar org-roam-directory "~/org/roam/")
