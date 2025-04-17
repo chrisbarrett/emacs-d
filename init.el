@@ -776,6 +776,11 @@ With optional prefix arg CONTINUE-P, keep profiling."
 
 (use-package bufler :ensure t
   ;; A better buffer list than the default.
+
+  :init
+  ;; Ensure indentation is stable before bufler is loaded.
+  (put 'bufler-defauto-group 'lisp-indent-function 'defun)
+
   :config
   (bufler-defauto-group nix-store-path
     (when-let* ((filename (or (buffer-file-name buffer)
