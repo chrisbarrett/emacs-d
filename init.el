@@ -612,6 +612,7 @@ With optional prefix arg CONTINUE-P, keep profiling."
               (interactive)
               (let ((default-directory (project-root (project-current t))))
                 (mistty))))
+  :config
   (with-eval-after-load 'evil
     (evil-set-initial-state 'mistty-mode 'insert)))
 
