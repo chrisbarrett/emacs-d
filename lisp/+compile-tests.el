@@ -139,7 +139,8 @@
        :where line-number = (+ digit) (+ space)
 
        :type (1 . 2)
-       :highlight message))
+       :hyperlink message
+       :highlights ((file compilation-info))))
     '(:rx-form
       (line-start (* space) (or (group-n 1 "warning") (group-n 2 "info") "error") ":"
                   (* space) (group-n 1 (+? nonl)) (? " Did you mean:") "\n"
@@ -156,7 +157,7 @@
       :line 3
       :col 4
       :type (1 . 2)
-      :highlights (1)
-      :hyperlink nil))))
+      :highlights ((2 compilation-info))
+      :hyperlink 1))))
 
 ;;; +compile-tests.el ends here

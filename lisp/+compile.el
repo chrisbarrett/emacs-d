@@ -137,7 +137,15 @@ The result is a plist containing the following keys:
     (list
      :rx-form (+compile-rx rx-forms keyword-args)
 
-     :highlights (ensure-list (+compile--subst-group-numbers (plist-get extra-keywords :highlight) group-numbers))
+     :highlights (seq-map (lambda (it)
+                            ;; The first element may be a symbol that resolves
+                            ;; to a group number, but any other elements are
+                            ;; part of a face spec.
+                            (pcase-exhaustive it
+                              (`(,match . ,rest)
+                               (cons (+compile--subst-group-numbers match group-numbers)
+                                     rest))))
+                          (plist-get extra-keywords :highlights))
 
      :hyperlink (+compile--subst-group-numbers (plist-get extra-keywords :hyperlink) group-numbers)
 
