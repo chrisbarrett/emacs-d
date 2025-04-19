@@ -85,6 +85,40 @@
       :line nil
       :col nil))))
 
+(ert-deftest compiling-specs--recursive-where-bindings ()
+  (should
+   (+equivalent-plists-p
+    (+compile-spec-for-compilation-error-alist
+     '(b c
+       :where a = (* space)
+       :where b = bol "hello" a
+       :where c = b "world" eol))
+    '(:rx-form ((and bol "hello" (* space))
+                (and (and bol "hello" (* space)) "world" eol))
+      :highlights nil
+      :hyperlink nil
+      :type nil
+      :file nil
+      :line nil
+      :col nil))))
+
+(ert-deftest compiling-specs--mutually-recursive-where-bindings ()
+  (should
+   (+equivalent-plists-p
+    (+compile-spec-for-compilation-error-alist
+     '(a
+       :where a = b c d
+       :where b = "hello"
+       :where c = b d
+       :where d = "world"))
+    '(:rx-form ((and "hello" (and "hello" "world") "world"))
+      :highlights nil
+      :hyperlink nil
+      :type nil
+      :file nil
+      :line nil
+      :col nil))))
+
 (ert-deftest compiling-specs--realistic-example ()
   (should
    (+equivalent-plists-p
@@ -96,33 +130,33 @@
 
        :where level = (or (group-n 1 "warning") (group-n 2 "info") "error")
        :where hint = "hint:" (* space) (+ nonl)
-       :where source-context = (* space) (or
-                                          (and
-                                           (? (+ digit) (+ space))
-                                           "│"
-                                           (* nonl))
-                                          (and "*" (+ space) (* nonl))
-                                          (and (* space) "..." (* nonl)))
+
+       :where suggested-ident = (* nonl)
+       :where source-context = (* space) (or (and (? line-number) "│" (* nonl))
+                                             (and "*" (+ space) suggested-ident)
+                                             (and (* space) "..." (* nonl)))
+
+       :where line-number = (+ digit) (+ space)
+
        :type (1 . 2)
        :highlight message))
-
-    '(:rx-form (line-start
-                (* space) (or (group-n 1 "warning") (group-n 2 "info") "error")
-                ":" (* space) (group-n 1 (+? nonl)) (? " Did you mean:") "\n"
-                (? (* space) (and "hint:" (* space) (+ nonl)) "\n")
-                (+ (* space)
-                   (? (and (* space)
-                           (or (and (? (+ digit) (+ space)) "│" (* nonl))
-                               (and "*" (+ space) (* nonl))
-                               (and (* space) "..." (* nonl)))))
-                   "\n")
-                line-start (* space) "└─ " (group-n 2 (+? nonl)) ":"
-                (group-n 3 (+ digit)) ":" (group-n 4 (+ digit)) (? ":" (+ nonl)))
+    '(:rx-form
+      (line-start (* space) (or (group-n 1 "warning") (group-n 2 "info") "error") ":"
+                  (* space) (group-n 1 (+? nonl)) (? " Did you mean:") "\n"
+                  (? (* space) (and "hint:" (* space) (+ nonl)) "\n")
+                  (+ (* space)
+                     (? (and (* space)
+                             (or (and (? (and (+ digit) (+ space))) "│" (* nonl))
+                                 (and "*" (+ space) (* nonl))
+                                 (and (* space) "..." (* nonl)))))
+                     "\n")
+                  line-start (* space) "└─ " (group-n 2 (+? nonl)) ":"
+                  (group-n 3 (+ digit)) ":" (group-n 4 (+ digit)) (? ":" (+ nonl)))
       :file 2
       :line 3
       :col 4
+      :type (1 . 2)
       :highlights (1)
-      :hyperlink nil
-      :type (1 . 2)))))
+      :hyperlink nil))))
 
 ;;; +compile-tests.el ends here
