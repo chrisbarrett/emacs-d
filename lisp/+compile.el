@@ -20,19 +20,52 @@ regular expression.")
 
   (defun +compile--subst-group-numbers (form group-numbers)
     (+tree-map (lambda (term)
-                 (if-let* ((group-number (gethash term group-numbers)))
-                     group-number
-                   term))
+                 (pcase term
+                   ;; Resolve direct reference.
+                   ((and (pred symbolp)
+                         (let group-number (gethash term group-numbers))
+                         (guard group-number))
+                    group-number)
+
+                   ;; Resolve named group (with colon suffix).
+                   ((and (pred symbolp)
+                         (let with-suffix (intern (format "%s:" term)))
+                         (let group-number (gethash with-suffix group-numbers))
+                         (guard group-number))
+                    group-number)
+                   (term
+                    term)))
                form))
 
   (defun +compile--subst-from-env (form env group-numbers)
     (+tree-map (lambda (term)
-                 (if-let* ((rx-form (and (symbolp term) (alist-get term +compile-metavars-alist)))
-                           (group-number (gethash term group-numbers)))
-                     `(group-n ,group-number ,rx-form)
-                   (if-let* ((expansion (and (symbolp term) (gethash term env))))
-                       `(and ,@expansion)
-                     term)))
+                 (pcase term
+                   ;; Rewrite standard metavar
+                   ((and (pred symbolp)
+                         (let rx-form (alist-get term +compile-metavars-alist))
+                         (guard rx-form)
+                         (let group-number (gethash term group-numbers))
+                         (guard group-number)
+                         )
+                    `(group-n ,group-number ,rx-form))
+
+                   ;; Rewrite named group to numbered group.
+                   ((and `(,h . ,tl)
+                         (guard (symbolp h))
+                         (guard (string-suffix-p ":" (symbol-name h)))
+                         (let group-number (gethash h group-numbers))
+                         (guard group-number)
+                         )
+                    `(group-n ,group-number ,@tl))
+
+                   ((and (pred symbolp)
+                         (let expansion (gethash term env))
+                         (guard (not (null expansion)))
+                         )
+                    `(and ,@expansion))
+
+                   (term
+                    term)))
                form))
 
   (defun +compile--optimize (form)
@@ -44,7 +77,7 @@ regular expression.")
                     term)))
                form))
 
-  (defun +compile--analyze-forms (rx-forms)
+  (defun +compile--analyze (rx-forms)
     "Analyze RX-FORMS for information needed to build a matcher.
 
 The result is a plist containing the following keys:
@@ -52,10 +85,13 @@ The result is a plist containing the following keys:
 - `:referenced-metavars' - the values in `+compile-metavars-alist' that
   were used.
 
-- `:highest-group-number' - the highest allocated match group number."
-    (let ((numbered-groups -1)
-          (un-numbered-groups -1)
+- `:highest-group-number' - the highest allocated match group number.
+
+- `:named-groups' - a list of named capture groups."
+    (let ((numbered-groups 0)
+          (un-numbered-groups 0)
           (referenced-metavars '())
+          (named-groups '())
           (metavars (seq-map #'car +compile-metavars-alist)))
       (+tree-map (lambda (it)
                    (pcase it
@@ -64,11 +100,16 @@ The result is a plist containing the following keys:
                      (`(group . ,_rest)
                       (cl-incf un-numbered-groups))
                      (`(group-n ,n . ,_rest)
-                      (setq numbered-groups (max numbered-groups n))))
+                      (setq numbered-groups (max numbered-groups n)))
+                     ((and `(,h . ,_tl)
+                           (guard (symbolp h))
+                           (guard (string-suffix-p ":" (symbol-name h))))
+                      (push h named-groups)))
                    it)
                  rx-forms)
-      (list :highest-group-number (max 0 numbered-groups un-numbered-groups)
-            :referenced-metavars (nreverse (delete-dups referenced-metavars)))))
+      (list :highest-group-number (max  numbered-groups un-numbered-groups)
+            :referenced-metavars (nreverse (delete-dups referenced-metavars))
+            :named-groups (nreverse (delete-dups named-groups)))))
 
 
   (defun +compile--parse-keyword-args (keyword-args)
@@ -100,7 +141,8 @@ The result is a plist containing the following keys:
 
     (pcase-let* ((env (make-hash-table))
                  (group-numbers (make-hash-table))
-                 ((map :referenced-metavars :highest-group-number) (+compile--analyze-forms rx-forms))
+                 ((map :referenced-metavars :highest-group-number :named-groups)
+                  (+compile--analyze rx-forms))
                  ((map :where-bindings :extra-keywords) (+compile--parse-keyword-args keyword-args)))
 
       (pcase-dolist (`(,key . ,value) where-bindings)
@@ -111,7 +153,8 @@ The result is a plist containing the following keys:
        :extra-keywords extra-keywords
        :group-numbers
        (cl-loop for fresh-number from (1+ highest-group-number)
-                for var in referenced-metavars
+                for var in (append referenced-metavars
+                                   named-groups)
                 do (puthash var fresh-number group-numbers)
                 finally return group-numbers))))
 

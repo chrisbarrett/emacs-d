@@ -2180,17 +2180,18 @@ file in your browser at the visited revision."
   ;; Compilation buffer support
 
   (define-compilation-error-rx elixirc
-    line-start "** (" module ") " message " on " file ":" line ":" col ":" (* nonl) line-end
+    bol "** (" module ") " message " on " file ":" line ":" col ":" (* nonl) eol
     :where module = (+? alnum)
     :hyperlink message
     :type error)
 
   (define-compilation-error-rx elixir-mix
-    line-start (+ space) level ":" (* space) message (? " Did you mean:") "\n"
+    bol (+ space) level ":" (* space) message (? " Did you mean:") "\n"
     (+ (* space) (? (or hint source-context)) "\n")
-    line-start (* space) "└─ " file ":" line ":" col (? ":" (+ nonl))
+    bol (* space) "└─ " file ":" line ":" col (? ":" (+ nonl))
 
     :where level = (or (group-n 1 "warning") (group-n 2 "info") "error")
+
     :where hint = "hint: " (* space) (+ nonl)
 
     :where source-context = (* space) (or (and (? line-number) "│" (* nonl))
@@ -2207,11 +2208,12 @@ file in your browser at the visited revision."
   ;; (elixir 1.18.3) lib/gen_server.ex:1121: GenServer.call/3
 
   (define-compilation-error-rx beam-stacktrace
-    bol (+ space) "(" module " " version ") " (group-n 1  file ":" line ": " message) eol
+    bol (+ space) "(" module " " version ") " (location: file ":" line ": " message) eol
     :where module = (+? any)
     :where version = (+? (any digit "."))
-    :hyperlink 1
-    :type info))
+    :hyperlink location
+    :type info
+    :highlights ((file compilation-info))))
 
 (use-package inf-elixir :ensure t)
 
