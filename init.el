@@ -2161,16 +2161,16 @@ file in your browser at the visited revision."
   (define-compilation-error-rx elixirc
     line-start "** (" module ") " message " on " file ":" line ":" col ":" (* nonl) line-end
     :where module = (+? alnum)
-    :highlight message
+    :hyperlink message
     :type error)
 
   (define-compilation-error-rx elixir-mix
-    line-start (* space) level ":" (* space) message (? " Did you mean:") "\n"
+    line-start (+ space) level ":" (* space) message (? " Did you mean:") "\n"
     (+ (* space) (? (or hint source-context)) "\n")
     line-start (* space) "└─ " file ":" line ":" col (? ":" (+ nonl))
 
     :where level = (or (group-n 1 "warning") (group-n 2 "info") "error")
-    :where hint = "hint:" (* space) (+ nonl)
+    :where hint = "hint: " (* space) (+ nonl)
 
     :where source-context = (* space) (or (and (? line-number) "│" (* nonl))
                                           (and "*" (+ space) ident)
@@ -2184,15 +2184,12 @@ file in your browser at the visited revision."
   ;; E.g.:
 
   ;; (elixir 1.18.3) lib/gen_server.ex:1121: GenServer.call/3
-  ;; (todo 0.1.0) lib/todo/server.ex:31: Todo.Server.handle_continue/2
-  ;; (stdlib 5.2.3.3) gen_server.erl:1085: :gen_server.try_handle_continue/3
-  ;; (stdlib 5.2.3.3) gen_server.erl:995: :gen_server.loop/7
-  ;; (stdlib 5.2.3.3) proc_lib.erl:241: :proc_lib.init_p_do_apply/3
 
   (define-compilation-error-rx beam-stacktrace
-    line-start (* space) "(" module " " version ") " file ":" line ": " message
+    bol (+ space) "(" module " " version ") " (group-n 1  file ":" line ": " message) eol
     :where module = (+? any)
     :where version = (+? (any digit "."))
+    :hyperlink 1
     :type info))
 
 (use-package inf-elixir :ensure t)
