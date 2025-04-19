@@ -37,38 +37,56 @@ regular expression.")
                     term)))
                form))
 
-  (defun +compile--subst-from-env (form env group-numbers)
-    (+tree-map (lambda (term)
-                 (pcase term
-                   ;; Rewrite standard metavar
-                   ((and (pred symbolp)
-                         (let rx-form (alist-get term +compile-metavars-alist))
-                         (guard rx-form)
-                         (let group-number (gethash term group-numbers))
-                         (guard group-number)
-                         )
-                    `(group-n ,group-number ,rx-form))
+  (defun +compile--subst (form env group-numbers)
+    (cl-letf* ((missing-var (gensym "missing-var-"))
+               (missing-group (gensym "missing-group-"))
 
-                   ;; Rewrite named group to numbered group.
-                   ((and `(,h . ,tl)
-                         (guard (symbolp h))
-                         (guard (string-suffix-p ":" (symbol-name h)))
-                         (let group-number (gethash h group-numbers))
-                         (guard group-number)
-                         )
-                    `(group-n ,group-number ,@tl))
+               ((symbol-function 'group-name-p)
+                (lambda (term)
+                  (and (symbolp term) (string-suffix-p ":" (symbol-name term)))))
 
-                   ((and (pred symbolp)
-                         (let expansion (gethash term env))
-                         (guard (not (null expansion)))
-                         )
-                    `(and ,@expansion))
+               ((symbol-function 'rewrite-named-group-to-numbered-group)
+                (lambda (form)
+                  (pcase-exhaustive form
+                    (`(,h . ,tl)
+                     (let ((group-number (gethash h group-numbers )))
+                       `(group-n ,group-number ,@tl))))))
 
-                   (term
-                    term)))
-               form))
+               ((symbol-function 'subst)
+                (lambda (term)
+                  (pcase term
+                    ;; Rewrite standard metavar
+                    ((and (pred symbolp)
+                          (let rx-form (alist-get term +compile-metavars-alist missing-var))
+                          (guard (not (equal missing-var rx-form)))
+                          (let group-number (gethash term group-numbers missing-group))
+                          (guard (not (equal group-number missing-group)))
+                          )
+                     `(group-n ,group-number ,rx-form))
+
+                    ;; Rewrite named group to numbered group.
+                    (`(,(pred group-name-p) . ,_tl)
+                     (rewrite-named-group-to-numbered-group term))
+
+                    ((and (pred symbolp)
+                          (let expansion (gethash term env missing-var))
+                          (guard (not (equal missing-var expansion)))
+                          )
+                     (pcase expansion
+                       ;; Further expand binding if it's a named group.
+                       (`(,(pred group-name-p) . ,_tl)
+                        (rewrite-named-group-to-numbered-group expansion))
+                       (expansion
+                        `(and ,@expansion))))
+
+                    (term
+                     term)))))
+
+      (+tree-map 'subst form)))
 
   (defun +compile--optimize (form)
+    ;; Rx does a good job, so just do some basic trivial hoists to make output
+    ;; forms more readable.
     (+tree-map (lambda (term)
                  (pcase term
                    (`(and ,x) x)
@@ -77,7 +95,7 @@ regular expression.")
                     term)))
                form))
 
-  (defun +compile--analyze (rx-forms)
+  (defun +compile--analyze (rx-forms where-bindings)
     "Analyze RX-FORMS for information needed to build a matcher.
 
 The result is a plist containing the following keys:
@@ -88,62 +106,84 @@ The result is a plist containing the following keys:
 - `:highest-group-number' - the highest allocated match group number.
 
 - `:named-groups' - a list of named capture groups."
-    (let ((numbered-groups 0)
-          (un-numbered-groups 0)
-          (referenced-metavars '())
-          (named-groups '())
-          (metavars (seq-map #'car +compile-metavars-alist)))
-      (+tree-map (lambda (it)
-                   (pcase it
-                     ((and (pred symbolp) (guard (member it metavars)))
-                      (push it referenced-metavars))
-                     (`(group . ,_rest)
-                      (cl-incf un-numbered-groups))
-                     (`(group-n ,n . ,_rest)
-                      (setq numbered-groups (max numbered-groups n)))
-                     ((and `(,h . ,_tl)
-                           (guard (symbolp h))
-                           (guard (string-suffix-p ":" (symbol-name h))))
-                      (push h named-groups)))
-                   it)
-                 rx-forms)
-      (list :highest-group-number (max  numbered-groups un-numbered-groups)
-            :referenced-metavars (nreverse (delete-dups referenced-metavars))
-            :named-groups (nreverse (delete-dups named-groups)))))
+    (let* ((numbered-groups 0)
+           (un-numbered-groups 0)
+           (referenced-metavars '())
+           (named-groups '())
+           (metavars (seq-map #'car +compile-metavars-alist))
+           (analyze (lambda (it)
+                      (pcase it
+                        ((and (pred symbolp) (guard (member it metavars)))
+                         (push it referenced-metavars))
+                        (`(group . ,_rest)
+                         (cl-incf un-numbered-groups))
+                        (`(group-n ,n . ,_rest)
+                         (setq numbered-groups (max numbered-groups n)))
+                        ((and `(,h . ,_tl)
+                              (guard (symbolp h))
+                              (guard (string-suffix-p ":" (symbol-name h))))
+                         (push h named-groups)))
+                      it)))
 
+      (+tree-map analyze rx-forms)
+
+      ;; (debug :where-bindings where-bindings)
+
+      (pcase-dolist (`(,_name . ,value) where-bindings)
+        (+tree-map analyze value))
+
+      (let ((result
+             (list :highest-group-number (max numbered-groups un-numbered-groups)
+                   :referenced-metavars (nreverse (delete-dups referenced-metavars))
+                   :named-groups (nreverse (delete-dups named-groups)))))
+        result)))
+
+
+  (define-error '+compile-duplicate-bindings "Duplicated where-bindings")
+
+  (defun +compile--assert-no-duplicate-bindings (where-bindings-alist)
+    (let* ((seen (make-hash-table))
+           (duplicate-bindings))
+      (pcase-dolist (`(,name . ,_) where-bindings-alist)
+        (when (gethash name seen)
+          (push name duplicate-bindings))
+        (puthash name t seen))
+      (when duplicate-bindings
+        (throw '+compile-duplicate-bindings duplicate-bindings))))
 
   (defun +compile--parse-keyword-args (keyword-args)
-
-    ;; (+compile--parse-keyword-args '(:where x = (+? alnum) (* digit) :kw-y y :kw-z z))
-
     (let ((extra-keywords (make-hash-table))
-          (where-bindings (make-hash-table))
+          (where-bindings)
           (groups (+chunk-by #'keywordp keyword-args)))
+
       (dolist (group groups)
         (pcase-exhaustive group
           ;; Both `:where foo = bar ...' and `:where foo bar ...' are
-          ;; equivalent.
+          ;; accepted.
           ((or `(:where ,key = . ,values)
                `(:where ,key . ,values))
-           (puthash key values where-bindings))
+           (push (cons key values) where-bindings)
+           )
           (`(,key ,value)
            (puthash key value extra-keywords))))
 
-      (list :where-bindings (+alist-from-hash-table where-bindings)
+      (+compile--assert-no-duplicate-bindings where-bindings)
+
+      (list :where-bindings (nreverse where-bindings)
             :extra-keywords (+plist-from-hash-table extra-keywords))))
 
 
   (defun +compile--build-env (rx-forms keyword-args)
-
-    ;; (+compile--build-env '(line-start "** (" module ") " message " on " file ":" line ":" col ":" (* nonl) line-end)
-    ;;                      '(:where module = (+? alnum)
-    ;;                        :type info))
-
     (pcase-let* ((env (make-hash-table))
                  (group-numbers (make-hash-table))
+                 ((map :where-bindings :extra-keywords) (+compile--parse-keyword-args keyword-args))
                  ((map :referenced-metavars :highest-group-number :named-groups)
-                  (+compile--analyze rx-forms))
-                 ((map :where-bindings :extra-keywords) (+compile--parse-keyword-args keyword-args)))
+                  (+compile--analyze rx-forms where-bindings)))
+
+      (cl-loop for fresh-number from (1+ highest-group-number)
+               for var in (append referenced-metavars
+                                  named-groups)
+               do (puthash var fresh-number group-numbers))
 
       (pcase-dolist (`(,key . ,value) where-bindings)
         (puthash key value env))
@@ -151,18 +191,14 @@ The result is a plist containing the following keys:
       (list
        :env env
        :extra-keywords extra-keywords
-       :group-numbers
-       (cl-loop for fresh-number from (1+ highest-group-number)
-                for var in (append referenced-metavars
-                                   named-groups)
-                do (puthash var fresh-number group-numbers)
-                finally return group-numbers))))
+       :group-numbers group-numbers)))
 
   (defun +compile-rx (rx-form keyword-args)
-    (pcase-let* (((map :env :group-numbers) (+compile--build-env rx-form keyword-args)))
-      (+compile--optimize (+compile--subst-from-env rx-form env group-numbers))))
-
-  )
+    (pcase-let* (((and analysis-result (map :env :group-numbers))
+                  (+compile--build-env rx-form keyword-args))
+                 )
+      (append (list :rx-form (+compile--optimize (+compile--subst rx-form env group-numbers)))
+              analysis-result))))
 
 
 
@@ -176,14 +212,15 @@ The result is a plist containing the following keys:
 (defun +compile-spec-for-compilation-error-alist (forms)
   (pcase-let* ((`(,rx-forms ,keyword-args)
                 (+split-with (lambda (it) (not (keywordp it))) forms))
-               ((map :group-numbers :extra-keywords) (+compile--build-env rx-forms keyword-args)))
+               ((map :group-numbers :extra-keywords :rx-form) (+compile-rx rx-forms keyword-args)))
     (list
-     :rx-form (+compile-rx rx-forms keyword-args)
+     :rx-form rx-form
 
      :highlights (seq-map (lambda (it)
                             ;; The first element may be a symbol that resolves
-                            ;; to a group number, but any other elements are
-                            ;; part of a face spec.
+                            ;; to a group number, but any remaining elements are
+                            ;; part of a face spec and should not be
+                            ;; substituted.
                             (pcase-exhaustive it
                               (`(,match . ,rest)
                                (cons (+compile--subst-group-numbers match group-numbers)
@@ -197,6 +234,9 @@ The result is a plist containing the following keys:
              ('warning 1)
              ('warn 1)
              ('info 0)
+             (`(,n . ,m)
+              (cons (+compile--subst-group-numbers n group-numbers)
+                    (+compile--subst-group-numbers m group-numbers)))
              (value value))
 
      :file (or (plist-get extra-keywords :file) (gethash 'file group-numbers))

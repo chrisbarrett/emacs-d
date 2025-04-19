@@ -2190,7 +2190,7 @@ file in your browser at the visited revision."
     (+ (* space) (? (or hint source-context)) "\n")
     bol (* space) "└─ " file ":" line ":" col (? ":" (+ nonl))
 
-    :where level = (or (group-n 1 "warning") (group-n 2 "info") "error")
+    :where level = (or (warn: "warning") (info: "info") "error")
 
     :where hint = "hint: " (* space) (+ nonl)
 
@@ -2200,7 +2200,7 @@ file in your browser at the visited revision."
     :where ident = (* nonl)
     :where line-number = (+ digit) (+ space)
 
-    :type (1 . 2)
+    :type (warn . info)
     :highlight message)
 
   ;; E.g.:

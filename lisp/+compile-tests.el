@@ -20,8 +20,8 @@
 ;;; Analysis
 
 (ert-deftest compiling-specs--analysis--finds-named-groups ()
-  (cl-labels ((named-groups (form)
-                (plist-get (+compile--analyze form)
+  (cl-labels ((named-groups (form &optional where-bindings)
+                (plist-get (+compile--analyze form where-bindings)
                            :named-groups)))
     (should-not
      (named-groups '(and "hello" "world")))
@@ -30,9 +30,20 @@
      (equal '(foo: bar:)
             (named-groups '(and "hello" (foo: "world") (group (bar: "!"))))))))
 
+
+(ert-deftest compiling-specs--analysis--finds-named-groups--in-where-bindings ()
+  (cl-labels ((named-groups (form where-bindings)
+                (plist-get (+compile--analyze form where-bindings)
+                           :named-groups)))
+    (should
+     (equal '(foo: bar:)
+            (named-groups '(and "hello")
+                          '((a . (foo: "hello"))
+                            (b . (and "world" (bar: "!")))))))))
+
 (ert-deftest compiling-specs--analysis--finds-referenced-metavars ()
-  (cl-labels ((metavars (form)
-                (plist-get (+compile--analyze form)
+  (cl-labels ((metavars (form &optional where-bindings)
+                (plist-get (+compile--analyze form where-bindings)
                            :referenced-metavars)))
     (should-not
      (metavars '(and "hello" "world!")))
@@ -41,9 +52,25 @@
      (equal '(file col)
             (metavars '(and "hello" (group file) (and col "world!")))))))
 
+(ert-deftest compiling-specs--analysis--finds-referenced-metavars--in-where-bindings ()
+  (cl-labels ((metavars (form where-bindings)
+                (plist-get (+compile--analyze form where-bindings)
+                           :referenced-metavars)))
+    (should-not
+     (metavars '(a b)
+               '((a . "hello")
+                 (b . "world!"))))
+
+    (should
+     (equal '(file col)
+            (metavars '(a b)
+                      '((a . file)
+                        (b . col)))))))
+
+
 (ert-deftest compiling-specs--analysis--computes-highest-group-number ()
-  (cl-labels ((highest-group (form)
-                (plist-get (+compile--analyze form)
+  (cl-labels ((highest-group (form &optional where-bindings)
+                (plist-get (+compile--analyze form where-bindings)
                            :highest-group-number)))
     (should
      (equal 0 (highest-group '(and "hello" "world!"))))
@@ -208,6 +235,17 @@
      :line nil
      :col nil)))
 
+(ert-deftest compiling-specs--where-bindings--named-group ()
+  (cl-labels ((compiled-rx (form)
+                (plist-get (+compile-spec-for-compilation-error-alist form)
+                           :rx-form)))
+    (should
+     (equal (compiled-rx '(a b
+                           :where a = foo: "hello"
+                           :where b = bar: "world!"))
+            '((group-n 1 "hello")
+              (group-n 2 "world!"))))))
+
 (ert-deftest compiling-specs--recursive-where-bindings ()
   (should-be-equiv-plists
    (+compile-spec-for-compilation-error-alist
@@ -243,41 +281,50 @@
 (ert-deftest compiling-specs--realistic-example ()
   (should-be-equiv-plists
    (+compile-spec-for-compilation-error-alist
-    '(line-start (* space) level ":" (* space) message (? " Did you mean:") "\n"
-      (? (* space) hint "\n")
-      (+ (* space) (? source-context) "\n")
-      line-start (* space) "└─ " file ":" line ":" col (? ":" (+ nonl))
+    '(bol (+ space) level ":" (* space) message (? " Did you mean:") "\n"
+      (+ (* space) (? (or hint source-context)) "\n")
+      bol (* space) "└─ " file ":" line ":" col (? ":" (+ nonl))
 
-      :where level = (or (group-n 1 "warning") (group-n 2 "info") "error")
-      :where hint = "hint:" (* space) (+ nonl)
+      :where level = (or (warn: "warning") (info: "info") "error")
 
-      :where suggested-ident = (* nonl)
+      :where hint = "hint: " (* space) (+ nonl)
+
       :where source-context = (* space) (or (and (? line-number) "│" (* nonl))
-                                            (and "*" (+ space) suggested-ident)
+                                            (and "*" (+ space) ident)
                                             (and (* space) "..." (* nonl)))
-
+      :where ident = (* nonl)
       :where line-number = (+ digit) (+ space)
 
-      :type (1 . 2)
-      :hyperlink message
-      :highlights ((file compilation-info))))
+      :type (warn . info)
+      :highlight message))
    '(:rx-form
-     (line-start (* space) (or (group-n 1 "warning") (group-n 2 "info") "error") ":"
-                 (* space) (group-n 1 (+? nonl)) (? " Did you mean:") "\n"
-                 (? (* space) (and "hint:" (* space) (+ nonl)) "\n")
-                 (+ (* space)
-                    (? (and (* space)
-                            (or (and (? (and (+ digit) (+ space))) "│" (* nonl))
-                                (and "*" (+ space) (* nonl))
-                                (and (* space) "..." (* nonl)))))
-                    "\n")
-                 line-start (* space) "└─ " (group-n 2 (+? nonl)) ":"
-                 (group-n 3 (+ digit)) ":" (group-n 4 (+ digit)) (? ":" (+ nonl)))
+     (bol (+ space)
+          (or (group-n 5 "warning") (group-n 6 "info") "error")
+          ":"
+          (* space) (group-n 1 (+? nonl)) (? " Did you mean:") "\n"
+          (+ (* space)
+             (? (or (and "hint: " (* space) (+ nonl))
+                    (and (* space)
+                         (or (and (? (and (+ digit) (+ space))) "│" (* nonl))
+                             (and "*" (+ space) (* nonl))
+                             (and (* space) "..." (* nonl))))))
+             "\n")
+
+          bol (* space) "└─ "
+          (group-n 2 (+? nonl)) ":" (group-n 3 (+ digit)) ":" (group-n 4 (+ digit))
+          (? ":" (+ nonl)))
+     :highlights nil
+     :hyperlink nil
+     :type (5 . 6)
      :file 2
      :line 3
-     :col 4
-     :type (1 . 2)
-     :highlights ((2 compilation-info))
-     :hyperlink 1)))
+     :col 4)))
+
+(ert-deftest compiling-specs--where-clauses--error-on-duplicates ()
+  (should-error
+   (+compile-spec-for-compilation-error-alist
+    '(a
+      :where a = "s"
+      :where a = "t"))))
 
 ;;; +compile-tests.el ends here
