@@ -2019,6 +2019,24 @@ file in your browser at the visited revision."
       (when (eq evil-state 'visual)
         (evil-normal-state)))))
 
+(use-package ert
+  :general
+  (:keymaps '(ert-results-mode-map emacs-lisp-mode-map)
+            "C-c C-t" #'+ert)
+  (:states 'motion :keymaps 'ert-results-mode-map
+           "L" 'ert-results-toggle-printer-limits-for-test-at-point
+           "T" 'ert-results-pop-to-timings
+           "B" 'ert-results-pop-to-backtrace-for-test-at-point
+           "H" 'ert-results-describe-test-at-point
+           "M-n" 'ert-results-next-test
+           "M-p" 'ert-results-previous-test)
+  :init
+  (defun +ert (arg)
+    (interactive "p")
+    (if arg
+        (ert t)
+      (call-interactively #'ert))))
+
 (use-package nix-ts-mode :ensure t
   :mode "\\.nix\\'"
   :init
@@ -3184,6 +3202,7 @@ file in your browser at the visited revision."
                                     (slot . 0)))))
            (list
             (top (rx bos "CAPTURE-") '(window-height . 0.6))
+            (top (rx bos "*ERT Backtrace*" eos))
             (top (rx bos "*Backtrace*" eos))))
 
          ;; Left side - Search results, debugger ancillary buffers. Generally,
@@ -3235,6 +3254,7 @@ file in your browser at the visited revision."
             (bottom '(derived-mode . inferior-emacs-lisp-mode))
             (bottom '(derived-mode . inf-elixir-mode))
             (bottom '(derived-mode . mistty-mode))
+            (bottom '(derived-mode . ert-simple-view-mode))
             (bottom (rx bos "*eshell*" eos))
             (bottom (rx bos "*eldoc*" eos))
             (bottom (rx bos "*calendar*" eos))
