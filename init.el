@@ -455,6 +455,9 @@ Runs `+escape-hook'."
   (compilation-always-kill t)
   (compilation-ask-about-save nil) ; automatically save before compiling.
   (compilation-scroll-output 'first-error)
+  ;; Clear the default compilation parsers--I'll manage these myself.
+  (compilation-error-regexp-alist nil)
+
   :config
   (add-hook 'compilation-filter-hook #'ansi-color-compilation-filter)
 
