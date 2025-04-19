@@ -40,6 +40,7 @@ emacs-lisp-mode
       (_ "&rest args"))
 
     ") " (p "NAME") ")" n> q ")")
+(ert "(ert-deftest " (p "NAME") " (" p ")" n> q ")")
 
 (atl "(add-to-list '" q ")")
 (as "(cl-assert " p " t " "\"" p "\")")

@@ -108,17 +108,16 @@
 
     '(:rx-form (line-start
                 (* space) (or (group-n 1 "warning") (group-n 2 "info") "error")
-                ":" (* space) (group-n 1 (+? nonl)) (32 " Did you mean:") "\n"
-                (32 (* space) (and "hint:" (* space) (+ nonl)) "\n")
+                ":" (* space) (group-n 1 (+? nonl)) (? " Did you mean:") "\n"
+                (? (* space) (and "hint:" (* space) (+ nonl)) "\n")
                 (+ (* space)
-                   (32
-                    (and (* space)
-                         (or (and (32 (+ digit) (+ space)) "│" (* nonl))
-                             (and "*" (+ space) (* nonl))
-                             (and (* space) "..." (* nonl)))))
+                   (? (and (* space)
+                           (or (and (? (+ digit) (+ space)) "│" (* nonl))
+                               (and "*" (+ space) (* nonl))
+                               (and (* space) "..." (* nonl)))))
                    "\n")
                 line-start (* space) "└─ " (group-n 2 (+? nonl)) ":"
-                (group-n 3 (+ digit)) ":" (group-n 4 (+ digit)) (32 ":" (+ nonl)))
+                (group-n 3 (+ digit)) ":" (group-n 4 (+ digit)) (? ":" (+ nonl)))
       :file 2
       :line 3
       :col 4

@@ -1959,6 +1959,12 @@ file in your browser at the visited revision."
     (describe-symbol (symbol-at-point)))
 
   (+local-leader-set-key 'emacs-lisp-mode-map
+    "t" '(nil :which-key "test")
+    "tt" 'ert
+    "td" 'ert-delete-test
+    "tD" 'ert-delete-all-tests
+
+
     "e" '(nil :which-key "eval")
     "eb" (defun +eval-buffer ()
            (interactive)
@@ -1981,6 +1987,14 @@ file in your browser at the visited revision."
   (setq-hook! 'emacs-lisp-mode-hook
     elisp-flymake-byte-compile-load-path (+elisp-set-flymake-load-path)
     evil-lookup-func #'+emacs-lisp-lookup-func)
+
+  (pushnew! find-sibling-rules
+            ;; Tests -> impl
+            (list (rx (group (+? any)) "-tests.el" eos)
+                  (rx (backref 1) ".el"))
+            ;; Impl -> tests
+            (list (rx (group (+? any)) ".el" eos)
+                  (rx (backref 1) "-tests.el")))
 
   :init
   (use-package checkdoc
