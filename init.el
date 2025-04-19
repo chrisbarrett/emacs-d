@@ -1512,8 +1512,9 @@ word.  Fall back to regular `expreg-expand'."
   (define-advice completing-read-multiple (:filter-args (args) crm-indicator)
     "Display the separator during `completing-read-multiple'."
     (let ((sans-brackets
-           (replace-regexp-in-string (rx (or (and bos "[" (*? any) "]*")
-                                             (and "[" (*? any) "]*" eos)))
+           (replace-regexp-in-string (+rx (or (and bos crm-indicator)
+                                              (and crm-indicator eos))
+                                          :where crm-indicator = "[" (*? any) "]*")
                                      ""
                                      crm-separator)))
       (cons (format "[CRM %s] %s" (propertize sans-brackets 'face 'error) (car args))
@@ -2157,55 +2158,42 @@ file in your browser at the visited revision."
 
   ;; Compilation buffer support
 
-  (alist-set! compilation-error-regexp-alist-alist 'elixirc
-              (list (rx line-start
-                        "** (" (+? alnum) ") "
-                        (group-n 10 (+? nonl)) ; message
-                        " on "
-                        (group-n 1 (+? nonl)) ; file
-                        ":"
-                        (group-n 2 (+ digit)) ; line
-                        ":"
-                        (group-n 3 (+ digit)) ; col
-                        ":" (* nonl) line-end)
-                    1 2 3 nil 10))
+  (define-compilation-error-rx elixirc
+    line-start "** (" module ") " message " on " file ":" line ":" col ":" (* nonl) line-end
+    :where module = (+? alnum)
+    :highlight message
+    :type error)
 
-  (add-to-list 'compilation-error-regexp-alist 'elixirc)
+  (define-compilation-error-rx elixir-mix
+    line-start (* space) level ":" (* space) message (? " Did you mean:") "\n"
+    (+ (* space) (? (or hint source-context)) "\n")
+    line-start (* space) "└─ " file ":" line ":" col (? ":" (+ nonl))
 
-  (alist-set! compilation-error-regexp-alist-alist 'elixir-mix
-              (list (rx line-start (* space) (or
-                                              (group-n 10 "warning")
-                                              (group-n 11 "info")
-                                              "error")
+    :where level = (or (group-n 1 "warning") (group-n 2 "info") "error")
+    :where hint = "hint:" (* space) (+ nonl)
 
-                        ":" (* space) (group-n 12 (+? nonl)) ; message
-                        (? " Did you mean:")
-                        "\n"
-                        (? (and (* space) "hint:" (* space) (+ nonl)
-                                "\n"))
+    :where source-context = (* space) (or (and (? line-number) "│" (* nonl))
+                                          (and "*" (+ space) ident)
+                                          (and (* space) "..." (* nonl)))
+    :where ident = (* nonl)
+    :where line-number = (+ digit) (+ space)
 
-                        ;; Source context lines
-                        (+ (* space)
-                           (? (or
-                               (and
-                                (? (+ digit) (+ space)) ; line number prefix
-                                "│"
-                                (* nonl))
-                               (and "*" (+ space) (* nonl)) ; suggested identifier
-                               (and (* space) "..." (* nonl))))
-                           "\n")
+    :type (1 . 2)
+    :highlight message)
 
-                        line-start (* space)
-                        "└─ "
-                        (group-n 1 (+? nonl)) ; file
-                        ":"
-                        (group-n 2 (+ digit)) ; line
-                        ":"
-                        (group-n 3 (+ digit)) ; col
-                        (? ":" (+ nonl)))
-                    1 2 3 '(10 . 11) 12))
+  ;; E.g.:
 
-  (add-to-list 'compilation-error-regexp-alist 'elixir-mix))
+  ;; (elixir 1.18.3) lib/gen_server.ex:1121: GenServer.call/3
+  ;; (todo 0.1.0) lib/todo/server.ex:31: Todo.Server.handle_continue/2
+  ;; (stdlib 5.2.3.3) gen_server.erl:1085: :gen_server.try_handle_continue/3
+  ;; (stdlib 5.2.3.3) gen_server.erl:995: :gen_server.loop/7
+  ;; (stdlib 5.2.3.3) proc_lib.erl:241: :proc_lib.init_p_do_apply/3
+
+  (define-compilation-error-rx beam-stacktrace
+    line-start (* space) "(" module " " version ") " file ":" line ": " message
+    :where module = (+? any)
+    :where version = (+? (any digit "."))
+    :type info))
 
 (use-package inf-elixir :ensure t)
 
