@@ -1515,11 +1515,8 @@ word.  Fall back to regular `expreg-expand'."
   (define-advice completing-read-multiple (:filter-args (args) crm-indicator)
     "Display the separator during `completing-read-multiple'."
     (let ((sans-brackets
-           (replace-regexp-in-string (+rx (or (and bos crm-indicator)
-                                              (and crm-indicator eos))
-                                          :where crm-indicator = "[" (*? any) "]*")
-                                     ""
-                                     crm-separator)))
+           (replace-regexp-in-string (rx (or (and bos "[" (*? any) "]*")
+                                             (and "[" (*? any) "]*" eos))) "")))
       (cons (format "[CRM %s] %s" (propertize sans-brackets 'face 'error) (car args))
             (cdr args)))))
 
