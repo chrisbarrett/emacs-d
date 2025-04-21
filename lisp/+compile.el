@@ -212,36 +212,46 @@ The result is a plist containing the following keys:
 (defun +compile-spec-for-compilation-error-alist (forms)
   (pcase-let* ((`(,rx-forms ,keyword-args)
                 (+split-with (lambda (it) (not (keywordp it))) forms))
-               ((map :group-numbers :extra-keywords :rx-form) (+compile-rx rx-forms keyword-args)))
-    (list
-     :rx-form rx-form
+               ((map :group-numbers :extra-keywords :rx-form) (+compile-rx rx-forms keyword-args))
+               )
+    (cl-labels ((compile-from-keyword-arg (keyword &optional default)
+                  (pcase (plist-get extra-keywords keyword)
+                    ('()
+                     default)
+                    ((and it (pred functionp))
+                     it)
+                    (it
+                     (+compile--subst-group-numbers it group-numbers))))
+                )
+      (list
+       :rx-form rx-form
 
-     :highlights (seq-map (lambda (it)
-                            ;; The first element may be a symbol that resolves
-                            ;; to a group number, but any remaining elements are
-                            ;; part of a face spec and should not be
-                            ;; substituted.
-                            (pcase-exhaustive it
-                              (`(,match . ,rest)
-                               (cons (+compile--subst-group-numbers match group-numbers)
-                                     rest))))
-                          (plist-get extra-keywords :highlights))
+       :highlights (seq-map (lambda (it)
+                              ;; The first element may be a symbol that resolves
+                              ;; to a group number, but any remaining elements are
+                              ;; part of a face spec and should not be
+                              ;; substituted.
+                              (pcase-exhaustive it
+                                (`(,match . ,rest)
+                                 (cons (+compile--subst-group-numbers match group-numbers)
+                                       rest))))
+                            (plist-get extra-keywords :highlights))
 
-     :hyperlink (+compile--subst-group-numbers (plist-get extra-keywords :hyperlink) group-numbers)
 
-     :type (pcase (plist-get extra-keywords :type)
-             ('error 2)
-             ('warning 1)
-             ('warn 1)
-             ('info 0)
-             (`(,n . ,m)
-              (cons (+compile--subst-group-numbers n group-numbers)
-                    (+compile--subst-group-numbers m group-numbers)))
-             (value value))
+       :type (pcase (plist-get extra-keywords :type)
+               ('error 2)
+               ('warning 1)
+               ('warn 1)
+               ('info 0)
+               (`(,n . ,m)
+                (cons (+compile--subst-group-numbers n group-numbers)
+                      (+compile--subst-group-numbers m group-numbers)))
+               (value value))
 
-     :file (or (plist-get extra-keywords :file) (gethash 'file group-numbers))
-     :line (or (plist-get extra-keywords :line) (gethash 'line group-numbers))
-     :col (or (plist-get extra-keywords :col) (gethash 'col group-numbers)))))
+       :hyperlink (compile-from-keyword-arg :hyperlink)
+       :file (compile-from-keyword-arg :file (gethash 'file group-numbers))
+       :line (compile-from-keyword-arg :line (gethash 'line group-numbers))
+       :col (compile-from-keyword-arg :col (gethash 'col group-numbers))))))
 
 (cl-defmacro define-compilation-error-rx (name &rest forms)
   "Define a regexp parser for use in `compile'.

@@ -392,11 +392,11 @@ Every time PRED returns non-nil, the list is split into a new chunk."
 (defun +tree-map (fn tree)
   "Perform a pre-order traversal of TREE using FN."
   (let ((current (funcall fn tree)))
-    (if (listp current)
-        (seq-map (lambda (it)
-                   (+tree-map fn it))
-                 current)
-      current)))
+    (pcase current
+      (`(,l . ,r)
+       (cons (+tree-map fn l) (+tree-map fn r)))
+      (it
+       it))))
 
 (defmacro alist-set! (alist key value)
   `(setf (alist-get ,key ,alist nil nil #'equal) ,value))

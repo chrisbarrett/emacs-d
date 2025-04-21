@@ -103,8 +103,8 @@
                             :group-numbers))))
 
     (should-be-equiv-plists
-     '(foo: 1)
-     (build-env '(and (foo: 1) bar: 2)))
+     '(foo: 1 bar: 2)
+     (build-env '(and (foo: 1) (bar: 2))))
 
     (should-be-equiv-plists
      '(file 1)
