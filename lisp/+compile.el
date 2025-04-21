@@ -127,8 +127,6 @@ The result is a plist containing the following keys:
 
       (+tree-map analyze rx-forms)
 
-      ;; (debug :where-bindings where-bindings)
-
       (pcase-dolist (`(,_name . ,value) where-bindings)
         (+tree-map analyze value))
 
@@ -218,8 +216,6 @@ The result is a plist containing the following keys:
                   (pcase (plist-get extra-keywords keyword)
                     ('()
                      default)
-                    ((and it (pred functionp))
-                     it)
                     (it
                      (+compile--subst-group-numbers it group-numbers))))
                 )

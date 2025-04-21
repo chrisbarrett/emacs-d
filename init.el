@@ -2198,7 +2198,7 @@ file in your browser at the visited revision."
     :where line-number = (+ digit) (+ space)
 
     :type (warn . info)
-    :highlight message)
+    :hyperlink message)
 
   ;; E.g.:
 
