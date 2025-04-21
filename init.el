@@ -2219,7 +2219,7 @@ file in your browser at the visited revision."
     :where version = (+? (any digit "."))
     :hyperlink location
     :type info
-    :highlights ((file compilation-info))))
+    :highlights ((file 'compilation-info))))
 
 (use-package inf-elixir :ensure t)
 
