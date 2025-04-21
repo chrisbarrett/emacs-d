@@ -1516,7 +1516,9 @@ word.  Fall back to regular `expreg-expand'."
     "Display the separator during `completing-read-multiple'."
     (let ((sans-brackets
            (replace-regexp-in-string (rx (or (and bos "[" (*? any) "]*")
-                                             (and "[" (*? any) "]*" eos))) "")))
+                                             (and "[" (*? any) "]*" eos)))
+                                     ""
+                                     crm-separator)))
       (cons (format "[CRM %s] %s" (propertize sans-brackets 'face 'error) (car args))
             (cdr args)))))
 
