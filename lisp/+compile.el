@@ -200,13 +200,6 @@ The result is a plist containing the following keys:
 
 
 
-(defmacro +rx (&rest forms)
-  "Like RX, but also allow auxiliary definitions using `:where' clauses."
-
-  (cl-assert (cl-plusp (length forms)))
-  (pcase-let* ((`(,rx-forms ,keyword-args) (+split-with (lambda (it) (not (keywordp it))) forms)))
-    `(rx ,@(+compile-rx rx-forms keyword-args))))
-
 (defun +compile-spec-for-compilation-error-alist (forms)
   (pcase-let* ((`(,rx-forms ,keyword-args)
                 (+split-with (lambda (it) (not (keywordp it))) forms))
