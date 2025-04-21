@@ -2186,9 +2186,10 @@ file in your browser at the visited revision."
   ;; Compilation buffer support
 
   (define-compilation-error-rx elixirc
-    bol "** (" module ") " message " on " file ":" line ":" col ":" (* nonl) eol
-    :where module = (+? alnum)
+    bol "** (" err-name ") " message " on " file ":" line ":" col ":" (* nonl) eol
+    :where err-name = err-name: (+? alnum)
     :hyperlink message
+    :highlights ((err-name 'error))
     :type error)
 
   (define-compilation-error-rx elixir-mix
