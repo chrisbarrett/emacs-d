@@ -252,12 +252,12 @@ The result is a plist containing the following keys:
                        (`(,match . ,rest)
                         (pcase rest
                           ((or `(face ,_p1 ,_v1 . ,_)
-                               `(',(pred facep)))
+                               `(',(and (pred symbolp) face-symbol)))
+                           (unless (facep face-symbol)
+                             (warn ":highlights[%S]: `%S' is not a known face" match it))
                            (cons (eval-group-numbers match) rest))
                           (`(face . ,_)
                            (error ":highlights[%S]: face properties must be key-value-pairs" match))
-                          (`(',it)
-                           (error ":highlights[%S]: `%S' is not a known face" match it))
                           (_
                            (error ":highlights[%S]: must provide a 'face or (face props...) spec" match))))
                        (it
