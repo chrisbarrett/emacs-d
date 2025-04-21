@@ -2151,6 +2151,13 @@ file in your browser at the visited revision."
     (with-current-buffer eldoc--doc-buffer
       (general-define-key :keymaps 'local :states 'motion "RET" #'+eglot-open-link))))
 
+
+(use-package eglot-booster :ensure (eglot-booster :host github :repo "jdtsmith/eglot-booster")
+  ;; Teach eglot to use lsp-booster for better performance.
+  :after eglot
+  :demand t
+  :config (eglot-booster-mode +1))
+
 (use-package markdown
   :custom
   (markdown-fontify-code-blocks-natively t))
