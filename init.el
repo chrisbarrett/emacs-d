@@ -2198,7 +2198,7 @@ file in your browser at the visited revision."
 
     :where level = (or (warn: "warning") (info: "info") "error")
 
-    :where hint = "hint: " (* space) (+ nonl)
+    :where hint = "hint: " (* space) (hint-message: (+ nonl))
 
     :where source-context = (* space) (or (and (? line-number) "│" (* nonl))
                                           (and "*" (+ space) ident)
@@ -2207,6 +2207,7 @@ file in your browser at the visited revision."
     :where line-number = (+ digit) (+ space)
 
     :type (warn . info)
+    :highlights ((hint-message 'compilation-info))
     :hyperlink message)
 
   ;; E.g.:
