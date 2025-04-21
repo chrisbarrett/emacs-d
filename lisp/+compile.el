@@ -200,17 +200,25 @@ The result is a plist containing the following keys:
 
 
 
+(define-error '+compile-unbound-function "No such function")
+
 (defun +compile-spec-for-compilation-error-alist (forms)
   (pcase-let* ((`(,rx-forms ,keyword-args)
                 (+split-with (lambda (it) (not (keywordp it))) forms))
                ((map :group-numbers :extra-keywords :rx-form) (+compile-rx rx-forms keyword-args))
                )
-    (cl-labels ((compile-from-keyword-arg (keyword &optional default)
-                  (pcase (plist-get extra-keywords keyword)
-                    ('()
-                     default)
-                    (it
-                     (+compile--subst-group-numbers it group-numbers))))
+    (cl-labels ((throw-if-non-fboundp-symbol (it)
+                  (when (and it (symbolp it) (not (fboundp it)))
+                    (throw '+compile-unbound-function it))
+                  it)
+
+                (compile-from-keyword-arg (keyword &optional default)
+                  (throw-if-non-fboundp-symbol
+                   (pcase (plist-get extra-keywords keyword)
+                     ('()
+                      default)
+                     (it
+                      (+compile--subst-group-numbers it group-numbers)))))
                 )
       (list
        :rx-form rx-form
