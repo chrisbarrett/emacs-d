@@ -2214,12 +2214,14 @@ file in your browser at the visited revision."
   ;; (elixir 1.18.3) lib/gen_server.ex:1121: GenServer.call/3
 
   (define-compilation-error-rx beam-stacktrace
-    bol (+ space) "(" module " " version ") " (location: file ":" line ": " message) eol
-    :where module = (+? any)
-    :where version = (+? (any digit "."))
+    bol (+ space) "(" module " " version ") " (location: file ":" line) ": " message eol
+    :where module = module: (+? any)
+    :where version = version: (+? (any digit "."))
     :hyperlink location
     :type info
-    :highlights ((file 'compilation-info))))
+    :highlights ((file 'compilation-info)
+                 (module 'bold)
+                 (version 'font-lock-comment-face))))
 
 (use-package inf-elixir :ensure t)
 
