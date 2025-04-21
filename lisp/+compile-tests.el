@@ -297,7 +297,7 @@
 
       :type (warn . info)
       :hyperlink message
-      :highlights ((hint italic))
+      :highlights ((hint 'italic))
 
       ))
    '(:rx-form
@@ -317,7 +317,7 @@
      :file 2
      :line 3
      :col 4
-     :highlights ((7 italic))
+     :highlights ((7 'italic))
      :type (5 . 6))))
 
 (ert-deftest compiling-specs--where-clauses--error-on-duplicates ()

@@ -250,13 +250,21 @@ The result is a plist containing the following keys:
                      ;; substituted.
                      (pcase it
                        (`(,match . ,rest)
-                        (cons (eval-group-numbers match) rest))
-                       (value
-                        (error ":highlights must be an alist, but value was not a cons: %S" value))))
+                        (pcase rest
+                          ((or `(face ,_p1 ,_v1 . ,_)
+                               `(',(pred facep)))
+                           (cons (eval-group-numbers match) rest))
+                          (`(face . ,_)
+                           (error ":highlights[%S]: face properties must be key-value-pairs" match))
+                          (`(',it)
+                           (error ":highlights[%S]: `%S' is not a known face" match it))
+                          (_
+                           (error ":highlights[%S]: must provide a 'face or (face props...) spec" match))))
+                       (it
+                        (error ":highlights must be an alist, but value was not a cons: %S" it))))
                    value))
          (_
           (error ":highlights must be an alist")))
-
 
        :type (assert-symbols-fboundp
               (pcase (plist-get extra-keywords :type)
@@ -308,7 +316,9 @@ The optional keyword arguments are:
 
   - `:highlights' - An alist of additional text properties to apply to
     the matched string. The car of each element is a match group (as a
-    number or name) followed by a face or a face spec.
+    number or name) followed by a quoted face or a face spec. See
+    `compilation-error-regexp-alist'.
+
 
 \(fn NAME RX-FORMS... [:where SYMBOL = RX-FORM]* [:highlights number|var-symbol])"
   (declare (indent 1))
