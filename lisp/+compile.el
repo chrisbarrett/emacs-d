@@ -202,18 +202,35 @@ The result is a plist containing the following keys:
 
 (define-error '+compile-unbound-function "No such function")
 
+(defun +compile--no-unrecognised-plist-keys (extra-keywords)
+  (let ((unknown-keywords (seq-difference (seq-map 'car (seq-partition extra-keywords 2))
+                                          '(:where
+                                            :highlights
+                                            :type
+                                            :hyperlink
+                                            :file
+                                            :line
+                                            :col))))
+    (cl-assert (null unknown-keywords) nil "Unknown keyword arguments" )))
+
 (defun +compile-spec-for-compilation-error-alist (forms)
   (pcase-let* ((`(,rx-forms ,keyword-args)
                 (+split-with (lambda (it) (not (keywordp it))) forms))
                ((map :group-numbers :extra-keywords :rx-form) (+compile-rx rx-forms keyword-args))
                )
-    (cl-labels ((throw-if-non-fboundp-symbol (it)
+    (+compile--no-unrecognised-plist-keys extra-keywords)
+
+    (cl-labels ((assert-symbols-fboundp (it)
                   (when (and it (symbolp it) (not (fboundp it)))
                     (throw '+compile-unbound-function it))
                   it)
 
+                (eval-group-numbers (form)
+                  (assert-symbols-fboundp
+                   (+compile--subst-group-numbers form group-numbers)))
+
                 (compile-from-keyword-arg (keyword &optional default)
-                  (throw-if-non-fboundp-symbol
+                  (assert-symbols-fboundp
                    (pcase (plist-get extra-keywords keyword)
                      ('()
                       default)
@@ -223,27 +240,33 @@ The result is a plist containing the following keys:
       (list
        :rx-form rx-form
 
-       :highlights (seq-map (lambda (it)
-                              ;; The first element may be a symbol that resolves
-                              ;; to a group number, but any remaining elements are
-                              ;; part of a face spec and should not be
-                              ;; substituted.
-                              (pcase-exhaustive it
-                                (`(,match . ,rest)
-                                 (cons (+compile--subst-group-numbers match group-numbers)
-                                       rest))))
-                            (plist-get extra-keywords :highlights))
+       :highlights
+       (pcase-exhaustive (plist-get extra-keywords :highlights)
+         ((and value (pred listp))
+          (seq-map (lambda (it)
+                     ;; The first element may be a symbol that resolves
+                     ;; to a group number, but any remaining elements are
+                     ;; part of a face spec and should not be
+                     ;; substituted.
+                     (pcase it
+                       (`(,match . ,rest)
+                        (cons (eval-group-numbers match) rest))
+                       (value
+                        (error ":highlights must be an alist, but value was not a cons: %S" value))))
+                   value))
+         (_
+          (error ":highlights must be an alist")))
 
 
-       :type (pcase (plist-get extra-keywords :type)
-               ('error 2)
-               ('warning 1)
-               ('warn 1)
-               ('info 0)
-               (`(,n . ,m)
-                (cons (+compile--subst-group-numbers n group-numbers)
-                      (+compile--subst-group-numbers m group-numbers)))
-               (value value))
+       :type (assert-symbols-fboundp
+              (pcase (plist-get extra-keywords :type)
+                ('error 2)
+                ('warning 1)
+                ('warn 1)
+                ('info 0)
+                (`(,n . ,m)
+                 (cons (eval-group-numbers n) (eval-group-numbers m)))
+                (value (assert-symbols-fboundp value))))
 
        :hyperlink (compile-from-keyword-arg :hyperlink)
        :file (compile-from-keyword-arg :file (gethash 'file group-numbers))
@@ -283,7 +306,11 @@ The optional keyword arguments are:
     Can be the number of a match group, or one of the symbols in
     `+compile-metavars-alist'.
 
-\(fn NAME RX-FORMS... [:where SYMBOL = RX-FORM]* [:highlight number|var-symbol])"
+  - `:highlights' - An alist of additional text properties to apply to
+    the matched string. The car of each element is a match group (as a
+    number or name) followed by a face or a face spec.
+
+\(fn NAME RX-FORMS... [:where SYMBOL = RX-FORM]* [:highlights number|var-symbol])"
   (declare (indent 1))
   (cl-assert (symbolp name))
 

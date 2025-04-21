@@ -287,7 +287,7 @@
 
       :where level = (or (warn: "warning") (info: "info") "error")
 
-      :where hint = "hint: " (* space) (+ nonl)
+      :where hint = hint: "hint: " (* space) (+ nonl)
 
       :where source-context = (* space) (or (and (? line-number) "│" (* nonl))
                                             (and "*" (+ space) ident)
@@ -296,29 +296,29 @@
       :where line-number = (+ digit) (+ space)
 
       :type (warn . info)
-      :highlight message))
-   '(:rx-form
-     (bol (+ space)
-          (or (group-n 5 "warning") (group-n 6 "info") "error")
-          ":"
-          (* space) (group-n 1 (+? nonl)) (? " Did you mean:") "\n"
-          (+ (* space)
-             (? (or (and "hint: " (* space) (+ nonl))
-                    (and (* space)
-                         (or (and (? (and (+ digit) (+ space))) "│" (* nonl))
-                             (and "*" (+ space) (* nonl))
-                             (and (* space) "..." (* nonl))))))
-             "\n")
+      :hyperlink message
+      :highlights ((hint italic))
 
-          bol (* space) "└─ "
-          (group-n 2 (+? nonl)) ":" (group-n 3 (+ digit)) ":" (group-n 4 (+ digit))
-          (? ":" (+ nonl)))
-     :highlights nil
-     :hyperlink nil
-     :type (5 . 6)
+      ))
+   '(:rx-form
+     (bol (+ space) (or (group-n 5 "warning") (group-n 6 "info") "error") ":"
+          (* space) (group-n 1 (+? nonl)) (32 " Did you mean:") "\n"
+          (+ (* space)
+             (32
+              (or (group-n 7 "hint: " (* space) (+ nonl))
+                  (and (* space)
+                       (or (and (32 (and (+ digit) (+ space))) "│" (* nonl))
+                           (and "*" (+ space) (* nonl))
+                           (and (* space) "..." (* nonl))))))
+             "\n")
+          bol (* space) "└─ " (group-n 2 (+? nonl)) ":" (group-n 3 (+ digit)) ":"
+          (group-n 4 (+ digit)) (32 ":" (+ nonl)))
+     :hyperlink 1
      :file 2
      :line 3
-     :col 4)))
+     :col 4
+     :highlights ((7 italic))
+     :type (5 . 6))))
 
 (ert-deftest compiling-specs--where-clauses--error-on-duplicates ()
   (should-error
@@ -326,5 +326,11 @@
     '(a
       :where a = "s"
       :where a = "t"))))
+
+(ert-deftest compiling-specs--special-keywords--throws-on-non-fboundp-symbol ()
+  (should-error
+   (+compile-spec-for-compilation-error-alist
+    '(""
+      :highlights hello))))
 
 ;;; +compile-tests.el ends here
