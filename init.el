@@ -2199,6 +2199,21 @@ file in your browser at the visited revision."
     :highlights ((hint-message 'compilation-info))
     :hyperlink message)
 
+  (define-compilation-error-rx elixir-test-failure
+    bol (+ space) failure-number ") " message " (" module ")\n"
+    bol (+ space) file ":" line
+    :where module = module: upper (+ (any alnum "_."))
+    :where failure-number = failure-number: (any "1-9") (* digit)
+    :hyperlink message
+    :highlights ((failure-number 'bold)
+                 (module 'font-lock-type-face)))
+
+  (define-compilation-error-rx elixir-test-stacktrace-line
+    bol (+ space) (location: file ":" line) ": (test)" eol
+    :hyperlink location
+    :type info
+    :highlights ((file 'compilation-info)))
+
   ;; E.g.:
 
   ;; (elixir 1.18.3) lib/gen_server.ex:1121: GenServer.call/3
