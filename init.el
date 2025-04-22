@@ -2046,7 +2046,18 @@ file in your browser at the visited revision."
             ;; Impl -> tests
             (list (rx (group (+? any)) ".ts" eos)
                   (rx (backref 1) ".test.ts")
-                  (rx (backref 1) ".integration.ts"))))
+                  (rx (backref 1) ".integration.ts")))
+
+  ;; Compilation
+
+  (define-compilation-error-rx typescript-tsc
+    bol file ":" line ":" col " - " level " " err-code ": " message eol
+    :where err-code = err-code: "TS" (+ digit)
+    :where level = error: "error"
+
+    :hyperlink message
+    :highlights ((err-code 'font-lock-constant-face)
+                 (error 'compilation-error))))
 
 (use-package c-ts-mode
   :general
