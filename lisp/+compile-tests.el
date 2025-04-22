@@ -206,8 +206,8 @@
 
    '(:rx-form (bol
                (group-n 1 (+? nonl))
-               ":" (group-n 2 (+ digit))
-               ":" (group-n 3 (+ digit))
+               ":" (group-n 2 (and (any "1-9") (* digit)))
+               ":" (group-n 3 (and (any "1-9") (* digit)))
                " -- " (group-n 4 (+? nonl))
                eol)
      :file 1
@@ -302,17 +302,18 @@
       ))
    '(:rx-form
      (bol (+ space) (or (group-n 5 "warning") (group-n 6 "info") "error") ":"
-          (* space) (group-n 1 (+? nonl)) (32 " Did you mean:") "\n"
+          (* space) (group-n 1 (+? nonl)) (? " Did you mean:") "\n"
           (+ (* space)
-             (32
-              (or (group-n 7 "hint: " (* space) (+ nonl))
-                  (and (* space)
-                       (or (and (32 (and (+ digit) (+ space))) "│" (* nonl))
-                           (and "*" (+ space) (* nonl))
-                           (and (* space) "..." (* nonl))))))
+             (? (or (group-n 7 "hint: " (* space) (+ nonl))
+                    (and (* space)
+                         (or (and (? (and (+ digit) (+ space))) "│" (* nonl))
+                             (and "*" (+ space) (* nonl))
+                             (and (* space) "..." (* nonl))))))
              "\n")
-          bol (* space) "└─ " (group-n 2 (+? nonl)) ":" (group-n 3 (+ digit)) ":"
-          (group-n 4 (+ digit)) (32 ":" (+ nonl)))
+          bol (* space) "└─ " (group-n 2 (+? nonl)) ":"
+          (group-n 3 (and (any "1-9") (* digit))) ":"
+          (group-n 4 (and (any "1-9") (* digit)))
+          (? ":" (+ nonl)))
      :hyperlink 1
      :file 2
      :line 3

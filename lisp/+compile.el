@@ -10,8 +10,8 @@
 
 (eval-and-compile
   (defconst +compile-metavars-alist '((file . (+? nonl))
-                                      (line . (+ digit))
-                                      (col . (+ digit))
+                                      (line . (and (any "1-9") (* digit)))
+                                      (col . (and (any "1-9") (* digit)))
                                       (message . (+? nonl)))
     "Meta-variables that are available for use in `rx' forms.
 
