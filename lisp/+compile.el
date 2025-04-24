@@ -211,7 +211,7 @@ The result is a plist containing the following keys:
                                             :file
                                             :line
                                             :col))))
-    (cl-assert (null unknown-keywords) nil "Unknown keyword arguments" )))
+    (cl-assert (null unknown-keywords) nil "Unknown keyword arguments: %S" unknown-keywords)))
 
 (defun +compile-spec-for-compilation-error-alist (forms)
   (pcase-let* ((`(,rx-forms ,keyword-args)
