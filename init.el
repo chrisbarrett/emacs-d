@@ -2057,7 +2057,37 @@ file in your browser at the visited revision."
 
     :hyperlink message
     :highlights ((err-code 'font-lock-constant-face)
-                 (error 'compilation-error))))
+                 (error 'compilation-error)))
+
+  (define-compilation-error-rx vitest-trace-line
+    bol (+ space) "❯ " message " " file ":" line ":" col
+    :hyperlink message
+    :type info)
+
+  (define-compilation-error-rx vitest-error
+    bol (prefix: "Serialized Error") ": " message "\n"
+    bol "This error originated in \"" file "\""
+    :hyperlink message
+    :highlights ((prefix 'compilation-error))
+    :type error)
+
+  (define-compilation-error-rx node-warnings
+    bol "(" (node-lit: "node") ":" (node-line: (+ digit)) ") " (warn-ident: (+? alnum) "Warning") ": " message eol
+    :hyperlink message
+    :highlights ((message 'compilation-warning)
+                 (warn-ident 'warning)
+                 (node-lit 'compilation-info)
+                 (node-line 'compilation-line-number))
+    :type warning)
+
+  (define-compilation-error-rx js-error-stacktrace
+    bol (+ space) "\"" file-pat ":" line "\"" (? ",") eol
+    :where file-pat = (? (file-prefix: "file://")) file
+    :hyperlink file
+    :highlights ((file-prefix 'parenthesis)
+                 (file 'compilation-info)
+                 (line 'compilation-line-number))
+    :type info))
 
 (use-package c-ts-mode
   :general
