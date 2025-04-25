@@ -1883,6 +1883,13 @@ file in your browser at the visited revision."
                      "C-n" #'forward-button
                      "C-p" #'backward-button))
 
+(use-package helpful :ensure t
+  ;; Extended help system, showing definitions etc. in the help buffer.
+  :general (:keymaps 'help-map
+                     "f" #'helpful-callable
+                     "v" #'helpful-variable
+                     "k" #'helpful-key))
+
 (use-package eldoc
   ;; Display help hints in the echo area as you move around.
   :config
@@ -1942,7 +1949,10 @@ file in your browser at the visited revision."
 
   :config
   (defun +emacs-lisp-lookup-func ()
-    (describe-symbol (symbol-at-point)))
+    (let ((sym (symbol-at-point)))
+      (if (require 'helpful nil t)
+          (helpful-at-point)
+        (describe-symbol (symbol-at-point)))))
 
   (+local-leader-set-key 'emacs-lisp-mode-map
     "t" '(nil :which-key "test")
