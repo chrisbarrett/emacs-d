@@ -9,10 +9,10 @@
 (require 'map)
 
 (eval-and-compile
-  (defconst +compile-metavars-alist '((file . (+? nonl))
+  (defconst +compile-metavars-alist '((file . (+? print))
                                       (line . (and (any "1-9") (* digit)))
                                       (col . (and (any "1-9") (* digit)))
-                                      (message . (+? nonl)))
+                                      (message . (+? print)))
     "Meta-variables that are available for use in `rx' forms.
 
 These are translated from symbols to match groups in the compiled
