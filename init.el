@@ -2238,9 +2238,10 @@ file in your browser at the visited revision."
   ;; Compilation buffer support
 
   (define-compilation-error-rx elixirc
-    bol "** (" err-name ") " (or typespec-error err-at-loc) eol
+    bol "** (" err-name ") " (or typespec-error err-at-loc mod-compile-err) eol
     :where typespec-error = file ":" line ": " message
     :where err-at-loc = message " on " file ":" line ":" col ":" (* nonl)
+    :where mod-compile-err = file ": " message
 
     :where err-name = err-name: upper (* (any alnum "._"))
     :hyperlink message
