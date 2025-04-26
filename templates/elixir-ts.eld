@@ -18,3 +18,15 @@ elixir-ts-mode
 (re "receive do" n>
     (p "PAT") " -> " q n
     "end" >)
+
+(cast "@impl GenServer" > n>
+      "def handle_cast({" (p "PAT") "}, state) do" n>
+      q n>
+      "{:noreply, state}" n
+      "end" >)
+
+(call "@impl GenServer" > n>
+      "def handle_call({" (p "PAT") "}, _sender, state) do" n>
+      q n>
+      "{:reply, res, state}" n
+      "end" >)
