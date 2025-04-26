@@ -2238,8 +2238,11 @@ file in your browser at the visited revision."
   ;; Compilation buffer support
 
   (define-compilation-error-rx elixirc
-    bol "** (" err-name ") " message " on " file ":" line ":" col ":" (* nonl) eol
-    :where err-name = err-name: (+? alnum)
+    bol "** (" err-name ") " (or typespec-error err-at-loc) eol
+    :where typespec-error = file ":" line ": " message
+    :where err-at-loc = message " on " file ":" line ":" col ":" (* nonl)
+
+    :where err-name = err-name: upper (* (any alnum "._"))
     :hyperlink message
     :highlights ((err-name 'error))
     :type error)
