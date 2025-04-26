@@ -1849,7 +1849,7 @@ file in your browser at the visited revision."
 (use-package project
   ;; Emacs' built-in project lib
   :custom
-  (project-vc-ignores '(".cache/" ".nx/"))
+  (project-vc-ignores '(".cache/"))
   (project-switch-commands
    (defun +project-switch-magit-status ()
      (interactive)
@@ -2047,6 +2047,7 @@ file in your browser at the visited revision."
 (use-package typescript-ts-mode
   :init
   (with-eval-after-load 'project
+    (pushnew! project-vc-ignores ".nx/")
     (pushnew! project-vc-extra-root-markers "nx.json"))
   :config
   (pushnew! find-sibling-rules
