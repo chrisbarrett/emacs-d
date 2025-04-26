@@ -1857,19 +1857,7 @@ file in your browser at the visited revision."
             (root (project-root proj)))
        (if (file-directory-p (file-name-concat root ".git"))
            (magit-status-setup-buffer root)
-         (dired root)))))
-
-  ;; Avoid broken caching behaviour in project.el
-
-  :init
-  (defvar-local +project-root nil
-    "Cached project root.")
-
-  (defun +project-try-vc-cached (dir)
-    (setq +project-root (or +project-root
-                            (project-try-vc--search dir))))
-  :custom
-  (project-find-functions '(+project-try-vc-cached)))
+         (dired root))))))
 
 
 ;;; Documentation systems
