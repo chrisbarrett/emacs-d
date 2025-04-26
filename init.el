@@ -2233,12 +2233,16 @@ file in your browser at the visited revision."
 
   (define-compilation-error-rx elixir-mix
     bol (+ space) level ":" (* space) message (? " Did you mean:") "\n"
-    (+ (* space) (? (or hint source-context)) "\n")
+    (* "\n")
+    (? (+ space) (or hint error-detail) "\n")
+    (* (+ space) source-context "\n")
     bol (* space) "└─ " file ":" line ":" col (? ":" (+ nonl))
 
     :where level = (or (warn: "warning") (info: "info") "error")
 
     :where hint = "hint: " (* space) (hint-message: (+ nonl))
+
+    :where error-detail = error-detail: alpha (+ nonl)
 
     :where source-context = (* space) (or (and (? line-number) "│" (* nonl))
                                           (and "*" (+ space) ident)
@@ -2247,7 +2251,8 @@ file in your browser at the visited revision."
     :where line-number = (+ digit) (+ space)
 
     :type (warn . info)
-    :highlights ((hint-message 'compilation-info))
+    :highlights ((hint-message 'compilation-info)
+                 (error-detail 'compilation-info))
     :hyperlink message)
 
   (define-compilation-error-rx elixir-test-failure
