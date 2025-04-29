@@ -2433,9 +2433,17 @@ file in your browser at the visited revision."
      "elixir-test.eld"))
 
   (+define-file-template-dispatcher 'typescript-ts-mode
-    ((string-match-p "construct" (buffer-file-name))
+    ((and (locate-dominating-file (buffer-file-name "cdk.json"))
+          (string-match-p "construct" (buffer-file-name))
+          (not (equal "index.ts") (file-name-nondirectory (buffer-file-name))))
      "ts-cdk-construct.eld")
-    ((string-match-p "stack" (buffer-file-name))
+    ((and (locate-dominating-file (buffer-file-name "cdk.json"))
+          (string-match-p "/stages/" (buffer-file-name))
+          (not (equal "index.ts") (file-name-nondirectory (buffer-file-name))))
+     "ts-cdk-stage.eld")
+    ((and (locate-dominating-file (buffer-file-name "cdk.json"))
+          (string-match-p "/stages/" (buffer-file-name))
+          (not (equal "index.ts") (file-name-nondirectory (buffer-file-name))))
      "ts-cdk-stack.eld")))
 
 
