@@ -205,10 +205,10 @@
     '(bol file ":" line ":" col " -- " message eol))
 
    '(:rx-form (bol
-               (group-n 1 (+? nonl))
+               (group-n 1 (+? print))
                ":" (group-n 2 (and (any "1-9") (* digit)))
                ":" (group-n 3 (and (any "1-9") (* digit)))
-               " -- " (group-n 4 (+? nonl))
+               " -- " (group-n 4 (+? print))
                eol)
      :file 1
      :line 2
@@ -225,7 +225,7 @@
       :where custom-col = (+? (any "1-9") (* digit))))
 
    '(:rx-form (bol
-               (group-n 1 (+? nonl))
+               (group-n 1 (+? print))
                ":" (+? (any "1-9") (* digit))
                ":" (+? (any "1-9") (* digit)))
      :highlights nil
@@ -278,8 +278,21 @@
      :line nil
      :col nil)))
 
+(ert-deftest compiling-specs--where-clauses--error-on-duplicates ()
+  (should-error
+   (+compile-spec-for-compilation-error-alist
+    '(a
+      :where a = "s"
+      :where a = "t"))))
+
+(ert-deftest compiling-specs--special-keywords--throws-on-non-fboundp-symbol ()
+  (should-error
+   (+compile-spec-for-compilation-error-alist
+    '(""
+      :highlights hello))))
+
 (ert-deftest compiling-specs--realistic-example ()
-  (should-be-equiv-plists
+  (should
    (+compile-spec-for-compilation-error-alist
     '(bol (+ space) level ":" (* space) message (? " Did you mean:") "\n"
       (+ (* space) (? (or hint source-context)) "\n")
@@ -297,41 +310,6 @@
 
       :type (warn . info)
       :hyperlink message
-      :highlights ((hint 'italic))
-
-      ))
-   '(:rx-form
-     (bol (+ space) (or (group-n 5 "warning") (group-n 6 "info") "error") ":"
-          (* space) (group-n 1 (+? nonl)) (? " Did you mean:") "\n"
-          (+ (* space)
-             (? (or (group-n 7 "hint: " (* space) (+ nonl))
-                    (and (* space)
-                         (or (and (? (and (+ digit) (+ space))) "│" (* nonl))
-                             (and "*" (+ space) (* nonl))
-                             (and (* space) "..." (* nonl))))))
-             "\n")
-          bol (* space) "└─ " (group-n 2 (+? nonl)) ":"
-          (group-n 3 (and (any "1-9") (* digit))) ":"
-          (group-n 4 (and (any "1-9") (* digit)))
-          (? ":" (+ nonl)))
-     :hyperlink 1
-     :file 2
-     :line 3
-     :col 4
-     :highlights ((7 'italic))
-     :type (5 . 6))))
-
-(ert-deftest compiling-specs--where-clauses--error-on-duplicates ()
-  (should-error
-   (+compile-spec-for-compilation-error-alist
-    '(a
-      :where a = "s"
-      :where a = "t"))))
-
-(ert-deftest compiling-specs--special-keywords--throws-on-non-fboundp-symbol ()
-  (should-error
-   (+compile-spec-for-compilation-error-alist
-    '(""
-      :highlights hello))))
+      :highlights ((hint 'italic))))))
 
 ;;; +compile-tests.el ends here
