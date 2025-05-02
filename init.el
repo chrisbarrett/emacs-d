@@ -2432,18 +2432,24 @@ file in your browser at the visited revision."
     ((string-match-p (rx "/test/" (+? nonl) ".exs" eos) (buffer-file-name))
      "elixir-test.eld"))
 
+  (defun +cdk-project-p (&optional dir)
+    (locate-dominating-file (or dir default-directory) "cdk.json"))
+
+  (defun +index-ts-p (file)
+    (equal "index.ts" (file-name-nondirectory (buffer-file-name))))
+
   (+define-file-template-dispatcher 'typescript-ts-mode
-    ((and (locate-dominating-file (buffer-file-name) "cdk.json")
-          (string-match-p "construct" (buffer-file-name))
-          (not (equal "index.ts") (file-name-nondirectory (buffer-file-name))))
+    ((and (string-match-p "construct" (buffer-file-name))
+          (+cdk-project-p)
+          (not (+index-ts-p (buffer-file-name))))
      "ts-cdk-construct.eld")
-    ((and (locate-dominating-file (buffer-file-name) "cdk.json")
-          (string-match-p "/stages/" (buffer-file-name))
-          (not (equal "index.ts") (file-name-nondirectory (buffer-file-name))))
+    ((and (string-match-p "/stages/" (buffer-file-name))
+          (+cdk-project-p)
+          (not (+index-ts-p (buffer-file-name))))
      "ts-cdk-stage.eld")
-    ((and (locate-dominating-file (buffer-file-name) "cdk.json")
-          (string-match-p "/stages/" (buffer-file-name))
-          (not (equal "index.ts") (file-name-nondirectory (buffer-file-name))))
+    ((and (string-match-p "/stacks/" (buffer-file-name))
+          (+cdk-project-p)
+          (not (+index-ts-p (buffer-file-name))))
      "ts-cdk-stack.eld")))
 
 
