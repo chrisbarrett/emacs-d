@@ -2270,7 +2270,8 @@ file in your browser at the visited revision."
                  (module 'font-lock-type-face)))
 
   (define-compilation-error-rx elixir-test-stacktrace-line
-    bol (+ space) (location: file ":" line) ": (test)" eol
+    bol (+ space) (location: file ":" line) ": " source eol
+    :where source = (or "(test)" (+ print))
     :hyperlink location
     :type info
     :highlights ((file 'compilation-info)))
