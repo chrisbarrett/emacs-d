@@ -2241,7 +2241,7 @@ file in your browser at the visited revision."
     (* "\n")
     (? (+ space) (or hint error-detail) "\n")
     (* (+ space) source-context "\n")
-    bol (* space) "└─ " file ":" line ":" (? col (? ":" (+ nonl)))
+    bol (* space) "└─ " file ":" line ":" (? col (? ":" (* nonl)))
 
     :where level = (or (warn: "warning") (info: "info") "error")
 
@@ -2249,9 +2249,9 @@ file in your browser at the visited revision."
 
     :where error-detail = error-detail: alpha (+ nonl)
 
-    :where source-context = (* space) (or (and (? line-number) "│" (* nonl))
-                                          (and "*" (+ space) ident)
-                                          (and (* space) "..." (* nonl)))
+    :where source-context =  (or (and (? line-number) "│" (* nonl))
+                                 (and "*" (+ space) ident)
+                                 (and (* space) "..." (* nonl)))
     :where ident = (* nonl)
     :where line-number = (+ digit) (+ space)
 
