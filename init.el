@@ -3224,6 +3224,16 @@ file in your browser at the visited revision."
   (use-package org-roam-links
     :commands (org-roam-links))
 
+  (use-package org-roam-refill-previews
+    :after org-roam
+    :demand t
+    :config
+    (add-hook 'org-roam-preview-postprocess-functions #'org-roam-refill-previews))
+
+  (use-package org-roam-lazy-previews
+    :after org-roam
+    :demand t)
+
   (use-package timekeep
     :commands (timekeep-start timekeep-stop)
     :general
