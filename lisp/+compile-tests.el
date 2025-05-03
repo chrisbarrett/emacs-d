@@ -42,31 +42,36 @@
                             (b . (and "world" (bar: "!")))))))))
 
 (ert-deftest compiling-specs--analysis--finds-referenced-metavars ()
-  (cl-labels ((metavars (form &optional where-bindings)
-                (plist-get (+compile--analyze form where-bindings)
-                           :referenced-metavars)))
-    (should-not
-     (metavars '(and "hello" "world!")))
+  (let ((+compile-metavars-alist '((foo . $FOO)
+                                   (bar . $BAR)
+                                   (baz . $BAZ))))
+    (cl-labels ((metavars (form &optional where-bindings)
+                  (plist-get (+compile--analyze form where-bindings)
+                             :referenced-metavars)))
+      (should-not
+       (metavars '(and "hello" "world!")))
 
-    (should
-     (equal '(file col)
-            (metavars '(and "hello" (group file) (and col "world!")))))))
+      (should
+       (equal '(foo bar)
+              (metavars '(and "hello" (group foo) (and bar "world!"))))))))
 
 (ert-deftest compiling-specs--analysis--finds-referenced-metavars--in-where-bindings ()
-  (cl-labels ((metavars (form where-bindings)
-                (plist-get (+compile--analyze form where-bindings)
-                           :referenced-metavars)))
-    (should-not
-     (metavars '(a b)
-               '((a . "hello")
-                 (b . "world!"))))
+  (let ((+compile-metavars-alist '((file . $FILE)
+                                   (col . $COL)
+                                   (other . $OTHER))))
+    (cl-labels ((metavars (form where-bindings)
+                  (plist-get (+compile--analyze form where-bindings)
+                             :referenced-metavars)))
+      (should-not
+       (metavars '(a b)
+                 '((a . "hello")
+                   (b . "world!"))))
 
-    (should
-     (equal '(file col)
-            (metavars '(a b)
-                      '((a . file)
-                        (b . col)))))))
-
+      (should
+       (equal '(file col)
+              (metavars '(a b)
+                        '((a . file)
+                          (b . col))))))))
 
 (ert-deftest compiling-specs--analysis--computes-highest-group-number ()
   (cl-labels ((highest-group (form &optional where-bindings)
@@ -200,40 +205,46 @@
      :col nil)))
 
 (ert-deftest compiling-specs--metavars ()
-  (should-be-equiv-plists
-   (+compile-spec-for-compilation-error-alist
-    '(bol file ":" line ":" col " -- " message eol))
+  (let ((+compile-metavars-alist '((file . $FILE)
+                                   (line . $LINE)
+                                   (col . $COL)
+                                   (message . $MESSAGE)
+                                   (unused . $OTHER))))
+    (should-be-equiv-plists
+     (+compile-spec-for-compilation-error-alist
+      '(bol file ":" line ":" col " -- " message eol))
 
-   '(:rx-form (bol
-               (group-n 1 (+? print))
-               ":" (group-n 2 (and (any "1-9") (* digit)))
-               ":" (group-n 3 (and (any "1-9") (* digit)))
-               " -- " (group-n 4 (+? print))
-               eol)
-     :file 1
-     :line 2
-     :col 3
-     :highlights nil
-     :hyperlink nil
-     :type nil)))
+     '(:rx-form (bol
+                 (group-n 1 $FILE)
+                 ":" (group-n 2 $LINE)
+                 ":" (group-n 3 $COL)
+                 " -- " (group-n 4 $MESSAGE)
+                 eol)
+       :file 1
+       :line 2
+       :col 3
+       :highlights nil
+       :hyperlink nil
+       :type nil))))
 
 (ert-deftest compiling-specs--where-bindings ()
-  (should-be-equiv-plists
-   (+compile-spec-for-compilation-error-alist
-    '(bol file ":" custom-line ":" custom-col
-      :where custom-line = (+? (any "1-9") (* digit))
-      :where custom-col = (+? (any "1-9") (* digit))))
+  (let ((+compile-metavars-alist '((file . $FILE))))
+    (should-be-equiv-plists
+     (+compile-spec-for-compilation-error-alist
+      '(bol file ":" custom-line ":" custom-col
+        :where custom-line = (+? (any "1-9") (* digit))
+        :where custom-col = (+? (any "1-9") (* digit))))
 
-   '(:rx-form (bol
-               (group-n 1 (+? print))
-               ":" (+? (any "1-9") (* digit))
-               ":" (+? (any "1-9") (* digit)))
-     :highlights nil
-     :hyperlink nil
-     :type nil
-     :file 1
-     :line nil
-     :col nil)))
+     '(:rx-form (bol
+                 (group-n 1 $FILE)
+                 ":" (+? (any "1-9") (* digit))
+                 ":" (+? (any "1-9") (* digit)))
+       :highlights nil
+       :hyperlink nil
+       :type nil
+       :file 1
+       :line nil
+       :col nil))))
 
 (ert-deftest compiling-specs--where-bindings--named-group ()
   (cl-labels ((compiled-rx (form)
