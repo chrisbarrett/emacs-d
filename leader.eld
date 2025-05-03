@@ -263,6 +263,7 @@
 
  "e"  '(nil :wk "errors")
  "el" '(consult-flymake :wk "error list")
+ "ee" '(first-error :wk "first error")
  "en" '(next-error :wk "next error")
  "ep" '(previous-error :wk "prev error")
 
