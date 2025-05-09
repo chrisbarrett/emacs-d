@@ -1920,6 +1920,17 @@ file in your browser at the visited revision."
   :general-config
   (:keymaps 'Info-mode-map [remap consult-imenu] #'Info-menu))
 
+(use-package rfc-mode :ensure t
+  ;; Interface for browsing RFC documents.
+  :general (:keymaps 'help-map "w" #'rfc-mode-browse)
+
+  :custom (rfc-mode-directory "~/.cache/emacs/rfc-mode/rfcs/")
+
+  :config
+  ;; Fix the default face, which doesn't allow highlights (e.g. in vertico).
+  (custom-theme-set-faces 'user
+                          '(rfc-mode-browser-title-face ((t (:inherit bold))))))
+
 
 ;;; Text & programming modes
 
