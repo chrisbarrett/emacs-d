@@ -3352,6 +3352,7 @@ file in your browser at the visited revision."
             ;; Search results
             (left `(or
                     (derived-mode . grep-mode)
+                    (derived-mode . embark-collect-mode)
                     ,(rx bos "*Embark Export: ")
                     ,(rx bos "*org-roam-search"))
                   '(window-width 80))))
