@@ -863,7 +863,7 @@ With optional prefix arg CONTINUE-P, keep profiling."
   :after-call +first-file-hook +first-buffer-hook
   :config
   (global-page-break-lines-mode +1)
-  (pushnew! page-break-lines-modes 'makefile-mode))
+  (pushnew! page-break-lines-modes 'makefile-mode 'rfc-mode))
 
 (use-package hide-mode-line :ensure (hide-mode-line
                                      :host github
