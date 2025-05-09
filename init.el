@@ -1929,7 +1929,26 @@ file in your browser at the visited revision."
   :config
   ;; Fix the default face, which doesn't allow highlights (e.g. in vertico).
   (custom-theme-set-faces 'user
-                          '(rfc-mode-browser-title-face ((t (:inherit bold))))))
+                          '(rfc-mode-browser-title-face ((t (:inherit bold)))))
+
+  (with-eval-after-load 'evil
+    (evil-set-initial-state 'rfc-mode 'motion))
+
+  ;; Add rfc link type to org.
+  :init
+  (with-eval-after-load 'ol
+    (org-link-set-parameters
+     "RFC"
+     :follow (lambda (number)
+               (require 'rfc-mode)
+               (pop-to-buffer (rfc-mode--document-buffer (string-to-number number))))
+     :export (lambda (path desc format)
+               (let ((rfc-num path)
+                     (desc (or desc (concat "RFC " path))))
+                 (pcase format
+                   (`html (format "<a href=\"https://www.rfc-editor.org/rfc/rfc%s.html\">%s</a>" rfc-num desc))
+                   (`latex (format "\\href{https://www.rfc-editor.org/rfc/rfc%s.html}{%s}" rfc-num desc))
+                   (_ desc)))))))
 
 
 ;;; Text & programming modes
