@@ -2059,7 +2059,7 @@ file in your browser at the visited revision."
   :init
   (with-eval-after-load 'project
     (pushnew! project-vc-ignores ".nx/")
-    (pushnew! project-vc-extra-root-markers "nx.json"))
+    (pushnew! project-vc-extra-root-markers "nx.json" "cdk.json"))
   :config
   (pushnew! find-sibling-rules
             ;; Tests -> impl
