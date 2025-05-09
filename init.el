@@ -3313,9 +3313,8 @@ file in your browser at the visited revision."
                                     (side . top)
                                     (slot . 0)))))
            (list
-            (top (rx bos "CAPTURE-") '(window-height . 0.6))
-            (top (rx bos "*ERT Backtrace*" eos))
-            (top (rx bos "*Backtrace*" eos))))
+            (top '(derived-mode . debugger-mode))
+            (top (rx bos "CAPTURE-") '(window-height . 0.6))))
 
          ;; Left side - Search results, debugger ancillary buffers. Generally,
          ;; things that define a temporary context change.
@@ -3327,12 +3326,16 @@ file in your browser at the visited revision."
                                     (side . left)
                                     (slot . 0)))))
            (list
-            (left '(derived-mode . grep-mode) '(window-width 80))
-            (left (rx bos "*Embark Export: ") '(window-width 80))
             (left (rx bos "*Debugger-record*" eos)
                   '(slot . 1)
                   '(window-height . 0.3))
-            (left (rx bos "*org-roam-search") '(window-width . 80))))
+
+            ;; Search results
+            (left `(or
+                    (derived-mode . grep-mode)
+                    ,(rx bos "*Embark Export: ")
+                    ,(rx bos "*org-roam-search"))
+                  '(window-width 80))))
 
          ;; Right side - documentation, reference buffers & command outputs.
 
@@ -3343,15 +3346,26 @@ file in your browser at the visited revision."
                                     (side . right)
                                     (slot . 0)))))
            (list
-            (right (mode-active-p 'gptel-mode) '(window-width . 80))
-            (right (rx bos "*org-roam*" eos) '(window-width . 80))
-            (right (rx bos "*org-roam-links*" eos) '(window-width . 80))
-            (right (rx bos "*help*" eos) '(window-width . 80))
-            (right (rx bos "*Man ") '(window-width . 80))
-            (right (rx bos "*WoMan ") '(window-width . 80))
-            (right (rx bos "*shell command output*" eos))
-            (right (rx bos "*Org babel results*" eos))
-            (right (rx bos "*async shell command*" eos))))
+            (right `(or
+                     ;; shell output
+                     ,(rx bos "*shell command output*" eos)
+                     ,(rx bos "*Org babel results*" eos)
+                     ,(rx bos "*async shell command*" eos)))
+
+            (right `(or
+                     ;; Help buffers
+                     ,(mode-active-p 'gptel-mode)
+                     (derived-mode . rfc-mode)
+                     (derived-mode . help-mode)
+                     (derived-mode . helpful-mode)
+                     (derived-mode . Man-mode)
+                     (derived-mode . woman-mode)
+
+                     ;; org-roam links
+                     ,(rx bos "*org-roam*" eos)
+                     ,(rx bos "*org-roam-links*" eos)
+                     )
+                   '(window-width . 80))))
 
 
          ;; Bottom - Prompts, warnings, errors, compilation buffers.
@@ -3363,18 +3377,28 @@ file in your browser at the visited revision."
                                     (dedicated . t)
                                     (slot . 0)))))
            (list
-            (bottom '(derived-mode . inferior-emacs-lisp-mode))
-            (bottom '(derived-mode . inf-elixir-mode))
-            (bottom '(derived-mode . mistty-mode))
-            (bottom '(derived-mode . ert-simple-view-mode))
-            (bottom (rx bos "*eshell*" eos))
-            (bottom (rx bos "*eldoc*" eos))
-            (bottom (rx bos "*calendar*" eos))
-            (bottom (rx bos " *Agenda Commands*" eos))
-            (bottom (rx bos "*Org Select*" eos))
-            (bottom (rx bos "*Org Note*" eos))
-            (bottom (rx bos "*Org-Babel Error Output*" eos))
-            (bottom (rx bos "*compilation*" eos))))
+            (bottom `(or
+                      ;; REPLs
+                      (derived-mode . inferior-emacs-lisp-mode)
+                      (derived-mode . inf-elixir-mode)
+
+                      ;; shells
+                      (derived-mode . mistty-mode)
+                      (derived-mode . eshell-mode)
+
+                      ;; compilation-like buffers
+                      (derived-mode . compilation-mode)
+                      ,(rx bos "*Org-Babel Error Output*" eos)
+
+                      ;; org-mode popups
+                      ,(rx bos "*calendar*" eos)
+                      ,(rx bos " *Agenda Commands*" eos)
+                      ,(rx bos "*Org Select*" eos)
+                      ,(rx bos "*Org Note*" eos)
+
+                      ;; misc
+                      (derived-mode . ert-simple-view-mode)
+                      ,(rx bos "*eldoc*" eos)))))
 
          ;; Buffers that should never pop up.
 
@@ -3384,8 +3408,8 @@ file in your browser at the visited revision."
                                ,@overrides
                                (allow-no-window . t)))))
            (list
-            (suppress (rx bos "*warnings*" eos))
-            (suppress (rx bos "*async-native-compile-Log*" eos)))))))
+            (suppress `(or ,(rx bos "*warnings*" eos)
+                           ,(rx bos "*async-native-compile-Log*" eos))))))))
 
 
 ;; Then, customise what display-buffer will do for all buffers not matching the
