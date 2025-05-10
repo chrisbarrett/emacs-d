@@ -2159,6 +2159,27 @@ file in your browser at the visited revision."
             (t
              (call-interactively #'self-insert-command))))))
 
+(use-package zig-mode :ensure t
+  :mode "\\.\\(zig\\|zon\\)\\'"
+  :custom
+  (zig-format-on-save nil) ; use apheleia instead.
+  :config
+  (define-compilation-error-rx zig
+    bol file ":" line ":" col ": " level ": " message eol
+    :where level = (or (warn: "warn") (note: "note") (error: "error"))
+    :type (warn . note)
+    :hyperlink message
+    :highlights ((warn 'warning)
+                 (error 'error)
+                 (note 'compilation-info)))
+
+  (define-compilation-error-rx zig-stack-line
+    bol (= 4 space) fun ": " file ":" line ":" col
+    :where fun = fun: (any alpha "_") (* (any alnum "_"))
+    :hyperlink fun
+    :type info
+    :highlights ((fun 'font-lock-function-name-face))))
+
 (use-package hexl
   :general-config
   (:states 'normal
