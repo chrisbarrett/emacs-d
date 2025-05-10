@@ -14,7 +14,7 @@ c-mode c-ts-base-mode
 (i "if (" p ") {" n> q n "}" >)
 (ei "else if (" p ") {" n q "}" >)
 (e "else {" n> q n "}" >)
-(ie "if (" p ") {" n> p n "} else {" n> q n "}" >)
+(ie "if (" p ") {" n> p n "} else {" > n> q n "}" >)
 (r "return " q ";")
 (wh "while (" p ") {" n> q n "}" >)
 (dw "do {" n> p n "}" > " while (" q ");")
