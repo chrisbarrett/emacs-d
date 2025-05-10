@@ -2239,7 +2239,12 @@ file in your browser at the visited revision."
 
   (define-advice eldoc-display-in-buffer (:after (&rest _) update-keymap)
     (with-current-buffer eldoc--doc-buffer
-      (general-define-key :keymaps 'local :states 'motion "RET" #'+eglot-open-link))))
+      (general-define-key :keymaps 'local :states 'motion "RET" #'+eglot-open-link)))
+
+  ;; Prevent display of inlay hints
+  (add-hook 'eglot-managed-mode-hook
+            (defun +eglot-inlay-hints-off ()
+              (eglot-inlay-hints-mode -1))))
 
 
 (use-package eglot-booster :ensure (eglot-booster :host github :repo "jdtsmith/eglot-booster")
