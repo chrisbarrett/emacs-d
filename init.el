@@ -3406,15 +3406,15 @@ file in your browser at the visited revision."
                       (derived-mode . mistty-mode)
                       (derived-mode . eshell-mode)
 
-                      ;; compilation-like buffers
+                      ;; compilation
                       (derived-mode . compilation-mode)
-                      ,(rx bos "*Org-Babel Error Output*" eos)
 
                       ;; org-mode popups
                       ,(rx bos "*calendar*" eos)
                       ,(rx bos " *Agenda Commands*" eos)
                       ,(rx bos "*Org Select*" eos)
                       ,(rx bos "*Org Note*" eos)
+                      ,(rx bos "*Org-Babel Error Output*" eos)
 
                       ;; misc
                       (derived-mode . ert-simple-view-mode)
@@ -3422,10 +3422,9 @@ file in your browser at the visited revision."
 
          ;; Buffers that should never pop up.
 
-         (cl-labels ((suppress (pred &rest overrides)
+         (cl-labels ((suppress (pred)
                        (cons pred
                              `((display-buffer-no-window)
-                               ,@overrides
                                (allow-no-window . t)))))
            (list
             (suppress `(or ,(rx bos "*warnings*" eos)
