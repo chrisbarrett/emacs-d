@@ -2257,7 +2257,8 @@ file in your browser at the visited revision."
   :custom
   (markdown-fontify-code-blocks-natively t))
 
-(use-package hcl-mode :ensure t)
+(use-package hcl-mode :ensure t
+  :mode ("\\.tf\\'" "\\.hcl\\'" "\\.nomad\\'"))
 
 (use-package elixir-ts-mode
   :mode ("\\.ex\\'" "\\.exs\\'")
