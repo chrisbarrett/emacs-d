@@ -8,3 +8,4 @@ org-mode
 (ts "#+begin_src typescript" n> q n "#+end_src" >)
 (js "#+begin_src javascript" n> q n "#+end_src" >)
 (C "#+begin_src C" n> q n "#+end_src" >)
+(zig "#+begin_src zig" n> q n "#+end_src" >)

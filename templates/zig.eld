@@ -29,3 +29,7 @@ zig-mode
 (err "const " (p "NAME") " = error{" n>
      q n
      "}" >)
+
+(sw "switch (" p ") {" n>
+    (p "CASE") " => " q "," n
+    "};" > )
