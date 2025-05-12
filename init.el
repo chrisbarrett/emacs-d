@@ -3032,7 +3032,7 @@ file in your browser at the visited revision."
   :defer-incrementally
   ansi-color dash f rx seq magit-section emacsql
 
-  :general-config
+  :general
   (:states '(motion insert normal) :keymaps 'org-mode-map
            "C-c C-i" #'org-roam-node-insert)
 
