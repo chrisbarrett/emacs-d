@@ -2092,7 +2092,7 @@ file in your browser at the visited revision."
   ;; Compilation
 
   (define-compilation-error-rx typescript-tsc
-    bol file ":" line ":" col " - " level " " err-code ": " message eol
+    bol (* space) file ":" line ":" col " - " level " " err-code ": " message eol
     :where err-code = err-code: "TS" (+ digit)
     :where level = error: "error"
 
