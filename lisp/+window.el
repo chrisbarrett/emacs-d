@@ -81,4 +81,70 @@ With prefix arg ARG, don't select the new window."
       (widen))
     new-buf))
 
+
+;;; Raise/return side windows
+
+(defvar-local +window-original-side nil)
+
+(defvar +side-window-raised-hook nil)
+(defvar +side-window-returned-hook nil)
+
+(defun +side-window-p (window)
+  (window-parameter window 'window-side))
+
+(defun +raise-side-window (&optional window)
+  (interactive)
+  (when window
+    (select-window window))
+
+  (let ((buf (current-buffer))
+        (orig-side (window-parameter nil 'window-side)))
+
+    (unless orig-side
+      (user-error "Not a side window"))
+
+    (delete-window)
+    (switch-to-buffer buf)
+    (setq +window-original-side orig-side)
+    (run-hooks '+side-window-raised-hook)
+    (message "Side window raised")))
+
+(defun +return-raised-side-window ()
+  (interactive)
+  (let ((buf (current-buffer)))
+
+    (unless +window-original-side
+      (user-error "Buffer was not originally a side window"))
+
+    (unless (= 1 (length (seq-remove #'+side-window-p (window-list))))
+      (delete-window))
+
+    (let ((source-window (selected-window)))
+      (display-buffer-in-side-window buf `((side . ,+window-original-side)))
+
+      (with-selected-window source-window
+        (previous-buffer))
+
+      (select-window (get-buffer-window buf))
+      (run-hooks '+side-window-returned-hook)
+      (message "Side window returned"))))
+
+(defun +toggle-side-window ()
+  "Toggle between side-window and regular window."
+  (interactive)
+  (cond ((+side-window-p (selected-window))
+         (+raise-side-window))
+
+        (+window-original-side
+         (+return-raised-side-window))
+
+        (t
+         (pcase (seq-filter #'+side-window-p (window-list))
+           (`(,win)
+            (+raise-side-window win))
+           (`()
+            (user-error "No side windows to act on"))
+           (_
+            (user-error "Select a side window"))))))
+
 (provide '+window)
