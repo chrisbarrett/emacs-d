@@ -81,4 +81,48 @@ With prefix arg ARG, don't select the new window."
       (widen))
     new-buf))
 
+
+;;; Raise/return side windows
+
+(defvar-local +window-original-side nil)
+(defvar +window-return-configuration nil)
+
+(defun +side-window-p (window)
+  (window-parameter window 'window-side))
+
+(defun +toggle-window-focus ()
+  "Toggle between side-window and regular window."
+  (interactive)
+  (cond
+   ((+side-window-p (selected-window))
+    (setq +window-return-configuration
+          (list (current-window-configuration) (point-marker)))
+
+    (let ((buf (current-buffer))
+          (orig-side (window-parameter nil 'window-side)))
+
+      ;; Delete this side window, then any remaining side windows.
+      (delete-window)
+      (let ((ignore-window-parameters t))
+        (delete-other-windows))
+
+      (switch-to-buffer buf)
+      (setq +window-original-side orig-side)
+      (message "Side window raised")))
+
+   (+window-return-configuration
+    (register-val-jump-to +window-return-configuration nil)
+    (setq +window-return-configuration nil)
+    (message "Restoring window arrangement"))
+
+   ((< 1 (length (window-list)))
+    (setq +window-return-configuration
+          (list (current-window-configuration) (point-marker)))
+    (let ((ignore-window-parameters t))
+      (delete-other-windows))
+    (message "Focusing window"))
+
+   (t
+    (user-error "Window already focused"))))
+
 (provide '+window)
