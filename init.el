@@ -1024,7 +1024,16 @@ With optional prefix arg CONTINUE-P, keep profiling."
   (show-paren-delay 0.1)
   (show-paren-when-point-inside-paren t)
   (show-paren-when-point-in-periphery t)
-  (show-paren-context-when-offscreen 'overlay))
+  (show-paren-context-when-offscreen 'overlay)
+  :config
+  (define-advice show-paren--show-context-in-overlay (:after (&rest _) format-overlay)
+    (let ((current-text (overlay-get show-paren--context-overlay 'display)))
+      (overlay-put show-paren--context-overlay 'display
+                   (string-pad (concat "↑ " current-text)
+                               (window-width)
+                               (string-to-char " "))))
+    (overlay-put show-paren--context-overlay
+                 'face `(:box (:line-width (0 . 1) :color ,(face-attribute 'shadow :foreground))))))
 
 (use-package paren-face :ensure t
   ;; Adds a face for parentheses in lisps. I hijack it to dim semicolons and
