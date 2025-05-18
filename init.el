@@ -2386,6 +2386,37 @@ file in your browser at the visited revision."
   (with-eval-after-load 'dired-x
     (pushnew! dired-omit-extensions ".jam" ".vee" ".beam")))
 
+(use-package rust-ts-mode
+  :init
+  (with-eval-after-load 'ol
+    (org-link-set-parameters
+     "crate"
+     :follow (lambda (name)
+               (browse-url (format "https://docs.rs/%s/latest/%s" name name)))
+     :export (lambda (path desc format)
+               (let ((crate-name path)
+                     (desc (or desc (concat "Crate " path))))
+                 (pcase format
+                   (`html (format "<a href=\"https://crates.io/crates/%s\">%s</a>" crate-name desc))
+                   (`latex (format "\\href{https://crates.io/crates/%s}{%s}" crate-name desc))
+                   (_ desc))))))
+  :config
+  (define-compilation-error-rx rustc
+    bol (* space) level (? code) ": " message "\n"
+    bol space "--> " file ":" line ":" col eol
+
+    :where level = (or (err: "error")
+                       (warn: "warn")
+                       (note: "note"))
+    :where code = code: "[" (+ alnum) "]"
+
+    :type (warn . note)
+    :hyperlink message
+    :highlights ((code 'font-lock-constant-face)
+                 (warn 'compilation-warning)
+                 (note 'compilation-info)
+                 (err 'compilation-error))))
+
 ;; Use tree-sitter modes.
 
 (alist-set! major-mode-remap-alist #'c-mode #'c-ts-mode)
