@@ -698,6 +698,7 @@ With optional prefix arg CONTINUE-P, keep profiling."
   :config
   (ligature-set-ligatures 't '("www"))
   (ligature-set-ligatures 'prog-mode (+read-eld "ligatures/prog-mode.eld"))
+  (ligature-set-ligatures 'compilation-mode (+read-eld "ligatures/prog-mode.eld"))
   (ligature-set-ligatures '(text-mode org-agenda-mode) (+read-eld "ligatures/text-mode.eld"))
 
   (global-ligature-mode t))
