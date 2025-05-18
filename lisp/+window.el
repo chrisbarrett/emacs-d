@@ -85,13 +85,60 @@ With prefix arg ARG, don't select the new window."
 ;;; Raise/return side windows
 
 (defvar-local +window-original-side nil)
-(defvar +window-return-configuration nil)
+
+(defvar +side-window-raised-hook nil)
+(defvar +side-window-returned-hook nil)
 
 (defun +side-window-p (window)
   (window-parameter window 'window-side))
 
-(defun +toggle-window-focus ()
+(defun +toggle-side-window-raised ()
   "Toggle between side-window and regular window."
+  (interactive)
+  (cl-labels ((raise-side-window (&optional window)
+                (when window
+                  (select-window window))
+                (let ((buf (current-buffer))
+                      (orig-side (window-parameter nil 'window-side)))
+                  (delete-window)
+
+                  (switch-to-buffer buf)
+                  (setq +window-original-side orig-side)
+                  (run-hooks '+side-window-raised-hook)
+                  (message "Side window raised")))
+
+              (return-side-window ()
+                (let ((buf (current-buffer)))
+                  (unless (= 1 (length (seq-remove #'+side-window-p (window-list))))
+                    (delete-window))
+
+                  (let ((source-window (selected-window)))
+                    (display-buffer-in-side-window buf `((side . ,+window-original-side)))
+
+                    (with-selected-window source-window
+                      (previous-buffer))
+
+                    (select-window (get-buffer-window buf))
+                    (run-hooks '+side-window-returned-hook)
+                    (message "Side window returned")))))
+
+    (cond ((+side-window-p (selected-window))
+           (raise-side-window))
+          (+window-original-side
+           (return-side-window))
+          (t
+           (pcase (seq-filter #'+side-window-p (window-list))
+             (`(,win)
+              (raise-side-window win))
+             (`()
+              (user-error "No side windows to act on"))
+             (_
+              (user-error "Select a side window")))))))
+
+(defvar +window-return-configuration nil)
+
+(defun +toggle-window-fullframe ()
+  "Toggle whether a window takes up the full frame."
   (interactive)
   (cond
    ((+side-window-p (selected-window))

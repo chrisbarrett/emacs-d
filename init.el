@@ -262,7 +262,9 @@ Runs `+escape-hook'."
   (split-height-threshold nil))
 
 (use-package +window
-  :general (:keymaps 'override-global-map "M-r" #'+toggle-window-focus))
+  :general (:keymaps 'override-global-map
+                     "M-f" #'+toggle-window-fullframe
+                     "M-r" #'+toggle-side-window-raised))
 
 (use-package frame
   ;; Frame management settings
