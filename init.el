@@ -1583,7 +1583,6 @@ word.  Fall back to regular `expreg-expand'."
   (setq-hook! 'eshell-mode-hook corfu-auto nil)
   :config
   (corfu-popupinfo-mode +1)
-  (add-hook 'evil-insert-state-exit-hook #'corfu-quit)
 
   (with-eval-after-load 'savehist
     (add-to-list 'savehist-additional-variables 'corfu-history)))
