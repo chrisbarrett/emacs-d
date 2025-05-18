@@ -2409,7 +2409,7 @@ file in your browser at the visited revision."
   :config
   (define-compilation-error-rx rustc
     bol (* space) level (? code) ": " message "\n"
-    bol (+ space) "--> " file ":" line ":" col eol
+    bol (+ space) (arrow: "-->") " " file ":" line ":" col eol
 
     :where level = (or (err: "error")
                        (warn: "warning")
@@ -2419,6 +2419,7 @@ file in your browser at the visited revision."
     :type (warn . info)
     :hyperlink message
     :highlights ((code 'font-lock-constant-face)
+                 (arrow 'parenthesis)
                  (warn 'compilation-warning)
                  (info 'compilation-info)
                  (err 'compilation-error))))

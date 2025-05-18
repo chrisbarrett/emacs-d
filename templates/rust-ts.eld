@@ -22,4 +22,16 @@ rust-ts-mode
     q n
     "}" >)
 
+(im "impl " (p "NAME") " {" n>
+    q n
+    "}" >)
+
+
+(f "fn " (p "NAME") "(" p ")" p " {" n>
+    q n
+    "}" >)
+(pf "pub fn " (p "NAME") "(" p ")" p " {" n>
+    q n
+    "}" >)
+
 (drv "#[derive(" q ")]")
