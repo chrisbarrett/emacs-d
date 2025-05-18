@@ -157,17 +157,17 @@ With prefix arg ARG, don't select the new window."
       (setq +window-original-side orig-side)
       (message "Side window raised")))
 
-   (+window-return-configuration
-    (register-val-jump-to +window-return-configuration nil)
-    (setq +window-return-configuration nil)
-    (message "Restoring window arrangement"))
-
    ((< 1 (length (window-list)))
     (setq +window-return-configuration
           (list (current-window-configuration) (point-marker)))
     (let ((ignore-window-parameters t))
       (delete-other-windows))
     (message "Focusing window"))
+
+   (+window-return-configuration
+    (register-val-jump-to +window-return-configuration nil)
+    (setq +window-return-configuration nil)
+    (message "Restoring window arrangement"))
 
    (t
     (user-error "Window already focused"))))
