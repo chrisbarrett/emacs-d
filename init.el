@@ -192,10 +192,17 @@ Runs `+escape-hook'."
 (put 'erase-buffer 'disabled nil)
 (put 'narrow-to-region 'disabled nil)
 
-;; Since I use evil, I have no need for the usual rectangular selection
-;; keybinding.
 (when (equal system-type 'darwin)
-  (keymap-global-set "C-x SPC" #'ns-do-show-character-palette))
+  ;; Since I use evil, I have no need for the usual rectangular selection
+  ;; keybinding.
+  (keymap-global-set "C-x SPC" #'ns-do-show-character-palette)
+
+  ;; Delete some unneeded macOS-like keybindings.
+  (keymap-global-unset "s-o")
+  (keymap-global-unset "s-f")
+  (keymap-global-unset "s-q")
+  (keymap-global-unset "s-t")
+  (keymap-global-unset "s-n"))
 
 (setq-default fill-column 80)
 (setq ring-bell-function #'ignore)
