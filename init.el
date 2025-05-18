@@ -2403,18 +2403,18 @@ file in your browser at the visited revision."
   :config
   (define-compilation-error-rx rustc
     bol (* space) level (? code) ": " message "\n"
-    bol space "--> " file ":" line ":" col eol
+    bol (+ space) "--> " file ":" line ":" col eol
 
     :where level = (or (err: "error")
-                       (warn: "warn")
-                       (note: "note"))
+                       (warn: "warning")
+                       (info: (or "note" "help")))
     :where code = code: "[" (+ alnum) "]"
 
-    :type (warn . note)
+    :type (warn . info)
     :hyperlink message
     :highlights ((code 'font-lock-constant-face)
                  (warn 'compilation-warning)
-                 (note 'compilation-info)
+                 (info 'compilation-info)
                  (err 'compilation-error))))
 
 (use-package sh-script
