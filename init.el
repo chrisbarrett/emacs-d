@@ -885,7 +885,21 @@ With optional prefix arg CONTINUE-P, keep profiling."
           gptel-mode-hook
           org-roam-mode-hook
           )
-         . hide-mode-line-mode))
+         . hide-mode-line-mode)
+
+  :init
+  (defvar-local +hide-modeline-was-enabled-p nil)
+
+  (add-hook '+side-window-raised-hook
+            (defun +side-window--show-modeline-when-raised ()
+              (setq +hide-modeline-was-enabled-p hide-mode-line-mode)
+              (hide-mode-line-mode -1)))
+
+  (add-hook '+side-window-returned-hook
+            (defun +side-window--hide-mode-line-on-return ()
+              (hide-mode-line-mode (if +hide-modeline-was-enabled-p
+                                       +1
+                                     -1)))))
 
 (use-package highlight-numbers :ensure (highlight-numbers
                                         :host github
