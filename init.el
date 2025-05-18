@@ -2274,7 +2274,6 @@ file in your browser at the visited revision."
             (defun +eglot-inlay-hints-off ()
               (eglot-inlay-hints-mode -1))))
 
-
 (use-package eglot-booster :ensure (eglot-booster :host github :repo "jdtsmith/eglot-booster")
   ;; Teach eglot to use lsp-booster for better performance.
   :after eglot
