@@ -2417,6 +2417,12 @@ file in your browser at the visited revision."
                  (note 'compilation-info)
                  (err 'compilation-error))))
 
+(use-package sh-script
+  :config
+  (define-advice sh-set-shell (:around (fn &rest args) silence-messages)
+    (cl-letf (((symbol-function 'message) #'ignore))
+      (apply fn args))))
+
 ;; Use tree-sitter modes.
 
 (alist-set! major-mode-remap-alist #'c-mode #'c-ts-mode)
