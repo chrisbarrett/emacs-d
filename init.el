@@ -2409,6 +2409,10 @@ file in your browser at the visited revision."
                    (`latex (format "\\href{https://crates.io/crates/%s}{%s}" crate-name desc))
                    (_ desc))))))
   :config
+  ;; Doc-comments have an extra '/' character, which poporg unfortunately
+  ;; preserves in the indirect buffer. Teach poporg to skip that too.
+  (setq-hook! 'rust-ts-mode-hook poporg-comment-skip-regexp (rx (* (any space "/*"))))
+
   (define-compilation-error-rx rustc
     bol (* space) level (? code) ": " message "\n"
     bol (+ space) (arrow: "-->") " " file ":" line ":" col eol
