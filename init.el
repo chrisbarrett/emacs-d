@@ -1426,7 +1426,8 @@ word.  Fall back to regular `expreg-expand'."
 
 (use-package ace-window :ensure t
   ;; Jump to specific windows
-  :general ("M-o" #'ace-window))
+  :general ("M-w" #'ace-window
+            "M-o" #'other-window))
 
 
 ;;; Completion
