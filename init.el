@@ -2413,6 +2413,14 @@ file in your browser at the visited revision."
   ;; preserves in the indirect buffer. Teach poporg to skip that too.
   (setq-hook! 'rust-ts-mode-hook poporg-comment-skip-regexp (rx (* (any space "/*"))))
 
+  (define-advice poporg-dwim (:around (fn &rest args) use-markdown)
+    (let ((poporg-edit-hook
+           (if (derived-mode-p 'rust-ts-mode)
+               '(markdown-mode)
+             poporg-edit-hook)))
+      (apply fn args)))
+
+
   (define-compilation-error-rx rustc
     bol (* space) level (? code) ": " message "\n"
     bol (+ space) (arrow: "-->") " " file ":" line ":" col eol
