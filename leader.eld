@@ -28,12 +28,11 @@
            :wk "edit templates...")
 
 
- "'" (general-predicate-dispatch #'poporg-dwim
+ "'" (general-predicate-dispatch #'separedit
 
        ;; Exit indirect edit session if active
 
-       (bound-and-true-p poporg-mode) #'poporg-edit-exit
-       (bound-and-true-p edit-indirect--overlay) #'edit-indirect-commit
+       (bound-and-true-p edit-indirect--overlay) #'separedit-commit
        (bound-and-true-p org-src-mode) #'org-edit-src-exit
 
        ;; Otherwise, open indirect-edit buffer
@@ -41,9 +40,9 @@
        (and (derived-mode-p 'prog-mode)
             ;; Are we in a string or comment? See: `parse-partial-sexp'
             (or (nth 3 (syntax-ppss)) (nth 4 (syntax-ppss))))
-       #'poporg-dwim
+       #'separedit
 
-       (and (derived-mode-p 'prog-mode) (region-active-p)) #'edit-indirect-region
+       (and (derived-mode-p 'prog-mode) (region-active-p)) #'separedit
        (equal (buffer-name) "*Edit Formulas*") #'org-table-fedit-finish
        (derived-mode-p 'org-mode) #'org-edit-special
        (and (derived-mode-p 'markdown-mode) (markdown-code-block-at-point-p)) 'markdown-edit-code-block)

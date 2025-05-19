@@ -2409,17 +2409,7 @@ file in your browser at the visited revision."
                    (`latex (format "\\href{https://crates.io/crates/%s}{%s}" crate-name desc))
                    (_ desc))))))
   :config
-  ;; Doc-comments have an extra '/' character, which poporg unfortunately
-  ;; preserves in the indirect buffer. Teach poporg to skip that too.
-  (setq-hook! 'rust-ts-mode-hook poporg-comment-skip-regexp (rx (* (any space "/*"))))
-
-  (define-advice poporg-dwim (:around (fn &rest args) use-markdown)
-    (let ((poporg-edit-hook
-           (if (derived-mode-p 'rust-ts-mode)
-               '(markdown-mode)
-             poporg-edit-hook)))
-      (apply fn args)))
-
+  (setq-hook! 'rust-ts-mode-hook separedit-default-mode 'markdown-mode)
 
   (define-compilation-error-rx rustc
     bol (* space) level (? code) ": " message "\n"
@@ -3196,12 +3186,8 @@ file in your browser at the visited revision."
                           `((,(rx bol "LINKS:") 0 '(face org-special-keyword) prepend)))
   )
 
-(use-package poporg :ensure t
+(use-package separedit :ensure t
   ;; Easily pop open comments or strings for editing in a dedicated buffer.
-  )
-
-(use-package edit-indirect :ensure t
-  ;; used by poporg
   )
 
 (use-package org-cycle
