@@ -116,6 +116,7 @@
 
  "f"  '(nil :wk "files")
  "ff" '(find-file :wk "find")
+ "fg" '(magit-find-file :wk "find (in git rev...)")
  "fF" '(find-file-other-window :wk "find (other window)")
  "fs" '(save-buffer :wk "save")
  "fR" '(rename-visited-file :wk "rename")
