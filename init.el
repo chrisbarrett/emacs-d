@@ -473,6 +473,10 @@ Runs `+escape-hook'."
   :config
   (add-hook 'compilation-filter-hook #'ansi-color-compilation-filter)
 
+  (define-compilation-error-rx generic
+    bol file ":" line ":" col ":" (* space) message eol
+    :hyperlink message)
+
   (with-eval-after-load 'pulsar
     (delq! 'next-error pulsar-pulse-functions)
     (delq! 'next-error-recenter pulsar-pulse-functions)
