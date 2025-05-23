@@ -3521,6 +3521,7 @@ file in your browser at the visited revision."
 
                       ;; misc
                       (derived-mode . ert-simple-view-mode)
+                      ,(rx bol "*envrc*" eos)
                       ,(rx bos "*eldoc*" eos)))))
 
          ;; Buffers that should never pop up.
