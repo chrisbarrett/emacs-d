@@ -676,10 +676,9 @@ With optional prefix arg CONTINUE-P, keep profiling."
   :if (memq system-type '(darwin x))
   :demand t
   :config
-  ;; Get compilation working
-  ;;
-  ;; https://github.com/purcell/envrc/issues/92#issuecomment-2415612472
   (pushnew! exec-path-from-shell-variables
+            ;; Add variables needed for M-x compile with Nix. See:
+            ;; https://github.com/purcell/envrc/issues/92#issuecomment-2415612472
             "SSH_AUTH_SOCK"
             "SSH_AGENT_PID"
             "XDG_DATA_DIRS"
@@ -689,7 +688,10 @@ With optional prefix arg CONTINUE-P, keep profiling."
             "NIX_USER_PROFILE_DIR"
             "NIX_SSL_CERT_FILE"
             "NIX_PROFILES"
-            "NIX_PATH")
+            "NIX_PATH"
+            ;; Extra environment variables set via home-manager.
+            "RIPGREP_CONFIG_PATH"
+            )
 
   ;; Speed up by using a non-interactive shell.
   (delq! "-i" exec-path-from-shell-arguments)
