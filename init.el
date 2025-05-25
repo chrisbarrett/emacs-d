@@ -984,7 +984,10 @@ With optional prefix arg CONTINUE-P, keep profiling."
 
   (delq! 'evil-goto-first-line pulsar-pulse-functions)
   (delq! 'evil-goto-line pulsar-pulse-functions)
-  (pushnew! pulsar-pulse-functions 'forward-button 'backward-button)
+
+  (pushnew! pulsar-pulse-functions
+            'forward-button 'backward-button
+            'evil-search-next 'evil-search-previous 'isearch-exit)
 
   (define-advice evil-goto-line (:after (count) pulsar)
     "Don't pulse if moving to the first or last line via gg/G."
