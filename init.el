@@ -3303,7 +3303,7 @@ file in your browser at the visited revision."
   :general
   (:keymaps 'gptel-mode-map :states '(normal insert) "C-c C-s" #'+gptel-send)
   :custom
-  (gptel-model 'claude-3-7-sonnet-20250219)
+  (gptel-model 'claude-sonnet-4-20250514)
   (gptel-default-mode 'org-mode)
   :config
   (alist-set! gptel-prompt-prefix-alist 'org-mode "* ")
