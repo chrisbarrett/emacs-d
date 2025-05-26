@@ -2119,6 +2119,9 @@ file in your browser at the visited revision."
   (setq-hook! 'yaml-ts-mode-hook
     tab-width 2))
 
+(use-package js
+  :mode ("\\.[mc]?js" . js-ts-mode))
+
 (use-package typescript-ts-mode
   :init
   (with-eval-after-load 'project
