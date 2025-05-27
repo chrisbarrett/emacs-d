@@ -2814,6 +2814,17 @@ file in your browser at the visited revision."
 
   (org-link-set-parameters "id" :face '+org-id-link)
 
+  (org-link-set-parameters
+   "github"
+   :follow (lambda (path)
+             (browse-url (format "https://github.com/%s" path)))
+   :export (lambda (path desc format)
+             (let ((desc (or desc (concat "GitHub: " path))))
+               (pcase format
+                 (`html (format "<a href=\"https://github.com/%s\">%s</a>" path desc))
+                 (`latex (format "\\href{https://github.com/%s}{%s}" path desc))
+                 (_ desc)))))
+
   (require 'ol-man)
 
   ;; Make RET follow ID links in the same window.
