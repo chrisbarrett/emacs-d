@@ -279,6 +279,8 @@
  "ts" '(spell-fu-mode :wk "spellchecks")
  "tr" '(read-only-mode :wk "readonly")
  "tw" '(whitespace-mode :wk "whitespace")
+ "tv" '(visual-line-mode :wk "line wrapping")
+ "tV" '(global-visual-line-mode :wk "line wrapping (globally)")
 
  "w"  '(nil :wk "windows")
  "w-" '(+split-window-vertically-dwim :wk "vsplit")
