@@ -1856,7 +1856,10 @@ file in your browser at the visited revision."
   ;; useful mainly for my org files, where I don't care about commit messages
   ;; and just want a git history.
   :custom
-  (gac-silent-message-p t))
+  (gac-silent-message-p t)
+  :init
+  (put 'gac-debounce-interval 'safe-local-variable 'integerp)
+  (put 'gac-automatically-add-new-files-p 'safe-local-variable 'booleanp))
 
 
 ;;; Modeline
