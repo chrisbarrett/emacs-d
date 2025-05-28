@@ -2304,8 +2304,14 @@ file in your browser at the visited revision."
   :config (eglot-booster-mode +1))
 
 (use-package markdown
+  :general (:keymaps 'markdown-mode-map "C-c f" #'markdown-insert-footnote)
   :custom
-  (markdown-fontify-code-blocks-natively t))
+  (markdown-fontify-code-blocks-natively t)
+  (markdown-hide-urls t)
+  :config
+  (+local-leader-set-key 'markdown-mode-map
+    "l" '(markdown-toggle-url-hiding :wk "toggle URLs")
+    "f" '(markdown-insert-footnote :wk "insert footnote")))
 
 (use-package hcl-mode :ensure t
   :mode ("\\.tf\\'" "\\.hcl\\'" "\\.nomad\\'"))
