@@ -2125,6 +2125,13 @@ file in your browser at the visited revision."
 (use-package js
   :mode ("\\.[mc]?js" . js-ts-mode))
 
+(use-package nix-ts-mode
+  :init
+  (add-to-list 'auto-mode-alist `(,(rx "/flake.lock" eos) . json-ts-mode))
+
+  (with-eval-after-load 'project
+    (pushnew! project-vc-extra-root-markers "flake.nix")))
+
 (use-package typescript-ts-mode
   :init
   (with-eval-after-load 'project
