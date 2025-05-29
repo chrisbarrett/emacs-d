@@ -3500,7 +3500,7 @@ file in your browser at the visited revision."
                     (derived-mode . embark-collect-mode)
                     ,(rx bos "*Embark Export: ")
                     ,(rx bos "*org-roam-search"))
-                  '(window-width 80))))
+                  '(window-width . 80))))
 
          ;; Right side - documentation, reference buffers & command outputs.
 
