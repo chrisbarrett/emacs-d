@@ -513,6 +513,12 @@ Runs `+escape-hook'."
   (:keymaps 'elpaca-info-mode-map "q" #'quit-window))
 
 (use-package profiler
+  :general
+  (:keymaps 'profiler-report-mode-map
+   :states 'normal
+   "A" #'profiler-report-ascending-sort
+   "D" #'profiler-report-descending-sort
+   "K" #'profiler-report-describe-entry)
   :config
   (defun +profiler-stop-and-report (&optional continue-p)
     "Stop the profiler and show results.
