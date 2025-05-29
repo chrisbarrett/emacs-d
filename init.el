@@ -3475,7 +3475,8 @@ file in your browser at the visited revision."
                                     (side . top)
                                     (slot . 0)))))
            (list
-            (top '(derived-mode . debugger-mode))
+            (top '(or (derived-mode . debugger-mode)
+                      (derived-mode . profiler-report-mode)))
             (top (rx bos "CAPTURE-") '(window-height . 0.6))))
 
          ;; Left side - Search results, debugger ancillary buffers. Generally,
