@@ -6,6 +6,7 @@
 
 (require '+corelib)
 (require 's)
+(require 'dash)
 
 (autoload 'gptel-request "gptel")
 (defvar gptel-model nil)
@@ -19,10 +20,34 @@
 
 (defvar +capture-fast-llm-model 'claude-3-haiku-20240307)
 
-(defun +capture--metadata-for-web-document (url excerpt &optional title)
-  (let* ((gptel-model +capture-fast-llm-model)
-         (prompt-parts
-          `("
+
+;;; Prompt builders
+
+(defun +capture--prompt-for-youtube-video (title)
+  (cl-assert (stringp title))
+  (format "
+Below is the title for a YouTube video:
+<TITLE>
+%s
+</TITLE>
+
+Inspect this title and see whether you can infer information from it suitable for a citation.
+
+Return a Lisp plist, suitable for use with `read', with the following symbol keys:
+
+- :title -- the title of the work, with any unrelated information removed
+- :author -- the name of the primary author if available, or nil
+- :year -- the year the video was published.
+
+Values that cannot be reasonably inferred from the document excerpt should be omitted from the plist.
+
+Do not return any prose; only return the alist (unquoted) so that it may be passed to `read'.
+" title))
+
+(defun +capture--prompt-for-generic-web-page (title rendered-content)
+  (cl-assert (stringp title))
+  (cl-assert (stringp rendered-content))
+  (let ((parts `("
 Inspect this excerpt from a web page to return metadata about it.
 
 Return a Lisp plist, suitable for use with `read', with the following symbol keys:
@@ -36,31 +61,43 @@ Values that cannot be reasonably inferred from the document excerpt should be om
 
 Do not return any prose; only return the alist (unquoted) so that it may be passed to `read'.
 "
-            ,@(when title
-                `("The title of the page from the HTML header is below:"
-                  "<TITLE>"
-                  title
-                  "</TITLE>"))
+                 ,@(when title
+                     `("The title of the page from the HTML header is below:"
+                       "<TITLE>"
+                       ,title
+                       "</TITLE>"))
 
-            "The excerpt of the page text is below:"
-            "<EXCERPT>"
-            ,excerpt
-            "</EXCERPT>"))
-         (prompt (string-join (seq-map #'string-trim prompt-parts) "\n")))
+                 "The excerpt of the page text is below:"
+                 "<EXCERPT>"
+                 ,(substring-no-properties rendered-content
+                                           0
+                                           (min (length rendered-content) 1000))
+                 "</EXCERPT>")
+               ))
+    (string-join (seq-map #'string-trim parts) "\n")))
 
-    (let ((result)
-          (reporter (make-progress-reporter "Interpreting page for metadata")))
+
 
-      (gptel-request prompt
-        :callback (lambda (response _info)
-                    (setq result response)))
+(defun +capture--metadata-for-web-document (url title rendered-content)
+  (let* ((gptel-model +capture-fast-llm-model)
+         (reporter (make-progress-reporter "Interpreting page for metadata"))
+         (prompt
+          (cond ((string-prefix-p "https://www.youtube.com/" url)
+                 (+capture--prompt-for-youtube-video title))
+                (t
+                 (+capture--prompt-for-generic-web-page title rendered-content))))
+         (result))
 
-      (progress-reporter-update reporter)
-      (while (null result)
-        (sleep-for 0.05)
-        (progress-reporter-update reporter))
-      (prog1 (append (list :url url) (read result))
-        (progress-reporter-done reporter)))))
+    (gptel-request prompt
+      :callback (lambda (response _info)
+                  (setq result response)))
+
+    (progress-reporter-update reporter)
+    (while (null result)
+      (sleep-for 0.05)
+      (progress-reporter-update reporter))
+    (prog1 (append (list :url url) (read result))
+      (progress-reporter-done reporter))))
 
 (defun +litnote-meta-try-from-eww ()
   (when-let* ((eww-buffer (seq-find (lambda (buf)
@@ -70,9 +107,8 @@ Do not return any prose; only return the alist (unquoted) so that it may be pass
                                     (buffer-list))))
     (with-current-buffer eww-buffer
       (+capture--metadata-for-web-document (plist-get eww-data :url)
-                                           (buffer-substring (point-min)
-                                                             (min (point-max) 1000))
-                                           (plist-get eww-data :title)))))
+                                           (plist-get eww-data :title)
+                                           (buffer-string)))))
 
 (defun +capture-read-url ()
   (let ((default (seq-find (lambda (it)
@@ -89,13 +125,24 @@ Do not return any prose; only return the alist (unquoted) so that it may be pass
   "Return metadata plist for the URL in the clipboard."
   (let ((url (+capture-read-url)))
     (with-current-buffer (url-retrieve-synchronously url t t 5)
+      (goto-char (point-min))
+
+      (search-forward "\n\n") ; skip headers
+      (search-forward-regexp (rx bol "<")) ; make sure we're at the XML.
+      (goto-char (line-beginning-position))
+
       (unwind-protect
-          (let ((parsed (libxml-parse-html-region (point-min) (point-max))))
+          (let* ((dom (libxml-parse-html-region (point) (point-max)))
+                 (title
+                  (-some-> dom
+                    (dom-by-tag 'head)
+                    (dom-by-tag 'title)
+                    (car)
+                    (dom-text))))
             (erase-buffer)
-            (shr-insert-document parsed)
-            (+capture--metadata-for-web-document url
-                                                 (buffer-substring (point-min)
-                                                                   (min (point-max) 1000))))
+            (shr-insert-document dom)
+            (+capture--metadata-for-web-document url title (buffer-string)))
+
         (kill-buffer)))))
 
 (defun +capture-litnote-function ()
