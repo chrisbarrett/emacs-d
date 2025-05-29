@@ -2,6 +2,12 @@
 :ID:      %(org-id-new)
 :CREATED: %U
 :END:
-#+title: %^{Author}: %(eval +capture-current-file-title-from-read)
+#+title: %(plist-get +capture-context :author) - %(plist-get +capture-context :title)
+
+:META:
+- URL :: %(plist-get +capture-context :url)
+- AUTHORS :: %(plist-get +capture-context :authors-string)
+- YEAR :: %(plist-get +capture-context :year-string)
+:END:
 
 %?
