@@ -2339,7 +2339,15 @@ file in your browser at the visited revision."
   ;; KLUDGE: Use opentofu instead of terraform. Probably need to be a bit more
   ;; clever about this.
   (with-eval-after-load 'apheleia-formatters
-    (setf (car (alist-get 'terraform apheleia-formatters)) "tofu")))
+    (setf (car (alist-get 'terraform apheleia-formatters)) "tofu"))
+
+  (define-compilation-error-rx terragrunt
+    bol "*" space file ":" line "," col (? "-" (+ (any digit "-,"))) ":" space message eol
+    :hyperlink message)
+
+  ;; Errors in terragrunt stacks are reported from the temp build dir; navigate
+  ;; to actual input file instead.
+  (alist-set! compilation-transform-file-match-alist (rx "/.terragrunt-stack/") '("/")))
 
 (use-package elixir-ts-mode
   :mode ("\\.ex\\'" "\\.exs\\'")
