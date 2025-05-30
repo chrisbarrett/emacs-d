@@ -2336,10 +2336,10 @@ file in your browser at the visited revision."
 (use-package terraform-mode :ensure t
   :mode ("\\.tf\\'")
   :config
-  ;; KLUDGE: Use opentofu instead of terraform. Probably need to be a bit more
-  ;; clever about this.
+  ;; Use `tofu' for formatting terraform files if on PATH.
   (with-eval-after-load 'apheleia-formatters
-    (setf (car (alist-get 'terraform apheleia-formatters)) "tofu"))
+    (add-to-list 'apheleia-formatters '(opentofu . ("tofu" "fmt" "-")))
+    (alist-set! apheleia-mode-alist 'terraform-mode '(opentofu terraform)))
 
   (define-compilation-error-rx terragrunt
     bol "*" space file ":" line "," col (? "-" (+ (any digit "-,"))) ":" space message eol
