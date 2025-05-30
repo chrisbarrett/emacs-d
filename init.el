@@ -2327,7 +2327,14 @@ file in your browser at the visited revision."
     "f" '(markdown-insert-footnote :wk "insert footnote")))
 
 (use-package hcl-mode :ensure t
-  :mode ("\\.tf\\'" "\\.hcl\\'" "\\.nomad\\'"))
+  :mode ("\\.hcl\\'")
+  :config
+  (+define-file-template (rx "terragrunt.hcl" eos) "terragrunt/terragrunt.eld")
+  (+define-file-template (rx "root.hcl" eos) "terragrunt/root.eld")
+  (+define-file-template (rx "region.hcl" eos) "terragrunt/region.eld"))
+
+(use-package terraform-mode :ensure t
+  :mode ("\\.tf\\'"))
 
 (use-package elixir-ts-mode
   :mode ("\\.ex\\'" "\\.exs\\'")
@@ -2595,9 +2602,9 @@ file in your browser at the visited revision."
 
   (+define-file-template-dispatcher 'elixir-ts-mode
     ((string-match-p "/lib/" (buffer-file-name))
-     "elixir-lib.eld")
+     "elixir/lib.eld")
     ((string-match-p (rx "/test/" (+? nonl) ".exs" eos) (buffer-file-name))
-     "elixir-test.eld"))
+     "elixir/test.eld"))
 
   (defun +cdk-project-p (&optional dir)
     (locate-dominating-file (or dir default-directory) "cdk.json"))
@@ -2609,15 +2616,11 @@ file in your browser at the visited revision."
     ((and (string-match-p "construct" (buffer-file-name))
           (+cdk-project-p)
           (not (+index-ts-p (buffer-file-name))))
-     "ts-cdk-construct.eld")
-    ((and (string-match-p "/stages/" (buffer-file-name))
-          (+cdk-project-p)
-          (not (+index-ts-p (buffer-file-name))))
-     "ts-cdk-stage.eld")
+     "cdk/construct.eld")
     ((and (string-match-p "/stacks/" (buffer-file-name))
           (+cdk-project-p)
           (not (+index-ts-p (buffer-file-name))))
-     "ts-cdk-stack.eld")))
+     "cdk/stack.eld")))
 
 
 ;;; org-mode
