@@ -15,6 +15,8 @@
 (eval-and-compile
   (defvar +lisp-dir (file-name-concat user-emacs-directory "lisp/"))
   (add-to-list 'load-path +lisp-dir)
+  (defvar +modules-dir (file-name-concat user-emacs-directory "modules/"))
+  (add-to-list 'load-path +modules-dir)
   (require '+corelib)
   (require '+load-incrementally)
   (require '+compile))
@@ -617,7 +619,8 @@ With optional prefix arg CONTINUE-P, keep profiling."
 (when (boundp 'trusted-content)
   (add-to-list 'trusted-content (file-name-concat user-emacs-directory "early-init.el"))
   (add-to-list 'trusted-content (file-name-concat user-emacs-directory "init.el"))
-  (add-to-list 'trusted-content +lisp-dir))
+  (add-to-list 'trusted-content +lisp-dir)
+  (add-to-list 'trusted-content +modules-dir))
 
 ;; Silence "For information about GNU Emacs and the GNU system..." on startup.
 (advice-add #'display-startup-echo-area-message :override #'ignore)
