@@ -2339,7 +2339,33 @@ file in your browser at the visited revision."
 
   ;; Errors in terragrunt stacks are reported from the temp build dir; navigate
   ;; to actual input file instead.
-  (alist-set! compilation-transform-file-match-alist (rx "/.terragrunt-stack/") '("/")))
+  (alist-set! compilation-transform-file-match-alist (rx "/.terragrunt-stack/") '("/"))
+
+  ;; Extra informational parsers.
+
+  (define-compilation-error-rx terragrunt-info
+    (or "from" "at") space (? "'") (file: "./" (*? (not (any "\n:"))) ".hcl")
+    (or "'"
+        eol
+        (and symbol-end " line " line (* nonl)))
+    :file file
+    :type info
+    :hyperlink file)
+
+  (define-compilation-error-rx terragrunt-stack-modules
+    bol "- Module " file (or eol space)
+    :type info
+    :hyperlink file)
+
+  (define-compilation-error-rx terragrunt-err
+    prefix (err: "Error: " message) "\n"
+    prefix (= 2 space) "on " (loc: file " line " line) (* nonl) "\n"
+
+    :where prefix = bol timestamp space "ERROR" (= 2 space)
+    :where timestamp = (= 2 digit) ":" (= 2 digit) ":" (= 2 digit) "." (= 3 digit)
+    :highlights ((err 'error))
+
+    :hyperlink err))
 
 (use-package terraform-mode :ensure t
   :mode ("\\.tf\\'")
