@@ -8,7 +8,9 @@ locals {
   account_id   = local.account_vars.locals.aws_account_id
   aws_region   = local.region_vars.locals.aws_region
 
+  # TODO: Fill these out.
   bucket_prefix = \"TODO\"
+  source_base_url = \"git::git@github.com:<org>/<repo>.git\"
 }
 
 remote_state {

@@ -15,13 +15,19 @@ hcl-mode
    "}" >)
 
 (u "unit \"" (p "NAME" name) "\" {" n>
-   "source = \"git::git@github.com:OWNER:REPO.git//PATH?ref=VERSION\"" n>
+   "source = \"${local.source_base_url}//PATH?ref=VERSION\"" n>
    "path   = \"" name "\"" n
    "}" >)
 
 (in "inputs = {" n>
     q n
     "}" >)
+
+(inc "\
+include \"" (p "root" id) "\" {
+  path   = find_in_parent_folders(\"" id ".hcl\")
+  expose = true
+}")
 
 
 hcl-mode terraform-mode
