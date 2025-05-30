@@ -2334,7 +2334,12 @@ file in your browser at the visited revision."
   (+define-file-template (rx "region.hcl" eos) "terragrunt/region.eld"))
 
 (use-package terraform-mode :ensure t
-  :mode ("\\.tf\\'"))
+  :mode ("\\.tf\\'")
+  :config
+  ;; KLUDGE: Use opentofu instead of terraform. Probably need to be a bit more
+  ;; clever about this.
+  (with-eval-after-load 'apheleia-formatters
+    (setf (car (alist-get 'terraform apheleia-formatters)) "tofu")))
 
 (use-package elixir-ts-mode
   :mode ("\\.ex\\'" "\\.exs\\'")
