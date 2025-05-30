@@ -2376,6 +2376,15 @@ file in your browser at the visited revision."
     :type info
     :hyperlink file)
 
+  (define-compilation-error-rx terragrunt-unit-operation
+    bol timestamp space level (+ space) "[" file "]" message "\n"
+
+    :where level = (or (warn: "WARN") (info: (or "INFO" "STDOUT")) "ERROR")
+    :where timestamp = (= 2 digit) ":" (= 2 digit) ":" (= 2 digit) "." (= 3 digit)
+
+    :type (warn . info)
+    :hyperlink file)
+
   (define-compilation-error-rx terragrunt-stack-modules
     bol "- Module " file (or eol space)
     :hyperlink file
