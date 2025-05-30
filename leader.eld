@@ -87,6 +87,8 @@
  ",x" '(puni-split :wk "split")
 
  "a"  '(nil :wk "apps")
+ "an" #'elfeed
+ "aw" #'eww
  "ac" #'quick-calc
  "aC" #'full-calc
  "ae" #'eshell
