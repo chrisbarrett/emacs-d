@@ -1,6 +1,6 @@
 (nil
  "\
 locals {
-  aws_region = \"" p "\"
+  aws_region = \"" _ "\"
 }
 ")
