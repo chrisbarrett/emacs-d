@@ -469,15 +469,9 @@ Runs `+escape-hook'."
   (compilation-always-kill t)
   (compilation-ask-about-save nil) ; automatically save before compiling.
   (compilation-scroll-output 'first-error)
-  ;; Clear the default compilation parsers--I'll manage these myself.
-  (compilation-error-regexp-alist nil)
-
   :config
+  (require 'mod-compilation)
   (add-hook 'compilation-filter-hook #'ansi-color-compilation-filter)
-
-  (define-compilation-error-rx generic
-    bol file ":" line ":" col ":" (* space) message eol
-    :hyperlink message)
 
   (with-eval-after-load 'pulsar
     (delq! 'next-error pulsar-pulse-functions)
@@ -2160,48 +2154,7 @@ file in your browser at the visited revision."
             ;; Impl -> tests
             (list (rx (group (+? any)) ".ts" eos)
                   (rx (backref 1) ".test.ts")
-                  (rx (backref 1) ".integration.ts")))
-
-  ;; Compilation
-
-  (define-compilation-error-rx typescript-tsc
-    bol (* space) file ":" line ":" col " - " level " " err-code ": " message eol
-    :where err-code = err-code: "TS" (+ digit)
-    :where level = error: "error"
-
-    :hyperlink message
-    :highlights ((err-code 'font-lock-constant-face)
-                 (error 'compilation-error)))
-
-  (define-compilation-error-rx vitest-trace-line
-    bol (+ space) "❯ " message " " file ":" line ":" col
-    :hyperlink message
-    :type info)
-
-  (define-compilation-error-rx vitest-error
-    bol (prefix: "Serialized Error") ": " message "\n"
-    bol "This error originated in \"" file "\""
-    :hyperlink message
-    :highlights ((prefix 'compilation-error))
-    :type error)
-
-  (define-compilation-error-rx node-warnings
-    bol "(" (node-lit: "node") ":" (node-line: (+ digit)) ") " (warn-ident: (+? alnum) "Warning") ": " message eol
-    :hyperlink message
-    :highlights ((message 'compilation-warning)
-                 (warn-ident 'warning)
-                 (node-lit 'compilation-info)
-                 (node-line 'compilation-line-number))
-    :type warning)
-
-  (define-compilation-error-rx js-error-stacktrace
-    bol (+ space) "\"" file-pat ":" line "\"" (? ",") eol
-    :where file-pat = (? (file-prefix: "file://")) file
-    :hyperlink file
-    :highlights ((file-prefix 'parenthesis)
-                 (file 'compilation-info)
-                 (line 'compilation-line-number))
-    :type info))
+                  (rx (backref 1) ".integration.ts"))))
 
 (use-package c-ts-mode
   :general
@@ -2236,22 +2189,7 @@ file in your browser at the visited revision."
   :mode "\\.\\(zig\\|zon\\)\\'"
   :custom
   (zig-format-on-save nil) ; use apheleia instead.
-  :config
-  (define-compilation-error-rx zig
-    bol file ":" line ":" col ": " level ": " message eol
-    :where level = (or (warn: "warn") (note: "note") (error: "error"))
-    :type (warn . note)
-    :hyperlink message
-    :highlights ((warn 'warning)
-                 (error 'error)
-                 (note 'compilation-info)))
-
-  (define-compilation-error-rx zig-stack-line
-    bol (= 4 space) fun ": " file ":" line ":" col
-    :where fun = fun: (any alpha "_") (* (any alnum "_"))
-    :hyperlink fun
-    :type info
-    :highlights ((fun 'font-lock-function-name-face))))
+  )
 
 (use-package hexl
   :general-config
@@ -2340,74 +2278,7 @@ file in your browser at the visited revision."
   :config
   (+define-file-template (rx "terragrunt.hcl" eos) "terragrunt/terragrunt.eld")
   (+define-file-template (rx "root.hcl" eos) "terragrunt/root.eld")
-  (+define-file-template (rx "region.hcl" eos) "terragrunt/region.eld")
-
-  (define-compilation-error-rx terragrunt
-    bol "*" space (or validation-err regular-err) eol
-
-    :where validation-err =
-    (err: "Validation failed") " for unit " unit " at path " file ": " message
-
-    :where regular-err =
-    file ":" line "," col-ignoring-range ":" space message
-
-    :where unit = (unit: (+ graphic))
-
-    :where col-ignoring-range = col (? "-" (+ (any digit "-,")))
-
-    :highlights ((unit 'compilation-info)
-                 (err 'compilation-error))
-    :hyperlink message)
-
-  (define-compilation-error-rx terragrunt-err
-    prefix (err: "Error: " message) "\n"
-    prefix (= 2 space) "on " (loc: file " line " line) (* nonl) "\n"
-
-    :where prefix = bol timestamp space "ERROR" (= 2 space)
-    :where timestamp = (= 2 digit) ":" (= 2 digit) ":" (= 2 digit) "." (= 3 digit)
-
-    :highlights ((err 'error))
-    :hyperlink err)
-
-  ;; Errors in terragrunt stacks are reported from the temp build dir; navigate
-  ;; to actual input file instead.
-  (alist-set! compilation-transform-file-match-alist (rx "/.terragrunt-stack/") '("/"))
-  (alist-set! compilation-transform-file-match-alist (rx "/.terragrunt-stack" eos) '("/terragrunt.stack.hcl"))
-
-  ;; Extra informational parsers.
-
-  (define-compilation-error-rx terragrunt-info
-    (or "from" "at") space (? "'") (file: "./" (*? (not (any "\n:"))) ".hcl")
-    (or "'"
-        eol
-        (and symbol-end " line " line (* nonl)))
-    :file file
-    :type info
-    :hyperlink file)
-
-  (define-compilation-error-rx terragrunt-unit-operation
-    bol timestamp space level (+ space) "[" file "]" message "\n"
-
-    :where level = (or (warn: "WARN") (info: (or "INFO" "STDOUT")) "ERROR")
-    :where timestamp = (= 2 digit) ":" (= 2 digit) ":" (= 2 digit) "." (= 3 digit)
-
-    :type (warn . info)
-    :hyperlink file)
-
-  (define-compilation-error-rx terragrunt-stack-modules
-    bol "- Module " file (or eol space)
-    :hyperlink file
-    :type info)
-
-  (define-compilation-error-rx terragrunt-unit-reference
-    prefix "Processing unit " (unit: (+ (not space))) " from " file eol
-
-    :where prefix = bol timestamp space "INFO" (+ space)
-    :where timestamp = (= 2 digit) ":" (= 2 digit) ":" (= 2 digit) "." (= 3 digit)
-
-    :highlights ((unit 'compilation-info))
-    :hyperlink file
-    :type info))
+  (+define-file-template (rx "region.hcl" eos) "terragrunt/region.eld"))
 
 (use-package terraform-mode :ensure t
   :mode ("\\.tf\\'")
@@ -2435,74 +2306,7 @@ file in your browser at the visited revision."
 
             ;; Tests -> impl
             (list (rx (group-n 1 (+? nonl)) "/test/" (group-n 2 (+? any)) "_test.exs" eos)
-                  (rx (backref 1) "/lib/" (backref 2) ".ex")))
-
-  ;; Compilation buffer support
-
-  (define-compilation-error-rx elixirc
-    bol "** (" err-name ") " (or typespec-error err-at-loc mod-compile-err) eol
-    :where typespec-error = file ":" line ": " message
-    :where err-at-loc = message " on " file ":" line ":" col ":" (* nonl)
-    :where mod-compile-err = file ": " message
-
-    :where err-name = err-name: upper (* (any alnum "._"))
-    :hyperlink message
-    :highlights ((err-name 'error))
-    :type error)
-
-  (define-compilation-error-rx elixir-mix
-    bol (+ space) level ":" (* space) message (? " Did you mean:") "\n"
-    (* "\n")
-    (? (+ space) (or hint error-detail) "\n")
-    (* (+ space) source-context "\n")
-    bol (* space) "└─ " file ":" line ":" (? col (? ":" (* nonl)))
-
-    :where level = (or (warn: "warning") (info: "info") "error")
-
-    :where hint = "hint: " (* space) (hint-message: (+ nonl))
-
-    :where error-detail = error-detail: alpha (+ nonl)
-
-    :where source-context =  (or (and (? line-number) "│" (* nonl))
-                                 (and "*" (+ space) ident)
-                                 (and (* space) "..." (* nonl)))
-    :where ident = (* nonl)
-    :where line-number = (+ digit) (+ space)
-
-    :type (warn . info)
-    :highlights ((hint-message 'compilation-info)
-                 (error-detail 'compilation-info))
-    :hyperlink message)
-
-  (define-compilation-error-rx elixir-test-failure
-    bol (+ space) failure-number ") " message " (" module ")\n"
-    bol (+ space) file ":" line
-    :where module = module: upper (+ (any alnum "_."))
-    :where failure-number = failure-number: (any "1-9") (* digit)
-    :hyperlink message
-    :highlights ((failure-number 'bold)
-                 (module 'font-lock-type-face)))
-
-  (define-compilation-error-rx elixir-test-stacktrace-line
-    bol (+ space) (location: file ":" line) ": " source eol
-    :where source = (or "(test)" (+ print))
-    :hyperlink location
-    :type info
-    :highlights ((file 'compilation-info)))
-
-  ;; E.g.:
-
-  ;; (elixir 1.18.3) lib/gen_server.ex:1121: GenServer.call/3
-
-  (define-compilation-error-rx beam-stacktrace
-    bol (+ space) "(" module " " version ") " (location: file ":" line) ": " message eol
-    :where module = module: (+? any)
-    :where version = version: (+? (any digit "."))
-    :hyperlink location
-    :type info
-    :highlights ((file 'compilation-info)
-                 (module 'bold)
-                 (version 'font-lock-comment-face))))
+                  (rx (backref 1) "/lib/" (backref 2) ".ex"))))
 
 (use-package inf-elixir :ensure t)
 
@@ -2531,24 +2335,7 @@ file in your browser at the visited revision."
                    (`latex (format "\\href{https://crates.io/crates/%s}{%s}" crate-name desc))
                    (_ desc))))))
   :config
-  (setq-hook! 'rust-ts-mode-hook separedit-default-mode 'markdown-mode)
-
-  (define-compilation-error-rx rustc
-    bol (* space) level (? code) ": " message "\n"
-    bol (+ space) (arrow: "-->") " " file ":" line ":" col eol
-
-    :where level = (or (err: "error")
-                       (warn: "warning")
-                       (info: (or "note" "help")))
-    :where code = code: "[" (+ alnum) "]"
-
-    :type (warn . info)
-    :hyperlink message
-    :highlights ((code 'font-lock-constant-face)
-                 (arrow 'parenthesis)
-                 (warn 'compilation-warning)
-                 (info 'compilation-info)
-                 (err 'compilation-error))))
+  (setq-hook! 'rust-ts-mode-hook separedit-default-mode 'markdown-mode))
 
 (use-package sh-script
   :config
