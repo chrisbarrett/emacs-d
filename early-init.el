@@ -48,7 +48,7 @@
 (setq +theme-dark 'modus-vivendi)
 
 (set-face-attribute 'default nil :family "Fira Code")
-(set-face-attribute 'variable-pitch nil :family "Helvetica Neue")
+(set-face-attribute 'variable-pitch nil :family "Fira Sans")
 
 ;; Sync the theme with the window system.
 (+theme-update)
