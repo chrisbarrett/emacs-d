@@ -1137,13 +1137,11 @@ With optional prefix arg CONTINUE-P, keep profiling."
   (delete-by-moving-to-trash t)
   (dired-dwim-target t)
   (dired-auto-revert-buffer 'dired-directory-changed-p)
+  (dired-create-destination-dirs 'ask)
+  (dired-vc-rename-file t)
   (dired-listing-switches
    "--almost-all --human-readable --group-directories-first --no-group"))
 
-(use-package dired-aux
-  :custom
-  (dired-create-destination-dirs 'ask)
-  (dired-vc-rename-file t))
 
 (use-package nerd-icons :ensure t
   ;; Icon set used by various packages.
