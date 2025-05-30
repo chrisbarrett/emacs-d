@@ -2336,12 +2336,29 @@ file in your browser at the visited revision."
   (define-compilation-error-rx terragrunt
     bol "*" space (or validation-err regular-err) eol
 
-    :where validation-err = (err: "Validation failed") " for unit " (unit: (+? nonl)) " at path " file ": " message
-    :where regular-err = file ":" line "," col (? "-" (+ (any digit "-,"))) ":" space message
+    :where validation-err =
+    (err: "Validation failed") " for unit " unit " at path " file ": " message
+
+    :where regular-err =
+    file ":" line "," col-ignoring-range ":" space message
+
+    :where unit = (unit: (+ graphic))
+
+    :where col-ignoring-range = col (? "-" (+ (any digit "-,")))
 
     :highlights ((unit 'compilation-info)
                  (err 'compilation-error))
     :hyperlink message)
+
+  (define-compilation-error-rx terragrunt-err
+    prefix (err: "Error: " message) "\n"
+    prefix (= 2 space) "on " (loc: file " line " line) (* nonl) "\n"
+
+    :where prefix = bol timestamp space "ERROR" (= 2 space)
+    :where timestamp = (= 2 digit) ":" (= 2 digit) ":" (= 2 digit) "." (= 3 digit)
+
+    :highlights ((err 'error))
+    :hyperlink err)
 
   ;; Errors in terragrunt stacks are reported from the temp build dir; navigate
   ;; to actual input file instead.
@@ -2361,18 +2378,18 @@ file in your browser at the visited revision."
 
   (define-compilation-error-rx terragrunt-stack-modules
     bol "- Module " file (or eol space)
-    :type info
-    :hyperlink file)
+    :hyperlink file
+    :type info)
 
-  (define-compilation-error-rx terragrunt-err
-    prefix (err: "Error: " message) "\n"
-    prefix (= 2 space) "on " (loc: file " line " line) (* nonl) "\n"
+  (define-compilation-error-rx terragrunt-unit-reference
+    prefix "Processing unit " (unit: (+ (not space))) " from " file eol
 
-    :where prefix = bol timestamp space "ERROR" (= 2 space)
+    :where prefix = bol timestamp space "INFO" (+ space)
     :where timestamp = (= 2 digit) ":" (= 2 digit) ":" (= 2 digit) "." (= 3 digit)
-    :highlights ((err 'error))
 
-    :hyperlink err))
+    :highlights ((unit 'compilation-info))
+    :hyperlink file
+    :type info))
 
 (use-package terraform-mode :ensure t
   :mode ("\\.tf\\'")
