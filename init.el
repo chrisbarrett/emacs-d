@@ -2331,15 +2331,7 @@ file in your browser at the visited revision."
   :config
   (+define-file-template (rx "terragrunt.hcl" eos) "terragrunt/terragrunt.eld")
   (+define-file-template (rx "root.hcl" eos) "terragrunt/root.eld")
-  (+define-file-template (rx "region.hcl" eos) "terragrunt/region.eld"))
-
-(use-package terraform-mode :ensure t
-  :mode ("\\.tf\\'")
-  :config
-  ;; Use `tofu' for formatting terraform files if on PATH.
-  (with-eval-after-load 'apheleia-formatters
-    (add-to-list 'apheleia-formatters '(opentofu . ("tofu" "fmt" "-")))
-    (alist-set! apheleia-mode-alist 'terraform-mode '(opentofu terraform)))
+  (+define-file-template (rx "region.hcl" eos) "terragrunt/region.eld")
 
   (define-compilation-error-rx terragrunt
     bol "*" space file ":" line "," col (? "-" (+ (any digit "-,"))) ":" space message eol
@@ -2348,6 +2340,14 @@ file in your browser at the visited revision."
   ;; Errors in terragrunt stacks are reported from the temp build dir; navigate
   ;; to actual input file instead.
   (alist-set! compilation-transform-file-match-alist (rx "/.terragrunt-stack/") '("/")))
+
+(use-package terraform-mode :ensure t
+  :mode ("\\.tf\\'")
+  :config
+  ;; Use `tofu' for formatting terraform files if on PATH.
+  (with-eval-after-load 'apheleia-formatters
+    (add-to-list 'apheleia-formatters '(opentofu . ("tofu" "fmt" "-")))
+    (alist-set! apheleia-mode-alist 'terraform-mode '(opentofu terraform))))
 
 (use-package elixir-ts-mode
   :mode ("\\.ex\\'" "\\.exs\\'")
