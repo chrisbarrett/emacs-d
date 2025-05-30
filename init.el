@@ -1142,6 +1142,14 @@ With optional prefix arg CONTINUE-P, keep profiling."
   (dired-listing-switches
    "--almost-all --human-readable --group-directories-first --no-group"))
 
+(use-package dired-x
+  ;; Extra functionality around omitting files, etc.
+  :hook (dired-mode-hook . dired-omit-mode)
+  :custom
+  (dired-omit-files (rx bos "."))
+  :init
+  (+local-leader-set-key 'dired-mode-map
+    "h" '(dired-omit-mode :wk "toggle hidden files")))
 
 (use-package nerd-icons :ensure t
   ;; Icon set used by various packages.
