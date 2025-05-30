@@ -3298,6 +3298,11 @@ file in your browser at the visited revision."
   :demand t)
 
 
+;;; Wide World of Web
+
+(use-package elfeed :ensure t)
+
+
 ;;; Input methods
 
 (setq default-input-method "french-postfix")
