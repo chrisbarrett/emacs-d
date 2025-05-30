@@ -2334,12 +2334,19 @@ file in your browser at the visited revision."
   (+define-file-template (rx "region.hcl" eos) "terragrunt/region.eld")
 
   (define-compilation-error-rx terragrunt
-    bol "*" space file ":" line "," col (? "-" (+ (any digit "-,"))) ":" space message eol
+    bol "*" space (or validation-err regular-err) eol
+
+    :where validation-err = (err: "Validation failed") " for unit " (unit: (+? nonl)) " at path " file ": " message
+    :where regular-err = file ":" line "," col (? "-" (+ (any digit "-,"))) ":" space message
+
+    :highlights ((unit 'compilation-info)
+                 (err 'compilation-error))
     :hyperlink message)
 
   ;; Errors in terragrunt stacks are reported from the temp build dir; navigate
   ;; to actual input file instead.
   (alist-set! compilation-transform-file-match-alist (rx "/.terragrunt-stack/") '("/"))
+  (alist-set! compilation-transform-file-match-alist (rx "/.terragrunt-stack" eos) '("/terragrunt.stack.hcl"))
 
   ;; Extra informational parsers.
 
