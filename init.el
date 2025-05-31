@@ -2057,54 +2057,8 @@ file in your browser at the visited revision."
 
 (use-package debug
   ;; The built-in debugger for the Emacs Lisp runtime.
-  :init
-  (defun +debugger-toggle-on-exit-frame ()
-    (interactive)
-    (let ((enabled-for-line (save-excursion
-                              (goto-char (line-beginning-position))
-                              (looking-at (rx (* space) "*" (+ space))))))
-      (cond
-       (enabled-for-line
-        (debugger-frame-clear)
-        (message "debug on exit for frame disabled"))
-       (t
-        (debugger-frame)
-        (message "debug on exit for frame enabled")))))
-
-  :general
-  (:keymaps 'debugger-mode-map :states 'normal "t" #'+debugger-toggle-on-exit-frame)
-
   :config
-  (define-advice debugger-record-expression (:after (&rest _) display-buffer)
-    (display-buffer debugger-record-buffer))
-
-  ;; Show keybindings in the header line for Backtrace buffers.
-
-  (defconst +debugger-mode-line-format
-    (cl-labels ((low-emphasis (str)
-                  (propertize str 'face 'parenthesis))
-                (key (key desc)
-                  (concat (propertize key 'face 'which-key-key-face) (low-emphasis ":") " " desc))
-                (group (&rest children)
-                  (concat (low-emphasis "|") "  " (apply #'distribute children)))
-                (distribute (&rest strs)
-                  (string-join strs "  ")))
-      (distribute
-       (propertize "  " 'face 'font-lock-builtin-face)
-       (group
-        (key "d" "step")
-        (key "c" "continue")
-        (key "r" "return"))
-       (group
-        (key "t" "toggle debug on exit frame")
-        (key "J" "jump")
-        (key "L" "locals"))
-       (group
-        (key "E" "eval")
-        (key "R" "eval & record")))))
-
-  (setq-hook! 'debugger-mode-hook
-    mode-line-format +debugger-mode-line-format))
+  (require 'mod-debug))
 
 
 ;;; Code formatting
@@ -2385,6 +2339,7 @@ file in your browser at the visited revision."
 
 (use-package ol
   ;; Hyperlink functionality in org-mode
+  :custom
   (org-link-abbrev-alist
    '(("github"      . "https://github.com/%s")
      ("youtube"     . "https://youtube.com/watch?v=%s")
