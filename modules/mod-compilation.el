@@ -10,6 +10,7 @@
 (setq compilation-always-kill t)
 (setq compilation-ask-about-save nil) ; automatically save before compiling.
 (setq compilation-scroll-output 'first-error)
+(setq compilation-message-face 'default)
 
 (add-hook 'compilation-filter-hook #'ansi-color-compilation-filter)
 
