@@ -69,7 +69,7 @@
   exp)
 
 (defun +corelib--resolve-hook-forms (hooks)
-  "Converts a list of modes into a list of hook symbols.
+  "Convert a list of modes into a list of hook symbols.
 
 If a mode is quoted, it is left as is. If the entire HOOKS list is quoted, the
 list is returned as-is."
@@ -103,7 +103,7 @@ list is returned as-is."
                                           var mode))))))
 
 (defmacro setq-hook! (hooks &rest var-vals)
-  "Sets buffer-local variables on HOOKS.
+  "Set buffer-local variables on HOOKS.
 
 \(fn HOOKS &rest [SYM VAL]...)"
   (declare (indent 1))
@@ -463,5 +463,9 @@ P is the point at which we run `syntax-ppss'"
                          (nth 4 (syntax-ppss (- pt 1))))
                     (and (/= 0 (logand (ash 1 19) s))
                          (nth 4 (syntax-ppss (- pt 2))))))))))))
+
+(defmacro +local-leader-set-key (keymaps &rest general-args)
+  (declare (indent 1))
+  `(general-define-key :prefix "," :states '(normal motion) :keymaps ,keymaps ,@general-args))
 
 (provide '+corelib)

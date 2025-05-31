@@ -102,6 +102,14 @@
   (add-hook 'server-visit-hook #'+run-switch-buffer-hooks-h))
 
 
+
+(use-package general :ensure (:wait t) :demand t
+  ;; General provides a featureful key binding system. It makes defining leader
+  ;; key bindings much easier.
+  :config
+  (require 'mod-leader))
+
+
 ;; Adapt the escape key customisation from Doom.
 
 (defvar +default-minibuffer-maps
@@ -112,8 +120,7 @@
     minibuffer-local-isearch-map
     read-expression-map))
 
-(with-eval-after-load 'general
-  (general-def :keymaps +default-minibuffer-maps "S-v" #'yank))
+(general-def :keymaps +default-minibuffer-maps "S-v" #'yank)
 
 (defvar +escape-hook nil
   "Hook functions run until success when ESC is pressed.")
@@ -143,23 +150,11 @@ Runs `+escape-hook'."
 
 (global-set-key [remap keyboard-quit] #'+escape)
 (global-set-key [remap abort-recursive-edit] #'+escape)
-(with-eval-after-load 'general
-  (general-define-key :keymaps +default-minibuffer-maps [escape] #'+escape))
+
+(general-def :keymaps +default-minibuffer-maps [escape] #'+escape)
+
 (with-eval-after-load 'eldoc
   (eldoc-add-command '+escape))
-
-
-;;; Leader key
-
-(use-package general :ensure (:wait t) :demand t
-  ;; General provides a featureful key binding system. It makes defining leader
-  ;; key bindings much easier.
-  :config
-  (require 'mod-leader))
-
-(defmacro +local-leader-set-key (keymaps &rest general-args)
-  (declare (indent 1))
-  `(general-define-key :prefix "," :states '(normal motion) :keymaps ,keymaps ,@general-args))
 
 
 ;;; General editing
@@ -2162,180 +2157,10 @@ file in your browser at the visited revision."
 
   :custom
   (abbrev-file-name (file-name-concat org-directory "abbrev.el"))
-
-  ;; visual settings
-  (org-list-indent-offset 1)
-  (org-cycle-separator-lines 0)
-  (org-ellipsis " …")
-  (org-hide-emphasis-markers t)
-  (org-pretty-entities t)
-  (org-startup-folded nil)
-  (org-startup-indented t)
-  (org-startup-shrink-all-tables t)
-  (org-startup-with-inline-images t)
-  (org-fontify-quote-and-verse-blocks t)
-  (org-fontify-whole-heading-line t)
-  (org-indent-indentation-per-level 3)
-  (org-priority-faces
-   '((?A . error)
-     (?B . warning)
-     (?C . success)))
-
-  (org-tags-column 0)
-  (org-auto-align-tags nil)
-  (org-catch-invisible-edits 'show-and-error)
-
-  ;; TODOs, checkboxes, stats, properties.
-  (org-todo-keywords '((type "TODO(t)" "WAIT(w)" "|" "DONE(d!)" "CANCELLED(c@)")
-                       (type "PROJECT(p)" "|" "DONE(d!)")))
-  (org-use-fast-todo-selection 'expert)
-  (org-enforce-todo-dependencies t)
-  (org-enforce-todo-checkbox-dependencies t)
-  (org-hierarchical-todo-statistics nil)
-  (org-use-property-inheritance t)
-  (org-log-into-drawer t)
-
-  ;; babel & src support
-  (org-edit-src-content-indentation 0)
-  (org-src-preserve-indentation nil)
-  (org-src-window-setup 'plain)
-  (org-confirm-babel-evaluate nil)
-  (org-link-elisp-confirm-function nil)
-  (org-babel-default-header-args:emacs-lisp '((:lexical . "yes")))
-  (org-babel-default-header-args:C `((:includes
-                                      "<stdio.h>"
-                                      "<stdlib.h>"
-                                      "<stdint.h>"
-                                      "<assert.h>"
-                                      "<stdalign.h>"
-                                      "<string.h>"
-                                      "<fcntl.h>"
-                                      "<errno.h>")))
-  (org-babel-python-command "python3")
   (org-babel-load-languages '((emacs-lisp . t)
                               (C . t)
                               (calc . t)
-                              (shell . t)))
-
-  ;; interactive behaviour
-  (org-imenu-depth 5)
-  (org-bookmark-names-plist nil)
-  (org-M-RET-may-split-line nil)
-  (org-footnote-auto-adjust t)
-  (org-insert-heading-respect-content t)
-  (org-loop-over-headlines-in-active-region 'start-level)
-  (org-return-follows-link t)
-  (org-track-ordered-property-with-tag t)
-
-  :config
-
-  ;; Prefer inserting headings with M-RET
-  (add-hook! 'org-metareturn-hook
-    (when (org-in-item-p)
-      (org-insert-heading current-prefix-arg)
-      (evil-append-line 1)
-      t))
-
-  ;; Prevent flickering when org-indent is enabled.
-  (setq-hook! 'org-mode-hook show-paren-mode nil)
-
-  ;; Increase padding for readability.
-  (setq-hook! '(org-mode-hook org-agenda-mode-hook) line-spacing 0.1)
-
-  ;; Automatically enter insert state when inserting new headings, logbook notes
-  ;; or when using `org-capture'.
-
-  :preface
-  (defun +ad-org-enter-evil-insert-state (&rest _)
-    (when (and (bound-and-true-p evil-mode)
-               (called-interactively-p nil))
-      (evil-insert-state)))
-  :config
-  (dolist (cmd '(org-insert-heading
-                 org-insert-heading-respect-content
-                 org-insert-todo-heading-respect-content
-                 org-insert-todo-heading))
-    (advice-add cmd :after #'+ad-org-enter-evil-insert-state))
-
-  (define-advice org-capture (:after (&rest _) insert-state)
-    (when (and (bound-and-true-p evil-mode)
-               (called-interactively-p nil)
-               (bound-and-true-p org-capture-mode))
-      (evil-insert-state)))
-
-  (add-hook 'org-log-buffer-setup-hook #'evil-insert-state)
-
-  ;; Ensure we use dired rather than the Finder on macOS.
-
-  (when (equal system-type 'darwin)
-    (add-to-list 'org-file-apps '(directory . emacs)))
-
-  ;; Don't show secondary selection when running `org-show-todo-tree'.
-  (advice-add #'org-highlight-new-match :override #'ignore)
-
-  :config
-  (define-advice org-return (:after (&optional indent _arg _interactive) emulate-major-mode-indent)
-    "Mimic `newline-and-indent' in src blocks w/ lang-appropriate indentation."
-    (when (and indent org-src-tab-acts-natively (org-in-src-block-p t))
-      (save-window-excursion
-        (org-babel-do-in-edit-buffer
-         (call-interactively #'indent-for-tab-command)))))
-
-  ;; Make C-c C-k either cut subtrees or cancel open notes.
-  :config
-  (defun +org-cut-subtree-or-cancel-note ()
-    (interactive)
-    (cond (org-finish-function
-           (let ((org-note-abort t)) (funcall org-finish-function)))
-          ((bound-and-true-p org-capture-mode)
-           (org-capture-kill))
-          (t
-           (org-cut-subtree))))
-
-  :general-config
-  (:keymaps 'org-mode-map
-   :states '(normal insert)
-   "C-c C-k" #'+org-cut-subtree-or-cancel-note
-   "C-c f" #'org-footnote-new
-   "M-+" #'org-table-insert-column
-   "M--" #'org-table-delete-column
-   "C-c C-." #'org-time-stamp-inactive
-   "C-c ." #'org-time-stamp
-   "C-c RET" (general-predicate-dispatch #'org-insert-todo-heading
-               (org-at-table-p) #'org-table-hline-and-move))
-
-  (:keymaps 'org-mode-map
-   :states 'normal
-   "RET" 'org-open-at-point
-   "M-p" #'org-metaup
-   "M-n" #'org-metadown
-   "C-c c" #'org-columns
-   "C-c d" #'org-dynamic-block-insert-dblock
-   "C-c n" 'org-next-link
-   "C-c p" 'org-previous-link
-   "C-c o" 'org-table-toggle-coordinate-overlays
-   "SPC n s" #'org-narrow-to-subtree)
-
-  :config
-  (+local-leader-set-key 'org-mode-map
-    "A" #'org-archive-subtree
-    "I" #'org-id-get-create
-    "y" #'org-copy-subtree
-    "x" #'org-cut-subtree
-    "p" #'org-paste-subtree
-    "t" #'org-show-todo-tree)
-
-  (custom-theme-set-faces 'user
-                          '(org-footnote ((t (:underline nil))))
-                          '(org-document-title ((t (:height 2.0)))))
-
-  ;; `org-hidden-keywords' does not hide the spaces between the keyword and the
-  ;; value. I just do the hiding myself.
-  (font-lock-add-keywords 'org-mode
-                          `((,(rx bol "#+title:" (+ space)) 0
-                             '(face nil invisible t) prepend)))
-
-  )
+                              (shell . t))))
 
 (use-package ol
   ;; Hyperlink functionality in org-mode
