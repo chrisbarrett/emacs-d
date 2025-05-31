@@ -163,16 +163,7 @@ Runs `+escape-hook'."
   (general-auto-unbind-keys)
   (general-unbind :states '(normal motion) "SPC")
   :config
-  (require '+window)
-  (require '+roam)
-  (require '+edit-cmds)
-  (require '+files)
-
-  (eval `(general-define-key
-          :states '(normal motion)
-          :prefix "SPC"
-          :prefix-command '+leader-key
-          ,@(+read-eld "leader.eld")))
+  (require 'mod-leader)
 
   ;; Support multiple SPC-u calls in sequence to chain universal-argument calls.
 
