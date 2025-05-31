@@ -1,0 +1,157 @@
+;;; mod-org-agenda.el --- Configuration for org-agenda -*- lexical-binding: t; -*-
+
+;;; Commentary:
+
+;;; Code:
+
+(require '+corelib)
+(require '+agenda)
+(require 'org-agenda)
+(require 'general)
+
+(general-def :keymaps 'org-agenda-mode-map :states 'motion
+  [remap save-buffer] #'org-save-all-org-buffers
+  "J" #'org-agenda-goto-date
+  "C-n" #'org-agenda-later
+  "C-p" #'org-agenda-earlier)
+
+(setq org-agenda-files (file-name-concat org-directory "org-agenda-files"))
+(setq org-agenda-text-search-extra-files `(agenda-archives ,(file-name-concat org-directory "archive.org")))
+(setq org-agenda-restore-windows-after-quit t)
+(setq org-agenda-search-view-always-boolean t)
+(setq org-agenda-skip-unavailable-files t)
+(setq org-agenda-skip-scheduled-if-deadline-is-shown t)
+(setq org-agenda-start-on-weekday nil)
+(setq org-agenda-tags-column 0)
+(setq org-archive-tag "ARCHIVED")
+(setq org-agenda-inhibit-startup nil)
+
+(setq org-agenda-custom-commands
+      (let ((today
+             '(agenda ""
+               ((org-agenda-overriding-header "Agenda")
+                (org-agenda-use-time-grid t)
+                (org-agenda-clockreport-parameter-plist '(:compact t
+                                                          :link t
+                                                          :maxlevel 3
+                                                          :fileskip0 t
+                                                          :filetitle t))
+                (org-agenda-show-inherited-tags t)
+                (org-agenda-skip-function #'+agenda-view-skip-function)
+                (org-super-agenda-groups
+                 `((:name "Agenda" :time-grid t)
+                   (:name "Forming" :and (:habit t :regexp ,(rx "->")))
+                   (:name "French Study" :category "french")
+                   (:name "Cooking" :and (:habit t :tag "cooking"))
+                   (:name "Chores" :and (:habit t :tag "chore"))
+                   (:name "Habits" :habit t)
+                   (:name "Birthdays" :category "birthdays")
+                   (:name "Delegated" :todo "WAIT")
+                   (:name "Tickler" :tag "tickler"))))))
+
+            (next-actions
+             '(tags-todo "-tickler-inbox+TODO=\"TODO\""
+               ((org-agenda-overriding-header "Next Actions")
+                (org-agenda-dim-blocked-tasks 'invisible)
+                (org-agenda-skip-function #'+agenda-next-actions-skip-function))))
+
+            (inbox
+             '(tags-todo "+inbox+TODO=\"TODO\""
+               ((org-agenda-overriding-header "Inbox")
+                (org-agenda-skip-function '(org-agenda-skip-entry-if 'scheduled)))))
+
+            (delegated
+             '(todo "WAIT"
+               ((org-agenda-overriding-header "Delegated")
+                (org-agenda-remove-tags nil)
+                (org-agenda-skip-function '(org-agenda-skip-entry-if 'scheduled)))))
+
+            (projects
+             '(tags-todo "+TODO=\"PROJECT\""
+               ((org-agenda-overriding-header "Projects"))))
+
+            (defaults
+             `((org-agenda-todo-ignore-scheduled 'future)
+               (org-agenda-span 'day)
+               (org-agenda-window-setup 'only-window)
+               (org-agenda-start-day nil)
+               (org-agenda-include-diary nil)
+
+               (org-agenda-insert-diary-extract-time nil)
+               (org-agenda-show-inherited-tags nil)
+               (org-agenda-skip-deadline-if-done t)
+               (org-agenda-skip-deadline-prewarning-if-scheduled 'pre-scheduled)
+               (org-agenda-skip-scheduled-if-done t)
+               (org-agenda-start-on-weekday nil)
+               (org-agenda-dim-blocked-tasks t)
+               (org-agenda-sorting-strategy
+                '((agenda time-up habit-up priority-down category-up priority-down todo-state-up)
+                  (todo priority-down category-up scheduled-up)
+                  (tags priority-down category-up)
+                  (search category-up)))
+               (org-agenda-clock-report-header "\nClocking")
+               (org-agenda-use-time-grid nil)
+               (org-agenda-show-future-repeats nil)
+               (org-agenda-ignore-properties '(effort appt)))))
+
+        `(("p" "personal agenda" ,(list today next-actions inbox delegated projects)
+           (,@defaults
+            (org-agenda-tag-filter-preset '("-work" "-ignore"))))
+          ("w" "work agenda" ,(list today next-actions inbox delegated projects)
+           (,@defaults
+            (org-agenda-tag-filter-preset (list "-ignore" (format "+%s" (timekeep-work-tag))))
+            (org-agenda-clock-consistency-checks
+             '(:gap-ok-around ("12:20" "12:40" "4:00")
+               :max-duration "10:00"
+               :min-duration 0
+               :max-gap 0)))))))
+
+
+
+;; Use page-break separator for sections
+
+(setq org-agenda-block-separator (char-to-string ?\f))
+
+(cl-eval-when (compile)
+  (require 'page-break-lines))
+
+(with-eval-after-load 'page-break-lines
+  (add-to-list 'page-break-lines-modes 'org-agenda-mode)
+
+  (define-advice org-agenda (:after (&rest _) draw-separator)
+    (page-break-lines--update-display-tables))
+
+  (define-advice org-agenda-redo (:after (&rest _) draw-separator)
+    (page-break-lines--update-display-tables)))
+
+
+;; Automatically set agenda-files by scanning `org-directory' for files that
+;; have todo keywords.
+;;
+;; This could be made more efficient by computing incrementally, but ripgrep is
+;; so fast that I'm not too worried.
+
+(defvar +org--agenda-update-process nil)
+
+(defconst +agenda-files-update-script
+  (file-name-concat user-emacs-directory "scripts/update-agenda-files.sh"))
+
+(defun +org-agenda-update-files ()
+  (unless (and +org--agenda-update-process (process-live-p +org--agenda-update-process))
+    (setq +org--agenda-update-process
+          (start-process "update-org-agenda-files" nil +agenda-files-update-script))))
+
+(add-hook! 'org-mode-hook
+  (add-hook 'after-save-hook #'+org-agenda-update-files nil t))
+
+
+;; Reveal context around item on TAB
+(add-hook! 'org-agenda-after-show-hook
+  (org-overview)
+  (org-reveal)
+  (org-fold-show-subtree)
+  (org-display-outline-path))
+
+(provide 'mod-org-agenda)
+
+;;; mod-org-agenda.el ends here
