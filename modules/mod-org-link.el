@@ -70,6 +70,11 @@
   (let ((org-link-frame-setup '((file . find-file))))
     (funcall orig-fun id argument)))
 
+
+;;; Load extra link types provided by features
+
+(require 'ol-man)
+
 (provide 'mod-org-link)
 
 ;;; mod-org-link.el ends here

@@ -6,11 +6,17 @@
 
 (require '+corelib)
 (require 'org)
-(require 'org-indent)
 (require 'general)
 
 (cl-eval-when (compile)
-  (require 'evil))
+  (require 'evil)
+  (require 'org-archive)
+  (require 'org-capture)
+  (require 'org-clock)
+  (require 'org-duration)
+  (require 'org-habit)
+  (require 'org-indent)
+  (require 'org-src))
 
 
 
@@ -97,6 +103,11 @@
                         '(org-footnote ((t (:underline nil))))
                         '(org-document-title ((t (:height 2.0)))))
 
+;; Always re-hide draws cycling fold levels
+
+(add-hook! 'org-cycle-hook
+  (org-cycle-hide-drawers 'all))
+
 
 ;;; TODOs, checkboxes, stats, properties.
 
@@ -108,6 +119,7 @@
 (setq org-hierarchical-todo-statistics nil)
 (setq org-use-property-inheritance t)
 (setq org-log-into-drawer t)
+(setq org-duration-format 'h:mm)
 
 
 ;;; Interactive behaviour
@@ -160,6 +172,15 @@
               t)))
 
 
+;;; Hyperlinks
+
+(setq org-link-abbrev-alist
+      '(("github"      . "https://github.com/%s")
+        ("youtube"     . "https://youtube.com/watch?v=%s")
+        ("google"      . "https://google.com/search?q=")
+        ("wikipedia"   . "https://en.wikipedia.org/wiki/%s")))
+
+
 ;;; Babel & src blocks
 
 (setq org-edit-src-content-indentation 0)
@@ -191,7 +212,95 @@
       (org-babel-do-in-edit-buffer
        (call-interactively #'indent-for-tab-command)))))
 
+;; TODO: Remap mode definitions so I don't have to maintain this
+;; myself...
+(pushnew! org-src-lang-modes
+          '("cs" . csharp-ts)
+          '("csharp" . csharp-ts)
+          '("docker" . dockerfile-ts)
+          '("dockerfile" . dockerfile-ts)
+          '("elixir" . elixir-ts)
+          '("json" . json-ts)
+          '("md" . markdown)
+          '("nix" . nix-ts)
+          '("rs" . rust-ts)
+          '("rust" . rust-ts)
+          '("sh" . bash-ts)
+          '("ts" . typescript-ts)
+          '("typescript" . typescript-ts)
+          '("yaml" . yaml-ts)
+          '("yml" . yaml-ts)
+          )
+
 
+;;; Refile
+
+;; Move org-mode headings and their contents around in a structured way,
+;; both within the current file and to others.
+
+(setq org-refile-targets
+      '((nil :maxlevel . 3)
+        (org-agenda-files :maxlevel . 3)))
+(setq org-refile-use-outline-path 'file)
+(setq org-outline-path-complete-in-steps nil)
+
+;; When refiling from org-capture, Emacs prompts to kill the underlying,
+;; modified buffer. This fixes that.
+
+(add-hook 'org-after-refile-insert-hook #'save-buffer)
+
+
+;;; Clocking
+
+(add-transient-hook! 'org-mode-hook #'org-clock-persistence-insinuate)
+
+(require '+clockreport) ; used in my org config
+
+(setq org-clock-persist t)
+
+
+;;; org-habit
+
+;; Declare certain tasks in the agenda as 'habits'; these have a graph
+;; displayed beside them to help visualise your consistency.
+
+(setq org-habit-graph-column 72)
+(setq org-habit-today-glyph ?▲)
+(setq org-habit-completed-glyph ?✓)
+
+(defvar +org-habit-graph-window-ratio 0.2
+  "The ratio of the consistency graphs relative to the window width.")
+
+(defvar +org-habit-graph-padding 2
+  "The padding added to the end of the consistency graph.")
+
+(defvar +org-habit-min-width 30
+  "Hide the consistency graph if `org-habit-graph-column' is less than this.")
+
+(add-hook 'org-agenda-mode-hook
+          (defun +org-habit-resize-graph-h ()
+            "Right align and resize the consistency graphs based on
+`+org-habit-graph-window-ratio'"
+            (let* ((total-days (float (+ org-habit-preceding-days org-habit-following-days)))
+                   (preceding-days-ratio (/ org-habit-preceding-days total-days))
+                   (graph-width (floor (* (window-width) +org-habit-graph-window-ratio)))
+                   (preceding-days (floor (* graph-width preceding-days-ratio)))
+                   (following-days (- graph-width preceding-days))
+                   (graph-column (- (window-width) (+ preceding-days following-days)))
+                   (graph-column-adjusted (if (> graph-column +org-habit-min-width)
+                                              (- graph-column +org-habit-graph-padding)
+                                            nil)))
+              (setq-local org-habit-preceding-days preceding-days)
+              (setq-local org-habit-following-days following-days)
+              (setq-local org-habit-graph-column graph-column-adjusted))))
+
+
+;;; Archive
+
+;; org-mode's glacier storage tier.
+
+(setq org-archive-subtree-add-inherited-tags t)
+(setq org-archive-location (file-name-concat org-directory "archive.org::datetree/"))
 
 (provide 'mod-org)
 

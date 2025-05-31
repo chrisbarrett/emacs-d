@@ -2160,141 +2160,28 @@ file in your browser at the visited revision."
   :hook ((org-mode-hook . abbrev-mode)
          (org-mode-hook . auto-fill-mode))
 
+  :general ("C-c a" #'org-agenda)
+
   :custom
   (abbrev-file-name (file-name-concat org-directory "abbrev.el"))
   (org-babel-load-languages '((emacs-lisp . t)
                               (C . t)
                               (calc . t)
-                              (shell . t))))
-
-(use-package ol
-  ;; Hyperlink functionality in org-mode
-  :custom
-  (org-link-abbrev-alist
-   '(("github"      . "https://github.com/%s")
-     ("youtube"     . "https://youtube.com/watch?v=%s")
-     ("google"      . "https://google.com/search?q=")
-     ("wikipedia"   . "https://en.wikipedia.org/wiki/%s")))
+                              (shell . t)))
   :config
-  (require 'mod-org-link)
-  (require 'ol-man))
+  (require 'mod-org)
 
-(use-package org-capture
-  ;; Implements templated information capture into org-mode files.
-  :custom
-  (org-capture-templates
-   (cl-flet ((notes-datetree (key desc template &rest kvps)
-               (append
-                (list key desc 'entry '(file+olp+datetree org-default-notes-file) template)
-                '(:tree-type (month day))
-                kvps))
-             (template-file (name)
-               `(file ,(file-name-concat user-emacs-directory "capture-templates" name))))
+  (with-eval-after-load 'ol
+    (require 'mod-org-link))
 
-     (list (notes-datetree "t" "Todo" "* TODO %?")
-           (notes-datetree "n" "Note" "* %T %?")
-           (notes-datetree "N" "Note (setting time)" "* %^T %?")
+  (with-eval-after-load 'org-capture
+    (require 'mod-org-capture))
 
-           '("w" "work")
-           (notes-datetree "wt" "Todo" "* TODO %?               :%(timekeep-work-tag):work:")
-           (notes-datetree "wn" "Note" "* %T %?                 :%(timekeep-work-tag):work:")
-           (notes-datetree "wN" "Note (setting time)" "* %^T %? :%(timekeep-work-tag):work:")
-
-           (notes-datetree "l" "Link" "* %T %(org-cliplink-capture)\n%?")
-
-           `("L" "Litnote" plain
-             (function +capture-litnote-function) ,(template-file "litnote.org")
-             :immediate-finish t :jump-to-captured t)
-
-           (notes-datetree "p" "Postmortem" (template-file "postmortem.org") :jump-to-captured t)
-           (notes-datetree "j" "Journal" (template-file "journal.org"))
-           (notes-datetree "r" "Language Learning Review"
-                           (template-file "language-learning-review.org")
-                           :immediate-finish t :jump-to-captured t))))
-  :config
-  (require '+capture)
-  (org-capture-put :kill-buffer t))
-
-(use-package org-refile
-  ;; Move org-mode headings and their contents around in a structured way,
-  ;; both within the current file and to others.
-  :custom
-  (org-refile-targets
-   '((nil :maxlevel . 3)
-     (org-agenda-files :maxlevel . 3)))
-  (org-refile-use-outline-path 'file)
-  (org-outline-path-complete-in-steps nil)
-  :config
-  ;; When refiling from org-capture, Emacs prompts to kill the underlying,
-  ;; modified buffer. This fixes that.
-  (add-hook 'org-after-refile-insert-hook #'save-buffer))
-
-(defvar +org-habit-graph-window-ratio 0.2
-  "The ratio of the consistency graphs relative to the window width.")
-
-(defvar +org-habit-graph-padding 2
-  "The padding added to the end of the consistency graph.")
-
-(defvar +org-habit-min-width 30
-  "Hide the consistency graph if `org-habit-graph-column' is less than this.")
+  (with-eval-after-load 'org-agenda
+    (require 'mod-org-agenda)))
 
 (use-package org-habit
-  ;; Declare certain tasks in the agenda as 'habits'; these have a graph
-  ;; displayed beside them to help visualise your consistency.
-  :after-call org-agenda
-  :custom
-  (org-habit-graph-column 72)
-  (org-habit-today-glyph ?▲)
-  (org-habit-completed-glyph ?✓)
-  :config
-  (add-hook 'org-agenda-mode-hook
-            (defun +org-habit-resize-graph-h ()
-              "Right align and resize the consistency graphs based on
-`+org-habit-graph-window-ratio'"
-              (let* ((total-days (float (+ org-habit-preceding-days org-habit-following-days)))
-                     (preceding-days-ratio (/ org-habit-preceding-days total-days))
-                     (graph-width (floor (* (window-width) +org-habit-graph-window-ratio)))
-                     (preceding-days (floor (* graph-width preceding-days-ratio)))
-                     (following-days (- graph-width preceding-days))
-                     (graph-column (- (window-width) (+ preceding-days following-days)))
-                     (graph-column-adjusted (if (> graph-column +org-habit-min-width)
-                                                (- graph-column +org-habit-graph-padding)
-                                              nil)))
-                (setq-local org-habit-preceding-days preceding-days)
-                (setq-local org-habit-following-days following-days)
-                (setq-local org-habit-graph-column graph-column-adjusted)))))
-
-(use-package org-clock
-  ;; Provides time-tracking support for org-mode.
-  :init
-  (add-transient-hook! 'org-mode-hook #'org-clock-persistence-insinuate)
-  :custom
-  (org-clock-persist t)
-  :config
-  (require '+clockreport))
-
-(use-package org-src
-  ;; Programming language source blocks.
-  :config
-  ;; TODO: Remap mode definitions so I don't have to maintain this
-  ;; myself...
-  (pushnew! org-src-lang-modes
-            '("cs" . csharp-ts)
-            '("csharp" . csharp-ts)
-            '("docker" . dockerfile-ts)
-            '("dockerfile" . dockerfile-ts)
-            '("elixir" . elixir-ts)
-            '("json" . json-ts)
-            '("md" . markdown)
-            '("nix" . nix-ts)
-            '("rs" . rust-ts)
-            '("rust" . rust-ts)
-            '("sh" . bash-ts)
-            '("ts" . typescript-ts)
-            '("typescript" . typescript-ts)
-            '("yaml" . yaml-ts)
-            '("yml" . yaml-ts)
-            ))
+  :after-call org-agenda)
 
 (use-package evil-org :ensure t
   ;; Provides extra evil keybindings for org-mode, org-agenda etc.
@@ -2312,14 +2199,6 @@ file in your browser at the visited revision."
       (kbd "SPC") nil
       (kbd "/") #'org-agenda-filter)))
 
-(use-package org-agenda
-  ;; Aggregate TODOs and other tasks declared in org-mode files and display in a
-  ;; consolidated dashboard.
-  :general
-  ("C-c a" #'org-agenda)
-  :config
-  (require 'mod-org-agenda))
-
 (use-package org-super-agenda :ensure t
   ;; Group items in the agenda
   :after org-agenda
@@ -2331,16 +2210,6 @@ file in your browser at the visited revision."
   ;; Clear the keymap to ensure the regular evil keybindings for org-agenda
   ;; work.
   (setq org-super-agenda-header-map (make-sparse-keymap)))
-
-(use-package org-archive
-  ;; org-mode's glacier storage tier.
-  :custom
-  (org-archive-subtree-add-inherited-tags t)
-  (org-archive-location (file-name-concat org-directory "archive.org::datetree/")))
-
-(use-package org-duration
-  :custom
-  (org-duration-format 'h:mm))
 
 (use-package org-roam :ensure t
   ;; Provides workflows for working with documents for atomic notes (e.g. a
@@ -2358,11 +2227,6 @@ file in your browser at the visited revision."
 (use-package separedit :ensure t
   ;; Easily pop open comments or strings for editing in a dedicated buffer.
   )
-
-(use-package org-cycle
-  :config
-  (add-hook! 'org-cycle-hook
-    (org-cycle-hide-drawers 'all)))
 
 (use-package org-modern :ensure t
   ;; Provides visual enhancements that make org-mode look less cluttered and
