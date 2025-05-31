@@ -54,7 +54,7 @@
   bol (+ space) "\"" file-pat ":" line "\"" (? ",") eol
   :where file-pat = (? (file-prefix: "file://")) file
   :hyperlink file
-  :highlights ((file-prefix 'parenthesis)
+  :highlights ((file-prefix 'shadow)
                (file 'compilation-info)
                (line 'compilation-line-number))
   :type info)
@@ -253,7 +253,7 @@
   :type (warn . info)
   :hyperlink message
   :highlights ((code 'font-lock-constant-face)
-               (arrow 'parenthesis)
+               (arrow 'shadow)
                (warn 'compilation-warning)
                (info 'compilation-info)
                (err 'compilation-error)))
