@@ -8,8 +8,12 @@
 
 ;;; Code:
 
+(defvar +lisp-dir (file-name-concat user-emacs-directory "lisp/"))
+(defvar +modules-dir (file-name-concat user-emacs-directory "modules/"))
+
 (eval-and-compile
-  (add-to-list 'load-path (file-name-concat user-emacs-directory "lisp/")))
+  (add-to-list 'load-path +lisp-dir)
+  (add-to-list 'load-path +modules-dir))
 
 (setq package-enable-at-startup nil)
 

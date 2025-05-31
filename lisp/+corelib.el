@@ -11,6 +11,9 @@
 (require 'cl-lib)
 (require 'subr-x)
 
+(defvar +modules-dir nil)
+(defvar +lisp-dir nil)
+
 
 ;;; Logging
 

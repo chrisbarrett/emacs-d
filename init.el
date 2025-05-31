@@ -13,13 +13,9 @@
 (require 'use-package)
 
 (eval-and-compile
-  (defvar +lisp-dir (file-name-concat user-emacs-directory "lisp/"))
-  (add-to-list 'load-path +lisp-dir)
-  (defvar +modules-dir (file-name-concat user-emacs-directory "modules/"))
-  (add-to-list 'load-path +modules-dir)
+  (add-to-list 'load-path (file-name-concat user-emacs-directory "lisp/"))
   (require '+corelib)
-  (require '+load-incrementally)
-  (require '+compile))
+  (require '+load-incrementally))
 
 (defvar org-directory "~/org/")
 (defvar org-roam-directory "~/org/roam/")
