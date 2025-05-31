@@ -707,6 +707,11 @@ Runs `+escape-hook'."
   :config
   (require 'mod-bufler))
 
+(use-package mod-input-methods
+  :init
+  (keymap-global-set "M-i" 'activate-transient-input-method)
+  :after-call toggle-input-method activate-transient-input-method)
+
 
 ;;; Open some files as read-only, e.g. vendored deps.
 
@@ -2289,35 +2294,6 @@ file in your browser at the visited revision."
 ;;; Wide World of Web
 
 (use-package elfeed :ensure t)
-
-
-;;; Input methods
-
-(setq default-input-method "french-postfix")
-(setq default-transient-input-method default-input-method)
-
-(keymap-global-set "M-i" 'activate-transient-input-method)
-
-(with-eval-after-load "quail/latin-post"
-  (eval-and-compile
-    (require '+quail))
-
-  (message "Initializing custom keybindings for latin-post")
-
-  (+quail-defun "french-postfix" ";"
-    (delete-horizontal-space)
-    (insert " ; "))
-
-  (+quail-defun "french-postfix" ":"
-    (delete-horizontal-space)
-    (let ((left-pad (cond
-                     ((equal (char-before) ?:)
-                      "")
-                     ((and (derived-mode-p 'org-mode) (org-at-item-p) (not (org-at-item-description-p)))
-                      " ")
-                     (t
-                      " "))))
-      (insert left-pad ": "))))
 
 
 
