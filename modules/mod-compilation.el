@@ -142,10 +142,12 @@
   prefix (err: "Error: " message) "\n"
   prefix (= 2 space) "on " (loc: file " line " line) (* nonl) "\n"
 
-  :where prefix = bol timestamp space "ERROR" (= 2 space)
+  :where prefix = bol timestamp space "ERROR" (= 2 space) (? "[" unit "]" space)
   :where timestamp = (= 2 digit) ":" (= 2 digit) ":" (= 2 digit) "." (= 3 digit)
+  :where unit = (unit: (+ graphic))
 
-  :highlights ((err 'error))
+  :highlights ((err 'error)
+               (unit 'compilation-info))
   :hyperlink err)
 
 ;; Errors in terragrunt stacks are reported from the temp build dir; navigate
