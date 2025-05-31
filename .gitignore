@@ -4,22 +4,8 @@
 /site.el
 /site/*
 
-/.org-id-locations
-/auto-save-list
-/autosave
 /eln-cache
 /elpa
 /elpaca
-/eshell/history
-/forge
-/history
-/org-roam.db
-/persist
-/places
-/projects
-/recentf
-/spell-fu
-/transient
-/tramp
-/eshell/lastdir
-/url/
+
+/var

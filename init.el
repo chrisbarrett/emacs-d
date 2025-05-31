@@ -100,6 +100,10 @@
 
 
 
+(use-package no-littering :ensure (:wait t) :demand t
+  :config
+  (no-littering-theme-backups))
+
 (use-package general :ensure (:wait t) :demand t
   ;; General provides a featureful key binding system. It makes defining leader
   ;; key bindings much easier.
@@ -260,8 +264,6 @@ Runs `+escape-hook'."
   :custom
   (sentence-end-double-space nil))
 
-(defvar +auto-save-dir (file-name-concat user-emacs-directory "autosave/"))
-
 (use-package files
   ;; General built-in file IO.
   :custom
@@ -276,21 +278,11 @@ Runs `+escape-hook'."
   (delete-old-versions t)
   (kept-old-versions 5)
   (kept-new-versions 5)
-  (backup-directory-alist `(("." . ,+auto-save-dir)))
-  (auto-save-list-file-prefix (file-name-concat +auto-save-dir ".saves-"))
-  (auto-save-file-name-transforms `((".*" ,+auto-save-dir t)))
   :config
   (define-advice after-find-file (:around (fn &rest args) dont-block-on-autosave-exists)
     "Prevent the editor blocking to inform you when an autosave file exists."
     (cl-letf (((symbol-function #'sit-for) #'ignore))
       (apply fn args))))
-
-(use-package tramp
-  ;; Provides remote editing support, e.g. over SSH connections.
-  :after files
-  :config
-  (setq tramp-backup-directory-alist backup-directory-alist)
-  (setq tramp-auto-save-directory (file-name-concat user-emacs-directory "tramp-autosave/")))
 
 (use-package uniquify
   ;; Controls how buffers with conflicting names are managed.
@@ -1573,9 +1565,6 @@ file in your browser at the visited revision."
   ;; Teach magit how to work with pull requests on GitHub and other git hosting
   ;; services.
   :after-call magit-status ; avoids compilation until first use
-
-  :preface
-  (setq forge-database-file (file-name-concat user-emacs-directory "forge/forge-database.sqlite"))
   :general
   (:keymaps 'magit-mode-map [remap magit-browse-thing] #'forge-browse)
   (:keymaps 'magit-remote-section-map [remap magit-browse-thing] #'forge-browse-remote)
