@@ -31,10 +31,6 @@
 
 ;;; Bootstrap Elpaca
 
-;; TODO: Remove once Emacs 30 is out of pretest.
-(when (eq emacs-major-version 30)
-  (defvar elpaca-core-date 20241219))
-
 (unless (featurep 'elpaca)
   (load-file (file-name-concat user-emacs-directory "elpaca-bootstrap.el")))
 
