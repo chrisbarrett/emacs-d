@@ -2131,13 +2131,19 @@ file in your browser at the visited revision."
   ;; Zettelkasten); implements backlinks between documents for discovering
   ;; connected notes.
   :after org
+  :config
+  (use-package mod-org-roam :demand t)
+
   :defer-incrementally
   ansi-color dash f rx seq magit-section emacsql
+
+  ;; Autoload entrypoints
+  :commands (org-roam-buffer-toggle)
+  :init
+  (+local-leader-set-key 'org-mode-map "<tab>" #'org-roam-buffer-toggle)
   :general
   (:states '(motion insert normal) :keymaps 'org-mode-map
-           "C-c C-i" #'org-roam-node-insert)
-  :config
-  (use-package mod-org-roam :demand t))
+           "C-c C-i" #'org-roam-node-insert))
 
 (use-package separedit :ensure t
   ;; Easily pop open comments or strings for editing in a dedicated buffer.

@@ -9,8 +9,6 @@
 (require 'general)
 
 (+local-leader-set-key 'org-mode-map
-  "<tab>" #'org-roam-buffer-toggle
-
   "l" '(nil :wk "aliases")
   "la" #'org-roam-alias-add
   "lx" #'org-roam-alias-remove)
