@@ -155,15 +155,8 @@ Runs `+escape-hook'."
 (use-package general :ensure (:wait t) :demand t
   ;; General provides a featureful key binding system. It makes defining leader
   ;; key bindings much easier.
-  :init
-  (general-auto-unbind-keys)
-  (general-unbind :states '(normal motion) "SPC")
   :config
-  (require 'mod-leader)
-
-  ;; Support multiple SPC-u calls in sequence to chain universal-argument calls.
-
-  (keymap-set universal-argument-map "SPC u" #'universal-argument-more))
+  (require 'mod-leader))
 
 (defmacro +local-leader-set-key (keymaps &rest general-args)
   (declare (indent 1))

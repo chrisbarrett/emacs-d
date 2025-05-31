@@ -4,10 +4,14 @@
 
 ;;; Code:
 
+(require 'general)
 (require '+window)
 (require '+roam)
 (require '+edit-cmds)
 (require '+files)
+
+(general-auto-unbind-keys)
+(general-unbind :states '(normal motion) "SPC")
 
 (general-create-definer +define-leader-keys :states '(normal motion))
 
@@ -338,6 +342,12 @@
   "S" '(window-configuration-to-register :wk "save to reg")
   "t"  '(+toggle-window-dedication :wk "toggle dedication")
   "w" '(other-window :wk "other"))
+
+
+
+;; Support multiple SPC-u calls in sequence to chain universal-argument calls.
+
+(keymap-set universal-argument-map "SPC u" #'universal-argument-more)
 
 (provide 'mod-leader)
 
