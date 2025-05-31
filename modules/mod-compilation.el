@@ -122,10 +122,13 @@
 ;;; Terragrunt
 
 (define-compilation-error-rx terragrunt
-  bol "*" space (or validation-err regular-err) eol
+  bol "*" space (or validation-err module-process-err regular-err) eol
 
   :where validation-err =
   (err: "Validation failed") " for unit " unit " at path " file ": " message
+
+  :where module-process-err =
+  (err: "Cannot process module") space "Module " file space message
 
   :where regular-err =
   file ":" line "," col-ignoring-range ":" space message
@@ -168,20 +171,23 @@
   :hyperlink file)
 
 (define-compilation-error-rx terragrunt-unit-operation
-  bol (or non-error error-with-loc
-          ;; TODO: Enable this if I want to stop on first encountered error
-          ;; any-error
-          )
+  bol timestamp space  (or non-error error-with-loc error-for-module
+                           ;; TODO: Enable this if I want to stop on first encountered error
+                           ;; any-error
+                           )
 
   :where non-error =
-  timestamp space (or warn-lvl info-lvl) (+ space) "[" file "]" message "\n"
+  (or warn-lvl info-lvl) (+ space) "[" file "]" message eol
 
   :where error-with-loc =
-  timestamp space "ERROR" (+ space) "[" unit "] Error: " message "\n"
-  timestamp space "ERROR" (+ space) "[" unit "]   on " (loc: file " line " line) (* nonl) "\n"
+  "ERROR" (+ space) "[" unit "] Error: " message "\n"
+  timestamp space "ERROR" (+ space) "[" unit "]   on " (loc: file " line " line) (* nonl) eol
+
+  :where error-for-module =
+  "ERROR" (+ space) "[" unit "] Module " file space "has finished with an error" eol
 
   :where any-error =
-  timestamp space "ERROR" (+ space) "[" file "] " message "\n"
+  "ERROR" (+ space) "[" file "] " message eol
 
   :where warn-lvl = warn: "WARN"
   :where info-lvl = info: (or "INFO" "STDOUT")
