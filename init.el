@@ -107,7 +107,7 @@
   ;; General provides a featureful key binding system. It makes defining leader
   ;; key bindings much easier.
   :config
-  (require 'mod-leader))
+  (use-package mod-leader :demand t))
 
 
 ;; Adapt the escape key customisation from Doom.
@@ -439,20 +439,8 @@ Runs `+escape-hook'."
 
 (use-package compile
   ;; Integration for running compilers and other processes from inside Emacs.
-  :custom
-  (compilation-always-kill t)
-  (compilation-ask-about-save nil) ; automatically save before compiling.
-  (compilation-scroll-output 'first-error)
   :config
-  (require 'mod-compilation)
-  (add-hook 'compilation-filter-hook #'ansi-color-compilation-filter)
-  ;; Change to look like a highlighted-line, rather than a visual selection.
-  (custom-theme-set-faces 'user
-                          '(next-error-message ((t (:inherit hl-line)))))
-
-  ;; Automatically truncate long compilation buffers.
-  (autoload 'comint-truncate-buffer "comint" nil t)
-  (add-hook 'compilation-filter-hook #'comint-truncate-buffer))
+  (use-package mod-compilation :demand t))
 
 ;; Disable bidirectional text by default.
 (setq-default bidi-display-reordering 'left-to-right)

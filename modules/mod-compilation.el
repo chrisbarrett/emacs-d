@@ -2,6 +2,28 @@
 
 ;;; Commentary:
 
+;;; Code:
+
+(require 'compile)
+(require '+compile)
+
+(setq compilation-always-kill t)
+(setq compilation-ask-about-save nil) ; automatically save before compiling.
+(setq compilation-scroll-output 'first-error)
+
+(add-hook 'compilation-filter-hook #'ansi-color-compilation-filter)
+
+;; Change to look like a highlighted-line, rather than a visual selection.
+(custom-theme-set-faces 'user
+                        '(next-error-message ((t (:inherit hl-line)))))
+
+;; Automatically truncate long compilation buffers.
+(autoload 'comint-truncate-buffer "comint" nil t)
+(remove-hook 'compilation-filter-hook #'comint-truncate-buffer)
+
+
+;;; Parsers
+
 ;; The `compile' command uses a pretty byzantine system to interpret outputs from
 ;; commands into error locations that can be navigated around in the editor.
 ;;
@@ -16,19 +38,13 @@
 ;; Writing your own error parsers using this system is pretty finnicky. To make
 ;; working with it easier, I have defined a helper macro,
 ;; `define-compilation-error-rx'.
-;;
-;; The helper macro has made it easier for me to write fairly elaborate
 
-;;; Code:
 
-(require '+compile)
-
-;; Disable all built-in parsers; I only want to use the error parsers I define
-;; in this file.
+;; Start by disabling all built-in parsers; I only want to use the error parsers
+;; I define in this file.
 
 (setq compilation-error-regexp-alist nil)
 
-
 ;;; Generic compilation errors
 
 ;; Many well-behaved tools output something that vaguely conforms to the pattern
@@ -257,6 +273,7 @@
                (warn 'compilation-warning)
                (info 'compilation-info)
                (err 'compilation-error)))
+
 
 (provide 'mod-compilation)
 
