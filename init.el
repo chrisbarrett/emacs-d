@@ -1926,7 +1926,7 @@ file in your browser at the visited revision."
   ;; Use `tofu' for formatting terraform files if on PATH.
   (with-eval-after-load 'apheleia-formatters
     (add-to-list 'apheleia-formatters '(opentofu . ("tofu" "fmt" "-")))
-    (alist-set! apheleia-mode-alist 'terraform-mode '(opentofu terraform))))
+    (alist-set! apheleia-mode-alist 'terraform-mode 'opentofu)))
 
 (use-package elixir-ts-mode
   :mode ("\\.ex\\'" "\\.exs\\'")
