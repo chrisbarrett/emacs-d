@@ -113,8 +113,7 @@
     read-expression-map))
 
 (with-eval-after-load 'general
-  (general-define-key :keymaps +default-minibuffer-maps
-                      "S-v" #'yank))
+  (general-def :keymaps +default-minibuffer-maps "S-v" #'yank))
 
 (defvar +escape-hook nil
   "Hook functions run until success when ESC is pressed.")
@@ -1727,32 +1726,14 @@ file in your browser at the visited revision."
 (use-package rfc-mode :ensure t
   ;; Interface for browsing RFC documents.
   :general (:keymaps 'help-map "w" #'rfc-mode-browse)
-
-  :custom (rfc-mode-directory "~/.cache/emacs/rfc-mode/rfcs/")
-
+  :custom
+  (rfc-mode-directory "~/.cache/emacs/rfc-mode/rfcs/")
   :config
   ;; Fix the default face, which doesn't allow highlights (e.g. in vertico).
   (custom-theme-set-faces 'user
                           '(rfc-mode-browser-title-face ((t (:inherit bold)))))
-
   (with-eval-after-load 'evil
-    (evil-set-initial-state 'rfc-mode 'motion))
-
-  ;; Add rfc link type to org.
-  :init
-  (with-eval-after-load 'ol
-    (org-link-set-parameters
-     "RFC"
-     :follow (lambda (number)
-               (require 'rfc-mode)
-               (pop-to-buffer (rfc-mode--document-buffer (string-to-number number))))
-     :export (lambda (path desc format)
-               (let ((rfc-num path)
-                     (desc (or desc (concat "RFC " path))))
-                 (pcase format
-                   (`html (format "<a href=\"https://www.rfc-editor.org/rfc/rfc%s.html\">%s</a>" rfc-num desc))
-                   (`latex (format "\\href{https://www.rfc-editor.org/rfc/rfc%s.html}{%s}" rfc-num desc))
-                   (_ desc)))))))
+    (evil-set-initial-state 'rfc-mode 'motion)))
 
 
 ;;; Text & programming modes
@@ -2057,19 +2038,6 @@ file in your browser at the visited revision."
     (pushnew! dired-omit-extensions ".jam" ".vee" ".beam")))
 
 (use-package rust-ts-mode
-  :init
-  (with-eval-after-load 'ol
-    (org-link-set-parameters
-     "crate"
-     :follow (lambda (name)
-               (browse-url (format "https://docs.rs/%s/latest/%s" name name)))
-     :export (lambda (path desc format)
-               (let ((crate-name path)
-                     (desc (or desc (concat "Crate " path))))
-                 (pcase format
-                   (`html (format "<a href=\"https://crates.io/crates/%s\">%s</a>" crate-name desc))
-                   (`latex (format "\\href{https://crates.io/crates/%s}{%s}" crate-name desc))
-                   (_ desc))))))
   :config
   (setq-hook! 'rust-ts-mode-hook separedit-default-mode 'markdown-mode))
 
@@ -2308,14 +2276,6 @@ file in your browser at the visited revision."
   (org-return-follows-link t)
   (org-track-ordered-property-with-tag t)
 
-  ;; Custom links
-
-  (org-link-abbrev-alist
-   '(("github"      . "https://github.com/%s")
-     ("youtube"     . "https://youtube.com/watch?v=%s")
-     ("google"      . "https://google.com/search?q=")
-     ("wikipedia"   . "https://en.wikipedia.org/wiki/%s")))
-
   :config
 
   ;; Prefer inserting headings with M-RET
@@ -2381,14 +2341,6 @@ file in your browser at the visited revision."
           (t
            (org-cut-subtree))))
 
-  ;; Highlight broken file links.
-  (org-link-set-parameters
-   "file" :face (lambda (path)
-                  (if (or (file-remote-p path)
-                          (file-exists-p path))
-                      'org-link
-                    '(warning org-link))))
-
   :general-config
   (:keymaps 'org-mode-map
    :states '(normal insert)
@@ -2436,31 +2388,14 @@ file in your browser at the visited revision."
 
 (use-package ol
   ;; Hyperlink functionality in org-mode
+  (org-link-abbrev-alist
+   '(("github"      . "https://github.com/%s")
+     ("youtube"     . "https://youtube.com/watch?v=%s")
+     ("google"      . "https://google.com/search?q=")
+     ("wikipedia"   . "https://en.wikipedia.org/wiki/%s")))
   :config
-  (defface +org-id-link
-    '((t (:weight semi-bold :inherit font-lock-variable-name-face)))
-    "Face for ID links; these would typically be org-roam links.")
-
-  (org-link-set-parameters "id" :face '+org-id-link)
-
-  (org-link-set-parameters
-   "github"
-   :follow (lambda (path)
-             (browse-url (format "https://github.com/%s" path)))
-   :export (lambda (path desc format)
-             (let ((desc (or desc (concat "GitHub: " path))))
-               (pcase format
-                 (`html (format "<a href=\"https://github.com/%s\">%s</a>" path desc))
-                 (`latex (format "\\href{https://github.com/%s}{%s}" path desc))
-                 (_ desc)))))
-
-  (require 'ol-man)
-
-  ;; Make RET follow ID links in the same window.
-
-  (define-advice org-id-open (:around (orig-fun id &optional argument) follow-links-same-window)
-    (let ((org-link-frame-setup '((file . find-file))))
-      (funcall orig-fun id argument))))
+  (require 'mod-org-link)
+  (require 'ol-man))
 
 (use-package org-capture
   ;; Implements templated information capture into org-mode files.
