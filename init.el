@@ -2098,9 +2098,6 @@ file in your browser at the visited revision."
   (use-package mod-org-capture :after org-capture :demand t)
   (use-package mod-org-agenda :after org-agenda :demand t))
 
-(use-package org-habit
-  :after-call org-agenda)
-
 (use-package evil-org :ensure t
   ;; Provides extra evil keybindings for org-mode, org-agenda etc.
   :hook (org-mode-hook . evil-org-mode)
