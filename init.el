@@ -30,8 +30,9 @@
 (unless (featurep 'elpaca)
   (load-file (file-name-concat user-emacs-directory "elpaca-bootstrap.el")))
 
-(elpaca elpaca-use-package
-  (elpaca-use-package-mode))
+(with-no-warnings
+  (elpaca elpaca-use-package
+    (elpaca-use-package-mode)))
 
 ;; Make sure I don't accidentally start loading super-expensive packages on startup.
 
