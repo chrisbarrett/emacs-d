@@ -11,8 +11,7 @@
 
 (general-create-definer +define-leader-keys :states '(normal motion))
 
-(+define-leader-keys
-  :prefix "SPC"
+(+define-leader-keys :prefix "SPC" ;; root-level
   :prefix-command '+leader-key
 
   "SPC" '(consult-buffer :wk "buffers & files")
@@ -77,245 +76,257 @@
 
   "p"  '(nil :wk "project")
   "p" project-prefix-map
-
   "h"  '(nil :wk "help")
   "h" help-map
-
   "," '(nil :wk "structure")
-  ",n" '(puni-forward-sexp :wk "forward-sexp")
-  ",p" '(puni-backward-sexp :wk "backward-sexp")
-  ",<" '(puni-backward-sexp-or-up-list :wk "backward-sexp-or-up-list")
-  ",c" '(puni-convolute :wk "convolute")
-  ",d" '(+forward-kill-sexp :wk "kill sexp forward")
-  ",D" '(+backward-kill-sexp :wk "kill sexp back")
-
-  ",k" '(puni-splice-killing-forward :wk "splice-killing-forward")
-  ",K" '(puni-splice-killing-backward :wk "splice-killing-backward")
-  ;; TODO: define a killing-around variant.
-  ",s" '(puni-splice-killing-backward :wk "splice-killing-backward")
-  ",r" '(puni-raise :wk "raise")
-  ",b" '(puni-barf-forward :wk "barf-forward")
-  ",B" '(puni-barf-backward :wk "barf-backward")
-  ",m" '(puni-slurp-forward :wk "slurp-forward")
-  ",M" '(puni-slurp-backward :wk "slurp-backward")
-  ",t" '(puni-transpose :wk "transpose")
-  ",u" '(puni-splice :wk "splice")
-  ",x" '(puni-split :wk "split")
-
   "a"  '(nil :wk "apps")
-  "an" #'elfeed
-  "aw" #'eww
-  "ac" #'quick-calc
-  "aC" #'full-calc
-  "ae" #'eshell
-  "as" #'mistty
-  "ar" (general-predicate-dispatch 'profiler-start
-         (and (featurep 'profiler) (profiler-running-p)) #'+profiler-stop-and-report)
-
-  "ap"  '(nil :wk "elpaca")
-  "app" #'elpaca-manager
-  "apl" #'elpaca-log
-  "api" #'elpaca-info
-  "apb" #'elpaca-browse
-  "apv" #'elpaca-visit
-
   "b"  '(nil :wk "buffers")
-  "bb" '(bury-buffer :wk "bury")
-  "bd" '(bury-buffer :wk "bury")
-  "bD" '(kill-current-buffer :wk "kill")
-  "bl" '(bufler :wk "list")
-  "bn" '(next-buffer :wk "next")
-  "bs" '(bufler-switch-buffer :wk "switch...")
-  "bp" '(previous-buffer :wk "prev")
-  "bc" (list
-        (general-predicate-dispatch #'clone-indirect-buffer
-          (region-active-p) #'+clone-indirect-buffer-of-region)
-        :wk "clone indirect")
-
   "f"  '(nil :wk "files")
-  "ff" '(find-file :wk "find")
-  "fg" '(magit-find-file :wk "find (in git rev...)")
-  "fF" '(find-file-other-window :wk "find (other window)")
-  "fs" '(save-buffer :wk "save")
-  "fR" '(rename-visited-file :wk "rename")
-  "fr" '(recentf :wk "recent")
-  "fw" '(write-file :wk "write copy")
-  "fo" '(+find-sibling-file :wk "other file")
-
-  "fD" (list (defun +delete-file-and-buffer ()
-               (interactive)
-               (let ((file (buffer-file-name)))
-                 (kill-buffer (current-buffer))
-                 (when file
-                   (delete-file file))))
-             :wk "delete file & buf")
-
-  "fy" (list (defun +copy-file-path ()
-               (interactive)
-               (if-let* ((file (buffer-file-name)))
-                   (progn
-                     (kill-new file)
-                     (message "Copied to clipboard => %s" file))
-                 (user-error "Buffer is not visiting a file")))
-             :wk "copy (full path)")
-
-  "fd" (list (defun +copy-file-directory ()
-               (interactive)
-               (if-let* ((file (buffer-file-name))
-                         (dir (file-name-directory file)))
-                   (progn
-                     (kill-new dir)
-                     (message "Copied to clipboard => %s" dir))
-                 (user-error "Buffer is not visiting a file")))
-             :wk "copy (dir)")
-
-  "fv" (list (defun +revisit-file ()
-               (interactive)
-               (if-let* ((file (buffer-file-name)))
-                   (find-alternate-file file)
-                 (user-error "Buffer is not visiting a file")))
-             :wk "reload")
-
   "n"  '(nil :wk "narrowing")
-  "nf" '(narrow-to-defun :wk "defun")
-  "nr" '(narrow-to-region :wk "region")
-  "nw" #'widen
-
   "c"  '(nil :wk "code/comments")
-  "cm" '(xref-find-references :wk "find refs")
-  "cr" '(comment-dwim :wk "comment (dwim)")
-  "cd" '(eglot-find-typeDefinition :wk "find type def")
-  "cc" '(eglot-find-declaration :wk "find decl")
-  "ci" '(eglot-find-implementation :wk "find impl")
-  "cl" '(comment-line :wk "comment out")
-
   "g"  '(nil :wk "git/goto")
-  "gb" '(magit-blame :wk "blame")
-  "gd" '(magit-diff-buffer-file :wk "buffer diff")
-  "gf" '(magit-file-dispatch :wk "file actions...")
-  "gg" '(magit-status :wk "status")
-  "gl" '(magit-log-buffer-file :wk "buffer log")
-  "gr" '(browse-at-remote :wk "open on GitHub")
-  "gt" '(git-timemachine-toggle :wk "file history")
-  "gy" '(browse-at-remote-kill :wk "copy GitHub link ")
-
-  "g?" (list (defun +goto-messages ()
-               (interactive)
-               (display-buffer "*Messages*"))
-             :wk "messages")
-
-  "ge" (list (defun +goto-emacs-init-file ()
-               (interactive)
-               (find-file (file-name-concat user-emacs-directory "init.el")))
-             :wk "init file")
-
-  "gs" (list (defun +goto-emacs-site-file ()
-               (interactive)
-               (find-file
-                (read-file-name "Site file: " +site-files-directory)))
-             :wk "site file...")
-
-  "gn" (list (defun +goto-nix-file ()
-               (interactive)
-               (project-find-file-in  "flake.nix" nil
-                                      (project-current nil "~/.config/nix-configuration")))
-             :wk "nix config file...")
-
   "L" '(gptel-menu :wk "LLM menu")
   "l" '(nil :wk "LLMs")
-  "la" '(gptel-add :wk "add/remove from context")
-  "lf" '(gptel-add-file :wk "add file to context")
-  "ls" '(gptel-send :wk "send")
-  "l?" '(gptel-menu :wk "menu")
-  "ll" '(gptel :wk "open chat")
-  "lw" '(gptel :wk "rewrite")
-
   "o"  '(nil :wk "org")
-  "on" (list (defun +org-goto-notes ()
-               (interactive)
-               (find-file org-default-notes-file))
-             :wk "notes")
-  "oi" (list (defun +goto-org-roam-index ()
-               (interactive)
-               (find-file (file-name-concat org-roam-directory "notes/index.org")))
-             :wk "roam index")
-  "ot" (list (defun +goto-org-todos ()
-               (interactive)
-               (find-file (file-name-concat org-roam-directory "todos.org")))
-             :wk "todos")
-  "oa" (list (defun +org-agenda-dwim ()
-               (interactive)
-               (org-agenda nil "p"))
-             :wk "agenda")
-
-  "oj" '(consult-org-agenda :wk "agenda file heading...")
-  "og" '(org-capture-goto-last-stored :wk "goto captured")
-  "ov" '(org-tags-view :wk "search by tag")
-  "ok" #'org-capture
-  "ol" '(org-store-link :wk "store link")
-  "of" '(+roam-node-find :wk "find (roam)")
-  "os" '(org-roam-search :wk "search (roam)")
-  "ow" '(timekeep-visit-node :wk "work file")
-
-  "oc" '(nil :wk "clock")
-  "occ" '(org-clock-in-last :wk "clock in (last)")
-  "ocd" (list (general-predicate-dispatch #'org-clock-display
-                (not (derived-mode-p 'org-mode))
-                (defun +org-clock-display-last (&optional arg)
-                  "Jump to the latest clock and display clocking info in that buffer."
-                  (interactive "P")
-                  (org-clock-goto arg)
-                  (org-clock-display)))
-              :wk "display")
-  "oci" '(org-clock-in :wk "clock in")
-  "oco" '(org-clock-out :wk "clock out")
-  "ocr" '(org-resolve-clocks :wk "resolve")
-  "ocg" '(org-clock-goto :wk "goto clock")
-  "ocq" '(org-clock-cancel :wk "cancel")
-
-  "or" '(nil :wk "roam/review")
-  "ord" '(org-roam-review-list-recently-added :wk "list recent")
-  "orl" '(org-roam-links :wk "linked nodes")
-  "orr" '(org-roam-review :wk "review")
-  "ort" '(org-roam-search-tags :wk "search by tag")
-
   "e"  '(nil :wk "errors")
-  "el" '(consult-flymake :wk "error list")
-  "ee" '(first-error :wk "first error")
-  "en" '(next-error :wk "next error")
-  "ep" '(previous-error :wk "prev error")
-
-  "kr" '(consult-yank-pop :wk "kill-ring")
-
+  "k" '(consult-yank-pop :wk "kill-ring")
   "t"  '(nil :wk "toggles")
-  "tb" '(breadcrumb-mode :wk "breadcrumbs (header)")
-  "th" '(global-hl-line-mode :wk "highlight line")
-  "tf" '(global-display-fill-column-indicator-mode :wk "fill column indicator")
-  "ti" '(indent-bars-mode :wk "indent bars")
-  "tl" '(global-display-line-numbers-mode :wk "line numbers")
-  "tm" '(toggle-input-method :wk "input method")
-  "ts" '(spell-fu-mode :wk "spellchecks")
-  "tr" '(read-only-mode :wk "readonly")
-  "tw" '(whitespace-mode :wk "whitespace")
-  "tv" '(visual-line-mode :wk "line wrapping")
-  "tV" '(global-visual-line-mode :wk "line wrapping (globally)")
-
   "w"  '(nil :wk "windows")
-  "w-" '(+split-window-vertically-dwim :wk "vsplit")
-  "w/" '(+split-window-horizontally-dwim :wk "hsplit")
-  "w="  '(balance-windows :wk "balance")
-  "wd" '(delete-window :wk "delete")
-  "wo"  '(+delete-nondedicated-windows :wk "delete others")
-  "wO"  '(delete-other-windows :wk "delete (+dedicated)")
-  "wq" '(delete-window :wk "delete")
-  "wr" '(evil-window-rotate-downwards :wk "rotate")
-  "ws" '(consult-register-load :wk "registers")
-  "wS" '(window-configuration-to-register :wk "save to reg")
-  "wt"  '(+toggle-window-dedication :wk "toggle dedication")
-  "ww" '(other-window :wk "other")
+  "z" '(global-text-scale-adjust :wk "text scaling"))
 
-  "z" '(global-text-scale-adjust :wk "text scaling")
-  )
+(+define-leader-keys :prefix "SPC ," ;; structure
+  "n" '(puni-forward-sexp :wk "forward-sexp")
+  "p" '(puni-backward-sexp :wk "backward-sexp")
+  "<" '(puni-backward-sexp-or-up-list :wk "backward-sexp-or-up-list")
+  "c" '(puni-convolute :wk "convolute")
+  "d" '(+forward-kill-sexp :wk "kill sexp forward")
+  "D" '(+backward-kill-sexp :wk "kill sexp back")
+
+  "k" '(puni-splice-killing-forward :wk "splice-killing-forward")
+  "K" '(puni-splice-killing-backward :wk "splice-killing-backward")
+
+  ;; TODO: define a killing-around variant.
+  "s" '(puni-splice-killing-backward :wk "splice-killing-backward")
+
+  "r" '(puni-raise :wk "raise")
+  "b" '(puni-barf-forward :wk "barf-forward")
+  "B" '(puni-barf-backward :wk "barf-backward")
+  "m" '(puni-slurp-forward :wk "slurp-forward")
+  "M" '(puni-slurp-backward :wk "slurp-backward")
+  "t" '(puni-transpose :wk "transpose")
+  "u" '(puni-splice :wk "splice")
+  "x" '(puni-split :wk "split"))
+
+(+define-leader-keys :prefix "SPC a" ;; apps
+  "n" #'elfeed
+  "w" #'eww
+  "c" #'quick-calc
+  "C" #'full-calc
+  "e" #'eshell
+  "s" #'mistty
+  "r" (general-predicate-dispatch 'profiler-start
+        (and (featurep 'profiler) (profiler-running-p)) #'+profiler-stop-and-report)
+  "p"  '(nil :wk "elpaca"))
+
+(+define-leader-keys :prefix "SPC a p" ;; elpaca
+  "p" #'elpaca-manager
+  "l" #'elpaca-log
+  "i" #'elpaca-info
+  "b" #'elpaca-browse
+  "v" #'elpaca-visit)
+
+(+define-leader-keys :prefix "SPC b" ;; buffers
+  "b" '(bury-buffer :wk "bury")
+  "d" '(bury-buffer :wk "bury")
+  "D" '(kill-current-buffer :wk "kill")
+  "l" '(bufler :wk "list")
+  "n" '(next-buffer :wk "next")
+  "s" '(bufler-switch-buffer :wk "switch...")
+  "p" '(previous-buffer :wk "prev")
+  "c" (list (general-predicate-dispatch #'clone-indirect-buffer
+              (region-active-p) #'+clone-indirect-buffer-of-region)
+            :wk "clone indirect"))
+
+(+define-leader-keys :prefix "SPC c" ;; code/comments
+  "m" '(xref-find-references :wk "find refs")
+  "r" '(comment-dwim :wk "comment (dwim)")
+  "d" '(eglot-find-typeDefinition :wk "find type def")
+  "c" '(eglot-find-declaration :wk "find decl")
+  "i" '(eglot-find-implementation :wk "find impl")
+  "l" '(comment-line :wk "comment out"))
+
+(+define-leader-keys :prefix "SPC e" ;; errors
+  "l" '(consult-flymake :wk "error list")
+  "e" '(first-error :wk "first error")
+  "n" '(next-error :wk "next error")
+  "p" '(previous-error :wk "prev error"))
+
+(+define-leader-keys :prefix "SPC f" ;; files
+  "f" '(find-file :wk "find")
+  "g" '(magit-find-file :wk "find (in git rev...)")
+  "F" '(find-file-other-window :wk "find (other window)")
+  "s" '(save-buffer :wk "save")
+  "R" '(rename-visited-file :wk "rename")
+  "r" '(recentf :wk "recent")
+  "w" '(write-file :wk "write copy")
+  "o" '(+find-sibling-file :wk "other file")
+
+  "D" (list (defun +delete-file-and-buffer ()
+              (interactive)
+              (let ((file (buffer-file-name)))
+                (kill-buffer (current-buffer))
+                (when file
+                  (delete-file file))))
+            :wk "delete file & buf")
+
+  "y" (list (defun +copy-file-path ()
+              (interactive)
+              (if-let* ((file (buffer-file-name)))
+                  (progn
+                    (kill-new file)
+                    (message "Copied to clipboard => %s" file))
+                (user-error "Buffer is not visiting a file")))
+            :wk "copy (full path)")
+
+  "d" (list (defun +copy-file-directory ()
+              (interactive)
+              (if-let* ((file (buffer-file-name))
+                        (dir (file-name-directory file)))
+                  (progn
+                    (kill-new dir)
+                    (message "Copied to clipboard => %s" dir))
+                (user-error "Buffer is not visiting a file")))
+            :wk "copy (dir)")
+
+  "v" (list (defun +revisit-file ()
+              (interactive)
+              (if-let* ((file (buffer-file-name)))
+                  (find-alternate-file file)
+                (user-error "Buffer is not visiting a file")))
+            :wk "reload"))
+
+(+define-leader-keys :prefix "SPC g" ;; git/goto
+  "b" '(magit-blame :wk "blame")
+  "d" '(magit-diff-buffer-file :wk "buffer diff")
+  "f" '(magit-file-dispatch :wk "file actions...")
+  "g" '(magit-status :wk "status")
+  "l" '(magit-log-buffer-file :wk "buffer log")
+  "r" '(browse-at-remote :wk "open on GitHub")
+  "t" '(git-timemachine-toggle :wk "file history")
+  "y" '(browse-at-remote-kill :wk "copy GitHub link ")
+
+  "?" (list (defun +goto-messages ()
+              (interactive)
+              (display-buffer "*Messages*"))
+            :wk "messages")
+
+  "e" (list (defun +goto-emacs-init-file ()
+              (interactive)
+              (find-file (file-name-concat user-emacs-directory "init.el")))
+            :wk "init file")
+
+  "s" (list (defun +goto-emacs-site-file ()
+              (interactive)
+              (find-file
+               (read-file-name "Site file: " +site-files-directory)))
+            :wk "site file...")
+
+  "n" (list (defun +goto-nix-file ()
+              (interactive)
+              (project-find-file-in  "flake.nix" nil
+                                     (project-current nil "~/.config/nix-configuration")))
+            :wk "nix config file..."))
+
+(+define-leader-keys :prefix "SPC l" ;; LLMs
+  "a" '(gptel-add :wk "add/remove from context")
+  "f" '(gptel-add-file :wk "add file to context")
+  "s" '(gptel-send :wk "send")
+  "?" '(gptel-menu :wk "menu")
+  "l" '(gptel :wk "open chat")
+  "w" '(gptel :wk "rewrite"))
+
+(+define-leader-keys :prefix "SPC n" ;; narrowing
+  "f" '(narrow-to-defun :wk "defun")
+  "r" '(narrow-to-region :wk "region")
+  "w" #'widen)
+
+(+define-leader-keys :prefix "SPC o" ;; org
+  "n" (list (defun +org-goto-notes ()
+              (interactive)
+              (find-file org-default-notes-file))
+            :wk "notes")
+  "i" (list (defun +goto-org-roam-index ()
+              (interactive)
+              (find-file (file-name-concat org-roam-directory "notes/index.org")))
+            :wk "roam index")
+  "t" (list (defun +goto-org-todos ()
+              (interactive)
+              (find-file (file-name-concat org-roam-directory "todos.org")))
+            :wk "todos")
+  "a" (list (defun +org-agenda-dwim ()
+              (interactive)
+              (org-agenda nil "p"))
+            :wk "agenda")
+  "j" '(consult-org-agenda :wk "agenda file heading...")
+  "g" '(org-capture-goto-last-stored :wk "goto captured")
+  "v" '(org-tags-view :wk "search by tag")
+  "k" #'org-capture
+  "l" '(org-store-link :wk "store link")
+  "f" '(+roam-node-find :wk "find (roam)")
+  "s" '(org-roam-search :wk "search (roam)")
+  "w" '(timekeep-visit-node :wk "work file")
+
+  "c" '(nil :wk "clock")
+  "r" '(nil :wk "roam/review"))
+
+(+define-leader-keys :prefix "SPC o c" ;; org clocking
+  "c" '(org-clock-in-last :wk "clock in (last)")
+  "d" (list (general-predicate-dispatch #'org-clock-display
+              (not (derived-mode-p 'org-mode))
+              (defun +org-clock-display-last (&optional arg)
+                "Jump to the latest clock and display clocking info in that buffer."
+                (interactive "P")
+                (org-clock-goto arg)
+                (org-clock-display)))
+            :wk "display")
+  "i" '(org-clock-in :wk "clock in")
+  "o" '(org-clock-out :wk "clock out")
+  "r" '(org-resolve-clocks :wk "resolve")
+  "g" '(org-clock-goto :wk "goto clock")
+  "q" '(org-clock-cancel :wk "cancel"))
+
+(+define-leader-keys :prefix "SPC o r" ;; org roam/review
+  "d" '(org-roam-review-list-recently-added :wk "list recent")
+  "l" '(org-roam-links :wk "linked nodes")
+  "r" '(org-roam-review :wk "review")
+  "t" '(org-roam-search-tags :wk "search by tag"))
+
+(+define-leader-keys :prefix "SPC t" ;; toggles
+  "b" '(breadcrumb-mode :wk "breadcrumbs (header)")
+  "h" '(global-hl-line-mode :wk "highlight line")
+  "f" '(global-display-fill-column-indicator-mode :wk "fill column indicator")
+  "i" '(indent-bars-mode :wk "indent bars")
+  "l" '(global-display-line-numbers-mode :wk "line numbers")
+  "m" '(toggle-input-method :wk "input method")
+  "s" '(spell-fu-mode :wk "spellchecks")
+  "r" '(read-only-mode :wk "readonly")
+  "w" '(whitespace-mode :wk "whitespace")
+  "v" '(visual-line-mode :wk "line wrapping")
+  "V" '(global-visual-line-mode :wk "line wrapping (globally)"))
+
+(+define-leader-keys :prefix "SPC w" ;; windows
+  "-" '(+split-window-vertically-dwim :wk "vsplit")
+  "/" '(+split-window-horizontally-dwim :wk "hsplit")
+  "="  '(balance-windows :wk "balance")
+  "d" '(delete-window :wk "delete")
+  "o"  '(+delete-nondedicated-windows :wk "delete others")
+  "O"  '(delete-other-windows :wk "delete (+dedicated)")
+  "q" '(delete-window :wk "delete")
+  "r" '(evil-window-rotate-downwards :wk "rotate")
+  "s" '(consult-register-load :wk "registers")
+  "S" '(window-configuration-to-register :wk "save to reg")
+  "t"  '(+toggle-window-dedication :wk "toggle dedication")
+  "w" '(other-window :wk "other"))
 
 (provide 'mod-leader)
 
