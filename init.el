@@ -693,7 +693,7 @@ Runs `+escape-hook'."
 (use-package bufler :ensure t
   ;; A better buffer list than the default.
   :config
-  (require 'mod-bufler))
+  (use-package mod-bufler :demand t))
 
 (use-package mod-input-methods
   :init
@@ -821,7 +821,7 @@ Runs `+escape-hook'."
   (pulsar-iterations 5)
   (pulsar-pulse-on-window-change t)
   :config
-  (require 'mod-pulsar))
+  (use-package mod-pulsar :demand t))
 
 (use-package hl-line
   ;; Highlight the current line.
@@ -988,7 +988,7 @@ Runs `+escape-hook'."
   (evil-want-keybinding nil)
 
   :config
-  (require 'mod-evil)
+  (use-package mod-evil :demand t)
   (evil-mode +1)
 
   (add-hook '+escape-hook
@@ -2051,7 +2051,7 @@ file in your browser at the visited revision."
 (use-package debug
   ;; The built-in debugger for the Emacs Lisp runtime.
   :config
-  (require 'mod-debug))
+  (use-package mod-debug :demand t))
 
 
 ;;; Code formatting
@@ -2162,16 +2162,10 @@ file in your browser at the visited revision."
                               (calc . t)
                               (shell . t)))
   :config
-  (require 'mod-org)
-
-  (with-eval-after-load 'ol
-    (require 'mod-org-link))
-
-  (with-eval-after-load 'org-capture
-    (require 'mod-org-capture))
-
-  (with-eval-after-load 'org-agenda
-    (require 'mod-org-agenda)))
+  (use-package mod-org :demand t)
+  (use-package mod-org-link :after ol :demand t)
+  (use-package mod-org-capture :after org-capture :demand t)
+  (use-package mod-org-agenda :after org-agenda :demand t))
 
 (use-package org-habit
   :after-call org-agenda)
@@ -2215,7 +2209,7 @@ file in your browser at the visited revision."
   (:states '(motion insert normal) :keymaps 'org-mode-map
            "C-c C-i" #'org-roam-node-insert)
   :config
-  (require 'mod-org-roam))
+  (use-package mod-org-roam :demand t))
 
 (use-package separedit :ensure t
   ;; Easily pop open comments or strings for editing in a dedicated buffer.
@@ -2291,7 +2285,7 @@ file in your browser at the visited revision."
   :custom
   (gptel-model 'claude-sonnet-4-20250514)
   :config
-  (require 'mod-gptel))
+  (use-package mod-gptel :demand t))
 
 (use-package nursery :ensure (nursery :host github
                                       :repo "chrisbarrett/nursery"
@@ -2359,7 +2353,7 @@ file in your browser at the visited revision."
 
 
 (add-hook! '+first-input-hook
-  (require 'mod-display-buffer))
+  (use-package mod-display-buffer :demand t))
 
 ;; Local Variables:
 ;; no-native-compile: t
