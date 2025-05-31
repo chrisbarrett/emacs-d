@@ -1487,10 +1487,15 @@ word.  Fall back to regular `expreg-expand'."
   ;;
   ;; Magit depends on a more recent version of transient than the one that ships
   ;; with Emacs.
-  :custom
-  (transient-display-buffer-action '(display-buffer-below-selected))
   :general-config
-  (:keymaps 'transient-map [escape] #'transient-quit-one))
+  (:keymaps 'transient-map [escape] #'transient-quit-one)
+  :custom
+  ;; Prevent transient from creating extra windows due to conflicts with custom
+  ;; display-buffer rules. See:
+  ;; https://github.com/magit/transient/discussions/358
+  (transient-display-buffer-action '(display-buffer-below-selected
+                                     (dedicated . t)
+                                     (inhibit-same-window . t))))
 
 (use-package magit :ensure t
   ;; Magit is the definitive UX for working with git.
@@ -2528,40 +2533,11 @@ file in your browser at the visited revision."
 
 (use-package gptel :ensure t
   ;; Provides LLM integrations.
-  :hook (gptel-mode-hook . visual-line-mode)
   :general (:states 'visual "RET" #'gptel-rewrite)
-  :init
-  (defun +gptel-send ()
-    (interactive)
-    (unless (region-active-p)
-      (goto-char (line-end-position)))
-    (gptel-send)
-    (evil-normal-state))
-  :general
-  (:keymaps 'gptel-mode-map :states '(normal insert) "C-c C-s" #'+gptel-send)
   :custom
   (gptel-model 'claude-sonnet-4-20250514)
-  (gptel-default-mode 'org-mode)
   :config
-  (alist-set! gptel-prompt-prefix-alist 'org-mode "* ")
-  (setq-hook! 'gptel-mode-hook
-    org-pretty-entities-include-sub-superscripts nil)
-
-  (setq gptel-backend
-        (gptel-make-anthropic "Claude"
-          :stream t
-          :key (lambda ()
-                 (auth-source-pick-first-password :host "api.anthropic.com"))))
-
-  (add-hook 'gptel-mode-hook 'evil-insert-state)
-
-  ;; Prevent transient from creating extra windows due to conflicts with custom
-  ;; display-buffer rules. See:
-  ;; https://github.com/magit/transient/discussions/358
-  (setq transient-display-buffer-action
-        '(display-buffer-below-selected
-          (dedicated . t)
-          (inhibit-same-window . t))))
+  (require 'mod-gptel))
 
 (use-package nursery :ensure (nursery :host github
                                       :repo "chrisbarrett/nursery"
