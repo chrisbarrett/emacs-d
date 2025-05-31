@@ -785,25 +785,8 @@ Runs `+escape-hook'."
 
 (use-package bufler :ensure t
   ;; A better buffer list than the default.
-
-  :init
-  ;; Ensure indentation is stable before bufler is loaded.
-  (put 'bufler-defauto-group 'lisp-indent-function 'defun)
-
   :config
-  (bufler-defauto-group nix-store-path
-    (when-let* ((filename (or (buffer-file-name buffer)
-                              (when (buffer-base-buffer buffer)
-                                (buffer-file-name (buffer-base-buffer buffer)))))
-                (store-path (pcase (file-name-split filename)
-                              (`("" "nix" "store" ,store-path . ,_)
-                               store-path)))
-                (hash-delimiter (string-match "-" store-path))
-                ;; (hash (substring store-path 0 (1- hash-delimiter)))
-                (name (substring store-path (1+ hash-delimiter))))
-      (concat name)))
-
-  (setf bufler-groups (eval `(bufler-defgroups ,@(+read-eld "bufler-groups.eld")))))
+  (require 'mod-bufler))
 
 
 ;;; Open some files as read-only, e.g. vendored deps.
