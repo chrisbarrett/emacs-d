@@ -125,7 +125,18 @@
   "e" #'eshell
   "s" #'mistty
   "r" (general-predicate-dispatch 'profiler-start
-        (and (featurep 'profiler) (profiler-running-p)) #'+profiler-stop-and-report)
+        (and (featurep 'profiler) (profiler-running-p))
+        (defun +profiler-stop-and-report (&optional continue-p)
+          (interactive "P")
+          (let ((ran-p (profiler-running-p)))
+
+            (unless continue-p
+              (profiler-stop))
+            (profiler-report)
+            (when ran-p
+              (if continue-p
+                  (message "Profiler still recording")
+                (message "Profiler stopped"))))))
   "p"  '(nil :wk "elpaca"))
 
 (+define-leader-keys :prefix "SPC a p" ;; elpaca

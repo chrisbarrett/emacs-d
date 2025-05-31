@@ -501,22 +501,7 @@ Runs `+escape-hook'."
    :states 'normal
    "A" #'profiler-report-ascending-sort
    "D" #'profiler-report-descending-sort
-   "K" #'profiler-report-describe-entry)
-  :config
-  (defun +profiler-stop-and-report (&optional continue-p)
-    "Stop the profiler and show results.
-
-With optional prefix arg CONTINUE-P, keep profiling."
-    (interactive "P")
-    (let ((ran-p (profiler-running-p)))
-
-      (unless continue-p
-        (profiler-stop))
-      (profiler-report)
-      (when ran-p
-        (if continue-p
-            (message "Profiler still recording")
-          (message "Profiler stopped"))))))
+   "K" #'profiler-report-describe-entry))
 
 (use-package goto-addr
   ;; Turns URLs in the buffer into clickable buttons.
