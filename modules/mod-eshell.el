@@ -1,4 +1,4 @@
-;;; +eshell.el --- Extra commands for eshell -*- lexical-binding: t; -*-
+;;; mod-eshell.el --- Extra commands for eshell -*- lexical-binding: t; -*-
 
 ;;; Commentary:
 
@@ -58,6 +58,6 @@
             (eshell/cd dir))
         (user-error "Not in a project or git repo")))))
 
-(provide '+eshell)
+(provide 'mod-eshell)
 
-;;; +eshell.el ends here
+;;; mod-eshell.el ends here

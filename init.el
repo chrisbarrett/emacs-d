@@ -553,7 +553,7 @@ Runs `+escape-hook'."
   ;; Emacs' built-in shell combining Emacs Lisp evaluation with Unix shell
   ;; features.
   :config
-  (require '+eshell))
+  (use-package mod-eshell :demand t))
 
 (use-package mistty :ensure t
   ;; A better frontend for term.el.
