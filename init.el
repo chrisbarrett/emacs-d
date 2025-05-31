@@ -341,7 +341,7 @@ Runs `+escape-hook'."
   ;; Provides structured editing commands.
   :after-call +first-file-hook +first-buffer-hook
   :hook (text-mode-hook prog-mode-hook conf-mode-hook)
-  :general
+  :general-config
   (:keymaps 'puni-mode-map :states 'insert "C-w" #'puni-backward-kill-word)
   (:keymaps 'puni-mode-map :states '(visual) "C-k" #'puni-kill-active-region)
   (:keymaps 'puni-mode-map :states '(insert normal emacs)
@@ -458,7 +458,7 @@ Runs `+escape-hook'."
   (:keymaps 'elpaca-info-mode-map "q" #'quit-window))
 
 (use-package profiler
-  :general
+  :general-config
   (:keymaps 'profiler-report-mode-map
    :states 'normal
    "A" #'profiler-report-ascending-sort
@@ -1045,7 +1045,7 @@ Runs `+escape-hook'."
   ;; object with, e.g., matched parentheses.
   :hook ((text-mode-hook prog-mode-hook) . evil-surround-mode)
   ;; Use lowercase 's' for surround instead of 'S'.
-  :general (:states '(visual) :keymaps 'evil-surround-mode-map "s" #'evil-surround-region)
+  :general-config (:states '(visual) :keymaps 'evil-surround-mode-map "s" #'evil-surround-region)
   :custom
   (evil-surround-pairs-alist '((?\( . ("(" . ")"))
                                (?\) . ("(" . ")"))
@@ -1668,12 +1668,13 @@ file in your browser at the visited revision."
 
 (use-package help-mode
   ;; Major-mode for help buffers.
-  :general (:keymaps 'help-mode-map :states 'normal
-                     "^" #'help-go-back
-                     "M-n" #'forward-button
-                     "M-p" #'backward-button
-                     "C-n" #'forward-button
-                     "C-p" #'backward-button))
+  :general-config
+  (:keymaps 'help-mode-map :states 'normal
+            "^" #'help-go-back
+            "M-n" #'forward-button
+            "M-p" #'backward-button
+            "C-n" #'forward-button
+            "C-p" #'backward-button))
 
 (use-package helpful :ensure t
   ;; Extended help system, showing definitions etc. in the help buffer.
@@ -1696,6 +1697,7 @@ file in your browser at the visited revision."
   ;; Emacs' built-in system for reading texinfo manuals.
   :general
   (:keymaps 'help-map "s" #'info-apropos)
+  :general-config
   (:keymaps 'Info-mode-map :states 'normal "^" #'Info-up
             "C-n" #'Info-forward-node
             "C-p" #'Info-backward-node))
@@ -1806,7 +1808,7 @@ file in your browser at the visited revision."
                   (rx (backref 1) ".integration.ts"))))
 
 (use-package c-ts-mode
-  :general
+  :general-config
   (:keymaps 'c-ts-mode-map :states 'insert
             "<" #'+c-electric-left-angle-bracket)
 
@@ -1878,7 +1880,7 @@ file in your browser at the visited revision."
 
 (use-package eglot
   ;; Emacs' built-in LSP integration.
-  :general
+  :general-config
   (:keymaps 'eglot-mode-map
    :states '(insert normal)
    "M-RET" #'eglot-code-actions)
@@ -1912,7 +1914,7 @@ file in your browser at the visited revision."
   :config (eglot-booster-mode +1))
 
 (use-package markdown
-  :general (:keymaps 'markdown-mode-map "C-c f" #'markdown-insert-footnote)
+  :general-config (:keymaps 'markdown-mode-map "C-c f" #'markdown-insert-footnote)
   :custom
   (markdown-fontify-code-blocks-natively t)
   (markdown-hide-urls t)
