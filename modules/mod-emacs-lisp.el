@@ -1,11 +1,40 @@
-;; -*- lexical-binding: t; -*-
+;;; mod-emacs-lisp.el --- Configuration for emacs-lisp -*- lexical-binding: t; -*-
 
-(defun +elisp-eval-buffer ()
-  "Evaluate the current buffer with additional visual feedback."
-  (interactive)
-  (let ((inhibit-redisplay t))
-    (call-interactively #'eval-buffer)
-    (message "Buffer evaluated")))
+;;; Commentary:
+
+;;; Code:
+
+(require '+corelib)
+(require 'general)
+
+(+local-leader-set-key 'emacs-lisp-mode-map
+  "t" '(nil :which-key "test")
+  "tt" 'ert
+  "td" 'ert-delete-test
+  "tD" 'ert-delete-all-tests
+
+  "e" '(nil :which-key "eval")
+  "eb" #'+elisp-eval-buffer)
+
+(general-def :keymaps 'emacs-lisp-mode-map
+  "C-c RET" #'pp-macroexpand-last-sexp
+  "C-c C-c" #'+elisp-eval-dwim)
+
+(pushnew! find-sibling-rules
+          ;; Tests -> impl
+          (list (rx (group (+? any)) "-tests.el" eos)
+                (rx (backref 1) ".el"))
+          ;; Impl -> tests
+          (list (rx (group (+? any)) ".el" eos)
+                (rx (backref 1) "-tests.el")))
+
+;; Make lambdas look like λ.
+(add-hook 'emacs-lisp-mode-hook #'prettify-symbols-mode)
+
+(setq checkdoc-force-docstrings-flag nil)
+
+
+;;; Extra visual feedback for eval commands
 
 (defun +elisp-eval-dwim (&optional beg end)
   "Perform a context-sensitive Elisp eval action.
@@ -18,7 +47,56 @@ top-level-form) at point."
       (message "Eval region => %s" (eval-region beg end))
     (message "Eval defun => %s" (eval-defun nil))))
 
-(defun +elisp--calculate-lisp-indent-a (&optional parse-start)
+(defun +elisp-eval-buffer ()
+  "Evaluate the current buffer with additional visual feedback."
+  (interactive)
+  (let ((inhibit-redisplay t))
+    (call-interactively #'eval-buffer)
+    (message "Buffer evaluated")))
+
+
+;;; Flymake
+
+(defun +elisp-set-flymake-load-path ()
+  (if-let* ((file (buffer-file-name))
+            (this-dir (expand-file-name (file-name-directory file)))
+            (emacs-config-dirs (seq-map #'expand-file-name
+                                        (list user-emacs-directory
+                                              +modules-dir
+                                              +lisp-dir))))
+      (if (member this-dir emacs-config-dirs)
+          load-path
+        '("./"))))
+
+(setq-hook! 'emacs-lisp-mode-hook
+  elisp-flymake-byte-compile-load-path (+elisp-set-flymake-load-path))
+
+
+;;; Doc lookups
+
+(autoload 'helpful-at-point "helpful")
+
+(defun +emacs-lisp-lookup-func ()
+  (if (require 'helpful nil t)
+      (helpful-at-point)
+    (describe-symbol (symbol-at-point))))
+
+(setq-hook! 'emacs-lisp-mode-hook
+  evil-lookup-func #'+emacs-lisp-lookup-func)
+
+
+;;; evil compat
+
+(with-eval-after-load 'evil
+  (define-advice eval-region (:around (fn &rest args) clear-visual-state)
+    (unwind-protect (apply fn args)
+      (when (eq evil-state 'visual)
+        (evil-normal-state)))))
+
+
+;;; Lisp indentation
+
+(define-advice calculate-lisp-indent (:override (&optional parse-start) improve-indentation)
   "Add better indentation for quoted and backquoted lists.
 
 Intended as :override advice for `calculate-lisp-indent'.
@@ -221,4 +299,6 @@ Copied from doom, which itself adapts from:
               (desired-indent)
               (normal-indent))))))
 
-(provide '+elisp)
+(provide 'mod-emacs-lisp)
+
+;;; mod-emacs-lisp.el ends here

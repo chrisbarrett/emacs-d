@@ -1750,65 +1750,8 @@ file in your browser at the visited revision."
     (add-hook 'before-save-hook #'check-parens nil t)))
 
 (use-package elisp-mode
-  :general-config (:keymaps 'emacs-lisp-mode-map
-                            "C-c RET" #'pp-macroexpand-last-sexp
-                            "C-c C-c" #'+elisp-eval-dwim)
-
-  ;; Make lambdas look like λ.
-  :hook (emacs-lisp-mode-hook . prettify-symbols-mode)
-
   :config
-  (defun +emacs-lisp-lookup-func ()
-    (let ((sym (symbol-at-point)))
-      (if (require 'helpful nil t)
-          (helpful-at-point)
-        (describe-symbol (symbol-at-point)))))
-
-  (+local-leader-set-key 'emacs-lisp-mode-map
-    "t" '(nil :which-key "test")
-    "tt" 'ert
-    "td" 'ert-delete-test
-    "tD" 'ert-delete-all-tests
-
-    "e" '(nil :which-key "eval")
-    "eb" 'eval-buffer)
-
-  (defun +elisp-set-flymake-load-path ()
-    (if-let* ((file (buffer-file-name))
-              (this-dir (expand-file-name (file-name-directory file)))
-              (emacs-config-dirs (seq-map #'expand-file-name
-                                          (list user-emacs-directory
-                                                +modules-dir
-                                                +lisp-dir))))
-        (if (member this-dir emacs-config-dirs)
-            load-path
-          '("./"))))
-
-  (setq-hook! 'emacs-lisp-mode-hook
-    elisp-flymake-byte-compile-load-path (+elisp-set-flymake-load-path)
-    evil-lookup-func #'+emacs-lisp-lookup-func)
-
-  (pushnew! find-sibling-rules
-            ;; Tests -> impl
-            (list (rx (group (+? any)) "-tests.el" eos)
-                  (rx (backref 1) ".el"))
-            ;; Impl -> tests
-            (list (rx (group (+? any)) ".el" eos)
-                  (rx (backref 1) "-tests.el")))
-
-  :init
-  (use-package checkdoc
-    :custom
-    (checkdoc-force-docstrings-flag nil))
-  :config
-  (require '+elisp)
-
-  (advice-add #'calculate-lisp-indent :override #'+elisp--calculate-lisp-indent-a)
-
-  (define-advice eval-region (:around (fn &rest args) clear-visual-state)
-    (unwind-protect (apply fn args)
-      (when (eq evil-state 'visual)
-        (evil-normal-state)))))
+  (use-package mod-emacs-lisp :demand t))
 
 (use-package ert
   :general
