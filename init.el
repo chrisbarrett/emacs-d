@@ -1922,8 +1922,7 @@ file in your browser at the visited revision."
 
 (use-package conf-mode
   ;; Unix configuration files
-  :mode ("rc\\'" "\\.dockerignore\\'" "\\.gitignore\\'")
-  )
+  :mode ("rc\\'" "\\.dockerignore\\'" "\\.gitignore\\'"))
 
 (use-package treesit-auto :ensure t
   ;; Automatic installation of treesitter grammars.
