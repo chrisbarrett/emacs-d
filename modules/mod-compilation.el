@@ -168,12 +168,30 @@
   :hyperlink file)
 
 (define-compilation-error-rx terragrunt-unit-operation
-  bol timestamp space level (+ space) "[" file "]" message "\n"
+  bol (or non-error error-with-loc
+          ;; TODO: Enable this if I want to stop on first encountered error
+          ;; any-error
+          )
 
-  :where level = (or (warn: "WARN") (info: (or "INFO" "STDOUT")) "ERROR")
+  :where non-error =
+  timestamp space (or warn-lvl info-lvl) (+ space) "[" file "]" message "\n"
+
+  :where error-with-loc =
+  timestamp space "ERROR" (+ space) "[" unit "] Error: " message "\n"
+  timestamp space "ERROR" (+ space) "[" unit "]   on " (loc: file " line " line) (* nonl) "\n"
+
+  :where any-error =
+  timestamp space "ERROR" (+ space) "[" file "] " message "\n"
+
+  :where warn-lvl = warn: "WARN"
+  :where info-lvl = info: (or "INFO" "STDOUT")
+
+  :where unit = unit: (+ graphic)
+
   :where timestamp = (= 2 digit) ":" (= 2 digit) ":" (= 2 digit) "." (= 3 digit)
 
   :type (warn . info)
+  :highlights ((unit 'compilation-info))
   :hyperlink file)
 
 (define-compilation-error-rx terragrunt-stack-modules
