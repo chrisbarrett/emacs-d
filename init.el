@@ -459,15 +459,6 @@ Runs `+escape-hook'."
   :config
   (require 'mod-compilation)
   (add-hook 'compilation-filter-hook #'ansi-color-compilation-filter)
-
-  (with-eval-after-load 'pulsar
-    (delq! 'next-error pulsar-pulse-functions)
-    (delq! 'next-error-recenter pulsar-pulse-functions)
-    (delq! 'previous-error pulsar-pulse-functions)
-    (setq next-error-highlight nil)
-    (setq next-error-message-highlight t)
-    (add-hook 'next-error-hook #'pulsar-pulse-line-red))
-
   ;; Change to look like a highlighted-line, rather than a visual selection.
   (custom-theme-set-faces 'user
                           '(next-error-message ((t (:inherit hl-line)))))
@@ -935,69 +926,7 @@ Runs `+escape-hook'."
   (pulsar-iterations 5)
   (pulsar-pulse-on-window-change t)
   :config
-  (require '+pulsar)
-
-  (dolist (hook '(consult-after-jump-hook
-                  imenu-after-jump-hook))
-    (add-hook hook #'pulsar-recenter-top)
-    (add-hook hook #'pulsar-reveal-entry))
-
-  (dolist (hook '(org-agenda-after-show-hook
-                  org-follow-link-hook))
-    (add-hook hook #'pulsar-recenter-center)
-    (add-hook hook #'pulsar-reveal-entry))
-
-  (define-advice flymake-goto-next-error (:after (&rest _) pulsar)
-    (when pulsar-mode
-      (pcase (cl-loop for o in (overlays-at (point))
-                      for diag = (overlay-get o 'flymake-diagnostic)
-                      when diag
-                      return (flymake--severity (flymake-diagnostic-type diag)))
-        (3 (pulsar-pulse-line-red))
-        (2 (pulsar-pulse-line-yellow))
-        (_ (pulsar-pulse-line-cyan)))))
-
-  (delq! 'evil-goto-first-line pulsar-pulse-functions)
-  (delq! 'evil-goto-line pulsar-pulse-functions)
-
-  (pushnew! pulsar-pulse-functions
-            'forward-button 'backward-button
-            'evil-search-next 'evil-search-previous 'isearch-exit)
-
-  (define-advice evil-goto-line (:after (count) pulsar)
-    "Don't pulse if moving to the first or last line via gg/G."
-    (when (and pulsar-mode
-               count ; nil if going to end of buffer
-               (< 1 count ))
-      (pulsar-pulse-line)))
-
-  (define-advice evil-yank (:after (start end &rest _) pulsar)
-    "Pulse yanked lines & regions."
-    (when pulsar-mode
-      (pulsar--pulse nil 'pulsar-generic start end)))
-
-  (define-advice evil-jump-item (:after (&rest _) pulsar)
-    "Pulse if jumping to a different line."
-    (unless (region-active-p)
-      (pulsar-pulse-line)))
-
-  ;; Show a pulse indicating success or failure of eval-expression, eval-region,
-  ;; etc.
-  :config
-  (define-advice eval-region (:around (fn start end &rest args) pulsar)
-    "Pulse evaluated regions."
-    (+with-eval-pulse start end
-      (apply fn start end args)))
-
-  (define-advice eval-last-sexp (:around (fn &rest args) pulsar)
-    "Pulse evaluated expressions."
-    (pcase-let ((`(,start . ,end) (or (bounds-of-thing-at-point 'sexp)
-                                      (cons (ignore-errors (save-excursion
-                                                             (backward-sexp)
-                                                             (point)))
-                                            (point)))))
-      (+with-eval-pulse start end
-        (apply fn args)))))
+  (require 'mod-pulsar))
 
 (use-package hl-line
   ;; Highlight the current line.
@@ -1344,10 +1273,25 @@ word.  Fall back to regular `expreg-expand'."
   ;; Jump to things or execute other actions by typing a few letters.
   :general ("M-g" #'avy-goto-char-timer)
 
-  ;; Customise the action keys to make actions a bit more vimmy.
   :config
-  (require '+avy)
+  (defun +avy-action-change-move (pt)
+    "Delete the thing at PT and enter insert state."
+    (goto-char pt)
+    (avy-forward-item)
+    (kill-region pt (point))
+    (evil-insert-state)
+    (point))
+
+  (defun +avy-action-evil-lookup (pt)
+    "Look up the definition of thing at PT with evil."
+    (save-excursion
+      (goto-char pt)
+      (avy-forward-item)
+      (evil-lookup))
+    t)
+
   :custom
+  ;; Customise the action keys to make actions a bit more vimmy.
   (avy-dispatch-alist '((?x . avy-action-kill-stay)
                         (?d . avy-action-kill-move)
                         (?c . +avy-action-change-move)
@@ -1358,54 +1302,7 @@ word.  Fall back to regular `expreg-expand'."
                         (?P . avy-action-yank-line)
                         (?i . avy-action-ispell)
                         (?K . +avy-action-evil-lookup)
-                        (? . avy-action-zap-to-char)))
-
-  ;; Integrate avy with pulsar for better visual feedback
-
-  :config
-  (with-eval-after-load 'pulsar
-    (define-advice avy-process (:filter-return (result) pulse-red-on-no-matches)
-      (when (eq t result)
-        (when pulsar-mode
-          (pulsar-pulse-line-red)))
-      result)
-
-    (defun +avy-pulse-for-move (&rest _)
-      (when pulsar-mode
-        (pulsar-pulse-line)))
-
-    (advice-add #'avy-action-goto :after #'+avy-pulse-for-move)
-
-    (defun +avy-pulse-for-change (&rest _)
-      (when pulsar-mode
-        (pulsar-pulse-line-magenta)))
-
-    (advice-add #'avy-action-kill-move :after #'+avy-pulse-for-change)
-    (advice-add #'+avy-action-change-move :after #'+avy-pulse-for-change)
-
-    (defun +avy-pulse-for-change-elsewhere (fn pt)
-      (+with-clean-up-in-starting-buffer-and-window (funcall fn pt)
-        (when pulsar-mode
-          (goto-char pt)
-          (pulsar-pulse-line-magenta))))
-
-    (advice-add #'avy-action-kill-stay :around #'+avy-pulse-for-change-elsewhere)
-
-    (defun +avy-pulse-for-action-elsewhere (fn pt)
-      (+with-clean-up-in-starting-buffer-and-window (funcall fn pt)
-        (when pulsar-mode
-          (goto-char pt)
-          (pulsar-pulse-line-green))))
-
-    (advice-add #'+avy-action-evil-lookup :around #'+avy-pulse-for-action-elsewhere)
-    (advice-add #'avy-action-copy :around #'+avy-pulse-for-action-elsewhere)
-    (advice-add #'avy-action-ispell :around #'+avy-pulse-for-action-elsewhere))
-
-  ;; KLUDGE: Pre-configure indentation for dynamically-loaded macro. Ensures
-  ;; Apheleia applies correct indentation if I touch this file without avy being
-  ;; loaded in the editing session.
-  :init
-  (function-put '+with-clean-up-in-starting-buffer-and-window 'lisp-indent-function 1))
+                        (? . avy-action-zap-to-char))))
 
 ;; Use +/- to mark syntactic elements with tree-sitter. However, if I don't have
 ;; a selection, make - call avy.
@@ -2001,7 +1898,9 @@ file in your browser at the visited revision."
     (add-hook 'before-save-hook #'check-parens nil t)))
 
 (use-package elisp-mode
-  :general-config (:keymaps 'emacs-lisp-mode-map "C-c RET" #'pp-macroexpand-last-sexp)
+  :general-config (:keymaps 'emacs-lisp-mode-map
+                            "C-c RET" #'pp-macroexpand-last-sexp
+                            "C-c C-c" #'+elisp-eval-dwim)
 
   ;; Make lambdas look like λ.
   :hook (emacs-lisp-mode-hook . prettify-symbols-mode)
@@ -2019,21 +1918,15 @@ file in your browser at the visited revision."
     "td" 'ert-delete-test
     "tD" 'ert-delete-all-tests
 
-
     "e" '(nil :which-key "eval")
-    "eb" (defun +eval-buffer ()
-           (interactive)
-           (let ((inhibit-redisplay t))
-             (call-interactively #'eval-buffer)
-             (message "Buffer evaluated" ))
-           (when pulsar-mode
-             (pulsar--pulse nil 'pulsar-yellow (point-min) (point-max)))))
+    "eb" 'eval-buffer)
 
   (defun +elisp-set-flymake-load-path ()
     (if-let* ((file (buffer-file-name))
               (this-dir (expand-file-name (file-name-directory file)))
               (emacs-config-dirs (seq-map #'expand-file-name
                                           (list user-emacs-directory
+                                                +modules-dir
                                                 +lisp-dir))))
         (if (member this-dir emacs-config-dirs)
             load-path
@@ -2055,16 +1948,11 @@ file in your browser at the visited revision."
   (use-package checkdoc
     :custom
     (checkdoc-force-docstrings-flag nil))
+  :config
+  (require '+elisp)
 
-  (use-package +elisp
-    :general (:keymaps 'emacs-lisp-mode-map "C-c C-c" #'+elisp-eval-dwim)
+  (advice-add #'calculate-lisp-indent :override #'+elisp--calculate-lisp-indent-a)
 
-    ;; Improve plist indentation
-    :autoload +elisp--calculate-lisp-indent-a
-    :init
-    (advice-add #'calculate-lisp-indent :override #'+elisp--calculate-lisp-indent-a))
-
-  :custom
   (define-advice eval-region (:around (fn &rest args) clear-visual-state)
     (unwind-protect (apply fn args)
       (when (eq evil-state 'visual)
@@ -3211,20 +3099,7 @@ file in your browser at the visited revision."
   (setq transient-display-buffer-action
         '(display-buffer-below-selected
           (dedicated . t)
-          (inhibit-same-window . t)))
-
-  ;; Pulse the part of the buffer being sent to the LLM.
-
-  (define-advice gptel-send (:after (&optional show-transient) pulse)
-    (when (bound-and-true-p pulsar-mode)
-      (unless show-transient
-        (let ((pulsar-region-face 'pulsar-green))
-          (cond ((region-active-p)
-                 (pulsar-pulse-region))
-                ((and gptel-mode (org-at-heading-p))
-                 (pulsar-pulse-line-green))
-                (t
-                 (pulsar--pulse nil 'pulsar-green (point-min) (point)))))))))
+          (inhibit-same-window . t))))
 
 (use-package nursery :ensure (nursery :host github
                                       :repo "chrisbarrett/nursery"

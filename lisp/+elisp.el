@@ -1,5 +1,12 @@
 ;; -*- lexical-binding: t; -*-
 
+(defun +elisp-eval-buffer ()
+  "Evaluate the current buffer with additional visual feedback."
+  (interactive)
+  (let ((inhibit-redisplay t))
+    (call-interactively #'eval-buffer)
+    (message "Buffer evaluated")))
+
 (defun +elisp-eval-dwim (&optional beg end)
   "Perform a context-sensitive Elisp eval action.
 
