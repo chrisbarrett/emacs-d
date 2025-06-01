@@ -732,7 +732,7 @@ Runs `+escape-hook'."
   :after-call +first-file-hook +first-buffer-hook
   :config
   (global-page-break-lines-mode +1)
-  (pushnew! page-break-lines-modes 'makefile-mode 'rfc-mode))
+  (pushnew! page-break-lines-modes 'rfc-mode 'prog-mode 'text-mode))
 
 (use-package hide-mode-line :ensure (hide-mode-line
                                      :host github
