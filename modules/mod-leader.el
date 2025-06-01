@@ -226,6 +226,7 @@
   "f" '(magit-file-dispatch :wk "file actions...")
   "g" '(magit-status :wk "status")
   "l" '(magit-log-buffer-file :wk "buffer log")
+  "p" '(forge-browse-pullreq :wk "browse pullreq")
   "r" '(browse-at-remote :wk "open on GitHub")
   "t" '(git-timemachine-toggle :wk "file history")
   "y" '(browse-at-remote-kill :wk "copy GitHub link ")
