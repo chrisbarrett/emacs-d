@@ -11,7 +11,8 @@
 (eval-and-compile
   (defconst +compile-metavars-alist '((file . (and (any alnum "/~._") (*? (not (any "\n:")))))
                                       (line . (and (any "1-9") (* digit)))
-                                      (col . (and (any "1-9") (* digit)))
+                                      (col . (or "0"
+                                                 (and (any "1-9") (* digit))))
                                       (message . (+? print)))
     "Meta-variables that are available for use in `rx' forms.
 
