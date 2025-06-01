@@ -43,6 +43,8 @@
 (setq-hook! 'gptel-mode-hook
   org-pretty-entities-include-sub-superscripts nil)
 
+(add-hook 'gptel-mode-hook #'visual-line-mode)
+
 (provide 'mod-gptel)
 
 ;;; mod-gptel.el ends here
