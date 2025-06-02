@@ -16,6 +16,9 @@
     (should (equal (sort-plist plist1)
                    (sort-plist plist2)))))
 
+(defun delete-extra-outputs (plist)
+  (+plist-delete :group-numbers plist))
+
 
 ;;; Analysis
 
@@ -166,8 +169,10 @@
 
 (ert-deftest compiling-specs--no-metavars ()
   (should-be-equiv-plists
-   (+compile-spec-for-compilation-error-alist
-    '(bol "hello, world" eol))
+
+   (delete-extra-outputs
+    (+compile-spec-for-compilation-error-alist
+     '(bol "hello, world" eol)))
 
    '(:rx-form (bol "hello, world" eol)
      :highlights nil
@@ -179,8 +184,10 @@
 
 (ert-deftest compiling-specs--no-metavars--has-groups ()
   (should-be-equiv-plists
-   (+compile-spec-for-compilation-error-alist
-    '(bol (group "hello") (group ",") (group-n 3 ("world")) eol))
+
+   (delete-extra-outputs
+    (+compile-spec-for-compilation-error-alist
+     '(bol (group "hello") (group ",") (group-n 3 ("world")) eol)))
 
    '(:rx-form (bol (group "hello") (group ",") (group-n 3 ("world")) eol)
      :highlights nil
@@ -192,9 +199,11 @@
 
 (ert-deftest compiling-specs--no-metavars--has-named-groups ()
   (should-be-equiv-plists
-   (+compile-spec-for-compilation-error-alist
-    '(bol (greeting: "hello, world") (punct: "!") eol
-      :hyperlink greeting))
+
+   (delete-extra-outputs
+    (+compile-spec-for-compilation-error-alist
+     '(bol (greeting: "hello, world") (punct: "!") eol
+       :hyperlink greeting)))
 
    '(:rx-form (bol (group-n 1 "hello, world") (group-n 2 "!") eol)
      :highlights nil
@@ -210,9 +219,11 @@
                                    (col . $COL)
                                    (message . $MESSAGE)
                                    (unused . $OTHER))))
+
     (should-be-equiv-plists
-     (+compile-spec-for-compilation-error-alist
-      '(bol file ":" line ":" col " -- " message eol))
+     (delete-extra-outputs
+      (+compile-spec-for-compilation-error-alist
+       '(bol file ":" line ":" col " -- " message eol)))
 
      '(:rx-form (bol
                  (group-n 1 $FILE)
@@ -230,10 +241,12 @@
 (ert-deftest compiling-specs--where-bindings ()
   (let ((+compile-metavars-alist '((file . $FILE))))
     (should-be-equiv-plists
-     (+compile-spec-for-compilation-error-alist
-      '(bol file ":" custom-line ":" custom-col
-        :where custom-line = (+? (any "1-9") (* digit))
-        :where custom-col = (+? (any "1-9") (* digit))))
+
+     (delete-extra-outputs
+      (+compile-spec-for-compilation-error-alist
+       '(bol file ":" custom-line ":" custom-col
+         :where custom-line = (+? (any "1-9") (* digit))
+         :where custom-col = (+? (any "1-9") (* digit)))))
 
      '(:rx-form (bol
                  (group-n 1 $FILE)
@@ -259,11 +272,14 @@
 
 (ert-deftest compiling-specs--recursive-where-bindings ()
   (should-be-equiv-plists
-   (+compile-spec-for-compilation-error-alist
-    '(b c
-      :where a = (* space)
-      :where b = bol "hello" a
-      :where c = b "world" eol))
+
+   (delete-extra-outputs
+    (+compile-spec-for-compilation-error-alist
+     '(b c
+       :where a = (* space)
+       :where b = bol "hello" a
+       :where c = b "world" eol)))
+
    '(:rx-form ((and bol "hello" (* space))
                (and (and bol "hello" (* space)) "world" eol))
      :highlights nil
@@ -275,12 +291,13 @@
 
 (ert-deftest compiling-specs--mutually-recursive-where-bindings ()
   (should-be-equiv-plists
-   (+compile-spec-for-compilation-error-alist
-    '(a
-      :where a = b c d
-      :where b = "hello"
-      :where c = b d
-      :where d = "world"))
+   (delete-extra-outputs
+    (+compile-spec-for-compilation-error-alist
+     '(a
+       :where a = b c d
+       :where b = "hello"
+       :where c = b d
+       :where d = "world")))
    '(:rx-form ((and "hello" (and "hello" "world") "world"))
      :highlights nil
      :hyperlink nil

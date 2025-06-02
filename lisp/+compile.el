@@ -240,6 +240,7 @@ The result is a plist containing the following keys:
                 )
       (list
        :rx-form rx-form
+       :group-numbers group-numbers
 
        :highlights
        (pcase-exhaustive (plist-get extra-keywords :highlights)

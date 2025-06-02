@@ -410,6 +410,15 @@ Every time PRED returns non-nil, the list is split into a new chunk."
     (insert-file-contents-literally (file-name-concat user-emacs-directory file))
     (read (current-buffer))))
 
+(defun +plist-delete (key plist)
+  (let (result)
+    (while plist
+      (unless (equal (car plist) key)
+        (push (car plist) result)
+        (push (cadr plist) result))
+      (setq plist (cddr plist)))
+    (nreverse result)))
+
 
 
 (defvar-local +sppss-memo-last-point nil)
