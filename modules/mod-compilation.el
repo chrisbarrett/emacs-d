@@ -301,6 +301,17 @@
                (info 'compilation-info)
                (err 'compilation-error)))
 
+
+;;; Trivy
+
+;; Unfortunately, Trivy's output is super-verbose; the file+col ref is *after*
+;; an extended description of the error. Since multi-line parsers are likely to
+;; break across `read-process-output-max' boundaries, I can't reliably associate
+;; files with error messages.
+
+(define-compilation-error-rx trivy-file
+  ;; live/bootstrap/cloudtrail/main.tf (terraform)
+  bol file " (terraform)" eol)
 
 (provide 'mod-compilation)
 
