@@ -1639,7 +1639,10 @@ file in your browser at the visited revision."
             (root (project-root proj)))
        (if (file-directory-p (file-name-concat root ".git"))
            (magit-status-setup-buffer root)
-         (dired root))))))
+         (dired root)))))
+  :config
+  (project-remember-project (project-try-vc user-emacs-directory))
+  (project-remember-project (project-try-vc org-directory)))
 
 
 ;;; Documentation systems
