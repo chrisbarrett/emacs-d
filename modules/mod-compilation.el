@@ -153,8 +153,8 @@
                (unit 'compilation-info))
   :hyperlink err)
 
-;; Errors in terragrunt stacks are reported from the temp build dir; navigate
-;; to actual input file instead.
+;; Errors in terragrunt stacks are reported from .terragrunt-stack; navigate to
+;; actual input file instead.
 
 (alist-set! compilation-transform-file-match-alist (rx "/.terragrunt-stack/") '("/"))
 (alist-set! compilation-transform-file-match-alist (rx "/.terragrunt-stack" eos) '("/terragrunt.stack.hcl"))
