@@ -7,6 +7,8 @@
 (require '+corelib)
 (require 'cl-lib)
 (require 'map)
+(require 'ht)
+(require 'compile)
 
 (eval-and-compile
   (defconst +compile-metavars-alist '((file . (and (any alnum "/~._") (*? (not (any "\n:")))))
@@ -326,9 +328,11 @@ The optional keyword arguments are:
   (declare (indent 1))
   (cl-assert (symbolp name))
 
-  (pcase-let (((map :rx-form :file :line :col :type :hyperlink :highlights)
-               (+compile-spec-for-compilation-error-alist forms)))
+  (pcase-let* ((output (+compile-spec-for-compilation-error-alist forms))
+               ((map :rx-form :file :line :col :type :hyperlink :highlights) output))
     `(progn
+       (defconst ,(intern (format "+compile-form--%s" name))
+         ',output)
        (alist-set! compilation-error-regexp-alist-alist ',name
                    ;; See: `compilation-error-regexp-alist'
                    ;;
@@ -343,6 +347,59 @@ The optional keyword arguments are:
                      ,@highlights))
        (add-to-list 'compilation-error-regexp-alist ',name)
        ',name)))
+
+(defun +compile-pp-parser (form)
+  (interactive
+   (list
+    (let* ((cands
+            (seq-keep (pcase-lambda (`(,sym . ,_))
+                        (let ((var-sym (intern (format "+compile-form--%s" sym))))
+                          (when (boundp var-sym)
+                            (cons sym var-sym))))
+                      compilation-error-regexp-alist-alist))
+           (choice (intern (completing-read "Show compilation parser: "
+                                            cands
+                                            nil t))))
+      (eval
+       (alist-get choice cands)))))
+  (let ((buf (get-buffer-create "*compilation-parser*")))
+    (with-current-buffer buf
+
+      (let ((inhibit-read-only t)
+            (group-numbers (plist-get form :group-numbers)))
+
+        (cl-labels ((group-name-for-number (group-num)
+                      (car (ht-find (pcase-lambda (_key value)
+                                      (equal value group-num))
+                                    group-numbers))))
+          (erase-buffer)
+          (insert (pp-to-string (+plist-delete :group-numbers form)))
+          (goto-char (point-min))
+          (save-excursion
+            ;; Repair question-marks, which are actually read by the Lisp reader as
+            ;; whitespace character literals.
+            (while (search-forward-regexp (rx "(" (group-n 1 "32") symbol-end)
+                                          nil t)
+              (replace-match "?" nil nil nil 1))
+            (goto-char (point-min))
+
+            ;; annotate numbered match groups
+            (while (search-forward-regexp (rx "(group-n" (+ space) (group-n 1 (+ digit)))
+                                          nil t)
+              (when-let* ((group-num (string-to-number (match-string 1))))
+                (insert (format " ; %s" (group-name-for-number group-num)))
+                (newline-and-indent)))
+            (goto-char (point-min))
+
+            (while (search-forward-regexp (rx ":" (+ graphic) (+ space) (group-n 1 (+ digit)))
+                                          nil t)
+              (when-let* ((group-num (string-to-number (match-string 1))))
+                (insert (format " ; %s" (group-name-for-number group-num)))
+                (newline-and-indent))))))
+
+      (lisp-data-mode)
+      (read-only-mode +1))
+    (display-buffer buf)))
 
 (provide '+compile)
 
