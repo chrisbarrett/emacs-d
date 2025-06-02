@@ -13,6 +13,7 @@
   (require 'evil))
 
 (general-def :keymaps 'gptel-mode-map :states '(normal insert)
+  "C-c C-." #'gptel-abort
   "C-c C-s" (defun +gptel-send ()
               (interactive)
               (unless (region-active-p)
