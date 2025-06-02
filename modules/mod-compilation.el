@@ -68,8 +68,18 @@
 ;; below.
 
 (define-compilation-error-rx generic
-  bol file ":" line ":" col ":" (* space) message eol
+  bol (* space) file ":" line-maybe-range (? ":" col-maybe-range) ": " message eol
+
+  :where col-maybe-range = col (? "-" (+ digit))
+  :where line-maybe-range = line (? "-" (+ digit))
+
   :hyperlink message)
+
+(define-compilation-error-rx generic-no-message
+  bol (* space) file ":" line-maybe-range (? ":" col-maybe-range) eol
+
+  :where col-maybe-range = col (? "-" (+ digit))
+  :where line-maybe-range = line (? "-" (+ digit)))
 
 
 ;;; JS, TypeScript, and associated tools
