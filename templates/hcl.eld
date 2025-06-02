@@ -35,10 +35,3 @@ hcl-mode terraform-mode
 (l "locals {" n>
    q n
    "}" >)
-
-terraform-mode
-
-(o "output \"" (p "NAME") "\" {" n> "value = " q n "}" >)
-(v "variable \"" (p "NAME") "\" {" n> q n "}" >)
-(r "resource \"" (p "TYPE") "\" \"" (p "NAME") "\" {" n> q n "}" >)
-(d "data \"" (p "TYPE") "\" \"" (p "NAME") "\" {" n> q n "}" >)
