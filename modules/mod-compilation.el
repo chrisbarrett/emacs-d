@@ -6,6 +6,7 @@
 
 (require 'compile)
 (require '+compile)
+(require 'general)
 
 (setq compilation-always-kill t)
 (setq compilation-ask-about-save nil) ; automatically save before compiling.
@@ -21,6 +22,21 @@
 ;; Automatically truncate long compilation buffers.
 (autoload 'comint-truncate-buffer "comint" nil t)
 (remove-hook 'compilation-filter-hook #'comint-truncate-buffer)
+
+;; Highlight URLs in compilation output & make them navigable.
+
+(add-hook 'compilation-mode-hook
+          (defun +compilation-ensure-keybindings ()
+            (general-def :keymaps 'compilation-mode-map :states 'normal
+              "RET"
+              (general-predicate-dispatch #'compile-goto-error
+                (thing-at-point 'url) #'goto-address-at-point))))
+
+(autoload 'goto-address-fontify "goto-addr")
+
+(add-hook 'compilation-filter-hook
+          (defun +compilation-fontify-urls ()
+            (goto-address-fontify compilation-filter-start (point))))
 
 
 ;;; Parsers
