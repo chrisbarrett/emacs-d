@@ -13,6 +13,7 @@
 
 (cl-eval-when (compile)
   (require 'eww)
+  (require 'gptel)
   (require 'org-roam))
 
 (defvar +capture-context nil
@@ -80,6 +81,8 @@ Do not return any prose; only return the alist (unquoted) so that it may be pass
 
 (defun +capture--metadata-for-web-document (url title rendered-content)
   (let* ((gptel-model +capture-fast-llm-model)
+         (gptel-use-context nil)
+         (gptel-use-tools nil)
          (reporter (make-progress-reporter "Interpreting page for metadata"))
          (prompt
           (cond ((string-prefix-p "https://www.youtube.com/" url)
@@ -89,6 +92,7 @@ Do not return any prose; only return the alist (unquoted) so that it may be pass
          (result))
 
     (gptel-request prompt
+      :system nil
       :callback (lambda (response _info)
                   (setq result response)))
 
