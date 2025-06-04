@@ -5,6 +5,11 @@ terraform-mode
 (r "resource \"" (p "TYPE") "\" \"" (p "NAME") "\" {" n> q n "}" >)
 (d "data \"" (p "TYPE") "\" \"" (p "NAME") "\" {" n> q n "}" >)
 
+(m "module \"" (p "NAME" name) "\" {" n>
+   "source = \"./" name "\"" n>
+   "}" >
+ )
+
 ;; IAM policies
 
 (pol "\
