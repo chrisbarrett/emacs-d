@@ -6,7 +6,7 @@
 
 (require 'general)
 (require '+window)
-(require '+roam)
+(require '+org-roam)
 (require '+edit-cmds)
 (require '+files)
 
@@ -288,7 +288,7 @@
   "v" '(org-tags-view :wk "search by tag")
   "k" #'org-capture
   "l" '(org-store-link :wk "store link")
-  "f" '(+roam-node-find :wk "find (roam)")
+  "f" '(+org-roam-node-find :wk "find (roam)")
   "s" '(org-roam-search :wk "search (roam)")
   "w" '(timekeep-visit-node :wk "work file")
 

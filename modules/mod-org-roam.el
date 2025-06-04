@@ -6,6 +6,7 @@
 
 (require '+corelib)
 (require 'org-roam)
+(require '+org-roam)
 (require 'general)
 
 (+local-leader-set-key 'org-mode-map
@@ -53,8 +54,8 @@
 
 (add-hook 'org-roam-mode-hook #'turn-on-visual-line-mode)
 
-(require '+roam)
-(setq org-roam-node-formatter #'+roam-node-title-or-olp)
+(require '+org-roam)
+(setq org-roam-node-formatter #'+org-roam-node-title-or-olp)
 (setq org-roam-review-title-formatter #'org-roam-node-formatted-olp)
 
 ;; Work around clashes with evil bindings.
