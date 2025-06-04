@@ -145,6 +145,19 @@
   :highlights ((fun 'font-lock-function-name-face)))
 
 
+;;; Terraform
+
+(define-compilation-error-rx terraform
+  ;; │ Error: Reference to undeclared input variable
+  ;; │
+  ;; │   on file.tf line 7, in resource "local_file" "terraform_tf":
+  prefix (err: "Error: " message) "\n"
+  prefix "\n"
+  prefix (= 2 space) "on " (loc: file " line " line) (* nonl) "\n"
+  :where prefix = bol "│ "
+  :highlights ((err 'error))
+  :hyperlink err)
+
 ;;; Terragrunt
 
 (define-compilation-error-rx terragrunt
