@@ -328,6 +328,24 @@
                (err 'compilation-error)))
 
 
+;;; tflint
+
+(define-compilation-error-rx tflint
+  ;; Warning: Missing version constraint for provider "aws" in `required_providers` (terraform_required_providers)
+  ;;
+  ;;   on trail.tf line 1:
+
+  bol level ": " message " (" checker ")" eol "\n"
+  bol eol "\n"
+  bol (+ space) "on " file " line " line ":"
+
+  :where level = (or (warn: "Warning") (note: "???") "Error")
+  :where checker = checker: (+? (any alnum "_"))
+  :type (warn . note)
+  :highlights ((checker 'italic))
+  :hyperlink message)
+
+
 ;;; Trivy
 
 ;; Unfortunately, Trivy's output is super-verbose; the file+col ref is *after*
