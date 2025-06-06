@@ -1470,14 +1470,7 @@ word.  Fall back to regular `expreg-expand'."
   ;; Magit depends on a more recent version of transient than the one that ships
   ;; with Emacs.
   :general-config
-  (:keymaps 'transient-map [escape] #'transient-quit-one)
-  :custom
-  ;; Prevent transient from creating extra windows due to conflicts with custom
-  ;; display-buffer rules. See:
-  ;; https://github.com/magit/transient/discussions/358
-  (transient-display-buffer-action '(display-buffer-below-selected
-                                     (dedicated . t)
-                                     (inhibit-same-window . t))))
+  (:keymaps 'transient-map [escape] #'transient-quit-one))
 
 (use-package magit :ensure t
   ;; Magit is the definitive UX for working with git.
