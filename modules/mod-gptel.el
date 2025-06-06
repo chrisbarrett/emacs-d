@@ -12,6 +12,8 @@
 (cl-eval-when (compile)
   (require 'evil))
 
+(setf (alist-get 'org-mode gptel-response-prefix-alist) "** ")
+
 (general-def :keymaps 'gptel-mode-map :states '(normal insert)
   "C-c C-." #'gptel-abort
   "C-c C-s" (defun +gptel-send ()
