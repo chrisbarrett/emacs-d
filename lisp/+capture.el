@@ -21,6 +21,8 @@
 
 (defvar +capture-fast-llm-model 'claude-3-haiku-20240307)
 
+(defvar +capture-excerpt-length-chars 1500)
+
 
 ;;; Prompt builders
 
@@ -72,7 +74,7 @@ Do not return any prose; only return the alist (unquoted) so that it may be pass
                  "<EXCERPT>"
                  ,(substring-no-properties rendered-content
                                            0
-                                           (min (length rendered-content) 1000))
+                                           (min (length rendered-content) +capture-excerpt-length-chars))
                  "</EXCERPT>")
                ))
     (string-join (seq-map #'string-trim parts) "\n")))
