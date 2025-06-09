@@ -94,10 +94,15 @@
   :type warning)
 
 (define-compilation-error-rx js-error-stacktrace
-  bol (+ space) "\"" file-pat ":" line "\"" (? ",") eol
-  :where file-pat = (? (file-prefix: "file://")) file
+  bol (+ space) (or type1 type2) eol
+
+  :where type1 = (location-prefix: "at ") (src-info: (+? nonl)) " (" file ":" line ":" col ")"
+  :where type2 = "\"" file-pat ":" line "\"" (? ",")
+
+  :where file-pat = (? (location-prefix: "file://")) file
   :hyperlink file
-  :highlights ((file-prefix 'shadow)
+  :highlights ((location-prefix 'shadow)
+               (src-info 'compilation-info)
                (file 'compilation-info)
                (line 'compilation-line-number))
   :type info)
