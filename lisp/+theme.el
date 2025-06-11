@@ -29,4 +29,18 @@
     (load-theme updated-theme t)
     (run-hooks '+theme-changed-hook)))
 
+(defun +theme-dark ()
+  (interactive)
+  (dolist (theme custom-enabled-themes)
+    (disable-theme theme))
+  (load-theme +theme-dark t)
+  (run-hooks '+theme-changed-hook))
+
+(defun +theme-light ()
+  (interactive)
+  (dolist (theme custom-enabled-themes)
+    (disable-theme theme))
+  (load-theme +theme-light t)
+  (run-hooks '+theme-changed-hook))
+
 (provide '+theme)
