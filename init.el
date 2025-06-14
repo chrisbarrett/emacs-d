@@ -689,6 +689,10 @@ Runs `+escape-hook'."
   (keymap-global-set "M-i" 'activate-transient-input-method)
   :after-call toggle-input-method activate-transient-input-method)
 
+(use-package tramp
+  :config
+  (pushnew! tramp-remote-path 'tramp-own-remote-path))
+
 
 ;;; Open some files as read-only, e.g. vendored deps.
 
@@ -921,8 +925,11 @@ Runs `+escape-hook'."
   (dired-auto-revert-buffer 'dired-directory-changed-p)
   (dired-create-destination-dirs 'ask)
   (dired-vc-rename-file t)
-  (dired-listing-switches
-   "--almost-all --human-readable --group-directories-first --no-group"))
+  :config
+  (setq-hook! 'dired-mode-hook
+    dired-listing-switches (if (file-remote-p default-directory)
+                               "-al"
+                             "--almost-all --human-readable --group-directories-first --no-group")))
 
 (use-package dired-x
   ;; Extra functionality around omitting files, etc.
@@ -1986,6 +1993,8 @@ file in your browser at the visited revision."
 (use-package apheleia :ensure t
   ;; Apply code formatting on save. Works for a range of languages.
   :after-call +first-file-hook
+  :custom
+  (apheleia-remote-algorithm 'local)
   :config
   (apheleia-global-mode +1))
 
