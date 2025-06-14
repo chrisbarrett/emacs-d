@@ -43,6 +43,8 @@ window."
              #'org-roam-node-title)
            node))
 
+(cl-defgeneric org-roam-node-formatted-olp (node))
+
 (with-eval-after-load 'org-roam
   (cl-defmethod org-roam-node-formatted-olp ((node org-roam-node))
     (pcase-let ((`(,title . ,rest) (nreverse (+org-roam-node-title-hierarchy node))))
