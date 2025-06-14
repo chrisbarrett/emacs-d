@@ -5,6 +5,8 @@
 
 (defvar +theme-changed-hook nil)
 
+(defvar +theme-override nil)
+
 (cl-defgeneric +system-theme-query (system-type))
 
 (cl-defmethod +system-theme-query ((_ (eql 'darwin)))
@@ -15,9 +17,10 @@
 
 ;;;###autoload
 (defun +theme-for-system-theme ()
-  (if (string-match-p "dark" (+system-theme-query system-type))
-      +theme-dark
-    +theme-light))
+  (or +theme-override
+      (if (string-match-p "dark" (+system-theme-query system-type))
+          +theme-dark
+        +theme-light)))
 
 ;;;###autoload
 (defun +theme-update ()
