@@ -161,7 +161,8 @@ Runs `+escape-hook'."
 ;;; General editing
 
 (custom-theme-set-faces 'user
-                        '(region ((t (:foreground unspecified :background unspecified :inherit modus-themes-search-lazy))))
+                        '(region ((((background light))
+                                   (:foreground unspecified :background unspecified :inherit modus-themes-search-lazy))))
                         '(iedit-occurrence ((t (:inherit modus-themes-search-replace))))
                         ;; Dim delimiters like commas, semicolons, etc.
                         '(font-lock-delimiter-face ((t (:inherit shadow)))))
