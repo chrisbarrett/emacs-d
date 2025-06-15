@@ -13,6 +13,9 @@
   (require 'modus-themes nil t)
   (require 'use-package nil t))
 
+;; Ensure Emacs doesn't block the session manager with subprocess exit prompts.
+(setq confirm-kill-processes nil)
+
 
 
 (defvar +lisp-dir (file-name-concat user-emacs-directory "lisp/"))
