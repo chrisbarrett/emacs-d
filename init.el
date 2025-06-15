@@ -169,11 +169,19 @@ Runs `+escape-hook'."
 (put 'erase-buffer 'disabled nil)
 (put 'narrow-to-region 'disabled nil)
 
-(when (equal system-type 'darwin)
-  ;; Since I use evil, I have no need for the usual rectangular selection
-  ;; keybinding.
-  (keymap-global-set "C-x SPC" #'ns-do-show-character-palette)
+;; Since I use evil, I have no need for the usual rectangular selection
+;; keybinding.
+(keymap-global-set "C-x SPC"
+                   (defun +insert-char ()
+                     "Insert a character at point."
+                     (interactive)
+                     (evil-insert-state)
+                     (call-interactively
+                      (if (equal system-type 'darwin)
+                          #'ns-do-show-character-palette
+                        #'insert-char))))
 
+(when (equal system-type 'darwin)
   ;; Delete some unneeded macOS-like keybindings.
   (keymap-global-unset "s-o")
   (keymap-global-unset "s-f")
