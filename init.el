@@ -735,6 +735,11 @@ Runs `+escape-hook'."
 
 ;;; Visual enhancements
 
+(use-package catppuccin-theme :ensure (:wait t) :demand t
+  :init
+  (setq +theme-dark 'catppuccin)
+  (+theme-update))
+
 (use-package hideshow
   ;; Basic code folding.
   :hook (prog-mode-hook . hs-minor-mode))
