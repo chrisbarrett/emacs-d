@@ -1977,7 +1977,9 @@ file in your browser at the visited revision."
 
 (use-package rust-ts-mode
   :config
-  (setq-hook! 'rust-ts-mode-hook separedit-default-mode 'markdown-mode))
+  (setq-hook! 'rust-ts-mode-hook separedit-default-mode 'markdown-mode)
+  ;; Make cargo commands run from Emacs look pretty.
+  (setenv "CARGO_TERM_COLOR" "always"))
 
 (use-package sh-script
   :config
