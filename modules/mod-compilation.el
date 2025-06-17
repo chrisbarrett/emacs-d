@@ -345,6 +345,33 @@
                (info 'compilation-info)
                (err 'compilation-error)))
 
+(define-compilation-error-rx rust-panic
+  bol "thread '" thread-name  "' panicked at "  file ":" line ":" col ":\n"
+  (? err-type) message eol
+  :where thread-name = thread-name: (+? graphic)
+  :where err-type = err-type: "assertion failed: "
+  :hyperlink file
+  :highlights ((thread-name 'compilation-info)
+               (message 'font-lock-string-face)
+               (err-type 'error)))
+
+(define-compilation-error-rx rust-stacktrace
+  bol (or full-stack-frame reg-stack-frame) "\n"
+  src-location
+
+  :where full-stack-frame = (>= 1 space) depth ":" (+ space) mem-addr " - " fname
+  :where reg-stack-frame = (>= 1 space) depth ":" (+ space) fname
+  :where src-location = (+ space) "at " file ":" line ":" col
+
+  :where depth = depth: (+ digit)
+  :where mem-addr = mem-addr: (seq "0x" (+ digit))
+  :where fname = fname: (+ nonl)
+
+  :type info
+  :highlights ((fname 'bold)
+               (depth 'font-lock-constant-face)
+               (mem-addr 'compilation-info)))
+
 
 ;;; tflint
 
