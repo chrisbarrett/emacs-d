@@ -940,6 +940,11 @@ Runs `+escape-hook'."
   (dired-create-destination-dirs 'ask)
   (dired-vc-rename-file t)
   :config
+  (+local-leader-set-key 'dired-mode-map
+    "t" '(dired-toggle-marks :wk "toggle marks")
+    "s" '(nil :wk "subdir")
+    "si" '(dired-insert-subdir :wk "insert")
+    "sx" '(dired-kill-subdir :wk "kill"))
   (setq-hook! 'dired-mode-hook
     dired-listing-switches (if (file-remote-p default-directory)
                                "-al"
