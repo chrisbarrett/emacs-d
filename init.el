@@ -2178,9 +2178,9 @@ file in your browser at the visited revision."
   (org-modern-fold-stars
    '(("▶" . "▼") ("▹" . "▿") ("▸" . "▾") ("⯈" . "⯆")))
   (org-modern-block-name
-   `(("src" . ("" "◌"))
-     ("quote" . ("" ""))
-     ("example" . ("" "◌"))))
+   `(("src" . ("" "◌"))
+     ("quote" . ("" "◌"))
+     ("example" . ("" "◌"))))
   :config
   (global-org-modern-mode +1)
   (custom-theme-set-faces 'user
