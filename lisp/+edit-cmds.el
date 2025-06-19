@@ -31,6 +31,10 @@
   (puni-kill-line)
   (+format-after-kill))
 
+(defun +insert-uuid ()
+  (interactive)
+  (insert (string-trim (shell-command-to-string "uuidgen"))))
+
 (provide '+edit-cmds)
 
 ;;; +edit-cmds.el ends here
