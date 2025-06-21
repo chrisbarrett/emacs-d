@@ -17,23 +17,16 @@ rust-ts-mode
 
 (m "match " (p "TERM") " {" n> q n "}" >)
 
-(st "struct " (p "NAME") " {" n>
-    q n
-    "}" >)
-(en "enum " (p "NAME") " {" n>
-    q n
-    "}" >)
+(st "struct " (p "NAME") " {" n> q n "}" >)
+(ps "pub struct " (p "NAME") " {" n> q n "}" >)
 
-(im "impl " (p "NAME") " {" n>
-    q n
-    "}" >)
+(en "enum " (p "NAME") " {" n> q n "}" >)
+(pe "enum " (p "NAME") " {" n> q n "}" >)
+
+(im "impl " (p "NAME") " {" n> q n "}" >)
 
 
-(f "fn " (p "NAME") "(" p ")" p " {" n>
-    q n
-    "}" >)
-(pf "pub fn " (p "NAME") "(" p ")" p " {" n>
-    q n
-    "}" >)
+(f "fn " (p "NAME") "(" p ")" p " {" n> q n "}" >)
+(pf "pub fn " (p "NAME") "(" p ")" p " {" n> q n "}" >)
 
-(drv "#[derive(" q ")]")
+(der "#[derive(" q ")]")
