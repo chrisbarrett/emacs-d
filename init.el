@@ -1783,6 +1783,7 @@ file in your browser at the visited revision."
 
 (use-package nix-ts-mode :ensure t
   :mode "\\.nix\\'"
+  :hook (nix-ts-mode-hook . eglot-ensure)
   :init
   (with-eval-after-load 'project
     (pushnew! project-vc-extra-root-markers "flake.nix"))
@@ -1796,7 +1797,11 @@ file in your browser at the visited revision."
   (with-eval-after-load 'project
     (pushnew! project-vc-extra-root-markers "flake.nix")))
 
+(use-package json-ts-mode
+  :hook (json-ts-mode-hook . eglot-ensure))
+
 (use-package yaml-ts-mode
+  :hook (yaml-ts-mode-hook . eglot-ensure)
   :config
   (setq-hook! 'yaml-ts-mode-hook
     tab-width 2))
