@@ -1810,6 +1810,7 @@ file in your browser at the visited revision."
   :mode ("\\.[mc]?js" . js-ts-mode))
 
 (use-package typescript-ts-mode
+  :hook (typescript-ts-mode-hook . eglot-ensure)
   :init
   (with-eval-after-load 'project
     (pushnew! project-vc-ignores ".nx/")
@@ -1986,6 +1987,7 @@ file in your browser at the visited revision."
     (pushnew! dired-omit-extensions ".jam" ".vee" ".beam")))
 
 (use-package rust-ts-mode
+  :hook (rust-ts-mode-hook . eglot-ensure)
   :config
   (setq-hook! 'rust-ts-mode-hook separedit-default-mode 'markdown-mode)
   ;; Make cargo commands run from Emacs look pretty.
