@@ -808,7 +808,8 @@ Runs `+escape-hook'."
      ("FIXME" error bold)
      ("HACK" font-lock-constant-face bold)
      ("DEPRECATED" font-lock-doc-face bold)
-     ("NOTE" success bold))))
+     ("NOTE" success bold)
+     ("SAFETY" success bold))))
 
 (use-package indent-bars :ensure t
   ;; Display indentation guides in buffers. Particularly useful for
