@@ -205,12 +205,10 @@
 
   "d" (list (defun +copy-file-directory ()
               (interactive)
-              (if-let* ((file (buffer-file-name))
-                        (dir (file-name-directory file)))
-                  (progn
-                    (kill-new dir)
-                    (message "Copied to clipboard => %s" dir))
-                (user-error "Buffer is not visiting a file")))
+              (let ((dir (or (-some->> (buffer-file-name) (file-name-directory))
+                             default-directory)))
+                (kill-new dir)
+                (message "Copied to clipboard => %s" dir)))
             :wk "copy (dir)")
 
   "v" (list (defun +revisit-file ()
