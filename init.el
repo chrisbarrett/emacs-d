@@ -1415,6 +1415,7 @@ word.  Fall back to regular `expreg-expand'."
   (xref-show-xrefs-function #'consult-xref)
   (xref-show-definitions-function #'consult-xref)
   (consult-narrow-key "<")
+  (consult-preview-key "C-SPC")
 
   ;; Optimise for responsive input.
   (consult-async-min-input 2)
@@ -1429,11 +1430,6 @@ word.  Fall back to regular `expreg-expand'."
      "--hidden --exclude .git"))
 
   :config
-  (consult-customize
-   consult-ripgrep consult-git-grep consult-grep
-   consult-bookmark consult-recent-file
-   consult--source-recent-file consult--source-project-recent-file consult--source-bookmark
-   :preview-key "C-SPC")
   (consult-customize
    consult-theme
    :preview-key (list "C-SPC" :debounce 0.5 'any))
