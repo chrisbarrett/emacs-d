@@ -585,6 +585,11 @@ Runs `+escape-hook'."
   (envrc-show-summary-in-minibuffer nil) ; very noisy.
   )
 
+(use-package mise :ensure t
+  ;; Adds support for mise - https://mise.jdx.dev.
+  :hook (+first-file-hook . global-mise-mode)
+  )
+
 (use-package exec-path-from-shell :ensure t
   ;; Use the shell to get some environment vars; necessary when the window
   ;; system runs Emacs under a very different process environment.
