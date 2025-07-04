@@ -95,6 +95,7 @@
                      (derived-mode . helpful-mode)
                      (derived-mode . Man-mode)
                      (derived-mode . woman-mode)
+                     ,(rx bos "*eldoc*" eos)
 
                      ;; org-roam links
                      ,(rx bos "*org-roam*" eos)
@@ -133,8 +134,7 @@
 
                       ;; misc
                       (derived-mode . ert-simple-view-mode)
-                      ,(rx bol "*envrc*" eos)
-                      ,(rx bos "*eldoc*" eos)))))
+                      ,(rx bol "*envrc*" eos)))))
 
          ;; Buffers that should never pop up.
 
