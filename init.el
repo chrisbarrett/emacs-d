@@ -588,7 +588,7 @@ Runs `+escape-hook'."
 (use-package mise :ensure t
   ;; Adds support for mise - https://mise.jdx.dev.
   :hook (+first-file-hook . global-mise-mode)
-  )
+  :if (executable-find "mise"))
 
 (use-package exec-path-from-shell :ensure t
   ;; Use the shell to get some environment vars; necessary when the window
