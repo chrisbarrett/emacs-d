@@ -23,6 +23,14 @@
               (gptel-send)
               (evil-normal-state)))
 
+(autoload 'gptel--suffix-rewrite "gptel-rewrite")
+
+(general-def :states 'visual
+  "RET" (defun +gptel-rewrite-fast (prompt)
+          "Rewrite the current region using PROMPT."
+          (interactive "sRewrite: ")
+          (gptel--suffix-rewrite prompt)))
+
 
 
 (setq gptel-backend

@@ -2250,9 +2250,11 @@ file in your browser at the visited revision."
 
 (use-package gptel :ensure t
   ;; Provides LLM integrations.
-  :general (:states 'visual "RET" #'gptel-rewrite)
   :custom
   (gptel-model 'claude-sonnet-4-20250514)
+  :init
+  (use-package mod-gptel
+    :general (:states 'visual "RET" #'+gptel-rewrite-fast))
   :config
   (use-package mod-gptel :demand t))
 
