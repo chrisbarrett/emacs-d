@@ -1935,6 +1935,7 @@ file in your browser at the visited revision."
 
 (use-package markdown
   :general-config (:keymaps 'markdown-mode-map "C-c f" #'markdown-insert-footnote)
+  :hook (markdown-mode-hook . visual-line-mode)
   :custom
   (markdown-fontify-code-blocks-natively t)
   (markdown-hide-urls t)
