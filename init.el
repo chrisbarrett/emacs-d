@@ -1503,12 +1503,7 @@ word.  Fall back to regular `expreg-expand'."
 (use-package magit :ensure t
   ;; Magit is the definitive UX for working with git.
   :config
-  ;; Set initial evil state depending on whether the line is empty or not. Empty
-  ;; line = new commit message, whereas non-empty means we're editing an
-  ;; existing one.
-  (add-hook! 'git-commit-mode-hook
-    (when (and (bolp) (eolp))
-      (evil-insert-state)))
+  (use-package mod-magit :demand t)
   :custom
   (magit-display-buffer-function #'magit-display-buffer-fullframe-status-v1)
   (magit-bury-buffer-function #'magit-restore-window-configuration)
