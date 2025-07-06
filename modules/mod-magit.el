@@ -9,6 +9,7 @@
 
 (autoload 'evil-insert-state "evil-states")
 (autoload 'gptel-request "gptel")
+(autoload 'magit-run-git-async "magit-process")
 
 ;; See: https://cbea.ms/git-commit/#seven-rules
 (defvar +git-commit-llm-prompt "\
@@ -39,6 +40,31 @@ Be specific about what changed. Only respond with the commit message, no explana
                         (goto-char (point-min))
                         (insert (string-trim response))
                         (evil-insert-state))))))))
+
+(defun +magit-commit-with-llm ()
+  "Create a commit in the background using an LLM-generated message."
+  (interactive)
+  (let ((diff (shell-command-to-string "git diff --cached")))
+    (if (string-empty-p (string-trim diff))
+        (message "No staged changes to commit")
+      (let ((spinner (make-progress-reporter "Generating commit message and committing"))
+            (timer nil))
+        (setq timer (run-at-time 0.1 0.1 (lambda () (progress-reporter-update spinner))))
+        (gptel-request (concat +git-commit-llm-prompt "\n\nDiff:\n" diff)
+          :callback (lambda (response _)
+                      (when timer
+                        (cancel-timer timer))
+                      (progress-reporter-done spinner)
+                      (if response
+                          (let ((commit-msg (string-trim response)))
+                            (message "Committing: %s" commit-msg)
+                            (magit-run-git-async "commit" "-m" commit-msg))
+                        (message "Failed to generate commit message"))))))))
+
+;; Add keybinding to magit-commit transient
+(with-eval-after-load 'magit-commit
+  (transient-append-suffix 'magit-commit "c"
+    '("l" "LLM-generated message" +magit-commit-with-llm)))
 
 ;; Generate commit message using gptel when starting with empty commit message
 (add-hook 'git-commit-mode-hook
