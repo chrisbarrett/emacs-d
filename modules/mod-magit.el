@@ -26,15 +26,19 @@ Be specific about what changed. Only respond with the commit message, no explana
   "Generate a commit message using gptel based on staged changes."
   (let ((diff (shell-command-to-string "git diff --cached")))
     (if (string-empty-p (string-trim diff))
-        (progn
-          (insert "WIP: ")
-          (evil-insert-state))
-      (gptel-request (concat +git-commit-llm-prompt "\n\nDiff:\n" diff)
-                     :callback (lambda (response _)
-                                 (when response
-                                   (goto-char (point-min))
-                                   (insert (string-trim response))
-                                   (evil-insert-state)))))))
+        (evil-insert-state)
+      (let ((spinner (make-progress-reporter "Generating commit message"))
+            (timer nil))
+        (setq timer (run-at-time 0.1 0.1 (lambda () (progress-reporter-update spinner))))
+        (gptel-request (concat +git-commit-llm-prompt "\n\nDiff:\n" diff)
+          :callback (lambda (response _)
+                      (when timer
+                        (cancel-timer timer))
+                      (progress-reporter-done spinner)
+                      (when response
+                        (goto-char (point-min))
+                        (insert (string-trim response))
+                        (evil-insert-state))))))))
 
 ;; Generate commit message using gptel when starting with empty commit message
 (add-hook 'git-commit-mode-hook
