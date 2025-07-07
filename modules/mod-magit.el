@@ -6,10 +6,23 @@
 
 (require '+corelib)
 (require 'magit)
+(require 'general)
 
 (autoload 'evil-insert-state "evil-states")
 (autoload 'gptel-request "gptel")
 (autoload 'magit-run-git-async "magit-process")
+
+(general-def :keymaps 'git-commit-mode-map
+  "C-c C-l" #'+git-commit-generate-message-with-gptel)
+
+;; Automatically enter insert state on empty commit message.
+(add-hook! 'git-commit-mode-hook
+  (when (and (bolp) (eolp))
+    (evil-insert-state)))
+
+
+;;; Teach magit-commit how to generate commit messages based off diffs via an
+;;; LLM integration.
 
 ;; See: https://cbea.ms/git-commit/#seven-rules
 (defvar +git-commit-llm-prompt "\
@@ -25,6 +38,7 @@ Be specific about what changed. Only respond with the commit message, no explana
 
 (defun +git-commit-generate-message-with-gptel ()
   "Generate a commit message using gptel based on staged changes."
+  (interactive)
   (let ((diff (shell-command-to-string "git diff --cached")))
     (if (string-empty-p (string-trim diff))
         (evil-insert-state)
@@ -65,12 +79,6 @@ Be specific about what changed. Only respond with the commit message, no explana
 (with-eval-after-load 'magit-commit
   (transient-append-suffix 'magit-commit "c"
     '("l" "LLM-generated message" +magit-commit-with-llm)))
-
-;; Generate commit message using gptel when starting with empty commit message
-(add-hook 'git-commit-mode-hook
-          (defun +git-commit-set-message ()
-            (when (and (bolp) (eolp))
-              (+git-commit-generate-message-with-gptel))))
 
 (provide 'mod-magit)
 
