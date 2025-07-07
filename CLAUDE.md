@@ -86,3 +86,4 @@ Each module in `modules/` configures a specific feature:
 
 ## Development Best Practices
 - Use the full hook symbol when settings hooks via the `:hooks` form in `use-package`
+- Use general-def or :general in use-package as appropriate when setting keybindings
