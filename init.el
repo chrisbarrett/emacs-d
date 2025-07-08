@@ -1585,8 +1585,8 @@ file in your browser at the visited revision."
   (:keymaps 'magit-mode-map [remap magit-browse-thing] #'forge-browse)
   (:keymaps 'magit-remote-section-map [remap magit-browse-thing] #'forge-browse-remote)
   (:keymaps 'magit-branch-section-map [remap magit-browse-thing] #'forge-browse-branch)
-  :general-config
-  (:keymaps 'forge-topic-list-mode-map :states 'normal "q" #'kill-current-buffer))
+  :config
+  (use-package mod-forge :demand t))
 
 (use-package vc
   :custom
