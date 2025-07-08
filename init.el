@@ -1944,7 +1944,11 @@ file in your browser at the visited revision."
   :config
   (+define-file-template (rx "terragrunt.hcl" eos) "terragrunt/terragrunt.eld")
   (+define-file-template (rx "root.hcl" eos) "terragrunt/root.eld")
-  (+define-file-template (rx "region.hcl" eos) "terragrunt/region.eld"))
+  (+define-file-template (rx "region.hcl" eos) "terragrunt/region.eld")
+
+  (with-eval-after-load 'apheleia-formatters
+    (add-to-list 'apheleia-formatters '(terragrunt . ("terragrunt" "hcl" "fmt" "--stdin")))
+    (alist-set! apheleia-mode-alist 'hcl-mode 'terragrunt)))
 
 (use-package terraform-mode :ensure t
   :mode ("\\.tf\\'")
