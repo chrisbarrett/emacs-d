@@ -1,2 +1,2 @@
 ((magit-branch-configure)
- (magit-fetch "--prune"))
+ (magit-fetch "--prune" "--tags"))
