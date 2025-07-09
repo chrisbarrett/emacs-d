@@ -150,6 +150,7 @@ Respond with only the branch name, no explanation.
   (condition-case err
       (progn
         (magit-branch-spinoff branch-name)
+        (magit-set-push-remote "origin" branch-name)
         (message "Spun off branch: %s" branch-name)
         (+forge--push-and-create-pr branch-name))
     (error
