@@ -56,6 +56,7 @@ Requirements:
 - Description: Clear summary of what changed and why
 - Use markdown formatting for the description
 - Include relevant context about the changes
+- Consider both the commit messages and code diff for context
 
 Format your response as:
 Title: [your title here]
@@ -93,14 +94,18 @@ Respond with only the branch name, no explanation.
 
 (defun +forge--create-branch-and-pr ()
   "Create new branch with LLM name, then create PR."
-  (let ((staged-files (magit-git-lines "diff" "--cached" "--name-only"))
-        (modified-files (magit-git-lines "diff" "--name-only"))
-        (untracked-files (magit-git-lines "ls-files" "--others" "--exclude-standard")))
+  (let* ((main-branch (magit-main-branch))
+         (upstream (magit-get-upstream-branch main-branch))
+         (unpushed-commits (and upstream
+                                (magit-git-lines "log" "--oneline" (concat upstream "..HEAD"))))
+         (staged-files (magit-git-lines "diff" "--cached" "--name-only"))
+         (modified-files (magit-git-lines "diff" "--name-only"))
+         (untracked-files (magit-git-lines "ls-files" "--others" "--exclude-standard")))
     (cond
-     ;; No changes at all
-     ((and (null staged-files) (null modified-files) (null untracked-files))
-      (user-error "No changes to create a branch from"))
-     ;; Has staged files - proceed
+     ;; Has unpushed commits on main - spin them out
+     ((not (null unpushed-commits))
+      (+forge--generate-branch-name-and-create))
+     ;; No unpushed commits but has staged files - proceed
      ((not (null staged-files))
       (+forge--generate-branch-name-and-create))
      ;; Has unstaged changes - prompt to stage
@@ -114,14 +119,19 @@ Respond with only the branch name, no explanation.
               (magit-run-git-async "add" untracked-files))
             (run-at-time 1.0 nil #'+forge--generate-branch-name-and-create))
         (user-error "Cannot create PR without staged changes")))
-     ;; Fallback
+     ;; No changes at all
      (t (user-error "No changes to create a branch from")))))
 
 (defun +forge--generate-branch-name-and-create ()
   "Generate branch name with LLM and create branch."
-  (let ((commits (magit-git-lines "log" "--oneline" "--max-count=5" "HEAD"))
-        (spinner (make-progress-reporter "Generating branch name"))
-        (timer nil))
+  (let* ((main-branch (magit-main-branch))
+         (upstream (magit-get-upstream-branch main-branch))
+         (merge-base (and upstream (magit-git-string "merge-base" upstream "HEAD")))
+         (commits (if merge-base
+                      (magit-git-lines "log" "--oneline" (concat merge-base "..HEAD"))
+                    (magit-git-lines "log" "--oneline" "--max-count=5" "HEAD")))
+         (spinner (make-progress-reporter "Generating branch name"))
+         (timer nil))
     (if (null commits)
         (user-error "No commits found to create branch from")
       (setq timer (run-at-time 0.1 0.1 (lambda () (progress-reporter-update spinner))))
@@ -139,11 +149,11 @@ Respond with only the branch name, no explanation.
   "Create branch and continue with push and PR creation."
   (condition-case err
       (progn
-        (magit-branch-spinout branch-name)
-        (message "Created branch: %s" branch-name)
+        (magit-branch-spinoff branch-name)
+        (message "Spun off branch: %s" branch-name)
         (+forge--push-and-create-pr branch-name))
     (error
-     (message "Failed to create branch '%s': %s" branch-name (error-message-string err))
+     (message "Failed to spin off branch '%s': %s" branch-name (error-message-string err))
      (forge-create-pullreq branch-name (magit-main-branch)))))
 
 (defun +forge--push-and-create-pr (branch)
@@ -178,13 +188,17 @@ Respond with only the branch name, no explanation.
 (defun +forge--create-pr-with-llm (branch)
   "Create PR with LLM-generated content for current branch."
   (let* ((main-branch (magit-main-branch))
-         (diff (shell-command-to-string (format "git diff %s..%s" main-branch branch))))
+         (diff (shell-command-to-string (format "git diff %s..%s" main-branch branch)))
+         (commits (shell-command-to-string (format "git log --pretty=format:'%%h %%s%%n%%n%%b' %s..%s" main-branch branch))))
     (if (string-empty-p (string-trim diff))
         (message "No changes between %s and %s" main-branch branch)
       (let ((spinner (make-progress-reporter "Generating PR title and description"))
-            (timer nil))
+            (timer nil)
+            (context (concat +forge-pr-llm-prompt
+                            "\n\nCommits:\n" commits
+                            "\n\nDiff:\n" diff)))
         (setq timer (run-at-time 0.1 0.1 (lambda () (progress-reporter-update spinner))))
-        (gptel-request (concat +forge-pr-llm-prompt "\n\nDiff:\n" diff)
+        (gptel-request context
           :callback (lambda (response _)
                       (when timer
                         (cancel-timer timer))
