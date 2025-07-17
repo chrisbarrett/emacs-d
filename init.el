@@ -1996,6 +1996,8 @@ file in your browser at the visited revision."
   (setenv "CARGO_TERM_COLOR" "always"))
 
 (use-package sh-script
+  :init
+  (add-to-list 'magic-mode-alist `(,(rx bol "#!" (+? nonl) "nix-shell" eol) . bash-ts-mode))
   :config
   (define-advice sh-set-shell (:around (fn &rest args) silence-messages)
     (cl-letf (((symbol-function 'message) #'ignore))
