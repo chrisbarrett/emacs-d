@@ -90,8 +90,8 @@
   "n"  '(nil :wk "narrowing")
   "c"  '(nil :wk "code/comments")
   "g"  '(nil :wk "git/goto")
-  "L" '(gptel-menu :wk "LLM menu")
-  "l" '(nil :wk "LLMs")
+  "C" '(claude-code-ide-send-prompt :wk "Tell claude-code...")
+  "l" '(claude-code-ide-menu :wk "claude-code...")
   "o"  '(nil :wk "org")
   "e"  '(nil :wk "errors")
   "k" '(consult-yank-pop :wk "kill-ring")
@@ -251,14 +251,6 @@
               (project-find-file-in  "flake.nix" nil
                                      (project-current nil "~/.config/nix-configuration")))
             :wk "nix config file..."))
-
-(+define-leader-keys :prefix "SPC l" ;; LLMs
-  "a" '(gptel-add :wk "add/remove from context")
-  "f" '(gptel-add-file :wk "add file to context")
-  "s" '(gptel-send :wk "send")
-  "?" '(gptel-menu :wk "menu")
-  "l" '(gptel :wk "open chat")
-  "w" '(gptel :wk "rewrite"))
 
 (+define-leader-keys :prefix "SPC n" ;; narrowing
   "f" '(narrow-to-defun :wk "defun")
