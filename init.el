@@ -563,18 +563,21 @@ Runs `+escape-hook'."
   (eat-term-name "xterm-256color")
   (eat-kill-buffer-on-exit t)
   :general
-  (:keymaps 'eat-semi-char-mode-map "M-o" #'other-window "s-v" 'eat-yank-from-kill-ring)
   (:keymaps 'project-prefix-map "s" #'eat-project)
+
+  (:keymaps 'eat-semi-char-mode-map
+            "M-o" #'other-window
+            "s-v" 'eat-yank-from-kill-ring
+            [escape] 'eat-self-input)
+
   :config
-  (with-eval-after-load 'evil
-    (evil-set-initial-state 'eat-mode 'insert))
+  ;; Most keys are passed directly to Eat; add any to be intercepted by Emacs
+  ;; below.
   (pushnew! eat-semi-char-non-bound-keys [M-o])
 
-  (add-hook '+escape-hook
-            (defun +eat-escape ()
-              (when (derived-mode-p 'eat-mode)
-                (eat-self-input)
-                t))))
+  ;; Disable evil-mode entirely in eat-mode buffers.
+  (with-eval-after-load 'evil
+    (pushnew! evil-buffer-regexps `(,(rx bol "*eat")))))
 
 (use-package string-inflection :ensure t
   ;; Provides commands for cycling different string casing styles for the ident
