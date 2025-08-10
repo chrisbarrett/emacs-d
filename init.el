@@ -567,6 +567,8 @@ Runs `+escape-hook'."
   (:keymaps 'eat-semi-char-mode-map
             "s-v" 'eat-yank
             "M-o" nil
+            ;; Commands that should be passed through
+            "C-u" 'eat-self-input
             [escape] 'eat-self-input)
   :init
   (with-eval-after-load '+evil-collection
