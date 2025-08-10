@@ -2274,7 +2274,11 @@ file in your browser at the visited revision."
   :custom
   (claude-code-ide-terminal-backend 'eat)
   :config
-  (claude-code-ide-emacs-tools-setup))
+  (claude-code-ide-emacs-tools-setup)
+
+  ;; Disable evil-mode in ancillary buffers using eat
+  (with-eval-after-load 'evil
+    (pushnew! evil-buffer-regexps `(,(rx bol "*claude-code")))))
 
 (use-package nursery :ensure (nursery :host github
                                       :repo "chrisbarrett/nursery"
