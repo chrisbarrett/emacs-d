@@ -19,13 +19,14 @@
   :prefix-command '+leader-key
 
   "SPC" '(consult-buffer :wk "buffers & files")
-  "RET" '(gptel-menu :wk "LLM...")
+  "RET" '(claude-code-ide-menu :wk "LLM...")
   "." '(other-window-prefix :wk "in other window...")
   "!" '(async-shell-command :wk "shell command")
   "|" '(rotate-layout :wk "rotate window layout")
   "-" '(window-toggle-side-windows :wk "side windows")
   ":" '(pp-eval-expression :wk "eval")
   ";" '(ielm :wk "REPL")
+  "C" '(claude-code-ide-menu :wk "Claude Code")
   "d" (list (general-predicate-dispatch #'dired-jump
               current-prefix-arg #'dired
               ;; If already in dired, open elsewhere with completing-read.

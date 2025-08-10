@@ -563,12 +563,18 @@ Runs `+escape-hook'."
   (eat-term-name "xterm-256color")
   (eat-kill-buffer-on-exit t)
   :general
-  (:keymaps 'eat-semi-char-mode-map "M-o" #'other-window)
+  (:keymaps 'eat-semi-char-mode-map "M-o" #'other-window "s-v" 'eat-yank-from-kill-ring)
   (:keymaps 'project-prefix-map "s" #'eat-project)
   :config
   (with-eval-after-load 'evil
     (evil-set-initial-state 'eat-mode 'insert))
-  (pushnew! eat-semi-char-non-bound-keys [M-o]))
+  (pushnew! eat-semi-char-non-bound-keys [M-o])
+
+  (add-hook '+escape-hook
+            (defun +eat-escape ()
+              (when (derived-mode-p 'eat-mode)
+                (eat-self-input)
+                t))))
 
 (use-package string-inflection :ensure t
   ;; Provides commands for cycling different string casing styles for the ident
@@ -766,6 +772,7 @@ Runs `+escape-hook'."
           compilation-mode-hook
           help-mode-hook
           shell-command-mode-hook
+          eat-mode-hook
           gptel-mode-hook
           org-roam-mode-hook
           )
@@ -2256,6 +2263,15 @@ file in your browser at the visited revision."
     :general (:states 'visual "RET" #'+gptel-rewrite-fast))
   :config
   (use-package mod-gptel :demand t))
+
+(use-package claude-code-ide :ensure (:host github :repo "manzaltu/claude-code-ide.el")
+  ;; Creates an MCP bridge between Emacs and Claude-Code.
+  :after-call +first-input-hook +first-file-hook
+  :general ()
+  :custom
+  (claude-code-ide-terminal-backend 'eat)
+  :config
+  (claude-code-ide-emacs-tools-setup))
 
 (use-package nursery :ensure (nursery :host github
                                       :repo "chrisbarrett/nursery"
