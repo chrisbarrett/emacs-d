@@ -119,7 +119,7 @@
                       (derived-mode . inf-elixir-mode)
 
                       ;; shells
-                      (derived-mode . mistty-mode)
+                      (derived-mode . eat-mode)
                       (derived-mode . eshell-mode)
 
                       ;; compilation

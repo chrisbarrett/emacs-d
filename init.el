@@ -557,21 +557,18 @@ Runs `+escape-hook'."
   :config
   (use-package mod-eshell :demand t))
 
-(use-package mistty :ensure t
-  ;; A better frontend for term.el.
+(use-package eat :ensure t
+  ;; A reasonably performant terminal emulator in Emacs
+  :custom
+  (eat-term-name "xterm-256color")
+  (eat-kill-buffer-on-exit t)
   :general
-  (:keymaps 'project-prefix-map "s"
-            (defun +project-mistty ()
-              (interactive)
-              (let ((default-directory (project-root (project-current t))))
-                (mistty))))
+  (:keymaps 'eat-semi-char-mode-map "M-o" #'other-window)
+  (:keymaps 'project-prefix-map "s" #'eat-project)
   :config
   (with-eval-after-load 'evil
-    (evil-set-initial-state 'mistty-mode 'insert)
-
-    ;; Forward control keys to the terminal in insert state.
-    (dolist (key '("C-a" "C-b" "C-c" "C-d" "C-e" "C-f" "C-h" "C-k" "C-l" "C-n" "C-p" "C-r" "C-u" "C-w" "C-z"))
-      (evil-define-key 'insert mistty-prompt-map (kbd key) #'mistty-send-key))))
+    (evil-set-initial-state 'eat-mode 'insert))
+  (pushnew! eat-semi-char-non-bound-keys [M-o]))
 
 (use-package string-inflection :ensure t
   ;; Provides commands for cycling different string casing styles for the ident

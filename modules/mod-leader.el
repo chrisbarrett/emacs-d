@@ -127,7 +127,7 @@
   "c" #'quick-calc
   "C" #'full-calc
   "e" #'eshell
-  "s" #'mistty
+  "s" #'eat
   "r" (general-predicate-dispatch 'profiler-start
         (and (featurep 'profiler) (profiler-running-p))
         (defun +profiler-stop-and-report (&optional continue-p)
