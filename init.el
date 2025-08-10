@@ -564,17 +564,15 @@ Runs `+escape-hook'."
   (eat-kill-buffer-on-exit t)
   :general
   (:keymaps 'project-prefix-map "s" #'eat-project)
-
   (:keymaps 'eat-semi-char-mode-map
-            "M-o" #'other-window
-            "s-v" 'eat-yank-from-kill-ring
+            "s-v" 'eat-yank
+            "M-o" nil
             [escape] 'eat-self-input)
+  :init
+  (with-eval-after-load '+evil-collection
+    (pushnew! +evil-collection-disabled-list 'eat))
 
   :config
-  ;; Most keys are passed directly to Eat; add any to be intercepted by Emacs
-  ;; below.
-  (pushnew! eat-semi-char-non-bound-keys [M-o])
-
   ;; Disable evil-mode entirely in eat-mode buffers.
   (with-eval-after-load 'evil
     (pushnew! evil-buffer-regexps `(,(rx bol "*eat")))))
