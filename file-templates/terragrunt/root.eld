@@ -1,8 +1,14 @@
 (nil
  "\
 locals {
+  default_region = \"TODO\"
+
   account_vars = read_terragrunt_config(find_in_parent_folders(\"account.hcl\"))
-  region_vars  = read_terragrunt_config(find_in_parent_folders(\"region.hcl\"))
+  region_vars  = try(read_terragrunt_config(find_in_parent_folders(\"region.hcl\")), {
+    locals = {
+      region = local.default_region
+    }
+  })
 
   account_name = local.account_vars.locals.account_name
   account_id   = local.account_vars.locals.aws_account_id
