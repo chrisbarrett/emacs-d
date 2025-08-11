@@ -2268,7 +2268,8 @@ file in your browser at the visited revision."
   (use-package mod-gptel :demand t))
 
 (use-package claude-code-ide :ensure (:host github :repo "manzaltu/claude-code-ide.el")
-  ;; Creates an MCP bridge between Emacs and Claude-Code.
+  ;; Run claude-code inside Emacs; creates an MCP bridge between the processes
+  ;; to provide editor integration.
   :after-call +first-input-hook +first-file-hook
   :general ()
   :custom
