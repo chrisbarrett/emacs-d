@@ -10,7 +10,6 @@ locals {
 
   # TODO: Fill these out.
   bucket_prefix = \"TODO\"
-  source_base_url = \"git::git@github.com:<org>/<repo>.git\"
 }
 
 remote_state {
