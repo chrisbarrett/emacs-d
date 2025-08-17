@@ -620,12 +620,17 @@ Runs `+escape-hook'."
             "NIX_PATH"
             ;; Extra environment variables set via home-manager.
             "RIPGREP_CONFIG_PATH"
+            "NIX_EMACS_DARWIN_PATH_EXTRAS"
             )
 
   ;; Speed up by using a non-interactive shell.
   (delq! "-i" exec-path-from-shell-arguments)
 
-  (exec-path-from-shell-initialize))
+  (exec-path-from-shell-initialize)
+  (when-let* ((path-from-nix (getenv "NIX_EMACS_DARWIN_PATH_EXTRAS"))
+              (paths (string-split path-from-nix ":")))
+    (eval `(pushnew! exec-path ,@paths))
+    (setenv "PATH" (string-join exec-path ":"))))
 
 (use-package ligature :ensure t
   ;; Teach Emacs how to display ligatures when available.
