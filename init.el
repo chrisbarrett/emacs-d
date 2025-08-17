@@ -897,8 +897,11 @@ Runs `+escape-hook'."
   (ispell-dictionary "en_AU")
   (ispell-personal-dictionary (file-name-concat org-directory "aspell.en.pws"))
   :config
+  ;; Ensure exec-path has been set up before we attempt to look for aspell.
+  (require 'exec-path-from-shell nil t)
   (unless (executable-find "aspell")
     (warn "Could not find aspell program; spell checking will not work"))
+
   (ispell-set-spellchecker-params)
 
   ;; Treat aspell dictionaries as UTF-8. Note that aspell itself needs the
