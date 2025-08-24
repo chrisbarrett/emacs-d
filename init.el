@@ -1963,7 +1963,7 @@ file in your browser at the visited revision."
 
   (with-eval-after-load 'apheleia-formatters
     (add-to-list 'apheleia-formatters '(terragrunt . ("terragrunt" "hcl" "fmt" "--stdin")))
-    (alist-set! apheleia-mode-alist 'hcl-mode 'terragrunt)))
+    (alist-set! apheleia-mode-alist 'hcl-mode '(terragrunt hclfmt))))
 
 (use-package terraform-mode :ensure t
   :mode ("\\.tf\\'")

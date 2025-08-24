@@ -1,7 +1,7 @@
 (nil
  "\
 terraform {
-  source = \"PATH?ref=VERSION\"
+  source = \"git::https://github.com/OWNER/REPO.git//.//PATH?ref=VERSION\"
 }
 
 include \"root\" {
