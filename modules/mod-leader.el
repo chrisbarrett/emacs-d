@@ -11,7 +11,7 @@
 (require '+files)
 
 (general-auto-unbind-keys)
-(general-unbind :states '(normal motion) "SPC")
+(general-unbind :states '(normal motion) "SPC" "M-m")
 
 (general-create-definer +define-leader-keys :states '(normal motion))
 
@@ -340,6 +340,10 @@
 ;; Support multiple SPC-u calls in sequence to chain universal-argument calls.
 
 (keymap-set universal-argument-map "SPC u" #'universal-argument-more)
+
+;; Define alternative M-m key sequence for non-evil modes.
+
+(general-def "M-m" #'+leader-key)
 
 (provide 'mod-leader)
 

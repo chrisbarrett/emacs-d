@@ -566,6 +566,7 @@ Runs `+escape-hook'."
   (:keymaps 'project-prefix-map "s" #'eat-project)
   (:keymaps 'eat-semi-char-mode-map
             "s-v" 'eat-yank
+            "M-m" nil
             "M-o" nil
             ;; Commands that should be passed through
             "C-u" 'eat-self-input
