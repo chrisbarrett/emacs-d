@@ -1679,6 +1679,56 @@ file in your browser at the visited revision."
   (project-remember-project (project-try-vc user-emacs-directory))
   (project-remember-project (project-try-vc org-directory)))
 
+(use-package beframe :ensure t
+  ;; Associate frames with lists of buffers; useful for workflows where you have
+  ;; separate frames per project.
+  :hook +first-input-hook
+  :general
+  ("s-t" 'project-switch-beframed)
+  (:keymaps 'project-prefix-map "p" (general-predicate-dispatch 'project-switch-project
+                                      (bound-and-true-p beframe-mode) 'project-switch-beframed))
+  :config
+  ;; Assign the initial frame to the org directory.
+  (when-let* ((initial-frame (seq-find (lambda (frame)
+                                         (frame-parameter frame 'initial))
+                                       (frame-list))))
+    (set-frame-parameter initial-frame 'project-root org-directory))
+
+  (beframe-mode +1)
+
+  (defun project-switch-beframed (dir)
+    "A wrapper for `project-switch-project' that creates dedicated project frames.
+
+DIR is the project root."
+    (interactive (list (funcall project-prompter)))
+    (if-let* ((existing (seq-find (lambda (frame)
+                                    (equal dir (frame-parameter frame 'project-root)))
+                                  (frame-list))))
+        (progn
+          (raise-frame existing)
+          (select-frame existing))
+      (other-frame-prefix)
+      (project-switch-project dir)
+      (set-frame-parameter (selected-frame) 'name (file-name-nondirectory dir))
+      (set-frame-parameter (selected-frame) 'project-root dir)))
+
+  (define-advice project--read-file-name (:around (fn project &rest args))
+    "Switch to a project's frame when reading a file or dir."
+    (let ((result (apply fn project args)))
+      (unless (string= "" result)
+        (project-switch-beframed (project-root project)))
+      result))
+
+  (define-advice consult--buffer-query (:filter-return (bufs-alist) with-beframe-restriction)
+    "Restrict the buffers shown in consult to just the ones relevant to the current frame."
+    (if (bound-and-true-p beframe-mode)
+        (let ((in-scope (beframe-buffer-list)))
+          (seq-filter
+           (pcase-lambda (`(,name . ,buf))
+             (seq-contains-p in-scope buf))
+           bufs-alist))
+      bufs-alist)))
+
 
 ;;; Documentation systems
 
