@@ -27,6 +27,9 @@
 
 ;;; Bootstrap Elpaca
 
+;; Suppress warning when loading Elpaca with latest Emacs.
+(add-to-list 'warning-suppress-types '(elpaca core \30.2))
+
 (unless (featurep 'elpaca)
   (load-file (file-name-concat user-emacs-directory "elpaca-bootstrap.el")))
 
