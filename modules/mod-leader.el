@@ -20,6 +20,7 @@
 
   "SPC" '(consult-buffer :wk "buffers & files")
   "RET" '(claude-code-ide-menu :wk "LLM...")
+  "{" '(other-frame-prefix :wk "in other frame...")
   "." '(other-window-prefix :wk "in other window...")
   "!" '(async-shell-command :wk "shell command")
   "|" '(rotate-layout :wk "rotate window layout")
