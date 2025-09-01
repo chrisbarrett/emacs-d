@@ -566,7 +566,6 @@ Runs `+escape-hook'."
   (eat-term-name "xterm-256color")
   (eat-kill-buffer-on-exit t)
   :general
-  (:keymaps 'project-prefix-map "s" #'eat-project)
   (:keymaps 'eat-semi-char-mode-map
             "s-v" 'eat-yank
             "M-m" nil
@@ -1695,6 +1694,12 @@ file in your browser at the visited revision."
     (set-frame-parameter initial-frame 'project-root org-directory))
 
   (beframe-mode +1)
+
+  (defun eat-beframed (&optional arg)
+    (interactive "P")
+    (let* ((default-directory (project-root (project-current t)))
+           (eat-buffer-name (format "*eat %s*" (frame-parameter (selected-frame) 'name))))
+      (eat nil arg)))
 
   (defun project-switch-beframed (dir)
     "A wrapper for `project-switch-project' that creates dedicated project frames.

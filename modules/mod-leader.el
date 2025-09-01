@@ -129,7 +129,8 @@
   "c" #'quick-calc
   "C" #'full-calc
   "e" #'eshell
-  "s" #'eat
+  "s" (general-predicate-dispatch #'eat
+        (bound-and-true-p beframe-mode) #'eat-beframed)
   "r" (general-predicate-dispatch 'profiler-start
         (and (featurep 'profiler) (profiler-running-p))
         (defun +profiler-stop-and-report (&optional continue-p)
