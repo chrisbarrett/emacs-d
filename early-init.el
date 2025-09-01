@@ -91,6 +91,9 @@
 ;; The minibuffer doesn't pick up the fringe parameters unless we sync again.
 (add-hook 'after-init-hook #'+sync-frame-parameters)
 
+(add-to-list 'initial-frame-alist '(name . "Emacs"))
+(add-to-list 'initial-frame-alist '(initial . t))
+
 ;; Disable unneeded UI clutter
 
 ;; Take a cue from Doom's playbook and avoid calling the functions which can
