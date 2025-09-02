@@ -1697,6 +1697,7 @@ file in your browser at the visited revision."
 
   (beframe-mode +1)
 
+  (defvar eat-buffer-name)
   (defun eat-beframed (&optional arg)
     (interactive "P")
     (let ((eat-buffer-name (format "*eat %s*" (frame-parameter (selected-frame) 'name))))
