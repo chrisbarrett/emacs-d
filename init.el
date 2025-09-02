@@ -1697,8 +1697,7 @@ file in your browser at the visited revision."
 
   (defun eat-beframed (&optional arg)
     (interactive "P")
-    (let* ((default-directory (project-root (project-current t)))
-           (eat-buffer-name (format "*eat %s*" (frame-parameter (selected-frame) 'name))))
+    (let ((eat-buffer-name (format "*eat %s*" (frame-parameter (selected-frame) 'name))))
       (eat nil arg)))
 
   (defun project-switch-beframed (dir)
