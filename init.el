@@ -1707,21 +1707,35 @@ file in your browser at the visited revision."
     (let ((eat-buffer-name (format "*eat %s*" (frame-parameter (selected-frame) 'name))))
       (eat nil arg)))
 
-  (defun project-switch-beframed (dir)
+  (defun project-switch-beframed (dir &optional force-same-frame)
     "A wrapper for `project-switch-project' that creates dedicated project frames.
 
-DIR is the project root."
-    (interactive (list (funcall project-prompter)))
-    (if-let* ((existing (seq-find (lambda (frame)
-                                    (equal dir (frame-parameter frame 'project-root)))
-                                  (frame-list))))
-        (progn
-          (raise-frame existing)
-          (select-frame existing))
-      (other-frame-prefix)
-      (project-switch-project dir)
-      (set-frame-parameter (selected-frame) 'name (file-name-nondirectory dir))
-      (set-frame-parameter (selected-frame) 'project-root dir)))
+DIR is the project root.
+
+If prefix arg FORCE-SAME-FRAME is set, then switch to the project in the
+current beframe context."
+    (interactive (list (funcall project-prompter)
+                       current-prefix-arg))
+    (if force-same-frame
+        ;; no special handling.
+        (project-switch-project dir)
+
+      (pcase-exhaustive  (seq-find (lambda (frame)
+                                     (equal dir (frame-parameter frame 'project-root)))
+                                   (frame-list))
+        (`()
+         (other-frame-prefix)
+         (project-switch-project dir)
+         (set-frame-parameter (selected-frame) 'name (file-name-nondirectory dir))
+         (set-frame-parameter (selected-frame) 'project-root dir))
+
+        ((and existing (guard (equal existing (selected-frame))))
+         (project-switch-project dir))
+
+        (existing
+         ;; Switch to other frame
+         (raise-frame existing)
+         (select-frame existing)))))
 
   (define-advice project--read-file-name (:around (fn project &rest args))
     "Switch to a project's frame when reading a file or dir."
