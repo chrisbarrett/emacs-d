@@ -565,6 +565,10 @@ Runs `+escape-hook'."
   :custom
   (eat-term-name "xterm-256color")
   (eat-kill-buffer-on-exit t)
+  (eat-term-scrollback-size
+   (let ((lines 1000)
+         (chars-per-line 80))
+     (* lines chars-per-line)))
   :general
   (:keymaps 'eat-semi-char-mode-map
             "s-v" 'eat-yank
