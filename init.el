@@ -518,6 +518,10 @@ Runs `+escape-hook'."
   (unless (server-running-p)
     (server-start)))
 
+(use-package xclip :ensure t
+  ;; Copy to and paste from GUI clipboard in terminal.
+  :after-call +first-input-hook +first-file-hook)
+
 (use-package so-long
   ;; Improve performance of files with very long lines.
   :hook (elpaca-after-init-hook . global-so-long-mode))
