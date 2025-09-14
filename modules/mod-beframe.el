@@ -13,6 +13,8 @@
 
 (defvar org-directory)
 
+(defvar +beframe-strict-project-isolation-p nil)
+
 
 
 (defvar eat-buffer-name)
@@ -59,8 +61,9 @@ current beframe context."
 (define-advice project--read-file-name (:around (fn project &rest args))
   "Switch to a project's frame when reading a file or dir."
   (let ((result (apply fn project args)))
-    (unless (string= "" result)
-      (project-switch-beframed (project-root project)))
+    (when +beframe-strict-project-isolation-p
+      (unless (string= "" result)
+        (project-switch-beframed (project-root project))))
     result))
 
 (define-advice consult--buffer-query (:filter-return (bufs-alist) with-beframe-restriction)
