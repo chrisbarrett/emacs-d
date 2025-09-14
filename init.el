@@ -1115,9 +1115,18 @@ Runs `+escape-hook'."
     (alist-set! evil-surround-pairs-alist ?' '("`" . "'"))
     (alist-set! evil-surround-pairs-alist ?f #'evil-surround-prefix-function)))
 
+
+(use-package evil-terminal-cursor-changer :ensure t
+  ;; Use evil-terminal-cursor-changer to apply cursor shapes in TTY frames.
+  :after evil
+  :demand t
+  :config
+  (evil-terminal-cursor-changer-activate))
+
 (use-package evil-multiedit :ensure t
   ;; Evil-compatible multiple cursors.
   :after evil
+  :demand t
   :config
   (evil-multiedit-default-keybinds)
 
