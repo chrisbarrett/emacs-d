@@ -523,6 +523,11 @@ Runs `+escape-hook'."
   :after-call +first-input-hook +first-file-hook
   :config (global-clipetty-mode +1))
 
+(use-package xt-mouse
+  :demand t
+  :config
+  (xterm-mouse-mode +1))
+
 (use-package so-long
   ;; Improve performance of files with very long lines.
   :hook (elpaca-after-init-hook . global-so-long-mode))
