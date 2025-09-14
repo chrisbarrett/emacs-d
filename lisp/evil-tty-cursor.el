@@ -42,7 +42,13 @@ Uses modern terminal standard escape sequences."
 (defun evil-tty-cursor--update-cursor (&rest _)
   "Update cursor shape based on current evil state."
   (when (and (bound-and-true-p evil-tty-cursor-mode)
-             (not (display-graphic-p)))
+             (not (display-graphic-p))
+             ;; Only update if current buffer is displayed in selected window
+             (eq (current-buffer) (window-buffer))
+             ;; Only update if we're in the selected frame
+             (eq (selected-frame) (window-frame (selected-window)))
+             ;; Skip internal/temporary buffers
+             (not (string-prefix-p " " (buffer-name))))
     (when-let* ((shape (alist-get evil-state evil-tty-cursor-states))
                 (sequence (evil-tty-cursor--make-sequence shape)))
       (send-string-to-terminal sequence))))
