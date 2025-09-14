@@ -2022,8 +2022,7 @@ file in your browser at the visited revision."
 
 (use-package inf-elixir :ensure t)
 
-(use-package erlang
-  :ensure t
+(use-package erlang :ensure t :disabled t ; big boy that takes ages to clone
   :mode (("\\.erl\\'" . erlang-mode)
          ("\\.hrl\\'" . erlang-mode))
   :init
