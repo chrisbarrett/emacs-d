@@ -1540,6 +1540,7 @@ word.  Fall back to regular `expreg-expand'."
   :custom
   (magit-display-buffer-function #'magit-display-buffer-same-window-except-diff-v1)
   (magit-bury-buffer-function #'magit-restore-window-configuration)
+  (magit-diff-visit-prefer-worktree t)
   (magit-diff-refine-hunk t)
   (magit-save-repository-buffers 'dontask)
   (magit-revision-insert-related-refs nil)
