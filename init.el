@@ -1690,8 +1690,6 @@ file in your browser at the visited revision."
   :hook +first-input-hook
   :general
   ("s-t" 'project-switch-beframed)
-  (:keymaps 'project-prefix-map "p" (general-predicate-dispatch 'project-switch-project
-                                      (bound-and-true-p beframe-mode) 'project-switch-beframed))
   :config
   ;; Assign the initial frame to the org directory.
   (when-let* ((initial-frame (seq-find (lambda (frame)
