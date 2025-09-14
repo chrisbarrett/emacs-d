@@ -309,7 +309,12 @@ Runs `+escape-hook'."
   ;; buffers. This is much less resource-intensive.
   :config
   (defun +auto-revert-current-buffer-h ()
-    (unless (or auto-revert-mode (active-minibuffer-window))
+    (unless (or auto-revert-mode
+                (active-minibuffer-window)
+                ;; Skip non-file buffers
+                (not (buffer-file-name))
+                ;; Skip temporary/internal buffers
+                (string-prefix-p " " (buffer-name)))
       (let ((auto-revert-mode t))
         (auto-revert-handler))))
 
