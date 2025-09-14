@@ -109,6 +109,11 @@
 (setq frame-resize-pixelwise t)
 (setq frame-inhibit-implied-resize t)
 
+(add-hook 'after-make-frame-functions
+          (lambda (frame)
+            (with-selected-frame frame
+              (menu-bar-mode -1))))
+
 
 ;;; Customise native compilation
 
