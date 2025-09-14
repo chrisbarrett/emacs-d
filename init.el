@@ -855,6 +855,12 @@ Runs `+escape-hook'."
   (pulsar-iterations 5)
   (pulsar-pulse-on-window-change t)
   :config
+  (custom-theme-set-faces 'user
+                          '(pulse-highlight-start-face
+                            ((((background light))
+                              (:background "#bfc9ff"))
+                             (((background dark))
+                              (:background "#00422a")))))
   (use-package mod-pulsar :demand t))
 
 (use-package hl-line
