@@ -39,7 +39,7 @@ Uses modern terminal standard escape sequences."
     ('hollow "\e[2 q")   ; Steady block (fallback for hollow)
     (_ "\e[2 q")))       ; Default to block
 
-(defun evil-tty-cursor--update-cursor ()
+(defun evil-tty-cursor--update-cursor (&rest _)
   "Update cursor shape based on current evil state."
   (when (and (bound-and-true-p evil-tty-cursor-mode)
              (not (display-graphic-p)))
@@ -47,23 +47,45 @@ Uses modern terminal standard escape sequences."
                 (sequence (evil-tty-cursor--make-sequence shape)))
       (send-string-to-terminal sequence))))
 
+(defun evil-tty-cursor--on-buffer-change (frame)
+  "Update cursor when buffer changes in FRAME."
+  (when (eq frame (selected-frame))
+    (evil-tty-cursor--update-cursor)))
+
+(defun evil-tty-cursor--on-window-change (frame)
+  "Update cursor when window selection changes in FRAME."
+  (when (eq frame (selected-frame))
+    (evil-tty-cursor--update-cursor)))
+
 (defun evil-tty-cursor--enable-hooks ()
   "Enable evil state change hooks."
+  ;; Evil state changes
   (add-hook 'evil-normal-state-entry-hook #'evil-tty-cursor--update-cursor)
   (add-hook 'evil-insert-state-entry-hook #'evil-tty-cursor--update-cursor)
   (add-hook 'evil-visual-state-entry-hook #'evil-tty-cursor--update-cursor)
   (add-hook 'evil-replace-state-entry-hook #'evil-tty-cursor--update-cursor)
   (add-hook 'evil-operator-state-entry-hook #'evil-tty-cursor--update-cursor)
-  (add-hook 'evil-emacs-state-entry-hook #'evil-tty-cursor--update-cursor))
+  (add-hook 'evil-emacs-state-entry-hook #'evil-tty-cursor--update-cursor)
+
+  ;; Buffer and window context changes
+  (add-hook 'window-buffer-change-functions #'evil-tty-cursor--on-buffer-change)
+  (add-hook 'window-selection-change-functions #'evil-tty-cursor--on-window-change)
+  (add-hook 'after-focus-change-functions #'evil-tty-cursor--update-cursor))
 
 (defun evil-tty-cursor--disable-hooks ()
   "Disable evil state change hooks."
+  ;; Evil state changes
   (remove-hook 'evil-normal-state-entry-hook #'evil-tty-cursor--update-cursor)
   (remove-hook 'evil-insert-state-entry-hook #'evil-tty-cursor--update-cursor)
   (remove-hook 'evil-visual-state-entry-hook #'evil-tty-cursor--update-cursor)
   (remove-hook 'evil-replace-state-entry-hook #'evil-tty-cursor--update-cursor)
   (remove-hook 'evil-operator-state-entry-hook #'evil-tty-cursor--update-cursor)
-  (remove-hook 'evil-emacs-state-entry-hook #'evil-tty-cursor--update-cursor))
+  (remove-hook 'evil-emacs-state-entry-hook #'evil-tty-cursor--update-cursor)
+
+  ;; Buffer and window context changes
+  (remove-hook 'window-buffer-change-functions #'evil-tty-cursor--on-buffer-change)
+  (remove-hook 'window-selection-change-functions #'evil-tty-cursor--on-window-change)
+  (remove-hook 'after-focus-change-functions #'evil-tty-cursor--update-cursor))
 
 ;;;###autoload
 (define-minor-mode evil-tty-cursor-mode
