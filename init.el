@@ -1142,7 +1142,7 @@ Runs `+escape-hook'."
          (when-let* ((str (iedit-current-occurrence-string)))
            (kill-new str)
            (message "Copied to kill ring")))
-   "<tab>" #'iedit-toggle-selection
+   "TAB" #'iedit-toggle-selection
    "n" #'evil-multiedit-next
    "N" #'evil-multiedit-prev
    "S" #'evil-multiedit--change-line))
@@ -1236,7 +1236,7 @@ word.  Fall back to regular `expreg-expand'."
   (vertico-preselect 'no-prompt)
   (vertico-cycle t)
   :general-config (:keymaps 'vertico-map
-                            "C-<return>" #'vertico-exit-input
+                            "C-RET" #'vertico-exit-input
                             "RET" #'vertico-directory-enter
                             "DEL" #'vertico-directory-delete-char
                             "C-l" #'vertico-insert
@@ -1862,7 +1862,7 @@ file in your browser at the visited revision."
             "<" #'+c-electric-left-angle-bracket)
 
   (:keymaps 'c-ts-mode-map :states '(normal insert)
-            "S-<return>" #'+c-auto-insert-semi-newline)
+            "S-RET" #'+c-auto-insert-semi-newline)
   :init
   (defun +c-auto-insert-semi-newline ()
     (interactive)
@@ -2211,7 +2211,7 @@ file in your browser at the visited revision."
   ;; Autoload entrypoints
   :commands (org-roam-buffer-toggle)
   :init
-  (+local-leader-set-key 'org-mode-map "<tab>" #'org-roam-buffer-toggle)
+  (+local-leader-set-key 'org-mode-map "TAB" #'org-roam-buffer-toggle)
   :general
   (:states '(motion insert normal) :keymaps 'org-mode-map
            "C-c C-i" #'org-roam-node-insert))

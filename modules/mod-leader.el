@@ -74,11 +74,11 @@
               (consult-ripgrep nil (format "%s" (symbol-at-point))))
             :wk "search (symbol)")
 
-  "<tab>" (list (defun +swap-buffers ()
-                  "Switch between the previous buffer and the current one."
-                  (interactive)
-                  (switch-to-buffer nil))
-                :wk "swap bufs")
+  "TAB" (list (defun +swap-buffers ()
+                "Switch between the previous buffer and the current one."
+                (interactive)
+                (switch-to-buffer nil))
+              :wk "swap bufs")
 
   "p"  '(nil :wk "project")
   "p" project-prefix-map
