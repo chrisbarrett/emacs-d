@@ -2336,11 +2336,12 @@ subprocess calls on every file open, especially problematic in TTY."
   ;; Run claude-code inside Emacs; creates an MCP bridge between the processes
   ;; to provide editor integration.
   :after-call +first-input-hook +first-file-hook
-  :general ()
   :custom
   (claude-code-ide-terminal-backend 'eat)
+  (claude-code-ide-enable-mcp-server t)
   :config
   (claude-code-ide-emacs-tools-setup)
+  (claude-code-ide-mcp-server-ensure-server)
 
   ;; Disable evil-mode in ancillary buffers using eat
   (with-eval-after-load 'evil
