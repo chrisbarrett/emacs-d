@@ -518,9 +518,10 @@ Runs `+escape-hook'."
   (unless (server-running-p)
     (server-start)))
 
-(use-package xclip :ensure t
+(use-package clipetty :ensure t
   ;; Copy to and paste from GUI clipboard in terminal.
-  :after-call +first-input-hook +first-file-hook)
+  :after-call +first-input-hook +first-file-hook
+  :config (global-clipetty-mode +1))
 
 (use-package so-long
   ;; Improve performance of files with very long lines.
