@@ -2069,6 +2069,10 @@ subprocess calls on every file open, especially problematic in TTY."
     (cl-letf (((symbol-function 'message) #'ignore))
       (apply fn args))))
 
+(use-package kdl-ts-mode :ensure (:host github :repo "merrickluo/kdl-ts-mode")
+  ;; Major-mode for the KDL file format used by Zellij.
+  :mode "\\.kdl\\'")
+
 ;; Use tree-sitter modes.
 
 (alist-set! major-mode-remap-alist #'c-mode #'c-ts-mode)
