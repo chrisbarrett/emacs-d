@@ -518,7 +518,7 @@ Runs `+escape-hook'."
 (use-package server
   ;; Use existing Emacs instances to edit files as $EDITOR.
   :if (display-graphic-p)
-  :after-call +first-input-hook +first-file-hook
+  :demand t
   :config
   (unless (server-running-p)
     (server-start)))
