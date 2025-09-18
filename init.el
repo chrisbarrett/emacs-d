@@ -1027,10 +1027,13 @@ Runs `+escape-hook'."
   ;; ships with Emacs.
   :demand t
   :general-config
-  (:states 'emacs "ESC ESC" #'evil-normal-state)
+  (:states 'emacs
+           "ESC ESC" #'evil-normal-state)
   (:states '(insert normal emacs)
            "M-." #'xref-find-definitions
            "C-x RET" #'insert-char)
+  (:states 'visual
+           "TAB" 'indent-region)
   :custom
   (evil-symbol-word-search t)
   (evil-undo-system 'undo-redo)
