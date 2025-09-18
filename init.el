@@ -1240,10 +1240,6 @@ word.  Fall back to regular `expreg-expand'."
                           (region-active-p) #'expreg-contract)
                     "+" #'+expreg-expand-dwim)
 
-(use-package ace-window :ensure t
-  ;; Jump to specific windows
-  :general ("M-w" #'ace-window
-            "M-o" #'other-window))
 
 
 ;;; Completion
