@@ -124,7 +124,7 @@
     minibuffer-local-isearch-map
     read-expression-map))
 
-(general-def :keymaps +default-minibuffer-maps "S-v" #'yank)
+(general-def :keymaps +default-minibuffer-maps "s-v" #'yank)
 
 (defvar +escape-hook nil
   "Hook functions run until success when ESC is pressed.")
