@@ -356,9 +356,9 @@ Runs `+escape-hook'."
   (:keymaps 'puni-mode-map :states '(visual) "C-k" #'puni-kill-active-region)
   (:keymaps 'puni-mode-map :states '(insert normal emacs)
             "C-k" #'+kill-line
-            "M-)" #'puni-wrap-round
-            "M-]" #'puni-wrap-square
-            "M-S-}" #'puni-wrap-curly))
+            "M-(" #'puni-wrap-round "M-)" #'puni-wrap-round
+            "M-]" #'puni-wrap-square ;; NB. M-[ translates to the ESC-[ control sequence in terminals.
+            "M-{" #'puni-wrap-curly "M-}" #'puni-wrap-curly))
 
 (use-package recentf
   ;; Maintain a list of visited files.
