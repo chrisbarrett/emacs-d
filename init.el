@@ -154,6 +154,7 @@ Runs `+escape-hook'."
 
 (global-set-key [remap keyboard-quit] #'+escape)
 (global-set-key [remap abort-recursive-edit] #'+escape)
+(general-def :states 'normal [escape] #'+escape)
 
 (general-def :keymaps +default-minibuffer-maps [escape] #'+escape)
 
@@ -1148,6 +1149,13 @@ Runs `+escape-hook'."
       (forward-char -1))
     (evil-multiedit-match-all))
 
+  :config
+  (add-hook '+escape-hook
+            (defun +evil-multiedit-escape-exit-h ()
+              (when evil-multiedit-mode
+                (evil-multiedit-abort)
+                t)))
+
   :general
   (:states 'visual
            "v" (general-predicate-dispatch #'evil-multiedit-match-all
@@ -2125,12 +2133,18 @@ subprocess calls on every file open, especially problematic in TTY."
   ;; Text snippets.
   ;;
   ;; NB. Field navigation uses M-{ and M-}.
-  (:keymaps 'tempel-map :states 'normal "<escape>" #'tempel-done)
   :custom
   (tempel-path (file-name-concat +templates-dir "*.eld"))
   :init
   (add-hook! '(prog-mode-hook text-mode-hook config-mode-hook)
-    (add-hook 'completion-at-point-functions #'tempel-expand -90 t)))
+    (add-hook 'completion-at-point-functions #'tempel-expand -90 t))
+
+  :config
+  (add-hook '+escape-hook
+            (defun +tempel-esc-exit-h ()
+              (when (tempel--active-p nil (current-buffer))
+                (tempel-done)
+                t))))
 
 (use-package autoinsert
   :after-call +first-buffer-hook +first-file-hook
