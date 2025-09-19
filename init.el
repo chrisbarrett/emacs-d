@@ -359,7 +359,14 @@ Runs `+escape-hook'."
             "C-k" #'+kill-line
             "M-(" #'puni-wrap-round "M-)" #'puni-wrap-round
             "M-]" #'puni-wrap-square ;; NB. M-[ translates to the ESC-[ control sequence in terminals.
-            "M-{" #'puni-wrap-curly "M-}" #'puni-wrap-curly))
+            "M-{" (general-predicate-dispatch #'puni-wrap-curly
+                    ((and (fboundp 'tempel--active-p)
+                          (tempel--active-p nil (current-buffer)))
+                     #'tempel-previous))
+            "M-}" (general-predicate-dispatch #'puni-wrap-curly
+                    ((and (fboundp 'tempel--active-p)
+                          (tempel--active-p nil (current-buffer)))
+                     #'tempel-next))))
 
 (use-package recentf
   ;; Maintain a list of visited files.
@@ -1411,6 +1418,13 @@ word.  Fall back to regular `expreg-expand'."
 
   (with-eval-after-load 'savehist
     (add-to-list 'savehist-additional-variables 'corfu-history)))
+
+(use-package corfu-terminal :ensure t
+  ;; Provides terminal (TTY) support for corfu
+  :after corfu
+  :config
+  (unless (display-graphic-p)
+    (corfu-terminal-mode +1)))
 
 (use-package nerd-icons-corfu :ensure t
   ;; Adds icons to corfu popups.
