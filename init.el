@@ -1003,7 +1003,7 @@ Runs `+escape-hook'."
   ;; Extra functionality around omitting files, etc.
   :hook (dired-mode-hook . dired-omit-mode)
   :custom
-  (dired-omit-files (rx bos "."))
+  (dired-omit-files (rx bos (or "." "__pycache__" "node_modules")))
   :init
   (+local-leader-set-key 'dired-mode-map
     "h" '(dired-omit-mode :wk "toggle hidden files")))
