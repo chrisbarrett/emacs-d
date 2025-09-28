@@ -258,6 +258,8 @@ Runs `+escape-hook'."
   (split-width-threshold 160)
   (split-height-threshold nil))
 
+(use-package mod-tty-frames :demand t)
+
 (use-package +window
   :general (:keymaps 'override-global-map
                      "M-f" #'+toggle-window-fullframe
