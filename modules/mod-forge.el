@@ -196,8 +196,8 @@ Respond with only the branch name, no explanation.
       (let ((spinner (make-progress-reporter "Generating PR title and description"))
             (timer nil)
             (context (concat +forge-pr-llm-prompt
-                            "\n\nCommits:\n" commits
-                            "\n\nDiff:\n" diff)))
+                             "\n\nCommits:\n" commits
+                             "\n\nDiff:\n" diff)))
         (setq timer (run-at-time 0.1 0.1 (lambda () (progress-reporter-update spinner))))
         (gptel-request context
           :callback (lambda (response _)
@@ -222,7 +222,7 @@ Respond with only the branch name, no explanation.
                         llm-response))
          (draft-file (expand-file-name ".git/magit/posts/new-pullreq" (magit-toplevel))))
     ;; Clear any existing buffer for this file to avoid conflict
-    (when-let ((existing-buf (find-buffer-visiting draft-file)))
+    (when-let* ((existing-buf (find-buffer-visiting draft-file)))
       (with-current-buffer existing-buf
         (set-buffer-modified-p nil))
       (kill-buffer existing-buf))

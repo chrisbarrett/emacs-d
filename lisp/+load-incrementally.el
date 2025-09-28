@@ -141,7 +141,7 @@ If this is a daemon session, load them all immediately instead."
                     (require ',name))
                 ((debug error)
                  (message "Failed to load deferred package %s: %s" ',name e)))
-              (when-let (deferral-list (assq ',name +load-packages--work-queue))
+              (when-let* ((deferral-list (assq ',name +load-packages--work-queue)))
                 (dolist (hook (cdr deferral-list))
                   (advice-remove hook #',fn)
                   (remove-hook hook #',fn))

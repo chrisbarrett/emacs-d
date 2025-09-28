@@ -555,7 +555,7 @@ Runs `+escape-hook'."
    input-decode-map fallback
    (lambda (&rest _args)
      (interactive)
-     (if (when-let ((keys (this-single-command-raw-keys)))
+     (if (when-let* ((keys (this-single-command-raw-keys)))
            (and (display-graphic-p)
                 (not (cl-loop for event in events
                               if (cl-position event keys)
