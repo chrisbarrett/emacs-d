@@ -13,6 +13,7 @@
                       (set-display-table-slot dt 'vertical-border (make-glyph-code ?│))
                       (set-frame-parameter frame '+vborder-dtable dt)
                       dt))))
+        (set-display-table-slot dt 'truncation (make-glyph-code ?… 'warning))
 
         (dolist (window (window-list frame 'no-minibuf))
           (set-window-display-table window dt))
