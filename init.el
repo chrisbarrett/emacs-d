@@ -1419,13 +1419,6 @@ word.  Fall back to regular `expreg-expand'."
   (with-eval-after-load 'savehist
     (add-to-list 'savehist-additional-variables 'corfu-history)))
 
-(use-package corfu-terminal :ensure t
-  ;; Provides terminal (TTY) support for corfu
-  :after corfu
-  :config
-  (unless (display-graphic-p)
-    (corfu-terminal-mode +1)))
-
 (use-package nerd-icons-corfu :ensure t
   ;; Adds icons to corfu popups.
   :after corfu
