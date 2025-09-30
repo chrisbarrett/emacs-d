@@ -154,8 +154,8 @@
 ;; displayed beside them to help visualise your consistency.
 
 (setq org-habit-graph-column 72)
-(setq org-habit-today-glyph ?▲)
-(setq org-habit-completed-glyph ?✓)
+(setq org-habit-today-glyph ?!)
+(setq org-habit-completed-glyph ?*)
 
 (defvar +org-habit-graph-window-ratio 0.2
   "The ratio of the consistency graphs relative to the window width.")
