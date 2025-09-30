@@ -35,6 +35,13 @@
                         (and (boundp mode) (eval mode))))))
         (append
 
+         ;; Full-frame
+         (cl-labels ((full-frame (pred &rest overrides)
+                       (cons pred `((display-buffer-full-frame)
+                                    ,@overrides))))
+           (list
+            (full-frame (rx bos "CAPTURE-") )))
+
          ;; Top side - wide-screen, modal contexts
 
          (cl-labels ((top (pred &rest overrides)
