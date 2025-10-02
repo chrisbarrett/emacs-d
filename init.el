@@ -2045,6 +2045,9 @@ subprocess calls on every file open, especially problematic in TTY."
     (add-to-list 'apheleia-formatters '(opentofu . ("tofu" "fmt" "-")))
     (alist-set! apheleia-mode-alist 'terraform-mode 'opentofu)))
 
+;; Terragrunt drift history log.
+(pushnew! project-vc-ignores ".drift-history.json")
+
 (use-package elixir-ts-mode
   :mode ("\\.ex\\'" "\\.exs\\'")
   :init
