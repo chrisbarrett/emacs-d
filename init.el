@@ -2025,6 +2025,9 @@ subprocess calls on every file open, especially problematic in TTY."
 
 (use-package hcl-mode :ensure t
   :mode ("\\.hcl\\'")
+  :init
+  (with-eval-after-load 'project
+    (pushnew! project-vc-ignores ".drift-history.json"))
   :config
   (+define-file-template (rx "terragrunt.hcl" eos) "terragrunt/terragrunt.eld")
   (+define-file-template (rx "root.hcl" eos) "terragrunt/root.eld")
