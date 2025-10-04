@@ -2369,7 +2369,21 @@ subprocess calls on every file open, especially problematic in TTY."
 
   ;; Disable evil-mode in ancillary buffers using eat
   (with-eval-after-load 'evil
-    (pushnew! evil-buffer-regexps `(,(rx bol "*claude-code")))))
+    (pushnew! evil-buffer-regexps `(,(rx bol "*claude-code"))))
+
+  (define-advice claude-code-ide--create-terminal-session (:around (fn &rest args))
+    "Teach claude-code to use the mise environment, when available"
+    (let* ((mise-vars
+            (when (and (executable-find "mise")
+                       (locate-dominating-file default-directory ".mise.toml"))
+              (string-split
+               (replace-regexp-in-string (rx bol "export" (+ space))
+                                         ""
+                                         (shell-command-to-string "mise env"))
+               "\n"
+               t)))
+           (process-environment (append mise-vars process-environment)))
+      (apply fn args))))
 
 (use-package nursery :ensure (nursery :host github
                                       :repo "chrisbarrett/nursery"
