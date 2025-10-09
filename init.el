@@ -749,6 +749,17 @@ Runs `+escape-hook'."
   :config
   (pushnew! tramp-remote-path 'tramp-own-remote-path))
 
+(use-package midnight
+  ;; Run a hook at midnight; cleans up old buffers by default. Useful for
+  ;; preventing an Emacs server instance from drowning in open buffers
+  ;; throughout the work week.
+  ;;
+  ;; The behaviour of the buffer cleanup can be customised via the
+  ;; `clean-buffer-list-*' variables.
+  :after-call +first-file-hook +first-buffer-hook
+  :config
+  (midnight-mode +1))
+
 
 ;;; Open some files as read-only, e.g. vendored deps.
 
