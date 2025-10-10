@@ -1054,6 +1054,7 @@ Runs `+escape-hook'."
            "M-." #'xref-find-definitions
            "C-x RET" #'insert-char)
   (:states 'visual
+           "<tab>" 'indent-region
            "TAB" 'indent-region)
   :custom
   (evil-symbol-word-search t)
@@ -1193,6 +1194,7 @@ Runs `+escape-hook'."
          (when-let* ((str (iedit-current-occurrence-string)))
            (kill-new str)
            (message "Copied to kill ring")))
+   "<tab>" #'iedit-toggle-selection
    "TAB" #'iedit-toggle-selection
    "n" #'evil-multiedit-next
    "N" #'evil-multiedit-prev
