@@ -26,6 +26,8 @@
 ;;; Code:
 
 (require 'cl-lib)
+(require '+corelib)
+(require '+window)
 
 (setq display-buffer-alist
       (cl-labels ((mode-active-p (mode)
@@ -162,9 +164,33 @@
 (setq display-buffer-fallback-action
       `((display-buffer--maybe-same-window
          display-buffer-reuse-window
+
+         ,(defun +display-buffer-reuse-non-dedicated-window (buffer alist)
+            (when (member this-command '(
+                                         ;; Dired
+                                         dired-find-file
+                                         ;; Compilation
+                                         next-error
+                                         previous-error
+                                         compile-goto-error
+                                         ;; help
+                                         push-button
+                                         ;; magit
+                                         magit-diff-visit-file
+                                         ))
+
+              (let ((candidates (seq-remove (lambda (it)
+                                              (or (+side-window-p it)
+                                                  (window-dedicated-p it)))
+                                            (window-list))))
+                (pcase candidates
+                  (`(,sole-window)
+                   (window--display-buffer buffer sole-window 'reuse alist))))))
+
          display-buffer--maybe-pop-up-window
          display-buffer-in-previous-window
          display-buffer-use-some-window
+
          ,(defun +display-buffer-fallback (buffer &rest _)
             (when-let* ((win (split-window-sensibly)))
               (with-selected-window win
