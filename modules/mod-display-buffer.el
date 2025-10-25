@@ -177,6 +177,7 @@
                                          push-button
                                          ;; magit
                                          magit-diff-visit-file
+                                         +magit-diff-visit-file-unselected
                                          ))
 
               (let ((candidates (seq-remove (lambda (it)

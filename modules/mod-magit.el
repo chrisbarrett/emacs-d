@@ -15,6 +15,19 @@
 (general-def :keymaps 'git-commit-mode-map
   "C-c C-l" #'+git-commit-generate-message-with-gptel)
 
+(defun +magit-diff-visit-file-unselected ()
+  "Visit the file at point but keep the magit window selected."
+  (interactive)
+  (let ((orig-window (selected-window)))
+    (magit-diff-visit-file t)
+    (select-window orig-window)))
+
+(general-def :keymaps 'magit-diff-section-map
+  "S-<return>" #'+magit-diff-visit-file-unselected)
+
+(with-eval-after-load 'pulsar
+  (pushnew! pulsar-pulse-functions '+magit-diff-visit-file-unselected))
+
 ;; Automatically enter insert state on empty commit message.
 (add-hook! 'git-commit-mode-hook
   (when (and (bolp) (eolp))
