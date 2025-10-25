@@ -172,4 +172,46 @@ With prefix arg ARG, don't select the new window."
    (t
     (user-error "Window already focused"))))
 
+;;; Directional window swapping
+
+(defun +win-swap-up ()
+  "Swap current window with the one above, excluding side windows."
+  (interactive)
+  (when (+side-window-p (selected-window))
+    (user-error "Cannot swap from a side window"))
+  (when-let ((target (window-in-direction 'above)))
+    (when (+side-window-p target)
+      (user-error "Cannot swap with a side window")))
+  (windmove-swap-states-up))
+
+(defun +win-swap-down ()
+  "Swap current window with the one below, excluding side windows."
+  (interactive)
+  (when (+side-window-p (selected-window))
+    (user-error "Cannot swap from a side window"))
+  (when-let ((target (window-in-direction 'below)))
+    (when (+side-window-p target)
+      (user-error "Cannot swap with a side window")))
+  (windmove-swap-states-down))
+
+(defun +win-swap-left ()
+  "Swap current window with the one to the left, excluding side windows."
+  (interactive)
+  (when (+side-window-p (selected-window))
+    (user-error "Cannot swap from a side window"))
+  (when-let ((target (window-in-direction 'left)))
+    (when (+side-window-p target)
+      (user-error "Cannot swap with a side window")))
+  (windmove-swap-states-left))
+
+(defun +win-swap-right ()
+  "Swap current window with the one to the right, excluding side windows."
+  (interactive)
+  (when (+side-window-p (selected-window))
+    (user-error "Cannot swap from a side window"))
+  (when-let ((target (window-in-direction 'right)))
+    (when (+side-window-p target)
+      (user-error "Cannot swap with a side window")))
+  (windmove-swap-states-right))
+
 (provide '+window)

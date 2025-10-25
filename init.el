@@ -259,11 +259,13 @@ Runs `+escape-hook'."
   (split-width-threshold 160)
   (split-height-threshold nil))
 
+;; Tiling window navigation--I configure bindings here that only work in GUI
+;; frames. In terminals I use Zellij.
+;;
+;; NB terminals can't interpret M-S-* or M-C-* bindings, making these bindings
+;; GUI-frame-only.
+
 (use-package windmove
-  ;; Window navigation--I configure bindings here that only work in GUI frames
-  ;; to match my zellij bindings
-  ;;
-  ;; NB terminals can't interpret M-S-* bindings.
   :general (:keymaps 'override-global-map
                      "M-C" #'windmove-up
                      "M-H" #'windmove-left
@@ -276,8 +278,11 @@ Runs `+escape-hook'."
   :general (:keymaps 'override-global-map
                      "M-f" #'+toggle-window-fullframe
                      "M-r" #'+toggle-side-window-raised
-                     ;; NB terminals can't interpret M-S-* bindings.
-                     "M-S-<return>" #'+toggle-window-fullframe))
+                     "M-S-<return>" #'+toggle-window-fullframe
+                     "C-M-c" #'+win-swap-up
+                     "C-M-h" #'+win-swap-left
+                     "C-M-n" #'+win-swap-right
+                     "C-M-t" #'+win-swap-down))
 
 (use-package frame
   ;; Frame management settings
