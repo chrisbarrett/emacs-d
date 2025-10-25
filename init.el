@@ -259,12 +259,25 @@ Runs `+escape-hook'."
   (split-width-threshold 160)
   (split-height-threshold nil))
 
+(use-package windmove
+  ;; Window navigation--I configure bindings here that only work in GUI frames
+  ;; to match my zellij bindings
+  ;;
+  ;; NB terminals can't interpret M-S-* bindings.
+  :general (:keymaps 'override-global-map
+                     "M-C" #'windmove-up
+                     "M-H" #'windmove-left
+                     "M-N" #'windmove-right
+                     "M-T" #'windmove-down))
+
 (use-package mod-tty-frames :demand t)
 
 (use-package +window
   :general (:keymaps 'override-global-map
                      "M-f" #'+toggle-window-fullframe
-                     "M-r" #'+toggle-side-window-raised))
+                     "M-r" #'+toggle-side-window-raised
+                     ;; NB terminals can't interpret M-S-* bindings.
+                     "M-S-<return>" #'+toggle-window-fullframe))
 
 (use-package frame
   ;; Frame management settings
