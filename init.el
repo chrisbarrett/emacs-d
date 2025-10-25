@@ -616,6 +616,7 @@ Runs `+escape-hook'."
             "M-o" nil
             ;; Commands that should be passed through
             "C-u" 'eat-self-input
+            "C-o" 'eat-self-input
             [escape] 'eat-self-input)
   :init
   (with-eval-after-load '+evil-collection
