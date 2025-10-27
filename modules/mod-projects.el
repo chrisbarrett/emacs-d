@@ -333,6 +333,18 @@ switch to an existing frame for that project or create a new one."
     (when-let* ((project-root (alist-get input project-alist nil nil #'equal)))
       (+projects--open-project-frame project-root))))
 
+;;; Magit integration
+
+(defun +projects-magit-status ()
+  "Show magit-status for the current tab's worktree.
+If the current tab has a worktree path set, opens magit-status in that
+worktree's context. Otherwise, opens magit-status in the current directory."
+  (interactive)
+  (if-let* ((worktree-path (+projects--current-worktree-path)))
+      (let ((default-directory worktree-path))
+        (magit-status-setup-buffer worktree-path))
+    (magit-status)))
+
 (provide 'mod-projects)
 
 ;;; mod-projects.el ends here

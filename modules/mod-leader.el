@@ -227,7 +227,7 @@
   "b" '(magit-blame :wk "blame")
   "d" '(magit-diff-buffer-file :wk "buffer diff")
   "f" '(magit-file-dispatch :wk "file actions...")
-  "g" '(magit-status :wk "status")
+  "g" '(+projects-magit-status :wk "status")
   "l" '(magit-log-buffer-file :wk "buffer log")
   "p" '(forge-browse-pullreq :wk "browse pullreq")
   "r" '(browse-at-remote :wk "open on GitHub")
