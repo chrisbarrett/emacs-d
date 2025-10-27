@@ -365,7 +365,7 @@ Requires a clean working tree (no uncommitted changes)."
     (+project--kill-worktree-buffers worktree-path)))
 
 ;; Always add the hook - it will only fire when tab-bar-mode is active
-(add-hook 'tab-bar-tab-post-close-functions #'+projects--cleanup-worktree-tab)
+(add-hook 'tab-bar-tab-pre-close-functions #'+projects--cleanup-worktree-tab)
 
 ;;; Tab bar management
 
