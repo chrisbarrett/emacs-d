@@ -158,10 +158,6 @@ If EXCLUDE-ROOT is non-nil, return nil if the worktree is the repo root."
     ;; Create new tab for worktree
     (let ((tab-name (+projects--worktree-branch worktree-path)))
       (tab-bar-new-tab)
-      ;; Set worktree-path in tab parameters
-      (set-frame-parameter nil
-                           'buffer-list
-                           (frame-parameter nil 'buffer-list))
       (tab-bar-rename-tab tab-name)
       ;; Store worktree path in the current tab
       (let ((current-tab (tab-bar--current-tab-find)))
@@ -400,11 +396,14 @@ Useful when tab bar display gets broken but tabs are still functional."
                          (+projects--worktree-branch worktree-path))))
           (tab-bar-rename-tab tab-name))))
 
+    ;; Ensure tab-bar-lines is set before toggling (fixes invisible tab bar)
+    (set-frame-parameter nil 'tab-bar-lines 1)
     ;; Force tab bar to redisplay
     (tab-bar-mode -1)
     (tab-bar-mode 1)
-    ;; Ensure tab-bar-lines is set (fixes invisible tab bar)
+    ;; Set again after mode toggle to ensure it sticks
     (set-frame-parameter nil 'tab-bar-lines 1)
+    (redraw-frame)
     (message "Tab bar reset for current frame")))
 
 ;;; Magit integration
