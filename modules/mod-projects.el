@@ -378,7 +378,7 @@ Useful when tab bar display gets broken but tabs are still functional."
     (let* ((current-tab (tab-bar--current-tab-find))
            (worktree-path (alist-get 'worktree-path (cdr current-tab)))
            (detected (when (not worktree-path)
-                      (car (+projects--detect-worktree-path)))))
+                       (car (+projects--detect-worktree-path)))))
       (when detected
         (setf (alist-get 'worktree-path (cdr current-tab)) detected)
         (setq worktree-path detected))
@@ -386,14 +386,14 @@ Useful when tab bar display gets broken but tabs are still functional."
       ;; Update tab name if we have a worktree
       (when worktree-path
         (let ((tab-name (if (equal worktree-path (+projects--repo-root))
-                           ;; Repo root - use project name
-                           (or (and (frame-parameter nil 'project-root)
-                                   (file-name-nondirectory
-                                    (directory-file-name (frame-parameter nil 'project-root))))
-                              (file-name-nondirectory
-                               (directory-file-name worktree-path)))
-                         ;; Worktree - use branch name
-                         (+projects--worktree-branch worktree-path))))
+                            ;; Repo root - use project name
+                            (or (and (frame-parameter nil 'project-root)
+                                     (file-name-nondirectory
+                                      (directory-file-name (frame-parameter nil 'project-root))))
+                                (file-name-nondirectory
+                                 (directory-file-name worktree-path)))
+                          ;; Worktree - use branch name
+                          (+projects--worktree-branch worktree-path))))
           (tab-bar-rename-tab tab-name))))
 
     ;; Ensure tab-bar-lines is set before toggling (fixes invisible tab bar)
