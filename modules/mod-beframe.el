@@ -44,11 +44,20 @@ current beframe context."
                                    (equal dir (frame-parameter frame 'project-root)))
                                  (frame-list))
       (`()
-       (let ((message-log-max nil))
-         (other-frame-prefix))
+       ;; No frame found. Dedicate the initial frame or create a new one.
+       (pcase (frame-list)
+         ((and `(,sole-frame)
+               (guard (null (frame-parameter sole-frame 'project-root))))
+          ;; First frame--re-use this one.
+          )
+         (_
+          ;; Initial frame has been dedicated; prepare to create a new one.
+          (let ((message-log-max nil))
+            (other-frame-prefix))))
+
        (project-switch-project dir)
-       (set-frame-parameter (selected-frame) 'name (file-name-nondirectory dir))
-       (set-frame-parameter (selected-frame) 'project-root dir))
+       (set-frame-parameter nil 'name (file-name-nondirectory dir))
+       (set-frame-parameter nil 'project-root dir))
 
       ((and existing (guard (equal existing (selected-frame))))
        (project-switch-project dir))
@@ -77,12 +86,6 @@ current beframe context."
     bufs-alist))
 
 
-
-;; Assign the initial frame to the org directory.
-(when-let* ((initial-frame (seq-find (lambda (frame)
-                                       (frame-parameter frame 'initial))
-                                     (frame-list))))
-  (set-frame-parameter initial-frame 'project-root org-directory))
 
 (beframe-mode +1)
 
