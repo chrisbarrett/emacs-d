@@ -11,6 +11,7 @@
 ;;; Code:
 
 (require '+corelib)
+(require '+beads)
 (require 'tab-bar)
 (require 'magit)
 (require 'general)
@@ -23,9 +24,13 @@
 (transient-define-prefix +projects-worktree-menu ()
   "Transient menu for git worktree operations."
   ["Worktree Operations"
-   ("X" "Delete tab, worktree, and branch" +projects-delete-worktree)
-   ("M" "Merge to main and cleanup" +projects-merge-and-cleanup)
-   ("r" "Rebase on main" +projects-rebase-on-main)])
+   ("i" "Switch to issue" +projects-switch-to-issue)
+   ("x" "Delete tab, worktree, and branch" +projects-delete-worktree
+    :if (lambda () (+projects--worktree-for-selected-tab t)))
+   ("m" "Merge to main and cleanup" +projects-merge-and-cleanup
+    :if (lambda () (+projects--worktree-for-selected-tab t)))
+   ("r" "Rebase on main" +projects-rebase-on-main
+    :if (lambda () (+projects--worktree-for-selected-tab t)))])
 
 ;;; Configuration
 
@@ -34,6 +39,10 @@
 
 
 ;;; Helper functions
+
+(defun +projects--repo-root ()
+  "Get the repository root directory (not the .git directory)."
+  (file-name-directory (directory-file-name (magit-gitdir))))
 
 (defun +projects--default-branch ()
   "Get the default branch name for the current repository."
@@ -67,29 +76,35 @@
 (defun +projects--detect-worktree-path ()
   "Detect the worktree path for the current directory, if in a worktree."
   (when-let* ((project-root (+projects--project-root)))
-    (let* ((toplevel (magit-gitdir))
+    (let* ((repo-root (+projects--repo-root))
            (worktrees (magit-list-worktrees))
            (current-dir (expand-file-name default-directory)))
       ;; Find a worktree that contains the current directory
       (seq-find (lambda (worktree-info)
                   (let ((worktree-path (car worktree-info)))
                     (and (not (equal (directory-file-name worktree-path)
-                                     (directory-file-name toplevel)))
+                                     (directory-file-name repo-root)))
                          (string-prefix-p (file-name-as-directory worktree-path)
                                           current-dir))))
                 worktrees))))
 
-(defun +projects--worktree-for-selected-tab ()
+(defun +projects--worktree-for-selected-tab (&optional exclude-root)
   "Get the worktree path for the current tab, if set.
-If not set but we're in a worktree, detect and set it."
+If not set but we're in a worktree, detect and set it.
+If EXCLUDE-ROOT is non-nil, return nil if the worktree is the repo root."
   (when tab-bar-mode
     (let ((current-tab (tab-bar--current-tab)))
-      (or (alist-get 'worktree-path current-tab)
-          ;; Try to detect and set it
-          (when-let* ((detected (car (+projects--detect-worktree-path))))
-            (let ((tab (tab-bar--current-tab-find)))
-              (setf (alist-get 'worktree-path (cdr tab)) detected))
-            detected)))))
+      (when-let* ((worktree-path
+                   (or (alist-get 'worktree-path current-tab)
+                       ;; First time checking this tab--try to assign it to a worktree.
+                       (when-let* ((detected (car (+projects--detect-worktree-path))))
+                         (let ((tab (tab-bar--current-tab-find)))
+                           (setf (alist-get 'worktree-path (cdr tab)) detected))
+                         detected))))
+        (if exclude-root
+            (unless (equal worktree-path (+projects--repo-root))
+              worktree-path)
+          worktree-path)))))
 
 (defun +projects--worktree-clean-p (worktree-path)
   (let ((default-directory worktree-path))
@@ -98,7 +113,18 @@ If not set but we're in a worktree, detect and set it."
 
 ;;; Worktree operations
 
-(defun +projects--open-worktree-tab (worktree-path)
+(defun +projects--branch-name-from-issue (issue)
+  "Generate a git branch name from ISSUE."
+  (let* ((id (alist-get 'id issue))
+         (title (alist-get 'title issue))
+         ;; Sanitize title: lowercase, replace spaces/special chars with hyphens
+         (sanitized (downcase
+                    (replace-regexp-in-string
+                     "[^a-z0-9-]+" "-"
+                     (replace-regexp-in-string "^[^a-z0-9]+\\|[^a-z0-9]+$" "" title)))))
+    (format "%s-%s" id sanitized)))
+
+(defun +projects--open-worktree-tab (worktree-path &optional issue)
   (if-let* ((existing-tab (+projects--tab-for-worktree worktree-path)))
       (tab-bar-select-tab (1+ (tab-bar--tab-index existing-tab)))
     ;; Create new tab
@@ -120,7 +146,24 @@ If not set but we're in a worktree, detect and set it."
     (let ((default-directory worktree-path)
           (project-find-functions nil))
       (ignore-errors
-        (claude-code-ide)))))
+        (claude-code-ide))))
+
+  ;; If an issue was provided, save issue context for Claude
+  (when issue
+    (let* ((id (alist-get 'id issue))
+           (title (alist-get 'title issue))
+           (description (alist-get 'description issue))
+           (claude-dir (expand-file-name ".claude" worktree-path))
+           (context-file (expand-file-name "issue-context.md" claude-dir))
+           (prompt (format "# Working on: %s\n\n## %s\n\n%s"
+                          id title (or description ""))))
+      ;; Ensure .claude directory exists
+      (make-directory claude-dir t)
+      (with-current-buffer (get-buffer-create "*claude-issue-context*")
+        (erase-buffer)
+        (insert prompt)
+        (write-region (point-min) (point-max) context-file nil 'silent))
+      (message "Issue context saved for Claude: %s" id))))
 
 (defun +projects-switch-worktree (&optional initial-rev)
   "Switch to a worktree tab, creating a branch and worktree if needed.
@@ -135,12 +178,50 @@ If called interactively with a prefix arg, prompt INITIAL-REV."
 
     (if (alist-get dir-or-new-branch worktrees nil nil #'equal)
         (+projects--open-worktree-tab dir-or-new-branch)
-      (let ((default-directory (magit-gitdir))
-            (worktree-path (file-name-concat (magit-gitdir) +projects-worktree-base-dir dir-or-new-branch)))
+      (let ((default-directory (+projects--repo-root))
+            (worktree-path (file-name-concat (+projects--repo-root) +projects-worktree-base-dir dir-or-new-branch)))
         ;; Ensure intervening directories exist
         (make-directory (file-name-directory worktree-path) t)
         (magit-run-git "worktree" "add" (magit--expand-worktree worktree-path) (or initial-rev "HEAD"))
         (+projects--open-worktree-tab worktree-path)))))
+
+(defun +projects-switch-to-issue ()
+  "Pick an issue from beads and create/switch to a worktree for it.
+If the worktree already exists, switch to it. Otherwise, create a new
+worktree with a branch name derived from the issue ID and title."
+  (interactive)
+  (unless (+projects--project-root)
+    (user-error "Not in a git project"))
+
+  (when-let* ((issue (+beads-pick-issue))
+              (branch-name (+projects--branch-name-from-issue issue))
+              (worktrees (magit-list-worktrees))
+              (default-directory (+projects--repo-root)))
+
+    ;; Check if worktree already exists for this branch
+    (if-let* ((existing-worktree
+               (seq-find (pcase-lambda (`(,_path ,_commit ,branch . ,_))
+                          (equal branch branch-name))
+                        worktrees)))
+        (progn
+          (message "Switching to existing worktree for %s" branch-name)
+          (+projects--open-worktree-tab (car existing-worktree) issue))
+
+      ;; Create new worktree
+      (let* ((worktree-path (file-name-concat (+projects--repo-root)
+                                              +projects-worktree-base-dir
+                                              branch-name)))
+        (message "Creating worktree for issue %s..." (alist-get 'id issue))
+        (make-directory (file-name-directory worktree-path) t)
+        (magit-run-git "worktree" "add" "-b" branch-name
+                      (magit--expand-worktree worktree-path)
+                      "HEAD")
+        (+projects--open-worktree-tab worktree-path issue)
+
+        ;; Update beads to mark issue as in_progress
+        (shell-command (format "bd update %s --status in_progress"
+                              (shell-quote-argument (alist-get 'id issue))))
+        (message "Issue %s marked as in_progress" (alist-get 'id issue))))))
 
 ;;; Worktree management commands
 
@@ -156,7 +237,7 @@ If called interactively with a prefix arg, prompt INITIAL-REV."
 Requires a clean working tree (no uncommitted changes)."
   (interactive)
   (let ((worktree-path (+projects--worktree-for-selected-tab)))
-    (when (equal worktree-path (magit-gitdir))
+    (when (equal worktree-path (+projects--repo-root))
       (user-error "Refusing to act on repo root worktree"))
 
     (unless worktree-path
@@ -180,14 +261,14 @@ Requires a clean working tree (no uncommitted changes)."
 (defun +projects-merge-and-cleanup ()
   "Merge current worktree branch to main, then delete worktree and branch."
   (interactive)
-  (let* ((default-directory (magit-gitdir))
+  (let* ((default-directory (+projects--repo-root))
          (worktree-path (+projects--worktree-for-selected-tab))
          (worktree-branch (+projects--worktree-branch worktree-path))
          (default-branch (+projects--default-branch)))
 
     (unless worktree-path
       (user-error "Current tab is not associated with a worktree"))
-    (when (equal worktree-path (magit-gitdir))
+    (when (equal worktree-path (+projects--repo-root))
       (user-error "Refusing to act on repo root worktree"))
 
     (unless (+projects--worktree-clean-p worktree-path)
@@ -212,7 +293,7 @@ Requires a clean working tree (no uncommitted changes)."
   (let ((worktree-path (+projects--worktree-for-selected-tab)))
     (unless worktree-path
       (user-error "Current tab is not associated with a worktree"))
-    (when (equal worktree-path (magit-gitdir))
+    (when (equal worktree-path (+projects--repo-root))
       (user-error "Refusing to act on root worktree"))
 
     (unless (+projects--worktree-clean-p worktree-path)
