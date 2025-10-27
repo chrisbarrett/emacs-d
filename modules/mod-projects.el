@@ -110,6 +110,28 @@ If EXCLUDE-ROOT is non-nil, return nil if the worktree is the repo root."
   (let ((default-directory worktree-path))
     (not (magit-anything-modified-p))))
 
+(defun +projects--ensure-claude-trust (worktree-path)
+  "Ensure WORKTREE-PATH is trusted in ~/.claude.json.
+Uses jq and sponge to safely update the config file."
+  (let* ((claude-config (expand-file-name "~/.claude.json"))
+         (allowed-tools '("Bash" "Read" "Write" "Edit" "Glob" "Grep" "Task"
+                         "WebFetch" "WebSearch" "MultiEdit" "NotebookEdit"))
+         (tools-json (json-serialize allowed-tools))
+         (jq-filter (format ".projects[\"%s\"].allowedTools = %s"
+                           worktree-path
+                           tools-json)))
+    ;; Create initial structure if file doesn't exist
+    (unless (file-exists-p claude-config)
+      (with-temp-file claude-config
+        (insert "{\"projects\":{}}\n")))
+
+    ;; Use jq + sponge to update the config
+    (shell-command
+     (format "jq '%s' %s | sponge %s"
+             jq-filter
+             (shell-quote-argument claude-config)
+             (shell-quote-argument claude-config)))))
+
 
 ;;; Worktree operations
 
@@ -140,6 +162,9 @@ If EXCLUDE-ROOT is non-nil, return nil if the worktree is the repo root."
         (setf (alist-get 'worktree-path (cdr current-tab)) worktree-path))))
 
   (magit-status-setup-buffer worktree-path)
+
+  ;; Ensure Claude trusts this worktree
+  (+projects--ensure-claude-trust worktree-path)
 
   ;; Start claude-code-ide for this worktree.
   (when (fboundp 'claude-code-ide)
