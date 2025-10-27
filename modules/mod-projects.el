@@ -1,11 +1,12 @@
-;;; mod-projects.el --- Project and worktree management with tabs -*- lexical-binding: t; -*-
+;;; mod-projects.el --- Git worktree management with tabs -*- lexical-binding: t; -*-
 
 ;;; Commentary:
 
 ;; This module implements a zellij-inspired workflow for managing git worktrees
-;; using Emacs tabs, and a frame-per-project workflow for general projects.
-;; Each tab represents a git worktree, and each frame can represent a project,
-;; allowing for isolated contexts.
+;; using Emacs tabs. Each tab represents a git worktree, allowing for isolated
+;; contexts when working on different branches.
+;;
+;; For frame-per-project workflow, see mod-beframe.el.
 
 ;;; Code:
 
@@ -144,15 +145,19 @@ START-POINT is the branch or ref to use as the starting point (defaults to HEAD)
           ;; Open dired at worktree root
           (dired worktree-path)
           ;; Start claude-code-ide for this worktree
+          ;; Disable project detection so claude-code uses the worktree path
           (when (fboundp 'claude-code-ide)
-            (let ((default-directory worktree-path))
+            (let ((default-directory worktree-path)
+                  (project-find-functions nil))
               (claude-code-ide)))
           (message "Opened tab for worktree: %s" tab-name)))
 
     ;; When tab-bar-mode is disabled, just open dired
     (dired worktree-path)
+    ;; Disable project detection so claude-code uses the worktree path
     (when (fboundp 'claude-code-ide)
-      (let ((default-directory worktree-path))
+      (let ((default-directory worktree-path)
+            (project-find-functions nil))
         (claude-code-ide)))))
 
 (defun +projects-switch-worktree (&optional start-point)
@@ -288,50 +293,20 @@ Requires a clean working tree (no uncommitted changes)."
         (message "Rebase successful: %s rebased on %s/%s"
                  branch-name remote default-branch)))))
 
-;;; Frame-per-project operations
+;;; Tab cleanup
 
-(defun +projects--frame-for-project (project-root)
-  "Find the frame associated with PROJECT-ROOT, if any."
-  (seq-find (lambda (frame)
-              (equal project-root (frame-parameter frame 'project-root)))
-            (frame-list)))
+(defun +projects--cleanup-worktree-tab (tab)
+  "Clean up resources when a worktree TAB is closed.
+This kills the claude-code-ide instance for the worktree."
+  (when-let* ((worktree-path (alist-get 'worktree-path tab)))
+    ;; Kill claude-code-ide instance for this worktree
+    (when (fboundp 'claude-code-ide-stop)
+      (let ((default-directory worktree-path)
+            (project-find-functions nil))
+        (claude-code-ide-stop)))))
 
-(defun +projects--project-frame-root (&optional frame)
-  "Get the project root for FRAME (defaults to current frame)."
-  (frame-parameter frame 'project-root))
-
-(defun +projects--open-project-frame (project-root)
-  "Open or switch to a frame for PROJECT-ROOT."
-  (if-let* ((existing-frame (+projects--frame-for-project project-root)))
-      ;; Switch to existing frame
-      (select-frame-set-input-focus existing-frame)
-
-    ;; Create new frame
-    (let* ((project-name (file-name-nondirectory (directory-file-name project-root)))
-           (new-frame (make-frame `((name . ,project-name)
-                                    (project-root . ,project-root)))))
-      (select-frame-set-input-focus new-frame)
-      ;; Open project root in dired
-      (dired project-root)
-      ;; Start claude-code-ide for this project
-      (when (fboundp 'claude-code-ide)
-        (let ((default-directory project-root))
-          (claude-code-ide)))
-      (message "Opened frame for project: %s" project-name))))
-
-(defun +projects-switch-project-frame ()
-  "Switch to a project in a dedicated frame.
-Shows a list of known projects. Selecting a project will either
-switch to an existing frame for that project or create a new one."
-  (interactive)
-  (let* ((projects (project-known-project-roots))
-         (project-names (mapcar (lambda (p)
-                                  (file-name-nondirectory (directory-file-name p)))
-                                projects))
-         (project-alist (cl-mapcar #'cons project-names projects))
-         (input (completing-read "Project: " project-names nil t)))
-    (when-let* ((project-root (alist-get input project-alist nil nil #'equal)))
-      (+projects--open-project-frame project-root))))
+;; Always add the hook - it will only fire when tab-bar-mode is active
+(add-hook 'tab-bar-tab-post-close-functions #'+projects--cleanup-worktree-tab)
 
 ;;; Magit integration
 

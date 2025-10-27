@@ -1630,12 +1630,11 @@ word.  Fall back to regular `expreg-expand'."
   (magit-format-file-function #'magit-format-file-nerd-icons))
 
 (use-package mod-projects
-  ;; Integrate git worktrees with tabs and frame-per-project
+  ;; Integrate git worktrees with tabs
   :commands (+projects-magit-status)
   :general (:keymaps 'override-global-map
                      "M-O" #'+projects-switch-worktree
-                     "M-G" #'+projects-worktree-menu
-                     "M-W" #'+projects-switch-project-frame))
+                     "M-G" #'+projects-worktree-menu))
 
 (use-package git-timemachine :ensure t
   :general-config
@@ -1780,18 +1779,26 @@ file in your browser at the visited revision."
             (root (project-root proj)))
        (if (file-directory-p (file-name-concat root ".git"))
            (magit-status-setup-buffer root)
-         (dired root)))))
+         (dired root))
+       (let ((win (selected-window)))
+         (when (display-graphic-p)
+           (claude-code-ide-continue))
+         (select-window win)))))
   :config
+  (add-to-list 'project-list-exclude (rx "/.worktrees/"))
+
   (project-remember-project (project-try-vc user-emacs-directory))
   (project-remember-project (project-try-vc org-directory)))
 
 (use-package beframe :ensure t
   ;; Associate frames with lists of buffers; useful for workflows where you have
   ;; separate frames per project.
-  :hook +first-input-hook
+  :demand t
   :init
   (use-package mod-beframe
-    :general ("s-t" 'project-switch-beframed)
+    :general (:keymaps 'override-global-map
+                       "s-t" 'project-switch-beframed
+                       "M-W" 'project-switch-beframed)
     :demand t
     :after beframe))
 
