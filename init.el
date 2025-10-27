@@ -306,6 +306,9 @@ Runs `+escape-hook'."
    "M->"         #'tab-bar-switch-to-next-tab
    "M-S-,"       #'tab-bar-switch-to-prev-tab
    "M-<"         #'tab-bar-switch-to-prev-tab)
+  :config
+  (use-package mod-tabs
+    :general (:keymaps 'override-global-map "M-B" #'+tabs-menu))
   :init
   (tab-bar-mode +1))
 
@@ -628,6 +631,9 @@ Runs `+escape-hook'."
   :general
   (:keymaps 'eat-semi-char-mode-map
             "s-v" 'eat-yank
+            ;; Commands that should be intercepted rather than be passed to eat
+            "M-B" nil
+            "M-P" nil
             "M-m" nil
             "M-o" nil
             "M-<" nil
