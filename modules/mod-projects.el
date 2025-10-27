@@ -378,11 +378,31 @@ Requires a clean working tree (no uncommitted changes)."
 Useful when tab bar display gets broken but tabs are still functional."
   (interactive)
   (when tab-bar-mode
+    ;; Detect and set worktree-path if missing
+    (let* ((current-tab (tab-bar--current-tab-find))
+           (worktree-path (alist-get 'worktree-path (cdr current-tab)))
+           (detected (when (not worktree-path)
+                      (car (+projects--detect-worktree-path)))))
+      (when detected
+        (setf (alist-get 'worktree-path (cdr current-tab)) detected)
+        (setq worktree-path detected))
+
+      ;; Update tab name if we have a worktree
+      (when worktree-path
+        (let ((tab-name (if (equal worktree-path (+projects--repo-root))
+                           ;; Repo root - use project name
+                           (or (and (frame-parameter nil 'project-root)
+                                   (file-name-nondirectory
+                                    (directory-file-name (frame-parameter nil 'project-root))))
+                              (file-name-nondirectory
+                               (directory-file-name worktree-path)))
+                         ;; Worktree - use branch name
+                         (+projects--worktree-branch worktree-path))))
+          (tab-bar-rename-tab tab-name))))
+
     ;; Force tab bar to redisplay
     (tab-bar-mode -1)
     (tab-bar-mode 1)
-    ;; Reset buffer list for current tab
-    (set-frame-parameter nil 'buffer-list (frame-parameter nil 'buffer-list))
     (message "Tab bar reset for current frame")))
 
 ;;; Magit integration
