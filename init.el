@@ -1630,9 +1630,10 @@ word.  Fall back to regular `expreg-expand'."
   (magit-format-file-function #'magit-format-file-nerd-icons))
 
 (use-package mod-projects
-  ;; Integrate git worktrees with tabs
+  ;; Integrate git worktrees with tabs and frame-per-project
   :general ("M-O" #'+projects-switch-worktree
-            "M-G" #'+projects-worktree-menu))
+            "M-G" #'+projects-worktree-menu
+            "M-W" #'+projects-switch-project-frame))
 
 (use-package git-timemachine :ensure t
   :general-config
