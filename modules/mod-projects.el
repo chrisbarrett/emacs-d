@@ -32,6 +32,7 @@
 (defvar +projects-worktree-base-dir ".worktrees"
   "Base directory name for creating new worktrees.")
 
+
 ;;; Helper functions
 
 (defun +projects--default-branch ()
@@ -44,18 +45,17 @@
         "main")))
 
 (defun +projects--project-root ()
-  "Get the current project root, or nil if not in a project."
   (when-let* ((project (project-current)))
     (project-root project)))
 
 (defun +projects--worktree-branch (worktree-path)
-  "Get the branch name for WORKTREE-PATH."
-  (let ((default-directory worktree-path))
-    (magit-get-current-branch)))
-
-(defun +projects--worktree-name (worktree-path)
-  "Get a human-readable name for WORKTREE-PATH."
-  (file-name-nondirectory (directory-file-name worktree-path)))
+  (or
+   (seq-find (pcase-lambda (`(,path ,_commit ,branch . ,_))
+               (when (equal path worktree-path)
+                 branch))
+             (magit-list-worktrees))
+   ;; Guess based on target directory
+   (file-name-nondirectory (directory-file-name worktree-path))))
 
 (defun +projects--tab-for-worktree (worktree-path)
   "Find the tab associated with WORKTREE-PATH, if any."
@@ -67,7 +67,7 @@
 (defun +projects--detect-worktree-path ()
   "Detect the worktree path for the current directory, if in a worktree."
   (when-let* ((project-root (+projects--project-root)))
-    (let* ((toplevel (magit-toplevel))
+    (let* ((toplevel (magit-gitdir))
            (worktrees (magit-list-worktrees))
            (current-dir (expand-file-name default-directory)))
       ;; Find a worktree that contains the current directory
@@ -91,170 +91,120 @@ If not set but we're in a worktree, detect and set it."
               (setf (alist-get 'worktree-path (cdr tab)) detected))
             detected)))))
 
-(defun +projects--validate-branch-name (name)
-  "Validate NAME as a legal git branch name.
-Returns t if valid, nil otherwise."
-  (and (stringp name)
-       (not (string-empty-p name))
-       (not (string-match-p "[\000-\037\177 ~^:?*\[]" name))
-       (not (string-match-p "\\.\\." name))
-       (not (string-prefix-p "/" name))
-       (not (string-suffix-p "/" name))
-       (not (string-suffix-p ".lock" name))
-       (not (string= name "@"))
-       t))
-
-(defun +projects--git-clean-p (&optional worktree-path)
-  "Check if WORKTREE-PATH (or current directory) has no uncommitted changes."
-  (let ((default-directory (or worktree-path default-directory)))
+(defun +projects--worktree-clean-p (worktree-path)
+  (let ((default-directory worktree-path))
     (not (magit-anything-modified-p))))
 
+
 ;;; Worktree operations
 
-(defun +projects--create-worktree (branch-name &optional start-point)
-  "Create a new worktree for BRANCH-NAME under the worktree base directory.
-START-POINT is the branch or ref to use as the starting point (defaults to HEAD)."
-  (let* ((root (+projects--project-root))
-         (worktree-path (expand-file-name
-                         (concat +projects-worktree-base-dir "/" branch-name)
-                         root))
-         (default-directory root))
-    (unless (file-directory-p (expand-file-name +projects-worktree-base-dir root))
-      (make-directory (expand-file-name +projects-worktree-base-dir root) t))
-    (message "Creating worktree for branch '%s'..." branch-name)
-    (magit-worktree-branch worktree-path branch-name (or start-point "HEAD"))
-    worktree-path))
-
 (defun +projects--open-worktree-tab (worktree-path)
-  "Open or switch to a tab for WORKTREE-PATH."
-  (if tab-bar-mode
-      (if-let* ((existing-tab (+projects--tab-for-worktree worktree-path)))
-          (tab-bar-select-tab (1+ (tab-bar--tab-index existing-tab)))
+  (if-let* ((existing-tab (+projects--tab-for-worktree worktree-path)))
+      (tab-bar-select-tab (1+ (tab-bar--tab-index existing-tab)))
+    ;; Create new tab
+    (let ((tab-name (+projects--worktree-branch worktree-path)))
+      (tab-bar-new-tab)
+      ;; Set worktree-path in tab parameters
+      (set-frame-parameter nil
+                           'buffer-list
+                           (frame-parameter nil 'buffer-list))
+      (tab-bar-rename-tab tab-name)
+      ;; Store worktree path in the current tab
+      (let ((current-tab (tab-bar--current-tab-find)))
+        (setf (alist-get 'worktree-path (cdr current-tab)) worktree-path))))
 
-        ;; Create new tab
-        (let* ((tab-name (+projects--worktree-name worktree-path)))
-          (tab-bar-new-tab)
-          ;; Set worktree-path in tab parameters
-          (set-frame-parameter nil
-                               'buffer-list
-                               (frame-parameter nil 'buffer-list))
-          (tab-bar-rename-tab tab-name)
-          ;; Store worktree path in the current tab
-          (let ((current-tab (tab-bar--current-tab-find)))
-            (setf (alist-get 'worktree-path (cdr current-tab)) worktree-path))
-          ;; Open dired at worktree root
-          (dired worktree-path)
-          ;; Start claude-code-ide for this worktree
-          ;; Disable project detection so claude-code uses the worktree path
-          (when (fboundp 'claude-code-ide)
-            (let ((default-directory worktree-path)
-                  (project-find-functions nil))
-              (claude-code-ide)))
-          (message "Opened tab for worktree: %s" tab-name)))
+  (magit-status-setup-buffer worktree-path)
 
-    ;; When tab-bar-mode is disabled, just open dired
-    (dired worktree-path)
-    ;; Disable project detection so claude-code uses the worktree path
-    (when (fboundp 'claude-code-ide)
-      (let ((default-directory worktree-path)
-            (project-find-functions nil))
+  ;; Start claude-code-ide for this worktree.
+  (when (fboundp 'claude-code-ide)
+    (let ((default-directory worktree-path)
+          (project-find-functions nil))
+      (ignore-errors
         (claude-code-ide)))))
 
-(defun +projects-switch-worktree (&optional start-point)
-  "Switch to an existing worktree or create a new one.
-Shows a completing-read prompt with existing worktrees. If the input
-doesn't match an existing worktree, creates a new one with that name.
+(defun +projects-switch-worktree (&optional initial-rev)
+  "Switch to a worktree tab, creating a branch and worktree if needed.
 
-With prefix argument, prompt for a branch or ref to use as the starting
-point for the new worktree."
+If called interactively with a prefix arg, prompt INITIAL-REV."
   (interactive (list (when current-prefix-arg
                        (magit-read-branch-or-commit "Create worktree from"))))
   (unless (+projects--project-root)
     (user-error "Not in a git project"))
-  (let* ((toplevel (magit-toplevel))
-         (worktrees (cl-delete (directory-file-name toplevel)
-                               (mapcar #'car (magit-list-worktrees))
-                               :test #'equal))
-         (worktree-names (mapcar #'+projects--worktree-name worktrees))
-         (worktree-alist (cl-mapcar #'cons worktree-names worktrees))
-         (input (completing-read "Worktree: " worktree-names nil nil)))
-    (if-let* ((existing-path (alist-get input worktree-alist nil nil #'equal)))
-        (+projects--open-worktree-tab existing-path)
+  (let* ((worktrees (magit-list-worktrees))
+         (dir-or-new-branch (completing-read "Worktree: " worktrees nil nil)))
 
-      (unless (+projects--validate-branch-name input)
-        (user-error "Invalid branch name: %s" input))
-
-      (let ((new-path (+projects--create-worktree input start-point)))
-        (+projects--open-worktree-tab new-path)))))
+    (if (alist-get dir-or-new-branch worktrees nil nil #'equal)
+        (+projects--open-worktree-tab dir-or-new-branch)
+      (let ((default-directory (magit-gitdir))
+            (worktree-path (file-name-concat (magit-gitdir) +projects-worktree-base-dir dir-or-new-branch)))
+        ;; Ensure intervening directories exist
+        (make-directory (file-name-directory worktree-path) t)
+        (magit-run-git "worktree" "add" (magit--expand-worktree worktree-path) (or initial-rev "HEAD"))
+        (+projects--open-worktree-tab worktree-path)))))
 
 ;;; Worktree management commands
+
+(defun +project--kill-worktree-buffers (worktree-path)
+  (dolist (buf (buffer-list))
+    (with-current-buffer buf
+      (when (string-prefix-p worktree-path default-directory)
+        (unless (get-buffer-process buf)
+          (kill-buffer buf))))))
 
 (defun +projects-delete-worktree ()
   "Delete the current tab, worktree, and associated branch.
 Requires a clean working tree (no uncommitted changes)."
   (interactive)
   (let ((worktree-path (+projects--worktree-for-selected-tab)))
+    (when (equal worktree-path (magit-gitdir))
+      (user-error "Refusing to act on repo root worktree"))
+
     (unless worktree-path
       (user-error "Current tab is not associated with a worktree"))
 
-    (unless (+projects--git-clean-p worktree-path)
-      (user-error "Worktree has uncommitted changes. Please commit or stash changes before deletion"))
+    (unless (+projects--worktree-clean-p worktree-path)
+      (user-error "Worktree has uncommitted changes"))
 
     (let ((branch-name (+projects--worktree-branch worktree-path)))
-
-      ;; Confirm deletion
-      (unless (yes-or-no-p (format "Delete worktree '%s' and branch '%s'? "
-                                   (+projects--worktree-name worktree-path)
-                                   branch-name))
-        (user-error "Deletion cancelled"))
+      (unless (yes-or-no-p (format "Delete worktree and branch '%s'?" branch-name))
+        (user-error "Aborted without changes"))
 
       (when tab-bar-mode
         (tab-bar-close-tab))
-      (magit-worktree-delete worktree-path)
-      (magit-branch-delete branch-name)
 
+      (+project--kill-worktree-buffers worktree-path)
+      (let ((magit-no-confirm '(trash)))
+        (magit-worktree-delete worktree-path))
       (message "Deleted worktree and branch: %s" branch-name))))
 
 (defun +projects-merge-and-cleanup ()
   "Merge current worktree branch to main, then delete worktree and branch."
   (interactive)
-  (let ((worktree-path (+projects--worktree-for-selected-tab)))
+  (let* ((default-directory (magit-gitdir))
+         (worktree-path (+projects--worktree-for-selected-tab))
+         (worktree-branch (+projects--worktree-branch worktree-path))
+         (default-branch (+projects--default-branch)))
+
     (unless worktree-path
       (user-error "Current tab is not associated with a worktree"))
+    (when (equal worktree-path (magit-gitdir))
+      (user-error "Refusing to act on repo root worktree"))
 
-    (unless (+projects--git-clean-p worktree-path)
-      (user-error "Worktree has uncommitted changes. Please commit or stash changes before merge"))
+    (unless (+projects--worktree-clean-p worktree-path)
+      (user-error "Worktree has uncommitted changes"))
 
-    (let* ((branch-name (+projects--worktree-branch worktree-path))
-           ;; Use toplevel to get the main repository, not the worktree
-           (toplevel (magit-toplevel))
-           (default-directory toplevel))
+    (unless (yes-or-no-p (format "Merge branch `%s' into `%s' and delete worktree? "
+                                 worktree-branch
+                                 default-branch))
+      (user-error "Aborted without changes"))
 
-      (let ((default-branch (+projects--default-branch)))
-        (unless (yes-or-no-p (format "Merge branch '%s' to %s and cleanup? "
-                                     branch-name
-                                     default-branch))
-          (user-error "Merge cancelled"))
+    (+project--kill-worktree-buffers worktree-path)
+    (magit-worktree-delete worktree-path) ; if this fails, the branch is still around for recovery.
+    (magit-run-git "switch" default-branch)
+    (magit-merge-absorb worktree-branch) ; NB. async
 
-        (message "Switching to %s in main repository..." default-branch)
-
-        (unless (zerop (magit-call-git "checkout" default-branch))
-          (user-error "Failed to checkout %s" default-branch))
-
-        (message "Merging %s into %s..." branch-name default-branch)
-
-        (unless (zerop (magit-call-git "merge" "--no-edit" branch-name))
-          (user-error "Merge failed - please resolve conflicts manually"))
-
-        (magit-refresh)
-
-        (when tab-bar-mode
-          (tab-bar-close-tab))
-
-        (magit-worktree-delete worktree-path)
-        (magit-branch-delete branch-name)
-
-        (message "Merged %s to %s and cleaned up" branch-name default-branch)))))
+    (when tab-bar-mode
+      (tab-bar-close-tab))))
 
 (defun +projects-rebase-on-main ()
   "Rebase the current worktree branch on main."
@@ -262,8 +212,10 @@ Requires a clean working tree (no uncommitted changes)."
   (let ((worktree-path (+projects--worktree-for-selected-tab)))
     (unless worktree-path
       (user-error "Current tab is not associated with a worktree"))
+    (when (equal worktree-path (magit-gitdir))
+      (user-error "Refusing to act on root worktree"))
 
-    (unless (+projects--git-clean-p worktree-path)
+    (unless (+projects--worktree-clean-p worktree-path)
       (user-error "Worktree has uncommitted changes. Please commit or stash changes before rebase"))
 
     (let* ((branch-name (+projects--worktree-branch worktree-path))
@@ -302,7 +254,9 @@ Requires a clean working tree (no uncommitted changes)."
       (let ((default-directory worktree-path)
             (project-find-functions nil))
         (ignore-errors
-          (claude-code-ide-stop))))))
+          (claude-code-ide-stop))))
+
+    (+project--kill-worktree-buffers worktree-path)))
 
 ;; Always add the hook - it will only fire when tab-bar-mode is active
 (add-hook 'tab-bar-tab-post-close-functions #'+projects--cleanup-worktree-tab)
@@ -310,7 +264,7 @@ Requires a clean working tree (no uncommitted changes)."
 ;;; Magit integration
 
 (defun +projects-magit-status ()
-  "Show `magit-status', for the current worktree if appropriate."
+  "Display magit status buffer, for the current worktree if appropriate."
   (interactive)
   (if-let* ((worktree-path (+projects--worktree-for-selected-tab)))
       (magit-status-setup-buffer worktree-path)
