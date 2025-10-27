@@ -229,8 +229,9 @@ Requires a clean working tree (no uncommitted changes)."
       (user-error "Worktree has uncommitted changes. Please commit or stash changes before merge"))
 
     (let* ((branch-name (+projects--worktree-branch worktree-path))
-           (root (+projects--project-root))
-           (default-directory root))
+           ;; Use toplevel to get the main repository, not the worktree
+           (toplevel (magit-toplevel))
+           (default-directory toplevel))
 
       (let ((default-branch (+projects--default-branch)))
         (unless (yes-or-no-p (format "Merge branch '%s' to %s and cleanup? "
@@ -238,7 +239,7 @@ Requires a clean working tree (no uncommitted changes)."
                                      default-branch))
           (user-error "Merge cancelled"))
 
-        (message "Switching to %s..." default-branch)
+        (message "Switching to %s in main repository..." default-branch)
 
         (unless (zerop (magit-call-git "checkout" default-branch))
           (user-error "Failed to checkout %s" default-branch))
