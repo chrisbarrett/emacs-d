@@ -403,6 +403,8 @@ Useful when tab bar display gets broken but tabs are still functional."
     ;; Force tab bar to redisplay
     (tab-bar-mode -1)
     (tab-bar-mode 1)
+    ;; Ensure tab-bar-lines is set (fixes invisible tab bar)
+    (set-frame-parameter nil 'tab-bar-lines 1)
     (message "Tab bar reset for current frame")))
 
 ;;; Magit integration
