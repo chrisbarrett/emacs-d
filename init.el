@@ -2442,6 +2442,8 @@ subprocess calls on every file open, especially problematic in TTY."
   :custom
   (claude-code-ide-terminal-backend 'eat)
   (claude-code-ide-enable-mcp-server t)
+  ;; disable ediff for proposed changes--too interruptive.
+  (claude-code-ide-use-ide-diff nil)
   :config
   (claude-code-ide-emacs-tools-setup)
   (claude-code-ide-mcp-server-ensure-server)
