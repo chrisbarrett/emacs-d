@@ -111,26 +111,14 @@ If EXCLUDE-ROOT is non-nil, return nil if the worktree is the repo root."
     (not (magit-anything-modified-p))))
 
 (defun +projects--ensure-claude-trust (worktree-path)
-  "Ensure WORKTREE-PATH is trusted in ~/.claude.json.
-Uses jq and sponge to safely update the config file."
-  (let* ((claude-config (expand-file-name "~/.claude.json"))
-         (allowed-tools '("Bash" "Read" "Write" "Edit" "Glob" "Grep" "Task"
-                          "WebFetch" "WebSearch" "MultiEdit" "NotebookEdit"))
-         (tools-json (json-serialize allowed-tools))
-         (jq-filter (format ".projects[\"%s\"].allowedTools = %s"
-                            worktree-path
-                            tools-json)))
-    ;; Create initial structure if file doesn't exist
-    (unless (file-exists-p claude-config)
-      (with-temp-file claude-config
-        (insert "{\"projects\":{}}\n")))
-
-    ;; Use jq + sponge to update the config
-    (shell-command
-     (format "jq '%s' %s | sponge %s"
-             jq-filter
-             (shell-quote-argument claude-config)
-             (shell-quote-argument claude-config)))))
+  "Ensure WORKTREE-PATH exists in ~/.claude.json projects."
+  (let ((claude-config (expand-file-name "~/.claude.json")))
+    (when (file-exists-p claude-config)
+      (shell-command
+       (format "jq '%s' %s | sponge %s"
+               (format ".projects[\"%s\"] |= . + {}" worktree-path)
+               (shell-quote-argument claude-config)
+               (shell-quote-argument claude-config))))))
 
 
 ;;; Worktree operations
