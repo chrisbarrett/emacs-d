@@ -115,11 +115,11 @@ If EXCLUDE-ROOT is non-nil, return nil if the worktree is the repo root."
 Uses jq and sponge to safely update the config file."
   (let* ((claude-config (expand-file-name "~/.claude.json"))
          (allowed-tools '("Bash" "Read" "Write" "Edit" "Glob" "Grep" "Task"
-                         "WebFetch" "WebSearch" "MultiEdit" "NotebookEdit"))
+                          "WebFetch" "WebSearch" "MultiEdit" "NotebookEdit"))
          (tools-json (json-serialize allowed-tools))
          (jq-filter (format ".projects[\"%s\"].allowedTools = %s"
-                           worktree-path
-                           tools-json)))
+                            worktree-path
+                            tools-json)))
     ;; Create initial structure if file doesn't exist
     (unless (file-exists-p claude-config)
       (with-temp-file claude-config
@@ -141,9 +141,9 @@ Uses jq and sponge to safely update the config file."
          (title (alist-get 'title issue))
          ;; Sanitize title: lowercase, replace spaces/special chars with hyphens
          (sanitized (downcase
-                    (replace-regexp-in-string
-                     "[^a-z0-9-]+" "-"
-                     (replace-regexp-in-string "^[^a-z0-9]+\\|[^a-z0-9]+$" "" title)))))
+                     (replace-regexp-in-string
+                      "[^a-z0-9-]+" "-"
+                      (replace-regexp-in-string "^[^a-z0-9]+\\|[^a-z0-9]+$" "" title)))))
     (format "%s-%s" id sanitized)))
 
 (defun +projects--open-worktree-tab (worktree-path &optional issue)
@@ -153,14 +153,14 @@ Uses jq and sponge to safely update the config file."
     ;; If this is the first worktree tab, set up the initial tab to represent the repo root
     (when (and tab-bar-mode
                (not (seq-some (lambda (tab)
-                               (alist-get 'worktree-path tab))
-                             (funcall tab-bar-tabs-function))))
+                                (alist-get 'worktree-path tab))
+                              (funcall tab-bar-tabs-function))))
       (let* ((repo-root (+projects--repo-root))
              (project-name (or (and (frame-parameter nil 'project-root)
-                                   (file-name-nondirectory
-                                    (directory-file-name (frame-parameter nil 'project-root))))
-                              (file-name-nondirectory
-                               (directory-file-name repo-root))))
+                                    (file-name-nondirectory
+                                     (directory-file-name (frame-parameter nil 'project-root))))
+                               (file-name-nondirectory
+                                (directory-file-name repo-root))))
              (current-tab (tab-bar--current-tab-find)))
         ;; Associate current tab with repo root
         (setf (alist-get 'worktree-path (cdr current-tab)) repo-root)
@@ -181,10 +181,8 @@ Uses jq and sponge to safely update the config file."
 
   (magit-status-setup-buffer worktree-path)
 
-  ;; Ensure Claude trusts this worktree
   (+projects--ensure-claude-trust worktree-path)
 
-  ;; Start claude-code-ide for this worktree.
   (when (fboundp 'claude-code-ide)
     (let ((default-directory worktree-path)
           (project-find-functions nil))
@@ -199,7 +197,7 @@ Uses jq and sponge to safely update the config file."
            (claude-dir (expand-file-name ".claude" worktree-path))
            (context-file (expand-file-name "issue-context.md" claude-dir))
            (prompt (format "# Working on: %s\n\n## %s\n\n%s"
-                          id title (or description ""))))
+                           id title (or description ""))))
       ;; Ensure .claude directory exists
       (make-directory claude-dir t)
       (with-current-buffer (get-buffer-create "*claude-issue-context*")
@@ -244,8 +242,8 @@ worktree with a branch name derived from the issue ID and title."
     ;; Check if worktree already exists for this branch
     (if-let* ((existing-worktree
                (seq-find (pcase-lambda (`(,_path ,_commit ,branch . ,_))
-                          (equal branch branch-name))
-                        worktrees)))
+                           (equal branch branch-name))
+                         worktrees)))
         (progn
           (message "Switching to existing worktree for %s" branch-name)
           (+projects--open-worktree-tab (car existing-worktree) issue))
@@ -257,13 +255,13 @@ worktree with a branch name derived from the issue ID and title."
         (message "Creating worktree for issue %s..." (alist-get 'id issue))
         (make-directory (file-name-directory worktree-path) t)
         (magit-run-git "worktree" "add" "-b" branch-name
-                      (magit--expand-worktree worktree-path)
-                      "HEAD")
+                       (magit--expand-worktree worktree-path)
+                       "HEAD")
         (+projects--open-worktree-tab worktree-path issue)
 
         ;; Update beads to mark issue as in_progress
         (shell-command (format "bd update %s --status in_progress --no-daemon"
-                              (shell-quote-argument (alist-get 'id issue))))
+                               (shell-quote-argument (alist-get 'id issue))))
         (message "Issue %s marked as in_progress" (alist-get 'id issue))))))
 
 ;;; Worktree management commands
