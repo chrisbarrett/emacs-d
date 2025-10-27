@@ -311,14 +311,11 @@ This kills the claude-code-ide instance for the worktree."
 ;;; Magit integration
 
 (defun +projects-magit-status ()
-  "Show magit-status for the current tab's worktree.
-If the current tab has a worktree path set, opens magit-status in that
-worktree's context. Otherwise, opens magit-status in the current directory."
+  "Show `magit-status', for the current worktree if appropriate."
   (interactive)
   (if-let* ((worktree-path (+projects--worktree-for-selected-tab)))
-      (let ((default-directory worktree-path))
-        (magit-status-setup-buffer worktree-path))
-    (magit-status)))
+      (magit-status-setup-buffer worktree-path)
+    (call-interactively #'magit-status)))
 
 (provide 'mod-projects)
 
