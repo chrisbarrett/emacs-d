@@ -9,3 +9,12 @@
 /elpaca
 
 /var
+
+.beads/**
+!.beads/*.jsonl
+
+
+.claude/*
+!.claude/agents/
+!.claude/commands/
+!.claude/skills/
