@@ -1631,9 +1631,10 @@ word.  Fall back to regular `expreg-expand'."
 
 (use-package mod-projects
   ;; Integrate git worktrees with tabs and frame-per-project
-  :general ("M-O" #'+projects-switch-worktree
-            "M-G" #'+projects-worktree-menu
-            "M-W" #'+projects-switch-project-frame))
+  :general (:keymaps 'override-global-map
+                     "M-O" #'+projects-switch-worktree
+                     "M-G" #'+projects-worktree-menu
+                     "M-W" #'+projects-switch-project-frame))
 
 (use-package git-timemachine :ensure t
   :general-config
