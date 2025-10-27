@@ -2044,13 +2044,21 @@ subprocess calls on every file open, especially problematic in TTY."
   :demand t
   :config (eglot-booster-mode +1))
 
-(use-package markdown
+(use-package markdown-mode
   :general-config (:keymaps 'markdown-mode-map "C-c f" #'markdown-insert-footnote)
-  :hook (markdown-mode-hook . visual-line-mode)
+  :hook ((markdown-mode-hook . visual-line-mode)
+         (markdown-ts-mode-hook . visual-line-mode))
   :custom
   (markdown-fontify-code-blocks-natively t)
   (markdown-hide-urls t)
-  :config
+  :init
+  (defun +markdown-ts-mode-maybe-gfm ()
+    "Use gfm-mode in git repos, markdown-ts-mode otherwise."
+    (if (and buffer-file-name (vc-git-root buffer-file-name))
+        (gfm-mode)
+      (markdown-ts-mode)))
+  (add-to-list 'major-mode-remap-alist '(markdown-ts-mode . +markdown-ts-mode-maybe-gfm))
+
   (+local-leader-set-key 'markdown-mode-map
     "l" '(markdown-toggle-url-hiding :wk "toggle URLs")
     "f" '(markdown-insert-footnote :wk "insert footnote")))
