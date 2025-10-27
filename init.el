@@ -630,6 +630,8 @@ Runs `+escape-hook'."
             "s-v" 'eat-yank
             "M-m" nil
             "M-o" nil
+            "M-<" nil
+            "M->" nil
             ;; Commands that should be passed through
             "C-u" 'eat-self-input
             "C-o" 'eat-self-input
