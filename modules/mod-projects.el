@@ -371,6 +371,20 @@ Requires a clean working tree (no uncommitted changes)."
 ;; Always add the hook - it will only fire when tab-bar-mode is active
 (add-hook 'tab-bar-tab-post-close-functions #'+projects--cleanup-worktree-tab)
 
+;;; Tab bar management
+
+(defun +projects-reset-tab-bar ()
+  "Reset tab bar display and parameters for the current frame.
+Useful when tab bar display gets broken but tabs are still functional."
+  (interactive)
+  (when tab-bar-mode
+    ;; Force tab bar to redisplay
+    (tab-bar-mode -1)
+    (tab-bar-mode 1)
+    ;; Reset buffer list for current tab
+    (set-frame-parameter nil 'buffer-list (frame-parameter nil 'buffer-list))
+    (message "Tab bar reset for current frame")))
+
 ;;; Magit integration
 
 (defun +projects-magit-status ()
