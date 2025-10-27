@@ -296,14 +296,13 @@ Requires a clean working tree (no uncommitted changes)."
 ;;; Tab cleanup
 
 (defun +projects--cleanup-worktree-tab (tab)
-  "Clean up resources when a worktree TAB is closed.
-This kills the claude-code-ide instance for the worktree."
+  "Clean up resources when a worktree TAB is closed."
   (when-let* ((worktree-path (alist-get 'worktree-path tab)))
-    ;; Kill claude-code-ide instance for this worktree
     (when (fboundp 'claude-code-ide-stop)
       (let ((default-directory worktree-path)
             (project-find-functions nil))
-        (claude-code-ide-stop)))))
+        (ignore-errors
+          (claude-code-ide-stop))))))
 
 ;; Always add the hook - it will only fire when tab-bar-mode is active
 (add-hook 'tab-bar-tab-post-close-functions #'+projects--cleanup-worktree-tab)
