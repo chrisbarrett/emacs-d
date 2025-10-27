@@ -79,7 +79,7 @@
                                           current-dir))))
                 worktrees))))
 
-(defun +projects--current-worktree-path ()
+(defun +projects--worktree-for-selected-tab ()
   "Get the worktree path for the current tab, if set.
 If not set but we're in a worktree, detect and set it."
   (when tab-bar-mode
@@ -193,7 +193,7 @@ point for the new worktree."
   "Delete the current tab, worktree, and associated branch.
 Requires a clean working tree (no uncommitted changes)."
   (interactive)
-  (let ((worktree-path (+projects--current-worktree-path)))
+  (let ((worktree-path (+projects--worktree-for-selected-tab)))
     (unless worktree-path
       (user-error "Current tab is not associated with a worktree"))
 
@@ -218,7 +218,7 @@ Requires a clean working tree (no uncommitted changes)."
 (defun +projects-merge-and-cleanup ()
   "Merge current worktree branch to main, then delete worktree and branch."
   (interactive)
-  (let ((worktree-path (+projects--current-worktree-path)))
+  (let ((worktree-path (+projects--worktree-for-selected-tab)))
     (unless worktree-path
       (user-error "Current tab is not associated with a worktree"))
 
@@ -259,7 +259,7 @@ Requires a clean working tree (no uncommitted changes)."
 (defun +projects-rebase-on-main ()
   "Rebase the current worktree branch on main."
   (interactive)
-  (let ((worktree-path (+projects--current-worktree-path)))
+  (let ((worktree-path (+projects--worktree-for-selected-tab)))
     (unless worktree-path
       (user-error "Current tab is not associated with a worktree"))
 
@@ -315,7 +315,7 @@ This kills the claude-code-ide instance for the worktree."
 If the current tab has a worktree path set, opens magit-status in that
 worktree's context. Otherwise, opens magit-status in the current directory."
   (interactive)
-  (if-let* ((worktree-path (+projects--current-worktree-path)))
+  (if-let* ((worktree-path (+projects--worktree-for-selected-tab)))
       (let ((default-directory worktree-path))
         (magit-status-setup-buffer worktree-path))
     (magit-status)))
