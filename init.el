@@ -293,6 +293,22 @@ Runs `+escape-hook'."
   :init
   (window-divider-mode +1))
 
+(use-package tab-bar
+  ;; Emacs' built-in tab-bar. I use it pretty much just for git worktrees.
+  :custom
+  (tab-bar-show 1)
+  (tab-bar-close-button-show nil)
+  (tab-bar-new-button-show nil)
+  (tab-bar-tab-hints t)
+  (tab-bar-format '(tab-bar-format-tabs tab-bar-separator))
+  :general
+  ("M-S-."       #'tab-bar-switch-to-next-tab
+   "M->"         #'tab-bar-switch-to-next-tab
+   "M-S-,"       #'tab-bar-switch-to-prev-tab
+   "M-<"         #'tab-bar-switch-to-prev-tab)
+  :init
+  (tab-bar-mode +1))
+
 (use-package paragraphs
   ;; Emacs' core paragraph parser.
   :custom
@@ -406,8 +422,8 @@ Runs `+escape-hook'."
 (use-package winner
   ;; Provides undo/redo for buffer & window layout changes.
   :general-config (:keymaps 'winner-mode-map
-                            "M-<" #'winner-undo
-                            "M->" #'winner-redo)
+                            "M-<left>" #'winner-undo
+                            "M-<right>" #'winner-redo)
   :after-call +first-file-hook +first-buffer-hook
   :init
   (winner-mode +1)
@@ -1604,6 +1620,11 @@ word.  Fall back to regular `expreg-expand'."
   (magit-save-repository-buffers 'dontask)
   (magit-revision-insert-related-refs nil)
   (magit-format-file-function #'magit-format-file-nerd-icons))
+
+(use-package mod-projects
+  ;; Integrate git worktrees with tabs
+  :general ("M-O" #'+projects-switch-worktree
+            "M-G" #'+projects-worktree-menu))
 
 (use-package git-timemachine :ensure t
   :general-config
