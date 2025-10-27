@@ -50,7 +50,7 @@ Returns a cons cell (PRIORITY . NUMBER) for comparison."
 (defun +beads-pick-issue ()
   "Prompt user to select an issue from beads.
 Returns the selected issue alist, or nil if cancelled."
-  (let* ((issues-json (shell-command-to-string "bd ready --json"))
+  (let* ((issues-json (shell-command-to-string "bd ready --json --no-daemon"))
          (issues (condition-case nil
                      (json-parse-string issues-json
                                         :object-type 'alist

@@ -219,7 +219,7 @@ worktree with a branch name derived from the issue ID and title."
         (+projects--open-worktree-tab worktree-path issue)
 
         ;; Update beads to mark issue as in_progress
-        (shell-command (format "bd update %s --status in_progress"
+        (shell-command (format "bd update %s --status in_progress --no-daemon"
                               (shell-quote-argument (alist-get 'id issue))))
         (message "Issue %s marked as in_progress" (alist-get 'id issue))))))
 
