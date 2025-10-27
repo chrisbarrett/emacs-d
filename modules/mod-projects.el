@@ -149,7 +149,25 @@ Uses jq and sponge to safely update the config file."
 (defun +projects--open-worktree-tab (worktree-path &optional issue)
   (if-let* ((existing-tab (+projects--tab-for-worktree worktree-path)))
       (tab-bar-select-tab (1+ (tab-bar--tab-index existing-tab)))
-    ;; Create new tab
+
+    ;; If this is the first worktree tab, set up the initial tab to represent the repo root
+    (when (and tab-bar-mode
+               (not (seq-some (lambda (tab)
+                               (alist-get 'worktree-path tab))
+                             (funcall tab-bar-tabs-function))))
+      (let* ((repo-root (+projects--repo-root))
+             (project-name (or (and (frame-parameter nil 'project-root)
+                                   (file-name-nondirectory
+                                    (directory-file-name (frame-parameter nil 'project-root))))
+                              (file-name-nondirectory
+                               (directory-file-name repo-root))))
+             (current-tab (tab-bar--current-tab-find)))
+        ;; Associate current tab with repo root
+        (setf (alist-get 'worktree-path (cdr current-tab)) repo-root)
+        ;; Rename to project name
+        (tab-bar-rename-tab project-name)))
+
+    ;; Create new tab for worktree
     (let ((tab-name (+projects--worktree-branch worktree-path)))
       (tab-bar-new-tab)
       ;; Set worktree-path in tab parameters
