@@ -2,10 +2,13 @@
 
 ;;; Commentary:
 
-;; This module provides a transient menu for tab management operations.
+;; This module provides a transient menu for tab management operations
+;; and theme-aware tab bar styling.
 
 ;;; Code:
 
+(require '+theme)
+(require 'color)
 (require 'tab-bar)
 (require 'transient)
 
@@ -26,6 +29,54 @@
    ["Other"
     ("u" "Undo close tab" tab-bar-undo-close-tab)
     ("o" "Close other tabs" tab-bar-close-other-tabs)]])
+
+;; Left-pad the tab name.
+
+(defun +tab-bar-tab-name-format (tab _i)
+  (let ((name (concat " " (alist-get 'name tab) " ")))
+    (propertize name 'face (if (eq (car tab) 'current-tab)
+                               'tab-bar-tab
+                             'tab-bar-tab-inactive))))
+
+(setq tab-bar-tab-name-format-function #'+tab-bar-tab-name-format)
+
+
+;; Compute tab-bar faces dynamically based on theme.
+
+(defconst +tab-bar-contrast 5)
+(defconst +inactive-tab-contrast 5)
+(defconst +tab-internal-padding 1)
+
+(defun +update-tab-bar-themes (&rest _)
+  "Update tab-bar colors to be distinct and theme-aware."
+  (when (facep 'tab-bar)
+    (let* ((default-bg (face-background 'default nil t))
+           ;; Detect if theme is dark by checking if background is dark
+           (dark-theme (+theme-dark-p))
+           ;; In dark mode, use mode-line bg for selected tab; in light mode use default
+           (selected-bg (if dark-theme
+                            (face-background 'mode-line nil t)
+                          default-bg))
+           (tab-bar-bg (if dark-theme
+                           (color-lighten-name default-bg +tab-bar-contrast)
+                         (color-darken-name default-bg +tab-bar-contrast)))
+           (inactive-bg (if dark-theme
+                            (color-lighten-name default-bg +inactive-tab-contrast)
+                          (color-darken-name default-bg +inactive-tab-contrast))))
+      (set-face-attribute 'tab-bar nil
+                          :background tab-bar-bg
+                          :box `(:line-width ,(- +tab-internal-padding) :color ,tab-bar-bg))
+      (set-face-attribute 'tab-bar-tab nil
+                          :background selected-bg
+                          :box `(:line-width ,(- +tab-internal-padding) :color ,selected-bg))
+      (set-face-attribute 'tab-bar-tab-inactive nil
+                          :background inactive-bg
+                          :box `(:line-width ,(- +tab-internal-padding) :color ,inactive-bg)
+                          :inherit 'shadow))))
+
+
+(add-hook '+theme-changed-hook #'+update-tab-bar-themes)
+(+update-tab-bar-themes)
 
 (provide 'mod-tabs)
 

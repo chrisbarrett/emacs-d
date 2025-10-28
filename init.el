@@ -297,24 +297,23 @@ Runs `+escape-hook'."
   ;; Emacs' built-in tab-bar. I use it pretty much just use it for git
   ;; worktrees.
   :custom
-  (tab-bar-show t)
-  (tab-bar-close-button-show nil)
-  (tab-bar-new-button-show nil)
-  (tab-bar-tab-hints t)
-  (tab-bar-format '(tab-bar-format-tabs tab-bar-separator))
+  (tab-bar-close-button-show 'selected)
   :general
-  ("M-S-."       #'tab-bar-switch-to-next-tab
-   "M->"         #'tab-bar-switch-to-next-tab
-   "M-S-,"       #'tab-bar-switch-to-prev-tab
-   "M-<"         #'tab-bar-switch-to-prev-tab)
-  :config
-  (use-package mod-tabs
-    :general (:keymaps 'override-global-map "M-B" #'+tabs-menu))
+  ("M-S-."  #'tab-bar-switch-to-next-tab
+   "M->"    #'tab-bar-switch-to-next-tab
+   "M-S-,"  #'tab-bar-switch-to-prev-tab
+   "M-<"    #'tab-bar-switch-to-prev-tab)
   :init
   (tab-bar-mode +1)
   :config
+  (delq! 'tab-bar-format-add-tab tab-bar-format)
+
   (custom-theme-set-faces 'user
-                          '(tab-bar-tab ((t (:inherit bold))))))
+                          '(tab-bar-tab ((t (:bold t)))))
+
+  (use-package mod-tabs
+    :demand t
+    :general (:keymaps 'override-global-map "M-B" #'+tabs-menu)))
 
 (use-package paragraphs
   ;; Emacs' core paragraph parser.

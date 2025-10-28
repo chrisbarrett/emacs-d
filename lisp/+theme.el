@@ -1,5 +1,7 @@
 ;;; -*- lexical-binding: t; -*-
 
+(require 'color)
+
 (defvar +theme-light nil)
 (defvar +theme-dark nil)
 
@@ -14,6 +16,11 @@
 
 (cl-defmethod +system-theme-query ((_ (eql 'gnu/linux)))
   (shell-command-to-string "gsettings get org.gnome.desktop.interface gtk-theme"))
+
+(defun +theme-dark-p ()
+  "Detect if theme is dark by checking if background."
+  (let ((default-bg (face-background 'default nil t)))
+    (< (apply #'+ (color-values default-bg)) (* 3 32768))))
 
 ;;;###autoload
 (defun +theme-for-system-theme ()
