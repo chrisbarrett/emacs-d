@@ -393,45 +393,6 @@ Requires a clean working tree (no uncommitted changes)."
 ;; Always add the hook - it will only fire when tab-bar-mode is active
 (add-hook 'tab-bar-tab-pre-close-functions #'+worktrees--cleanup-worktree-tab)
 
-;;; Tab bar management
-
-(defun +worktrees-reset-tab-bar ()
-  "Reset tab bar display and parameters for the current frame.
-Useful when tab bar display gets broken but tabs are still functional."
-  (interactive)
-  (when tab-bar-mode
-    ;; Detect and set worktree-path if missing
-    (let* ((current-tab (tab-bar--current-tab-find))
-           (worktree-path (alist-get 'worktree-path (cdr current-tab)))
-           (detected (when (not worktree-path)
-                       (car (+worktrees--detect-worktree-path)))))
-      (when detected
-        (setf (alist-get 'worktree-path (cdr current-tab)) detected)
-        (setq worktree-path detected))
-
-      ;; Update tab name if we have a worktree
-      (when worktree-path
-        (let ((tab-name (if (equal worktree-path (+worktrees--repo-root))
-                            ;; Repo root - use project name
-                            (or (and (frame-parameter nil 'project-root)
-                                     (file-name-nondirectory
-                                      (directory-file-name (frame-parameter nil 'project-root))))
-                                (file-name-nondirectory
-                                 (directory-file-name worktree-path)))
-                          ;; Worktree - use branch name
-                          (+worktrees--worktree-branch worktree-path))))
-          (tab-bar-rename-tab tab-name))))
-
-    ;; Ensure tab-bar-lines is set before toggling (fixes invisible tab bar)
-    (set-frame-parameter nil 'tab-bar-lines 1)
-    ;; Force tab bar to redisplay
-    (tab-bar-mode -1)
-    (tab-bar-mode 1)
-    ;; Set again after mode toggle to ensure it sticks
-    (set-frame-parameter nil 'tab-bar-lines 1)
-    (redraw-frame)
-    (message "Tab bar reset for current frame")))
-
 ;;; Magit integration
 
 (defun +worktrees-magit-status ()
