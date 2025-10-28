@@ -21,16 +21,21 @@
 (autoload 'dired-jump "dired-x")
 (autoload 'claude-code-ide "claude-code-ide")
 
-(transient-define-prefix +worktrees-worktree-menu ()
+(transient-define-prefix +worktrees-menu ()
   "Transient menu for git worktree operations."
-  ["Worktree Operations"
-   ("i" "Switch to issue" +worktrees-switch-to-issue)
-   ("x" "Delete tab, worktree, and branch" +worktrees-delete-worktree
-    :if (lambda () (+worktrees--worktree-for-selected-tab t)))
-   ("m" "Merge to main and cleanup" +worktrees-merge-and-cleanup
-    :if (lambda () (+worktrees--worktree-for-selected-tab t)))
+  ["Context"
+   ("i" "Work on issue" +worktrees-work-on-issue)
+   ("s" "Switch" +worktrees-switch
+    :inapt-if (lambda () (equal 1 (length (magit-list-worktrees)))))]
+  ["Git"
+   ("g" "magit (worktree)" +worktrees-magit-status)
    ("r" "Rebase on main" +worktrees-rebase-on-main
-    :if (lambda () (+worktrees--worktree-for-selected-tab t)))])
+    :inapt-if-not (lambda () (+worktrees-path-for-selected-tab t)))]
+
+  ["Resolve"
+   :inapt-if-not (lambda () (+worktrees-path-for-selected-tab t))
+   ("m" "Merge into main" +worktrees-absorb-into-main)
+   ("x" "Destroy" +worktrees-destroy-current)])
 
 ;;; Configuration
 
@@ -88,7 +93,7 @@
                                           current-dir))))
                 worktrees))))
 
-(defun +worktrees--worktree-for-selected-tab (&optional exclude-root)
+(defun +worktrees-path-for-selected-tab (&optional exclude-root)
   "Get the worktree path for the current tab, if set.
 If not set but we're in a worktree, detect and set it.
 If EXCLUDE-ROOT is non-nil, return nil if the worktree is the repo root."
@@ -190,7 +195,7 @@ If EXCLUDE-ROOT is non-nil, return nil if the worktree is the repo root."
         (write-region (point-min) (point-max) context-file nil 'silent))
       (message "Issue context saved for Claude: %s" id))))
 
-(defun +worktrees-switch-worktree (&optional initial-rev)
+(defun +worktrees-switch (&optional initial-rev)
   "Switch to a worktree tab, creating a branch and worktree if needed.
 
 If called interactively with a prefix arg, prompt INITIAL-REV."
@@ -210,7 +215,7 @@ If called interactively with a prefix arg, prompt INITIAL-REV."
         (magit-run-git "worktree" "add" (magit--expand-worktree worktree-path) (or initial-rev "HEAD"))
         (+worktrees--open-worktree-tab worktree-path)))))
 
-(defun +worktrees-switch-to-issue ()
+(defun +worktrees-work-on-issue ()
   "Pick an issue from beads and create/switch to a worktree for it.
 If the worktree already exists, switch to it. Otherwise, create a new
 worktree with a branch name derived from the issue ID and title."
@@ -257,11 +262,11 @@ worktree with a branch name derived from the issue ID and title."
         (unless (get-buffer-process buf)
           (kill-buffer buf))))))
 
-(defun +worktrees-delete-worktree ()
+(defun +worktrees-destroy-current ()
   "Delete the current tab, worktree, and associated branch.
 Requires a clean working tree (no uncommitted changes)."
   (interactive)
-  (let ((worktree-path (+worktrees--worktree-for-selected-tab)))
+  (let ((worktree-path (+worktrees-path-for-selected-tab)))
     (when (equal worktree-path (+worktrees--repo-root))
       (user-error "Refusing to act on repo root worktree"))
 
@@ -283,11 +288,11 @@ Requires a clean working tree (no uncommitted changes)."
         (magit-worktree-delete worktree-path))
       (message "Deleted worktree and branch: %s" branch-name))))
 
-(defun +worktrees-merge-and-cleanup ()
+(defun +worktrees-absorb-into-main ()
   "Merge current worktree branch to main, then delete worktree and branch."
   (interactive)
   (let* ((default-directory (+worktrees--repo-root))
-         (worktree-path (+worktrees--worktree-for-selected-tab))
+         (worktree-path (+worktrees-path-for-selected-tab))
          (worktree-branch (+worktrees--worktree-branch worktree-path))
          (default-branch (+worktrees--default-branch)))
 
@@ -315,7 +320,7 @@ Requires a clean working tree (no uncommitted changes)."
 (defun +worktrees-rebase-on-main ()
   "Rebase the current worktree branch on main."
   (interactive)
-  (let ((worktree-path (+worktrees--worktree-for-selected-tab)))
+  (let ((worktree-path (+worktrees-path-for-selected-tab)))
     (unless worktree-path
       (user-error "Current tab is not associated with a worktree"))
     (when (equal worktree-path (+worktrees--repo-root))
@@ -411,7 +416,7 @@ Useful when tab bar display gets broken but tabs are still functional."
 (defun +worktrees-magit-status ()
   "Display magit status buffer, for the current worktree if appropriate."
   (interactive)
-  (if-let* ((worktree-path (+worktrees--worktree-for-selected-tab)))
+  (if-let* ((worktree-path (+worktrees-path-for-selected-tab)))
       (magit-status-setup-buffer worktree-path)
     (call-interactively #'magit-status)))
 

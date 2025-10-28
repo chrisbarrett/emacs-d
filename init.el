@@ -1631,10 +1631,9 @@ word.  Fall back to regular `expreg-expand'."
 
 (use-package mod-worktrees
   ;; Integrate git worktrees with tabs
-  :commands (+worktrees-magit-status)
+  :commands (+worktrees-menu)
   :general (:keymaps 'override-global-map
-                     "M-O" #'+worktrees-switch-worktree
-                     "M-G" #'+worktrees-worktree-menu))
+                     "M-G" #'+worktrees-magit-status))
 
 (use-package git-timemachine :ensure t
   :general-config
