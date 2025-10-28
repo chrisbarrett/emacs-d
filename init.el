@@ -310,7 +310,10 @@ Runs `+escape-hook'."
   (use-package mod-tabs
     :general (:keymaps 'override-global-map "M-B" #'+tabs-menu))
   :init
-  (tab-bar-mode +1))
+  (tab-bar-mode +1)
+  :config
+  (custom-theme-set-faces 'user
+                          '(tab-bar-tab ((t (:inherit bold))))))
 
 (use-package paragraphs
   ;; Emacs' core paragraph parser.
