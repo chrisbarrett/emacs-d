@@ -101,7 +101,7 @@
   "Get the worktree path for the current tab, if set.
 If not set but we're in a worktree, detect and set it.
 If EXCLUDE-ROOT is non-nil, return nil if the worktree is the repo root."
-  (when (and tab-bar-mode (magit-gitdir))
+  (when tab-bar-mode
     (let ((current-tab (tab-bar--current-tab)))
       (when-let* ((worktree-path
                    (or (alist-get 'worktree-path current-tab)
@@ -164,12 +164,9 @@ If no such worktree exists, create it."
     (ignore-errors
       (claude-code-ide))))
 
-(defun +worktrees--adopt-initial-tab ()
+(defun +worktrees-adopt-initial-tab ()
   "Set up the initial tab to represent the repo root."
-  (when (and tab-bar-mode
-             (not (seq-some (lambda (tab)
-                              (alist-get 'worktree-path tab))
-                            (funcall tab-bar-tabs-function))))
+  (when tab-bar-mode
     (let* ((repo-root (+worktrees--repo-root))
            (project-name (or (and (frame-parameter nil 'project-root)
                                   (file-name-nondirectory
@@ -192,9 +189,6 @@ instance."
   (interactive (list (completing-read "Worktree: " (magit-list-worktrees) nil t)))
   (if-let* ((existing-tab (+worktrees--tab-for-worktree worktree-path)))
       (tab-bar-select-tab (1+ (tab-bar--tab-index existing-tab)))
-
-    (+worktrees--adopt-initial-tab)
-
     ;; Initialise new tab
     (let ((tab-name (+worktrees--worktree-branch worktree-path)))
       (tab-bar-new-tab)
@@ -437,9 +431,8 @@ Useful when tab bar display gets broken but tabs are still functional."
 (defun +worktrees-magit-status ()
   "Display magit status buffer, for the current worktree if appropriate."
   (interactive)
-  (if-let* ((worktree-path (+worktrees-path-for-selected-tab)))
-      (magit-status-setup-buffer worktree-path)
-    (call-interactively #'magit-status)))
+  (with-no-warnings
+    (magit-status (+worktrees-path-for-selected-tab))))
 
 (provide 'mod-worktrees)
 

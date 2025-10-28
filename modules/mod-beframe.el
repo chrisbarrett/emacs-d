@@ -57,7 +57,9 @@ current beframe context."
 
        (project-switch-project dir)
        (set-frame-parameter nil 'name (file-name-nondirectory dir))
-       (set-frame-parameter nil 'project-root dir))
+       (set-frame-parameter nil 'project-root dir)
+       (when (fboundp '+worktrees-adopt-initial-tab)
+         (+worktrees-adopt-initial-tab)))
 
       ((and existing (guard (equal existing (selected-frame))))
        (project-switch-project dir))
