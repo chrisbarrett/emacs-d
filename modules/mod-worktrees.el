@@ -24,7 +24,8 @@
 (transient-define-prefix +worktrees-menu ()
   "Transient menu for git worktree operations."
   [["Git"
-    ("g" "worktree status" +worktrees-magit-status)]
+    ("g" "worktree status" +worktrees-magit-status)
+    ("c" "Claude Code IDE" +worktrees-claude-code)]
 
    ["Context"
     :if +worktrees--repo-root
