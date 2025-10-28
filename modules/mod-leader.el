@@ -91,7 +91,7 @@
   "n"  '(nil :wk "narrowing")
   "c"  '(nil :wk "code/comments")
   "g"  '(nil :wk "git/goto")
-  "G" '(+projects-worktree-menu :wk "worktree ops...")
+  "G" '(+worktrees-worktree-menu :wk "worktree ops...")
   "C" '(claude-code-ide-send-prompt :wk "Tell claude-code...")
   "l" '(claude-code-ide-menu :wk "claude-code...")
   "o"  '(nil :wk "org")
@@ -99,7 +99,7 @@
   "k" '(consult-yank-pop :wk "kill-ring")
   "t"  '(nil :wk "toggles")
   "w"  '(nil :wk "windows")
-  "W" '(+projects-switch-worktree :wk "worktree...")
+  "W" '(+worktrees-switch-worktree :wk "worktree...")
   "z" '(global-text-scale-adjust :wk "text scaling"))
 
 (+define-leader-keys :prefix "SPC ," ;; structure
@@ -227,7 +227,7 @@
   "b" '(magit-blame :wk "blame")
   "d" '(magit-diff-buffer-file :wk "buffer diff")
   "f" '(magit-file-dispatch :wk "file actions...")
-  "g" '(+projects-magit-status :wk "status")
+  "g" '(+worktrees-magit-status :wk "status")
   "l" '(magit-log-buffer-file :wk "buffer log")
   "p" '(forge-browse-pullreq :wk "browse pullreq")
   "r" '(browse-at-remote :wk "open on GitHub")

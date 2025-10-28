@@ -1629,12 +1629,12 @@ word.  Fall back to regular `expreg-expand'."
   (magit-revision-insert-related-refs nil)
   (magit-format-file-function #'magit-format-file-nerd-icons))
 
-(use-package mod-projects
+(use-package mod-worktrees
   ;; Integrate git worktrees with tabs
-  :commands (+projects-magit-status)
+  :commands (+worktrees-magit-status)
   :general (:keymaps 'override-global-map
-                     "M-O" #'+projects-switch-worktree
-                     "M-G" #'+projects-worktree-menu))
+                     "M-O" #'+worktrees-switch-worktree
+                     "M-G" #'+worktrees-worktree-menu))
 
 (use-package git-timemachine :ensure t
   :general-config
