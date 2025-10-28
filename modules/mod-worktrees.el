@@ -25,8 +25,7 @@
   "Transient menu for git worktree operations."
   ["Context"
    ("i" "Work on issue" +worktrees-work-on-issue)
-   ("s" "Switch" +worktrees-switch
-    :inapt-if (lambda () (equal 1 (length (magit-list-worktrees)))))]
+   ("s" "Create/Switch" +worktrees-create-switch)]
   ["Git"
    ("g" "magit (worktree)" +worktrees-magit-status)
    ("r" "Rebase on main" +worktrees-rebase-on-main
@@ -128,55 +127,79 @@ If EXCLUDE-ROOT is non-nil, return nil if the worktree is the repo root."
 
 ;;; Worktree operations
 
-(defun +worktrees--branch-name-from-issue (issue)
-  "Generate a git branch name from ISSUE."
-  (let* ((id (alist-get 'id issue))
-         (title (alist-get 'title issue))
-         ;; Sanitize title: lowercase, replace spaces/special chars with hyphens
-         (sanitized (downcase
-                     (replace-regexp-in-string
-                      "[^a-z0-9-]+" "-"
-                      (replace-regexp-in-string "^[^a-z0-9]+\\|[^a-z0-9]+$" "" title)))))
-    (format "%s-%s" id sanitized)))
+(defun +worktrees-create-switch ()
+  "Read a worktree from the user and create a tab for it.
 
-(defun +worktrees--open-worktree-tab (worktree-path &optional issue)
+If no such worktree exists, create it."
+  (interactive)
+  (let* ((worktrees (magit-list-worktrees))
+         (worktree-paths (seq-map #'car worktrees))
+         (input (completing-read "Existing worktree, or name for new branch: " (remove (+worktrees-path-for-selected-tab) worktree-paths) nil
+                                 (lambda (input)
+                                   (or (member input worktree-paths)
+                                       (not (string-match-p (rx space) input))))) ))
+    (if (member input worktree-paths)
+        (+worktrees-open-tab input)
+
+      ;; User input is a new branch to create.
+      (let* ((branch input)
+             (start-point (magit-read-branch-or-commit "Start worktree at"))
+             (path (file-name-concat (+worktrees--repo-root) +worktrees-worktree-base-dir branch)))
+        (make-directory (file-name-directory path) t)
+        (magit-worktree-branch path branch start-point)
+        (+worktrees-open-tab path)))))
+
+(defun +worktrees-claude-code (worktree-path)
+  "Run claude-code for the worktree at WORKTREE-PATH."
+  (interactive (list (or (+worktrees-path-for-selected-tab)
+                         (user-error "Selected tab not associated with a worktree"))))
+  (+worktrees--ensure-claude-trust worktree-path)
+  (let ((default-directory worktree-path)
+        (project-find-functions nil))
+    (ignore-errors
+      (claude-code-ide))))
+
+(defun +worktrees--adopt-initial-tab ()
+  "Set up the initial tab to represent the repo root."
+  (when (and tab-bar-mode
+             (not (seq-some (lambda (tab)
+                              (alist-get 'worktree-path tab))
+                            (funcall tab-bar-tabs-function))))
+    (let* ((repo-root (+worktrees--repo-root))
+           (project-name (or (and (frame-parameter nil 'project-root)
+                                  (file-name-nondirectory
+                                   (directory-file-name (frame-parameter nil 'project-root))))
+                             (file-name-nondirectory
+                              (directory-file-name repo-root))))
+           (current-tab (tab-bar--current-tab-find)))
+      ;; Associate current tab with repo root
+      (setf (alist-get 'worktree-path (cdr current-tab)) repo-root)
+      ;; Rename to project name
+      (tab-bar-rename-tab project-name))))
+
+(defun +worktrees-open-tab (worktree-path &optional issue)
+  "Open a tab for WORKTREE-PATH, creating it if needed.
+
+If ISSUE is provided, write a markdown description of the issue into the
+new worktree to hand over the context to a dedicated claude-code
+instance."
+  (interactive (list (completing-read "Worktree: " (magit-list-worktrees) nil t)))
   (if-let* ((existing-tab (+worktrees--tab-for-worktree worktree-path)))
       (tab-bar-select-tab (1+ (tab-bar--tab-index existing-tab)))
 
-    ;; If this is the first worktree tab, set up the initial tab to represent the repo root
-    (when (and tab-bar-mode
-               (not (seq-some (lambda (tab)
-                                (alist-get 'worktree-path tab))
-                              (funcall tab-bar-tabs-function))))
-      (let* ((repo-root (+worktrees--repo-root))
-             (project-name (or (and (frame-parameter nil 'project-root)
-                                    (file-name-nondirectory
-                                     (directory-file-name (frame-parameter nil 'project-root))))
-                               (file-name-nondirectory
-                                (directory-file-name repo-root))))
-             (current-tab (tab-bar--current-tab-find)))
-        ;; Associate current tab with repo root
-        (setf (alist-get 'worktree-path (cdr current-tab)) repo-root)
-        ;; Rename to project name
-        (tab-bar-rename-tab project-name)))
+    (+worktrees--adopt-initial-tab)
 
-    ;; Create new tab for worktree
+    ;; Initialise new tab
     (let ((tab-name (+worktrees--worktree-branch worktree-path)))
       (tab-bar-new-tab)
       (tab-bar-rename-tab tab-name)
       ;; Store worktree path in the current tab
       (let ((current-tab (tab-bar--current-tab-find)))
-        (setf (alist-get 'worktree-path (cdr current-tab)) worktree-path))))
+        (setf (alist-get 'worktree-path (cdr current-tab)) worktree-path)))
 
-  (magit-status-setup-buffer worktree-path)
+    (magit-status-setup-buffer worktree-path)
+    (+worktrees-claude-code worktree-path))
 
-  (+worktrees--ensure-claude-trust worktree-path)
-
-  (when (fboundp 'claude-code-ide)
-    (let ((default-directory worktree-path)
-          (project-find-functions nil))
-      (ignore-errors
-        (claude-code-ide))))
 
   ;; If an issue was provided, save issue context for Claude
   (when issue
@@ -195,25 +218,16 @@ If EXCLUDE-ROOT is non-nil, return nil if the worktree is the repo root."
         (write-region (point-min) (point-max) context-file nil 'silent))
       (message "Issue context saved for Claude: %s" id))))
 
-(defun +worktrees-switch (&optional initial-rev)
-  "Switch to a worktree tab, creating a branch and worktree if needed.
-
-If called interactively with a prefix arg, prompt INITIAL-REV."
-  (interactive (list (when current-prefix-arg
-                       (magit-read-branch-or-commit "Create worktree from"))))
-  (unless (+worktrees--project-root)
-    (user-error "Not in a git project"))
-  (let* ((worktrees (magit-list-worktrees))
-         (dir-or-new-branch (completing-read "Worktree: " worktrees nil nil)))
-
-    (if (alist-get dir-or-new-branch worktrees nil nil #'equal)
-        (+worktrees--open-worktree-tab dir-or-new-branch)
-      (let ((default-directory (+worktrees--repo-root))
-            (worktree-path (file-name-concat (+worktrees--repo-root) +worktrees-worktree-base-dir dir-or-new-branch)))
-        ;; Ensure intervening directories exist
-        (make-directory (file-name-directory worktree-path) t)
-        (magit-run-git "worktree" "add" (magit--expand-worktree worktree-path) (or initial-rev "HEAD"))
-        (+worktrees--open-worktree-tab worktree-path)))))
+(defun +worktrees--branch-name-from-issue (issue)
+  "Generate a git branch name from ISSUE."
+  (let* ((id (alist-get 'id issue))
+         (title (alist-get 'title issue))
+         ;; Sanitize title: lowercase, replace spaces/special chars with hyphens
+         (sanitized (downcase
+                     (replace-regexp-in-string
+                      "[^a-z0-9-]+" "-"
+                      (replace-regexp-in-string "^[^a-z0-9]+\\|[^a-z0-9]+$" "" title)))))
+    (format "%s-%s" id sanitized)))
 
 (defun +worktrees-work-on-issue ()
   "Pick an issue from beads and create/switch to a worktree for it.
@@ -235,7 +249,7 @@ worktree with a branch name derived from the issue ID and title."
                          worktrees)))
         (progn
           (message "Switching to existing worktree for %s" branch-name)
-          (+worktrees--open-worktree-tab (car existing-worktree) issue))
+          (+worktrees-open-tab (car existing-worktree) issue))
 
       ;; Create new worktree
       (let* ((worktree-path (file-name-concat (+worktrees--repo-root)
@@ -246,7 +260,7 @@ worktree with a branch name derived from the issue ID and title."
         (magit-run-git "worktree" "add" "-b" branch-name
                        (magit--expand-worktree worktree-path)
                        "HEAD")
-        (+worktrees--open-worktree-tab worktree-path issue)
+        (+worktrees-open-tab worktree-path issue)
 
         ;; Update beads to mark issue as in_progress
         (shell-command (format "bd update %s --status in_progress --no-daemon"
