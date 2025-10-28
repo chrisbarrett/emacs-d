@@ -70,10 +70,10 @@
 
 (defun +worktrees--worktree-branch (worktree-path)
   (or
-   (seq-find (pcase-lambda (`(,path ,_commit ,branch . ,_))
-               (when (equal path worktree-path)
-                 branch))
-             (magit-list-worktrees))
+   (car (seq-keep (pcase-lambda (`(,path ,_commit ,branch . ,_))
+                    (when (equal path worktree-path)
+                      branch))
+                  (magit-list-worktrees)))
    ;; Guess based on target directory
    (file-name-nondirectory (directory-file-name worktree-path))))
 
