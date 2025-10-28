@@ -393,7 +393,12 @@ Requires a clean working tree (no uncommitted changes)."
         (+worktree--kill-worktree-buffers worktree-path)
         ;; Runs `+worktrees--cleanup-worktree-tab'.
         (when tab-bar-mode
-          (tab-bar-close-tab))))))
+          ;; Get the tab's index and explicitly close it by number
+          (let* ((tabs (funcall tab-bar-tabs-function))
+                 (tab-index (seq-position tabs tab)))
+            (when tab-index
+              ;; tab-bar-close-tab uses 1-based indexing
+              (tab-bar-close-tab (1+ tab-index)))))))))
 
 (defun +worktrees--cleanup-worktree-tab (tab _sole-tab)
   "Clean up resources when a worktree TAB is closed."
