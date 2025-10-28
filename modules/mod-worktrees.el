@@ -10,13 +10,14 @@
 
 ;;; Code:
 
-(require '+corelib)
 (require '+beads)
-(require 'tab-bar)
-(require 'magit)
+(require '+corelib)
+(require 'f)
 (require 'general)
-(require 'transient)
+(require 'magit)
 (require 'project)
+(require 'tab-bar)
+(require 'transient)
 
 (autoload 'dired-jump "dired-x")
 (autoload 'claude-code-ide "claude-code-ide")
@@ -72,17 +73,19 @@
 (defun +worktrees--worktree-branch (worktree-path)
   (or
    (car (seq-keep (pcase-lambda (`(,path ,_commit ,branch . ,_))
-                    (when (equal path worktree-path)
+                    (when (f-same-p path worktree-path)
                       branch))
                   (magit-list-worktrees)))
    ;; Guess based on target directory
    (file-name-nondirectory (directory-file-name worktree-path))))
 
 (defun +worktrees--tab-for-worktree (worktree-path)
-  "Find the tab associated with WORKTREE-PATH, if any."
+  "Find the tab associated with WORKTREE-PATH, if any.
+Normalizes paths to handle trailing slashes correctly."
   (when tab-bar-mode
     (seq-find (lambda (tab)
-                (equal worktree-path (alist-get 'worktree-path tab)))
+                (when-let* ((tab-path (alist-get 'worktree-path tab)))
+                  (f-same-p worktree-path tab-path)))
               (funcall tab-bar-tabs-function))))
 
 (defun +worktrees--detect-child-worktree-path ()
@@ -99,10 +102,8 @@ Return nil if the current worktree is the root worktree for the repo."
     ;; Find a worktree that contains the current directory
     (car (seq-keep (lambda (worktree-info)
                      (when-let* ((worktree-path (car worktree-info)))
-                       (when (and (not (equal (directory-file-name worktree-path)
-                                              (directory-file-name repo-root)))
-                                  (string-prefix-p (file-name-as-directory worktree-path)
-                                                   current-dir))
+                       (when (and (not (f-same-p worktree-path repo-root))
+                                  (f-descendant-of-p current-dir worktree-path))
                          worktree-path)))
                    worktrees))))
 
@@ -123,7 +124,7 @@ If EXCLUDE-ROOT is non-nil, return nil if the worktree is the repo root."
                            (setf (alist-get 'worktree-path (cdr tab)) detected))
                          detected))))
         (if exclude-root
-            (unless (equal worktree-path (+worktrees--repo-root))
+            (unless (f-same-p worktree-path (+worktrees--repo-root))
               worktree-path)
           worktree-path)))))
 
@@ -288,7 +289,7 @@ worktree with a branch name derived from the issue ID and title."
 Requires a clean working tree (no uncommitted changes)."
   (interactive)
   (let ((worktree-path (+worktrees-path-for-selected-tab)))
-    (when (equal worktree-path (+worktrees--repo-root))
+    (when (f-same-p worktree-path (+worktrees--repo-root))
       (user-error "Refusing to act on repo root worktree"))
 
     (unless worktree-path
@@ -317,7 +318,7 @@ Requires a clean working tree (no uncommitted changes)."
 
     (unless worktree-path
       (user-error "Current tab is not associated with a worktree"))
-    (when (equal worktree-path (+worktrees--repo-root))
+    (when (f-same-p worktree-path (+worktrees--repo-root))
       (user-error "Refusing to act on repo root worktree"))
 
     (unless (+worktrees--worktree-clean-p worktree-path)
@@ -342,7 +343,7 @@ Requires a clean working tree (no uncommitted changes)."
   (let ((worktree-path (+worktrees-path-for-selected-tab)))
     (unless worktree-path
       (user-error "Current tab is not associated with a worktree"))
-    (when (equal worktree-path (+worktrees--repo-root))
+    (when (f-same-p worktree-path (+worktrees--repo-root))
       (user-error "Refusing to act on root worktree"))
 
     (unless (+worktrees--worktree-clean-p worktree-path)
