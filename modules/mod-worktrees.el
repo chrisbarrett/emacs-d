@@ -24,15 +24,16 @@
 (transient-define-prefix +worktrees-menu ()
   "Transient menu for git worktree operations."
   ["Context"
+   :inapt-if-not +worktrees--repo-root
    ("i" "Work on issue" +worktrees-work-on-issue)
    ("s" "Create/Switch" +worktrees-create-switch)]
   ["Git"
-   ("g" "magit (worktree)" +worktrees-magit-status)
+   ("g" "worktree status" +worktrees-magit-status)
    ("r" "Rebase on main" +worktrees-rebase-on-main
-    :inapt-if-not (lambda () (+worktrees-path-for-selected-tab t)))]
+    :inapt-if-not +worktrees-tab-dedicated-to-child-p)]
 
   ["Resolve"
-   :inapt-if-not (lambda () (+worktrees-path-for-selected-tab t))
+   :inapt-if-not +worktrees-tab-dedicated-to-child-p
    ("m" "Merge into main" +worktrees-absorb-into-main)
    ("x" "Destroy" +worktrees-destroy-current)])
 
@@ -46,7 +47,8 @@
 
 (defun +worktrees--repo-root ()
   "Get the repository root directory (not the .git directory)."
-  (file-name-directory (directory-file-name (magit-gitdir))))
+  (when-let* ((gitdir (magit-gitdir)))
+    (file-name-directory (directory-file-name gitdir))))
 
 (defun +worktrees--default-branch ()
   "Get the default branch name for the current repository."
@@ -79,24 +81,27 @@
 
 (defun +worktrees--detect-worktree-path ()
   "Detect the worktree path for the current directory, if in a worktree."
-  (when-let* ((project-root (+worktrees--project-root)))
-    (let* ((repo-root (+worktrees--repo-root))
-           (worktrees (magit-list-worktrees))
-           (current-dir (expand-file-name default-directory)))
-      ;; Find a worktree that contains the current directory
-      (seq-find (lambda (worktree-info)
-                  (let ((worktree-path (car worktree-info)))
-                    (and (not (equal (directory-file-name worktree-path)
-                                     (directory-file-name repo-root)))
-                         (string-prefix-p (file-name-as-directory worktree-path)
-                                          current-dir))))
-                worktrees))))
+  (when-let* ((project-root (+worktrees--project-root))
+              (repo-root (+worktrees--repo-root))
+              (worktrees (magit-list-worktrees))
+              (current-dir (expand-file-name default-directory)))
+    ;; Find a worktree that contains the current directory
+    (seq-find (lambda (worktree-info)
+                (let ((worktree-path (car worktree-info)))
+                  (and (not (equal (directory-file-name worktree-path)
+                                   (directory-file-name repo-root)))
+                       (string-prefix-p (file-name-as-directory worktree-path)
+                                        current-dir))))
+              worktrees)))
+
+(defun +worktrees-tab-dedicated-to-child-p ( )
+  (+worktrees-path-for-selected-tab t))
 
 (defun +worktrees-path-for-selected-tab (&optional exclude-root)
   "Get the worktree path for the current tab, if set.
 If not set but we're in a worktree, detect and set it.
 If EXCLUDE-ROOT is non-nil, return nil if the worktree is the repo root."
-  (when tab-bar-mode
+  (when (and tab-bar-mode (magit-gitdir))
     (let ((current-tab (tab-bar--current-tab)))
       (when-let* ((worktree-path
                    (or (alist-get 'worktree-path current-tab)
