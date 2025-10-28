@@ -7,7 +7,7 @@
 (require '+corelib)
 (require 'general)
 
-(+local-leader-set-key 'emacs-lisp-mode-map
+(+local-leader-set-key '(emacs-lisp-mode-map lisp-interaction-mode-map)
   "t" '(nil :which-key "test")
   "tt" 'ert
   "td" 'ert-delete-test
