@@ -174,6 +174,7 @@ If no such worktree exists, create it."
            (current-tab (tab-bar--current-tab-find)))
       ;; Associate current tab with repo root
       (setf (alist-get 'worktree-path (cdr current-tab)) repo-root)
+      (setf (alist-get 'worktree-type (cdr current-tab)) 'root)
       ;; Rename to project name
       (tab-bar-rename-tab project-name))))
 
@@ -195,6 +196,7 @@ instance."
       (tab-bar-rename-tab tab-name)
       ;; Store worktree path in the current tab
       (let ((current-tab (tab-bar--current-tab-find)))
+        (setf (alist-get 'worktree-type (cdr current-tab)) 'child)
         (setf (alist-get 'worktree-path (cdr current-tab)) worktree-path)))
 
     (magit-status-setup-buffer worktree-path)

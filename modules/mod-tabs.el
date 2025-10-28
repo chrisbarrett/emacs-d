@@ -38,10 +38,22 @@
 ;; Left-pad the tab name.
 
 (defun +tab-bar-tab-name-format (tab _i)
-  (let ((name (concat " " (alist-get 'name tab) " ")))
-    (propertize name 'face (if (eq (car tab) 'current-tab)
-                               'tab-bar-tab
-                             'tab-bar-tab-inactive))))
+  (let* ((face (if (eq (car tab) 'current-tab)
+                   'tab-bar-tab
+                 'tab-bar-tab-inactive))
+         (tab-bg (face-attribute face :background))
+
+         (pad (propertize " " 'face face))
+
+         (worktree-icon
+          (pcase (alist-get 'worktree-type tab)
+            (`())
+            ('root
+             (propertize "" 'face `(:background ,tab-bg :inherit magit-branch-local)))
+            (_
+             (propertize "" 'face `(:background ,tab-bg :inherit magit-branch-local)))))
+         (name (propertize (alist-get 'name tab) 'face face)))
+    (concat pad worktree-icon pad name)))
 
 (setq tab-bar-tab-name-format-function #'+tab-bar-tab-name-format)
 
