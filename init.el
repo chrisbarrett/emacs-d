@@ -296,7 +296,7 @@ Runs `+escape-hook'."
 (use-package tab-bar
   ;; Emacs' built-in tab-bar. I use it pretty much just for git worktrees.
   :custom
-  (tab-bar-show 1)
+  (tab-bar-show t)
   (tab-bar-close-button-show nil)
   (tab-bar-new-button-show nil)
   (tab-bar-tab-hints t)
