@@ -294,7 +294,8 @@ Runs `+escape-hook'."
   (window-divider-mode +1))
 
 (use-package tab-bar
-  ;; Emacs' built-in tab-bar. I use it pretty much just for git worktrees.
+  ;; Emacs' built-in tab-bar. I use it pretty much just use it for git
+  ;; worktrees.
   :custom
   (tab-bar-show t)
   (tab-bar-close-button-show nil)
