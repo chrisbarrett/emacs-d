@@ -23,19 +23,24 @@
 
 (transient-define-prefix +worktrees-menu ()
   "Transient menu for git worktree operations."
-  ["Context"
-   :inapt-if-not +worktrees--repo-root
-   ("i" "Work on issue" +worktrees-work-on-issue)
-   ("s" "Create/Switch" +worktrees-create-switch)]
-  ["Git"
-   ("g" "worktree status" +worktrees-magit-status)
-   ("r" "Rebase on main" +worktrees-rebase-on-main
-    :inapt-if-not +worktrees-tab-dedicated-to-child-p)]
+  [["Git"
+    ("g" "worktree status" +worktrees-magit-status)]
 
-  ["Resolve"
-   :inapt-if-not +worktrees-tab-dedicated-to-child-p
-   ("m" "Merge into main" +worktrees-absorb-into-main)
-   ("x" "Destroy" +worktrees-destroy-current)])
+   ["Context"
+    :if +worktrees--repo-root
+    ("i" "Work on issue" +worktrees-work-on-issue)
+    ("s" "Create/Switch" +worktrees-create-switch)]]
+
+  [["Update"
+    :if +worktrees-path-for-selected-tab
+    :inapt-if-not +worktrees-tab-dedicated-to-child-p
+    ("r" "Rebase on main" +worktrees-rebase-on-main)]
+
+   ["Resolve"
+    :if +worktrees-path-for-selected-tab
+    :inapt-if-not +worktrees-tab-dedicated-to-child-p
+    ("m" "Merge into main" +worktrees-absorb-into-main)
+    ("x" "Destroy" +worktrees-destroy-current)]])
 
 ;;; Configuration
 
