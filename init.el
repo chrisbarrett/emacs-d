@@ -652,7 +652,14 @@ Runs `+escape-hook'."
   :config
   ;; Disable evil-mode entirely in eat-mode buffers.
   (with-eval-after-load 'evil
-    (pushnew! evil-buffer-regexps `(,(rx bol "*eat")))))
+    (pushnew! evil-buffer-regexps `(,(rx bol "*eat"))))
+
+  ;; Prevent over-scrolling beyond buffer content in eat buffers
+  (add-hook 'eat-mode-hook
+            (defun +eat-prevent-overscroll-h ()
+              "Prevent scrolling beyond buffer content in eat buffers."
+              (setq-local scroll-conservatively 101)
+              (setq-local maximum-scroll-margin 0.5))))
 
 (use-package string-inflection :ensure t
   ;; Provides commands for cycling different string casing styles for the ident
@@ -2466,7 +2473,21 @@ subprocess calls on every file open, especially problematic in TTY."
                "\n"
                t)))
            (process-environment (append mise-vars process-environment)))
-      (apply fn args))))
+      (apply fn args)))
+
+  ;; Auto-scroll claude-code-ide buffers to bottom when switching tabs/windows
+  (defun +claude-code-ide-scroll-to-bottom-h ()
+    "Scroll all visible claude-code-ide buffers to bottom.
+This ensures consistent positioning when switching tabs, frames, or windows."
+    (dolist (window (window-list nil 'no-minibuffer))
+      (with-selected-window window
+        (when (and (buffer-live-p (current-buffer))
+                   (string-match-p (rx bol "*claude-code") (buffer-name)))
+          (goto-char (point-max))
+          (recenter -1)))))
+
+  (add-hook '+switch-window-hook #'+claude-code-ide-scroll-to-bottom-h)
+  (add-hook '+switch-buffer-hook #'+claude-code-ide-scroll-to-bottom-h))
 
 (use-package nursery :ensure (nursery :host github
                                       :repo "chrisbarrett/nursery"
