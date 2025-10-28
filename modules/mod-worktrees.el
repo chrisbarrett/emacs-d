@@ -85,20 +85,26 @@
                 (equal worktree-path (alist-get 'worktree-path tab)))
               (funcall tab-bar-tabs-function))))
 
-(defun +worktrees--detect-worktree-path ()
-  "Detect the worktree path for the current directory, if in a worktree."
+(defun +worktrees--detect-child-worktree-path ()
+  "Detect the worktree path for the current directory, if in a worktree.
+
+Return nil if the current worktree is the root worktree for the repo."
   (when-let* ((project-root (+worktrees--project-root))
               (repo-root (+worktrees--repo-root))
-              (worktrees (magit-list-worktrees))
+              (worktrees
+               ;; NOTE: Puts root worktree at the end, ensure that's matched
+               ;; last.
+               (nreverse (magit-list-worktrees)))
               (current-dir (expand-file-name default-directory)))
     ;; Find a worktree that contains the current directory
-    (seq-find (lambda (worktree-info)
-                (let ((worktree-path (car worktree-info)))
-                  (and (not (equal (directory-file-name worktree-path)
-                                   (directory-file-name repo-root)))
-                       (string-prefix-p (file-name-as-directory worktree-path)
-                                        current-dir))))
-              worktrees)))
+    (car (seq-keep (lambda (worktree-info)
+                     (when-let* ((worktree-path (car worktree-info)))
+                       (when (and (not (equal (directory-file-name worktree-path)
+                                              (directory-file-name repo-root)))
+                                  (string-prefix-p (file-name-as-directory worktree-path)
+                                                   current-dir))
+                         worktree-path)))
+                   worktrees))))
 
 (defun +worktrees-tab-dedicated-to-child-p ( )
   (+worktrees-path-for-selected-tab t))
@@ -112,7 +118,7 @@ If EXCLUDE-ROOT is non-nil, return nil if the worktree is the repo root."
       (when-let* ((worktree-path
                    (or (alist-get 'worktree-path current-tab)
                        ;; First time checking this tab--try to assign it to a worktree.
-                       (when-let* ((detected (car (+worktrees--detect-worktree-path))))
+                       (when-let* ((detected (+worktrees--detect-child-worktree-path)))
                          (let ((tab (tab-bar--current-tab-find)))
                            (setf (alist-get 'worktree-path (cdr tab)) detected))
                          detected))))
@@ -184,7 +190,8 @@ If no such worktree exists, create it."
       (setf (alist-get 'worktree-path (cdr current-tab)) repo-root)
       (setf (alist-get 'worktree-type (cdr current-tab)) 'root)
       ;; Rename to project name
-      (tab-bar-rename-tab project-name))))
+      (tab-bar-rename-tab project-name)
+      t)))
 
 (defun +worktrees-open-tab (worktree-path &optional issue)
   "Open a tab for WORKTREE-PATH, creating it if needed.
@@ -276,13 +283,6 @@ worktree with a branch name derived from the issue ID and title."
 
 ;;; Worktree management commands
 
-(defun +worktree--kill-worktree-buffers (worktree-path)
-  (dolist (buf (buffer-list))
-    (with-current-buffer buf
-      (when (string-prefix-p worktree-path default-directory)
-        (unless (get-buffer-process buf)
-          (kill-buffer buf))))))
-
 (defun +worktrees-destroy-current ()
   "Delete the current tab, worktree, and associated branch.
 Requires a clean working tree (no uncommitted changes)."
@@ -301,10 +301,8 @@ Requires a clean working tree (no uncommitted changes)."
       (unless (yes-or-no-p (format "Delete worktree and branch '%s'?" branch-name))
         (user-error "Aborted without changes"))
 
-      (when tab-bar-mode
-        (tab-bar-close-tab))
+      (+worktrees-close-tabs worktree-path)
 
-      (+worktree--kill-worktree-buffers worktree-path)
       (let ((magit-no-confirm '(trash)))
         (magit-worktree-delete worktree-path))
       (message "Deleted worktree and branch: %s" branch-name))))
@@ -377,20 +375,37 @@ Requires a clean working tree (no uncommitted changes)."
         (message "Rebase successful: %s rebased on %s/%s"
                  branch-name remote default-branch)))))
 
-;;; Tab cleanup
+;;; Tab & buffer cleanup
+
+(defun +worktree--kill-worktree-buffers (worktree-path)
+  (dolist (buf (buffer-list))
+    (with-current-buffer buf
+      (when (string-prefix-p worktree-path default-directory)
+        (unless (get-buffer-process buf)
+          (kill-buffer buf))))))
+
+(defun +worktrees-close-tabs (worktree-path)
+  "Close any tabs in any frames that are dedicated to WORKTREE-PATH."
+  (dolist (frame (frame-list))
+    (with-selected-frame frame
+      (when-let* ((tab (+worktrees--tab-for-worktree worktree-path)))
+        (+worktree--kill-worktree-buffers worktree-path)
+        ;; Runs `+worktrees--cleanup-worktree-tab'.
+        (when tab-bar-mode
+          (tab-bar-close-tab))))))
 
 (defun +worktrees--cleanup-worktree-tab (tab _sole-tab)
   "Clean up resources when a worktree TAB is closed."
   (when-let* ((worktree-path (alist-get 'worktree-path tab)))
     (when (fboundp 'claude-code-ide-stop)
       (let ((default-directory worktree-path)
-            (project-find-functions nil))
+            (project-find-functions nil)
+            (kill-buffer-query-functions nil))
         (ignore-errors
           (claude-code-ide-stop))))
 
     (+worktree--kill-worktree-buffers worktree-path)))
 
-;; Always add the hook - it will only fire when tab-bar-mode is active
 (add-hook 'tab-bar-tab-pre-close-functions #'+worktrees--cleanup-worktree-tab)
 
 ;;; Magit integration
