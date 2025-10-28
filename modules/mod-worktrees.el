@@ -353,7 +353,7 @@ Requires a clean working tree (no uncommitted changes)."
 
 ;;; Tab cleanup
 
-(defun +worktrees--cleanup-worktree-tab (tab)
+(defun +worktrees--cleanup-worktree-tab (tab _sole-tab)
   "Clean up resources when a worktree TAB is closed."
   (when-let* ((worktree-path (alist-get 'worktree-path tab)))
     (when (fboundp 'claude-code-ide-stop)
