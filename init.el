@@ -2110,7 +2110,14 @@ subprocess calls on every file open, especially problematic in TTY."
 
   (+local-leader-set-key 'markdown-mode-map
     "l" '(markdown-toggle-url-hiding :wk "toggle URLs")
-    "f" '(markdown-insert-footnote :wk "insert footnote")))
+    "f" '(markdown-insert-footnote :wk "insert footnote"))
+
+  :config
+  (with-eval-after-load 'apheleia
+    (add-to-list 'apheleia-formatters '(prettier-markdown . ("prettier" "--stdin-filepath" filepath "--parser=markdown" "--prose-wrap" "always" (apheleia-formatters-fill-column "--print-width"))))
+    (alist-set! apheleia-mode-alist 'markdown-mode 'prettier-markdown)
+    (alist-set! apheleia-mode-alist 'gfm-mode 'prettier-markdown)
+    (alist-set! apheleia-mode-alist 'markdown-ts-mode 'prettier-markdown)))
 
 (use-package hcl-mode :ensure t
   :mode ("\\.hcl\\'")
@@ -2206,6 +2213,7 @@ subprocess calls on every file open, especially problematic in TTY."
   :after-call +first-file-hook
   :custom
   (apheleia-remote-algorithm 'local)
+  (apheleia-formatters-respect-fill-column t)
   :config
   (apheleia-global-mode +1))
 
