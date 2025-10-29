@@ -139,6 +139,7 @@
                       ,(rx bos " *Agenda Commands*" eos)
                       ,(rx bos "*Org Select*" eos)
                       ,(rx bos "*Org Note*" eos)
+                      ,(rx bos "*bd-new-issue*" eos)
                       ,(rx bos "*Org-Babel Error Output*" eos)
 
                       ;; misc
