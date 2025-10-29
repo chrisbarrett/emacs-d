@@ -313,6 +313,7 @@
 
 (+define-leader-keys :prefix "SPC t" ;; toggles
   "b" '(breadcrumb-mode :wk "breadcrumbs (header)")
+  "d" '(dimmer-mode :wk "dimmer")
   "h" '(global-hl-line-mode :wk "highlight line")
   "f" '(global-display-fill-column-indicator-mode :wk "fill column indicator")
   "i" '(indent-bars-mode :wk "indent bars")

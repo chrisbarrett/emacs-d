@@ -967,24 +967,13 @@ Runs `+escape-hook'."
      "^ \\*which-key\\*$"        ; which-key display
      "^\\*LV\\*$"))              ; Transient/hydra displays
 
-  ;; Prevent dimming during transient UI states
-  (dimmer-prevent-dimming-predicates
-   '(;; Don't dim during window selection operations
-     window-minibuffer-p
-     ;; Don't dim when company completion is active
-     (lambda () (and (bound-and-true-p company-mode)
-                     company-candidates))))
-
   :config
   ;; Configure integrations with popular packages
   (dimmer-configure-which-key)
   (dimmer-configure-magit)
   (dimmer-configure-org)
   (dimmer-configure-hydra)
-  (dimmer-configure-company-box)
-
-  :general
-  (+leader-def "t d" '(dimmer-mode :which-key "dimmer")))
+  (dimmer-configure-company-box))
 
 (use-package hl-line
   ;; Highlight the current line.
