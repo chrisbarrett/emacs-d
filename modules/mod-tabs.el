@@ -47,13 +47,17 @@
 
          (worktree-icon
           (pcase (alist-get 'worktree-type tab)
+
             (`())
             ('root
-             (propertize "" 'face `(:background ,tab-bg :inherit magit-branch-local)))
+             (propertize "" 'face `(:background ,tab-bg :inherit success)))
             (_
-             (propertize "" 'face `(:background ,tab-bg :inherit magit-branch-local)))))
+             (propertize "" 'face `(:background ,tab-bg :inherit success)))))
          (name (propertize (alist-get 'name tab) 'face face)))
-    (concat pad worktree-icon pad name)))
+    (apply #'concat `(,pad
+                      ,@(when worktree-icon
+                          (list worktree-icon pad))
+                      ,name))))
 
 (setq tab-bar-tab-name-format-function #'+tab-bar-tab-name-format)
 
