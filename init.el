@@ -943,6 +943,49 @@ Runs `+escape-hook'."
   :config
   (use-package mod-pulsar :demand t))
 
+(use-package dimmer :ensure t
+  ;; Dim inactive windows to highlight the active window
+  :hook (+first-input-hook . dimmer-mode)
+  :custom
+  ;; Adjust foreground colors only for better dark theme compatibility
+  (dimmer-adjustment-mode :foreground)
+
+  ;; Start with moderate dimming (20% adjustment)
+  ;; Users can customize this value: increase for more dimming
+  (dimmer-fraction 0.20)
+
+  ;; Use CIELAB color space for more perceptually uniform dimming
+  (dimmer-use-colorspace :cielab)
+
+  ;; Dim all buffers when Emacs loses focus
+  (dimmer-watch-frame-focus-events t)
+
+  ;; Exclude buffers that shouldn't be dimmed
+  (dimmer-buffer-exclusion-regexps
+   '("^ \\*Minibuf-[0-9]+\\*$"  ; Minibuffer
+     "^ \\*Echo Area"            ; Echo area
+     "^ \\*which-key\\*$"        ; which-key display
+     "^\\*LV\\*$"))              ; Transient/hydra displays
+
+  ;; Prevent dimming during transient UI states
+  (dimmer-prevent-dimming-predicates
+   '(;; Don't dim during window selection operations
+     window-minibuffer-p
+     ;; Don't dim when company completion is active
+     (lambda () (and (bound-and-true-p company-mode)
+                     company-candidates))))
+
+  :config
+  ;; Configure integrations with popular packages
+  (dimmer-configure-which-key)
+  (dimmer-configure-magit)
+  (dimmer-configure-org)
+  (dimmer-configure-hydra)
+  (dimmer-configure-company-box)
+
+  :general
+  (+leader-def "t d" '(dimmer-mode :which-key "dimmer")))
+
 (use-package hl-line
   ;; Highlight the current line.
   :custom
