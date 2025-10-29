@@ -14,6 +14,9 @@
 (setq evil-insert-state-cursor 'bar)
 (setq evil-visual-state-cursor 'hollow)
 
+;; Initial states for modes
+(evil-set-initial-state '+bd-issue-mode 'insert)
+
 ;; Keep shift-width in sync if mode changes.
 (setq-hook! 'after-change-major-mode
   evil-shift-width tab-width)

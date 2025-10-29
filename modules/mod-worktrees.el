@@ -11,6 +11,7 @@
 ;;; Code:
 
 (require '+beads)
+(require '+bd-issue)
 (require '+corelib)
 (require 'f)
 (require 'general)
@@ -31,6 +32,7 @@
    ["Context"
     :if +worktrees--repo-root
     ("i" "Work on issue" +worktrees-work-on-issue)
+    ("n" "New issue" +bd-issue-create)
     ("s" "Create/Switch" +worktrees-create-switch)]]
 
   [["Update"
@@ -51,6 +53,10 @@
 
 
 ;;; Helper functions
+
+(defun +worktrees-in-repo-root-p (&optional dir)
+  (when-let* ((repo-root (+worktrees--repo-root)))
+    (f-same-p (or dir default-directory) repo-root)))
 
 (defun +worktrees--repo-root ()
   "Get the repository root directory (not the .git directory)."
@@ -102,12 +108,12 @@ Return nil if the current worktree is the root worktree for the repo."
     ;; Find a worktree that contains the current directory
     (car (seq-keep (lambda (worktree-info)
                      (when-let* ((worktree-path (car worktree-info)))
-                       (when (and (not (f-same-p worktree-path repo-root))
-                                  (f-descendant-of-p current-dir worktree-path))
-                         worktree-path)))
+                       (unless (+worktrees-in-repo-root-p worktree-path)
+                         (when (f-descendant-of-p current-dir worktree-path)
+                           worktree-path))))
                    worktrees))))
 
-(defun +worktrees-tab-dedicated-to-child-p ( )
+(defun +worktrees-tab-dedicated-to-child-p ()
   (+worktrees-path-for-selected-tab t))
 
 (defun +worktrees-path-for-selected-tab (&optional exclude-root)
@@ -124,7 +130,7 @@ If EXCLUDE-ROOT is non-nil, return nil if the worktree is the repo root."
                            (setf (alist-get 'worktree-path (cdr tab)) detected))
                          detected))))
         (if exclude-root
-            (unless (f-same-p worktree-path (+worktrees--repo-root))
+            (unless (+worktrees-in-repo-root-p worktree-path)
               worktree-path)
           worktree-path)))))
 
@@ -134,13 +140,35 @@ If EXCLUDE-ROOT is non-nil, return nil if the worktree is the repo root."
 
 (defun +worktrees--ensure-claude-trust (worktree-path)
   "Ensure WORKTREE-PATH exists in ~/.claude.json projects."
+  (require 'json)
   (let ((claude-config (expand-file-name "~/.claude.json")))
     (when (file-exists-p claude-config)
-      (shell-command
-       (format "jq '%s' %s | sponge %s"
-               (format ".projects[\"%s\"] |= . + {}" worktree-path)
-               (shell-quote-argument claude-config)
-               (shell-quote-argument claude-config))))))
+      (condition-case err
+          (with-temp-buffer
+            (insert-file-contents claude-config)
+            (let* ((json-object-type 'alist)
+                   (json-key-type 'string)
+                   (config (json-read))
+                   (projects (or (alist-get "projects" config nil nil #'equal)
+                                 (make-hash-table :test 'equal))))
+              ;; Ensure projects is a hash table
+              (unless (hash-table-p projects)
+                (let ((new-projects (make-hash-table :test 'equal)))
+                  (dolist (pair projects)
+                    (puthash (car pair) (cdr pair) new-projects))
+                  (setq projects new-projects)))
+              ;; Add worktree-path if not present
+              (unless (gethash worktree-path projects)
+                (puthash worktree-path (make-hash-table :test 'equal) projects))
+              ;; Update config
+              (setf (alist-get "projects" config nil nil #'equal) projects)
+              ;; Write back
+              (erase-buffer)
+              (insert (json-encode config))
+              (write-region nil nil claude-config nil 'silent)))
+        (error
+         (message "Warning: Failed to update .claude.json: %s"
+                  (error-message-string err)))))))
 
 
 ;;; Worktree operations
@@ -278,9 +306,13 @@ worktree with a branch name derived from the issue ID and title."
         (+worktrees-open-tab worktree-path issue)
 
         ;; Update beads to mark issue as in_progress
-        (shell-command (format "bd update %s --status in_progress --no-daemon"
-                               (shell-quote-argument (alist-get 'id issue))))
-        (message "Issue %s marked as in_progress" (alist-get 'id issue))))))
+        (let ((issue-id (alist-get 'id issue)))
+          (unless (zerop (call-process "bd" nil nil nil
+                                       "update" issue-id
+                                       "--status" "in_progress"
+                                       "--no-daemon"))
+            (message "Warning: Failed to update issue %s status" issue-id))
+          (message "Issue %s marked as in_progress" issue-id))))))
 
 ;;; Worktree management commands
 
@@ -289,7 +321,7 @@ worktree with a branch name derived from the issue ID and title."
 Requires a clean working tree (no uncommitted changes)."
   (interactive)
   (let ((worktree-path (+worktrees-path-for-selected-tab)))
-    (when (f-same-p worktree-path (+worktrees--repo-root))
+    (when (+worktrees-in-repo-root-p worktree-path)
       (user-error "Refusing to act on repo root worktree"))
 
     (unless worktree-path
@@ -318,7 +350,7 @@ Requires a clean working tree (no uncommitted changes)."
 
     (unless worktree-path
       (user-error "Current tab is not associated with a worktree"))
-    (when (f-same-p worktree-path (+worktrees--repo-root))
+    (when (+worktrees-in-repo-root-p worktree-path)
       (user-error "Refusing to act on repo root worktree"))
 
     (unless (+worktrees--worktree-clean-p worktree-path)
@@ -343,7 +375,7 @@ Requires a clean working tree (no uncommitted changes)."
   (let ((worktree-path (+worktrees-path-for-selected-tab)))
     (unless worktree-path
       (user-error "Current tab is not associated with a worktree"))
-    (when (f-same-p worktree-path (+worktrees--repo-root))
+    (when (+worktrees-in-repo-root-p worktree-path)
       (user-error "Refusing to act on root worktree"))
 
     (unless (+worktrees--worktree-clean-p worktree-path)
