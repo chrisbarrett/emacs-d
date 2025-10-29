@@ -386,19 +386,27 @@ Requires a clean working tree (no uncommitted changes)."
           (kill-buffer buf))))))
 
 (defun +worktrees-close-tabs (worktree-path)
-  "Close any tabs in any frames that are dedicated to WORKTREE-PATH."
-  (dolist (frame (frame-list))
-    (with-selected-frame frame
-      (when-let* ((tab (+worktrees--tab-for-worktree worktree-path)))
-        (+worktree--kill-worktree-buffers worktree-path)
-        ;; Runs `+worktrees--cleanup-worktree-tab'.
-        (when tab-bar-mode
-          ;; Get the tab's index and explicitly close it by number
-          (let* ((tabs (funcall tab-bar-tabs-function))
-                 (tab-index (seq-position tabs tab)))
-            (when tab-index
-              ;; tab-bar-close-tab uses 1-based indexing
-              (tab-bar-close-tab (1+ tab-index)))))))))
+  "Close any tabs in any frames that are dedicated to WORKTREE-PATH.
+Returns a list of closed tab names."
+  (let (closed-tabs)
+    (dolist (frame (frame-list))
+      (with-selected-frame frame
+        (when-let* ((tab (+worktrees--tab-for-worktree worktree-path)))
+          (let ((tab-name (alist-get 'name tab)))
+            (+worktree--kill-worktree-buffers worktree-path)
+            ;; Runs `+worktrees--cleanup-worktree-tab'.
+            (let* ((tabs (funcall tab-bar-tabs-function))
+                   (tab-index (seq-position tabs tab)))
+              (when tab-index
+                ;; tab-bar-close-tab uses 1-based indexing
+                (tab-bar-close-tab (1+ tab-index))))
+            (push tab-name closed-tabs)))
+        (force-mode-line-update t)))
+    (message "Closed %s worktree tab(s) for %s: %s"
+             (length closed-tabs)
+             worktree-path
+             (string-join closed-tabs ", "))
+    (nreverse closed-tabs)))
 
 (defun +worktrees--cleanup-worktree-tab (tab _sole-tab)
   "Clean up resources when a worktree TAB is closed."
