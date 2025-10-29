@@ -1727,6 +1727,7 @@ file in your browser at the visited revision."
   (vc-follow-symlinks t)
   ;; I literally only ever use Git these days.
   (vc-handled-backends '(Git))
+  :functions (vc-git-root)
   :config
   (pushnew! vc-directory-exclusion-list
             "node_modules"
