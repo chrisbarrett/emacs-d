@@ -947,17 +947,9 @@ Runs `+escape-hook'."
   ;; Dim inactive windows to highlight the active window
   :hook (+first-input-hook . dimmer-mode)
   :custom
-  ;; Adjust foreground colors only for better dark theme compatibility
-  (dimmer-adjustment-mode :foreground)
-
-  ;; Start with moderate dimming (20% adjustment)
-  ;; Users can customize this value: increase for more dimming
-  (dimmer-fraction 0.20)
-
-  ;; Use CIELAB color space for more perceptually uniform dimming
+  (dimmer-adjustment-mode :both)
+  (dimmer-fraction -0.05)
   (dimmer-use-colorspace :cielab)
-
-  ;; Dim all buffers when Emacs loses focus
   (dimmer-watch-frame-focus-events t)
 
   ;; Exclude buffers that shouldn't be dimmed
@@ -973,7 +965,8 @@ Runs `+escape-hook'."
   (dimmer-configure-magit)
   (dimmer-configure-org)
   (dimmer-configure-hydra)
-  (dimmer-configure-company-box))
+  (dimmer-configure-posframe)
+  (dimmer-mode t))
 
 (use-package hl-line
   ;; Highlight the current line.
