@@ -402,11 +402,9 @@ Returns a list of closed tab names."
                 (tab-bar-close-tab (1+ tab-index))))
             (push tab-name closed-tabs)))
         (force-mode-line-update t)))
-    (message "Closed %s worktree tab(s) for %s: %s"
-             (length closed-tabs)
-             worktree-path
-             (string-join closed-tabs ", "))
-    (nreverse closed-tabs)))
+    (when closed-tabs
+      (message (concat "Closed worktree tab(s) for " (propertize (abbreviate-file-name worktree-path) 'face 'dired-directory)))
+      closed-tabs)))
 
 (defun +worktrees--cleanup-worktree-tab (tab _sole-tab)
   "Clean up resources when a worktree TAB is closed."
