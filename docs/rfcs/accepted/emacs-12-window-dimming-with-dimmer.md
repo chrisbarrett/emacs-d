@@ -129,10 +129,18 @@ Configuration to be added directly to init.el (in "Visual enhancements" section,
   (dimmer-configure-magit)
   (dimmer-configure-org)
   (dimmer-configure-hydra)
-  (dimmer-configure-company-box)
+  (dimmer-configure-company-box))
+```
 
-  :general
-  (+leader-def "t d" '(dimmer-mode :which-key "dimmer")))
+Keybinding to be added to `modules/mod-leader.el` in the toggles section:
+
+```elisp
+(+define-leader-keys :prefix "SPC t" ;; toggles
+  "b" '(breadcrumb-mode :wk "breadcrumbs (header)")
+  "d" '(dimmer-mode :wk "unfocused window dimming")  ; <-- Add this line
+  "h" '(global-hl-line-mode :wk "highlight line")
+  ;; ... rest of toggles
+)
 
 #### Data Model
 
