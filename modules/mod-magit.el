@@ -35,7 +35,8 @@
            (message "Failed to download emoji data: %s" (plist-get status :error))
          (goto-char (point-min))
          (re-search-forward "^$")
-         (let ((json-data (buffer-substring-no-properties (point) (point-max))))
+         (let ((json-data (buffer-substring-no-properties (point) (point-max)))
+               (coding-system-for-write 'utf-8))
            (with-temp-file +git-commit-emoji-cache-file
              (insert json-data))
            (message "Emoji data downloaded and cached successfully")
@@ -47,6 +48,7 @@
     (let* ((json-object-type 'alist)
            (json-array-type 'list)
            (json-key-type 'string)
+           (coding-system-for-read 'utf-8)
            (data (json-read-file +git-commit-emoji-cache-file))
            (table (make-hash-table :test 'equal :size 2000)))
       (dolist (entry data)
