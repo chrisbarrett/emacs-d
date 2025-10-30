@@ -265,6 +265,16 @@
 (setq org-archive-subtree-add-inherited-tags t)
 (setq org-archive-location (file-name-concat org-directory "archive.org::datetree/"))
 
+
+;;; Export settings
+
+;; Disable table of contents by default for all exports
+(setq org-export-with-toc nil)
+
+;; Disable entity conversion - use Unicode characters directly instead of HTML entities
+;; This affects both regular markdown (ox-md) and GitHub-flavored markdown (ox-gfm)
+(setq org-export-with-entities nil)
+
 (provide 'mod-org)
 
 ;;; mod-org.el ends here
