@@ -1834,6 +1834,8 @@ file in your browser at the visited revision."
     :general (:keymaps 'override-global-map
                        "s-t" 'project-switch-beframed
                        "M-W" 'project-switch-beframed)
+    :general (:keymaps 'project-prefix-map
+                       "p" #'project-switch-beframed)
     :demand t
     :after beframe))
 
