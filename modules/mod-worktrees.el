@@ -25,26 +25,28 @@
 
 (transient-define-prefix +worktrees-menu ()
   "Transient menu for git worktree operations."
-  [["Git"
-    ("g" "worktree status" +worktrees-magit-status)
-    ("c" "Claude Code IDE" +worktrees-claude-code)]
-
-   ["Context"
+  [["Change"
     :if +worktrees--repo-root
-    ("i" "Work on issue" +worktrees-work-on-issue)
-    ("n" "New issue" +bd-issue-create)
-    ("s" "Create/Switch" +worktrees-create-switch)]]
+    ("r" "Ready (work on issue)" +worktrees-work-on-issue)
+    ("o" "Switch or new..." +worktrees-create-switch)]
 
-  [["Update"
-    :if +worktrees-path-for-selected-tab
-    :inapt-if-not +worktrees-tab-dedicated-to-child-p
-    ("r" "Rebase on main" +worktrees-rebase-on-main)]
+   ["Update"
+    :if +worktrees-tab-dedicated-to-child-p
+    ("u" "Rebase on main" +worktrees-rebase-on-main)]
 
-   ["Resolve"
-    :if +worktrees-path-for-selected-tab
-    :inapt-if-not +worktrees-tab-dedicated-to-child-p
-    ("m" "Merge into main" +worktrees-absorb-into-main)
-    ("x" "Destroy" +worktrees-destroy-current)]])
+   ["Complete"
+    :if +worktrees-tab-dedicated-to-child-p
+    ("m" "Merge to main" +worktrees-absorb-into-main)
+    ("x" "Destroy" +worktrees-destroy-current)]]
+
+  ["Beads Issues"
+   :if +worktrees--repo-root
+   ("n" "Create..." +bd-issue-create)]
+
+  ["Show"
+   :if +worktrees--repo-root
+   ("g" "git status" +worktrees-magit-status)
+   ("c" "claude-code" +worktrees-claude-code)])
 
 ;;; Configuration
 
