@@ -243,7 +243,9 @@ WORKTREE-PATH is the directory to run the command in."
                      :noquery t)))
           ;; Send input and close stdin
           (process-send-string proc input)
-          (process-send-eof proc))
+          (process-send-eof proc)
+          (message "Creating issue with claude..." ))
+
       (file-error
        (kill-buffer output-buffer)
        (kill-buffer input-buffer)
