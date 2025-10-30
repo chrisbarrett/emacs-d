@@ -52,8 +52,10 @@
 (defconst +bd-issue--claude-instruction
   "Create a bd issue from this description using the beads MCP server.
 
-Use the mcp__plugin_beads_beads__create function to create the issue
-with an appropriate title, type, and priority based on the text below.
+IMPORTANT: First call mcp__plugin_beads_beads__set_context with the
+workspace_root parameter set to the current working directory. Then use
+mcp__plugin_beads_beads__create to create the issue with an appropriate
+title, type, and priority based on the text below.
 
 Just create the issue and confirm it was created - no other output needed.
 
