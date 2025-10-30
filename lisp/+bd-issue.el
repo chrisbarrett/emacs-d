@@ -28,6 +28,7 @@
 ;;
 ;;; Code:
 
+(require 'cl-lib)
 (require 'subr-x)
 
 ;;; Customization
@@ -223,96 +224,65 @@ WORKTREE-PATH is the directory to run the command in."
   (let* ((default-directory worktree-path)
          (input (concat +bd-issue--claude-instruction issue-text))
          (output-buffer (generate-new-buffer " *bd-issue-claude-output*"))
-         (input-buffer (generate-new-buffer " *bd-issue-claude-input*"))
-         (reporter (make-progress-reporter "Creating issue via Claude Code"))
-         (timer nil))
+         (input-buffer (generate-new-buffer " *bd-issue-claude-input*")))
 
     ;; Prepare input buffer
     (with-current-buffer input-buffer
       (insert input))
 
-    ;; Start progress reporter timer (update every 0.5s)
-    (setq timer
-          (run-with-timer 0.5 0.5
-                          (lambda ()
-                            (progress-reporter-update reporter))))
+    (condition-case err
+        (let ((proc (make-process
+                     :name "bd-issue-claude"
+                     :buffer output-buffer
+                     :command (list +bd-issue-claude-program)
+                     :connection-type 'pipe
+                     :sentinel (lambda (process event)
+                                 (+bd-issue--claude-sentinel process event
+                                                             input worktree-path
+                                                             input-buffer))
+                     :noquery t)))
+          ;; Send input and close stdin
+          (process-send-string proc input)
+          (process-send-eof proc))
+      (file-error
+       (kill-buffer output-buffer)
+       (kill-buffer input-buffer)
+       (user-error "Failed to execute claude: %s"
+                   (error-message-string err))))))
 
-    ;; Start async process
-    (let ((proc nil))
-      (unwind-protect
-          (condition-case err
-              (progn
-                (setq proc (make-process
-                            :name "bd-issue-claude"
-                            :buffer output-buffer
-                            :command (list +bd-issue-claude-program)
-                            :connection-type 'pipe
-                            :sentinel (lambda (process event)
-                                        (+bd-issue--claude-sentinel process event
-                                                                    input worktree-path
-                                                                    input-buffer
-                                                                    reporter timer))
-                            :noquery t))
-                ;; Send input and close stdin
-                (process-send-string proc input)
-                (process-send-eof proc))
-            (file-error
-             (when timer (cancel-timer timer))
-             (progress-reporter-done reporter)
-             (kill-buffer output-buffer)
-             (kill-buffer input-buffer)
-             (user-error "Failed to execute claude: %s"
-                         (error-message-string err))))
-        ;; Cleanup: if we error out before the process finishes, clean up
-        (when (and proc (process-live-p proc))
-          (delete-process proc)
-          (when timer (cancel-timer timer))
-          (kill-buffer output-buffer)
-          (kill-buffer input-buffer))))))
-
-(defun +bd-issue--claude-sentinel (process event input worktree-path input-buffer reporter timer)
+(defun +bd-issue--claude-sentinel (process event input worktree-path input-buffer)
   "Process sentinel for Claude CLI invocation.
 
 PROCESS is the process object.
 EVENT is the event description string.
 INPUT is the text sent to Claude.
 WORKTREE-PATH is the directory where the command ran.
-INPUT-BUFFER is the buffer containing the input text.
-REPORTER is the progress reporter object.
-TIMER is the timer updating the progress reporter."
+INPUT-BUFFER is the buffer containing the input text."
   (let ((output-buffer (process-buffer process)))
     (unwind-protect
-        (progn
-          ;; Cancel the progress reporter timer
-          (when timer
-            (cancel-timer timer))
+        (cond
+         ;; Process finished successfully
+         ((string-match-p (rx line-start "finished") event)
+          (let ((exit-code (process-exit-status process)))
+            (if (zerop exit-code)
+                (message "Issue created.")
+              ;; Non-zero exit with "finished" status
+              (let ((error-output (with-current-buffer output-buffer
+                                    (buffer-string))))
+                (message "Issue creation failed (exit code %d)" exit-code)
+                (+bd-issue--display-error exit-code error-output input worktree-path)))))
 
-          (cond
-           ;; Process finished successfully
-           ((string-match-p (rx line-start "finished") event)
-            (let ((exit-code (process-exit-status process)))
-              (if (zerop exit-code)
-                  (progress-reporter-done reporter)
-                ;; Non-zero exit with "finished" status
-                (let ((error-output (with-current-buffer output-buffer
-                                      (buffer-string))))
-                  (progress-reporter-done reporter)
-                  (message "Issue creation failed (exit code %d)" exit-code)
-                  (+bd-issue--display-error exit-code error-output input worktree-path)))))
+         ;; Process failed or was killed
+         ((string-match-p (rx line-start (or "exited" "failed" "killed" "terminated")) event)
+          (let ((exit-code (process-exit-status process))
+                (error-output (with-current-buffer output-buffer
+                                (buffer-string))))
+            (message "Issue creation with Claude failed: %s" (string-trim event))
+            (+bd-issue--display-error exit-code error-output input worktree-path)))
 
-           ;; Process failed or was killed
-           ((string-match-p (rx line-start (or "exited" "failed" "killed" "terminated")) event)
-            (let ((exit-code (process-exit-status process))
-                  (error-output (with-current-buffer output-buffer
-                                  (buffer-string))))
-              (progress-reporter-done reporter)
-              (message "Issue creation with Claude failed: %s" (string-trim event))
-              (+bd-issue--display-error exit-code error-output input worktree-path)))
-
-           ;; Unexpected event
-           (t
-            (progress-reporter-done reporter)
-            (message "Claude process event: %s" event))))
+         ;; Unexpected event
+         (t
+          (message "Claude process event: %s" event)))
 
       ;; Cleanup buffers
       (when (buffer-live-p output-buffer)
