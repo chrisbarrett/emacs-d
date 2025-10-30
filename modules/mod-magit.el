@@ -70,13 +70,15 @@
 (defun +git-commit-fontify-emoji (limit)
   "Fontify emoji codes like :emoji: as actual emoji up to LIMIT."
   (+git-commit-emoji-ensure-data)
-  (when (and +git-commit-emoji-table
-             (re-search-forward ":\\([a-z0-9_]+\\):" limit t))
-    (let* ((code (match-string 0))
-           (emoji (gethash code +git-commit-emoji-table)))
-      (when emoji
-        (compose-region (match-beginning 0) (match-end 0) emoji))
-      t)))
+  (when +git-commit-emoji-table
+    (catch 'found
+      (while (re-search-forward ":\\([a-z0-9_]+\\):" limit t)
+        (let* ((code (match-string 0))
+               (emoji (gethash code +git-commit-emoji-table)))
+          (when emoji
+            (compose-region (match-beginning 0) (match-end 0) emoji)
+            (throw 'found t))))
+      nil)))
 
 (defun +git-commit-enable-emoji-display ()
   "Enable emoji display in git-commit-mode buffers."
@@ -84,8 +86,9 @@
 
 (add-hook 'git-commit-mode-hook #'+git-commit-enable-emoji-display)
 
-;; Also enable in magit-revision-mode for viewing commits
+;; Also enable in magit-revision-mode and magit-log-mode for viewing commits
 (add-hook 'magit-revision-mode-hook #'+git-commit-enable-emoji-display)
+(add-hook 'magit-log-mode-hook #'+git-commit-enable-emoji-display)
 
 (autoload 'evil-insert-state "evil-states")
 (autoload 'gptel-request "gptel")
