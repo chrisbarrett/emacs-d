@@ -50,7 +50,7 @@ Returns a cons cell (PRIORITY . NUMBER) for comparison."
 (defun +beads-pick-issue ()
   "Prompt user to select an issue from beads.
 Returns the selected issue alist, or nil if cancelled."
-  (let* ((issues-json (shell-command-to-string "bd ready --json --no-daemon"))
+  (let* ((issues-json (shell-command-to-string "bd ready --json"))
          (issues (condition-case nil
                      (json-parse-string issues-json
                                         :object-type 'alist
@@ -63,12 +63,12 @@ Returns the selected issue alist, or nil if cancelled."
 
     ;; Sort by priority (ascending), then by issue number (ascending)
     (setq issues (sort issues
-                      (lambda (a b)
-                        (let ((key-a (+beads--issue-sort-key a))
-                              (key-b (+beads--issue-sort-key b)))
-                          (or (< (car key-a) (car key-b))
-                              (and (= (car key-a) (car key-b))
-                                   (< (cdr key-a) (cdr key-b))))))))
+                       (lambda (a b)
+                         (let ((key-a (+beads--issue-sort-key a))
+                               (key-b (+beads--issue-sort-key b)))
+                           (or (< (car key-a) (car key-b))
+                               (and (= (car key-a) (car key-b))
+                                    (< (cdr key-a) (cdr key-b))))))))
 
     (let* ((formatted-issues (mapcar #'+beads-format-issue-for-completion issues))
            (completion-table
