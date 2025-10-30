@@ -2149,27 +2149,27 @@ subprocess calls on every file open, especially problematic in TTY."
 
   ;; Define faces for GitHub Flavored Markdown callouts
   (defface +markdown-gfm-callout-note-face
-    '((t :inherit (font-lock-doc-face org-block) :extend t))
+    '((t :inherit font-lock-operator-face :weight semibold))
     "Face for [!NOTE] callout markers."
     :group 'markdown-faces)
 
   (defface +markdown-gfm-callout-tip-face
-    '((t :inherit (font-lock-builtin-face org-block) :extend t))
+    '((t :inherit font-lock-keyword-face :weight semibold))
     "Face for [!TIP] callout markers."
     :group 'markdown-faces)
 
   (defface +markdown-gfm-callout-important-face
-    '((t :inherit (font-lock-warning-face org-block) :extend t))
+    '((t :inherit font-lock-warning-face :weight semibold))
     "Face for [!IMPORTANT] callout markers."
     :group 'markdown-faces)
 
   (defface +markdown-gfm-callout-warning-face
-    '((t :inherit (warning org-block) :extend t))
+    '((t :inherit warning :weight semibold))
     "Face for [!WARNING] callout markers."
     :group 'markdown-faces)
 
   (defface +markdown-gfm-callout-caution-face
-    '((t :inherit (error org-block) :extend t))
+    '((t :inherit error :weight semibold))
     "Face for [!CAUTION] callout markers."
     :group 'markdown-faces)
 
@@ -2177,16 +2177,16 @@ subprocess calls on every file open, especially problematic in TTY."
   (defun +markdown-fontify-gfm-callouts ()
     "Add font-lock keywords for GFM callout syntax."
     (font-lock-add-keywords nil
-      `(;; NOTE - informational (neutral)
-        (,(rx bol "> " (group "[!NOTE]")) 1 '+markdown-gfm-callout-note-face prepend)
-        ;; TIP - helpful suggestion
-        (,(rx bol "> " (group "[!TIP]")) 1 '+markdown-gfm-callout-tip-face prepend)
-        ;; IMPORTANT - critical information
-        (,(rx bol "> " (group "[!IMPORTANT]")) 1 '+markdown-gfm-callout-important-face prepend)
-        ;; WARNING - potential problems
-        (,(rx bol "> " (group "[!WARNING]")) 1 '+markdown-gfm-callout-warning-face prepend)
-        ;; CAUTION - danger/severe issues
-        (,(rx bol "> " (group "[!CAUTION]")) 1 '+markdown-gfm-callout-caution-face prepend))))
+      `(;; NOTE - informational (cyan, semibold)
+        (,(rx bol "> " "[!" (group "NOTE") "]") 1 '+markdown-gfm-callout-note-face prepend)
+        ;; TIP - helpful suggestion (keyword color, semibold)
+        (,(rx bol "> " "[!" (group "TIP") "]") 1 '+markdown-gfm-callout-tip-face prepend)
+        ;; IMPORTANT - critical information (warning color, semibold)
+        (,(rx bol "> " "[!" (group "IMPORTANT") "]") 1 '+markdown-gfm-callout-important-face prepend)
+        ;; WARNING - potential problems (warning face, semibold)
+        (,(rx bol "> " "[!" (group "WARNING") "]") 1 '+markdown-gfm-callout-warning-face prepend)
+        ;; CAUTION - danger/severe issues (error face, semibold)
+        (,(rx bol "> " "[!" (group "CAUTION") "]") 1 '+markdown-gfm-callout-caution-face prepend))))
 
   (add-hook 'markdown-mode-hook #'+markdown-fontify-gfm-callouts)
   (add-hook 'gfm-mode-hook #'+markdown-fontify-gfm-callouts))
