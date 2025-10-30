@@ -148,15 +148,48 @@ All lines starting with '# ' are stripped, including what looks like headers."
     (text-mode)
     (should (+bd-issue--kill-buffer-query))))
 
+;;; Font-locking tests
+
+(ert-deftest +bd-issue-test-font-locking-applied ()
+  "Test that font-locking is configured correctly in +bd-issue-mode."
+  (with-temp-buffer
+    (+bd-issue-mode)
+    ;; Insert some content with comments
+    (insert "# This is a comment\n")
+    (insert "This is not a comment\n")
+    (insert "# Another comment")
+
+    ;; Font-lock defaults should be configured
+    (should font-lock-defaults)
+
+    ;; Verify the font-lock keywords are set up correctly
+    (should (equal (car font-lock-defaults)
+                   '(("^#.*$" . font-lock-comment-face))))
+
+    ;; Ensure font-lock is applied
+    (font-lock-ensure)
+
+    ;; Check that the comment line has the correct face
+    (goto-char (point-min))
+    (should (eq (get-text-property (point) 'face)
+                'font-lock-comment-face))
+
+    ;; Check that non-comment line doesn't have comment face
+    (goto-char (point-min))
+    (forward-line 1)
+    (should-not (eq (get-text-property (point) 'face)
+                    'font-lock-comment-face))))
+
 ;;; Entry point tests
 
 (ert-deftest +bd-issue-test-create-buffer-created ()
   "Test that +bd-issue-create creates a buffer."
-  (let (buf)
+  (let ((+bd-issue-buffer-name "*bd-test-issue*")
+        buf)
     (unwind-protect
         (progn
           (+bd-issue-create default-directory)
-          (setq buf (get-buffer "*bd-new-issue*"))
+          (setq buf (get-buffer +bd-issue-buffer-name))
           (should buf)
           (with-current-buffer buf
             (should (eq major-mode '+bd-issue-mode))
@@ -171,12 +204,13 @@ All lines starting with '# ' are stripped, including what looks like headers."
 
 (ert-deftest +bd-issue-test-create-sets-worktree-path ()
   "Test that +bd-issue-create sets worktree path correctly."
-  (let ((test-path "/tmp/test-worktree")
+  (let ((+bd-issue-buffer-name "*bd-test-issue*")
+        (test-path "/tmp/test-worktree")
         buf)
     (unwind-protect
         (progn
           (+bd-issue-create test-path)
-          (setq buf (get-buffer "*bd-new-issue*"))
+          (setq buf (get-buffer +bd-issue-buffer-name))
           (with-current-buffer buf
             (should (equal +bd-issue--worktree-path test-path))))
       ;; Cleanup
@@ -188,44 +222,47 @@ All lines starting with '# ' are stripped, including what looks like headers."
 
 (ert-deftest +bd-issue-test-finish-empty-buffer-errors ()
   "Test that finishing with empty buffer raises error."
-  (let ((buf (generate-new-buffer "*bd-new-issue*")))
-    (unwind-protect
-        (with-current-buffer buf
-          (+bd-issue-mode)
-          (setq-local +bd-issue--worktree-path default-directory)
-          (should-error (+bd-issue-finish) :type 'user-error))
-      ;; Cleanup
-      (when (buffer-live-p buf)
-        (let ((kill-buffer-query-functions nil))
-          (kill-buffer buf))))))
+  (let ((+bd-issue-buffer-name "*bd-test-issue*"))
+    (let ((buf (generate-new-buffer +bd-issue-buffer-name)))
+      (unwind-protect
+          (with-current-buffer buf
+            (+bd-issue-mode)
+            (setq-local +bd-issue--worktree-path default-directory)
+            (should-error (+bd-issue-finish) :type 'user-error))
+        ;; Cleanup
+        (when (buffer-live-p buf)
+          (let ((kill-buffer-query-functions nil))
+            (kill-buffer buf)))))))
 
 (ert-deftest +bd-issue-test-finish-whitespace-only-errors ()
   "Test that finishing with whitespace-only buffer raises error."
-  (let ((buf (generate-new-buffer "*bd-new-issue*")))
-    (unwind-protect
-        (with-current-buffer buf
-          (+bd-issue-mode)
-          (setq-local +bd-issue--worktree-path default-directory)
-          (insert "   \n\n  ")
-          (should-error (+bd-issue-finish) :type 'user-error))
-      ;; Cleanup
-      (when (buffer-live-p buf)
-        (let ((kill-buffer-query-functions nil))
-          (kill-buffer buf))))))
+  (let ((+bd-issue-buffer-name "*bd-test-issue*"))
+    (let ((buf (generate-new-buffer +bd-issue-buffer-name)))
+      (unwind-protect
+          (with-current-buffer buf
+            (+bd-issue-mode)
+            (setq-local +bd-issue--worktree-path default-directory)
+            (insert "   \n\n  ")
+            (should-error (+bd-issue-finish) :type 'user-error))
+        ;; Cleanup
+        (when (buffer-live-p buf)
+          (let ((kill-buffer-query-functions nil))
+            (kill-buffer buf)))))))
 
 (ert-deftest +bd-issue-test-finish-template-only-errors ()
   "Test that finishing with only template text raises error."
-  (let ((buf (generate-new-buffer "*bd-new-issue*")))
-    (unwind-protect
-        (with-current-buffer buf
-          (+bd-issue-mode)
-          (setq-local +bd-issue--worktree-path default-directory)
-          (insert +bd-issue-template)
-          (should-error (+bd-issue-finish) :type 'user-error))
-      ;; Cleanup
-      (when (buffer-live-p buf)
-        (let ((kill-buffer-query-functions nil))
-          (kill-buffer buf))))))
+  (let ((+bd-issue-buffer-name "*bd-test-issue*"))
+    (let ((buf (generate-new-buffer +bd-issue-buffer-name)))
+      (unwind-protect
+          (with-current-buffer buf
+            (+bd-issue-mode)
+            (setq-local +bd-issue--worktree-path default-directory)
+            (insert +bd-issue-template)
+            (should-error (+bd-issue-finish) :type 'user-error))
+        ;; Cleanup
+        (when (buffer-live-p buf)
+          (let ((kill-buffer-query-functions nil))
+            (kill-buffer buf)))))))
 
 ;;; Claude instruction tests
 

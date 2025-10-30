@@ -32,6 +32,12 @@
 
 ;;; Customization
 
+(defvar +bd-issue-buffer-name "*bd-new-issue*"
+  "Name of the buffer used for creating bd issues.")
+
+(defvar +bd-issue-claude-program "claude"
+  "Name or path of the Claude CLI program.")
+
 (defconst +bd-issue-template
   "
 
@@ -82,6 +88,11 @@ Special commands:
   (setq-local comment-start-skip (rx (one-or-more "#") (zero-or-more space)))
   (setq-local fill-column 72)
 
+  ;; Set up font-locking for # comments
+  (setq-local font-lock-defaults
+              '((("^#.*$" . font-lock-comment-face))
+                nil nil nil nil))
+
   ;; Enable auto-fill for description text
   (auto-fill-mode 1)
 
@@ -118,7 +129,7 @@ appropriate title, type, and priority."
                          (+worktrees-path-for-selected-tab))
                        default-directory))
          (window-config (current-window-configuration))
-         (buf (generate-new-buffer "*bd-new-issue*")))
+         (buf (generate-new-buffer +bd-issue-buffer-name)))
 
     ;; Set up the buffer
     (with-current-buffer buf
@@ -205,7 +216,7 @@ Prevents accidental buffer kill without using \\[+bd-issue-finish] or \\[+bd-iss
 ISSUE-TEXT is the free-form description from the user.
 WORKTREE-PATH is the directory to run the command in."
   ;; Check that claude binary exists
-  (cl-assert (executable-find "claude"))
+  (cl-assert (executable-find +bd-issue-claude-program))
 
   (let* ((default-directory worktree-path)
          (input (concat +bd-issue--claude-instruction issue-text))
@@ -232,7 +243,7 @@ WORKTREE-PATH is the directory to run the command in."
                 (setq proc (make-process
                             :name "bd-issue-claude"
                             :buffer output-buffer
-                            :command (list "claude")
+                            :command (list +bd-issue-claude-program)
                             :connection-type 'pipe
                             :sentinel (lambda (process event)
                                         (+bd-issue--claude-sentinel process event
