@@ -21,6 +21,8 @@
 ;; The buffer supports:
 ;;   C-c C-c - Create the issue via Claude Code
 ;;   C-c C-k - Cancel without creating the issue
+;;   M-p     - Cycle backward through issue description history
+;;   M-n     - Cycle forward through issue description history
 ;;
 ;; Evil integration:
 ;;   If using Evil mode, configure the initial state in your init.el:
@@ -30,6 +32,7 @@
 
 (require 'cl-lib)
 (require 'subr-x)
+(require 'ring)
 
 ;;; Customization
 
@@ -38,6 +41,17 @@
 
 (defvar +bd-issue-claude-program "claude"
   "Name or path of the Claude CLI program.")
+
+(defcustom +bd-issue-message-ring-size 32
+  "Maximum number of issue descriptions to save in the history ring."
+  :type 'integer
+  :group 'bd-issue)
+
+(defvar +bd-issue-message-ring nil
+  "Ring of previous bd issue descriptions for history cycling.")
+
+(defvar-local +bd-issue-message-ring-index nil
+  "Index into `+bd-issue-message-ring' for the current buffer.")
 
 (defconst +bd-issue-template
   "
@@ -78,6 +92,8 @@ Description:
   (let ((map (make-sparse-keymap)))
     (define-key map (kbd "C-c C-c") #'+bd-issue-finish)
     (define-key map (kbd "C-c C-k") #'+bd-issue-cancel)
+    (define-key map (kbd "M-p") #'+bd-issue-prev-message)
+    (define-key map (kbd "M-n") #'+bd-issue-next-message)
     map)
   "Keymap for `+bd-issue-mode'.")
 
@@ -107,7 +123,10 @@ Special commands:
   (setq-local mode-line-misc-info
               `((+bd-issue-mode
                  ,(substitute-command-keys
-                   " [\\[+bd-issue-finish] = create, \\[+bd-issue-cancel] = cancel]")))))
+                   " [\\[+bd-issue-finish] = create, \\[+bd-issue-cancel] = cancel, \\[+bd-issue-prev-message] = prev]"))))
+
+  ;; Initialize message ring for history cycling
+  (+bd-issue--prepare-message-ring))
 
 ;;; Entry point
 
@@ -176,6 +195,9 @@ which is intentional to match the git-commit style."
     (when (string-empty-p issue-text)
       (user-error "Please describe the issue you want to create"))
 
+    ;; Save message to history before finishing
+    (+bd-issue-save-message)
+
     (let ((worktree-path +bd-issue--worktree-path)
           (window-config +bd-issue--previous-window-config))
 
@@ -191,15 +213,17 @@ which is intentional to match the git-commit style."
       (+bd-issue--create-via-claude issue-text worktree-path))))
 
 (defun +bd-issue-cancel ()
-  "Cancel bd issue creation without creating the issue."
+  "Cancel bd issue creation without creating the issue.
+Saves the current message to history before cancelling."
   (interactive)
+  ;; Save message to history even when cancelling
+  (+bd-issue-save-message)
   (let ((window-config +bd-issue--previous-window-config))
-    (when (yes-or-no-p "Cancel issue creation? ")
-      (let ((kill-buffer-query-functions nil))
-        (kill-buffer (current-buffer)))
-      (when window-config
-        (set-window-configuration window-config))
-      (message "Issue creation cancelled"))))
+    (let ((kill-buffer-query-functions nil))
+      (kill-buffer (current-buffer)))
+    (when window-config
+      (set-window-configuration window-config))
+    (message "Issue creation cancelled. Message saved to history")))
 
 (defun +bd-issue--kill-buffer-query ()
   "Query function for `kill-buffer-query-functions'.
@@ -311,6 +335,75 @@ WORKTREE-PATH is the directory where the command ran."
       (insert "\n--- Input ---\n" input "\n")
       (insert "\n--- Output ---\n" error-output))
     (display-buffer (current-buffer))))
+
+;;; Message History
+
+(defun +bd-issue--prepare-message-ring ()
+  "Initialize the message ring for this buffer if needed."
+  (unless +bd-issue-message-ring
+    (setq +bd-issue-message-ring (make-ring +bd-issue-message-ring-size)))
+  (make-local-variable '+bd-issue-message-ring-index))
+
+(defun +bd-issue--buffer-message ()
+  "Extract the user's issue description from the buffer.
+Returns nil if the buffer contains only whitespace and/or comments."
+  (let ((text (+bd-issue--get-buffer-text)))
+    (and (not (string-match-p "\\`[ \t\n\r]*\\'" text))
+         text)))
+
+(defun +bd-issue--new-message-index (offset len)
+  "Calculate new message ring index.
+OFFSET is the relative movement (positive = backward, negative = forward).
+LEN is the ring length."
+  (if +bd-issue-message-ring-index
+      (mod (+ +bd-issue-message-ring-index offset) len)
+    (1- len)))
+
+(defun +bd-issue-prev-message (arg)
+  "Cycle backward through message history, after saving current message.
+With a numeric prefix ARG, go back ARG messages."
+  (interactive "*p")
+  (+bd-issue--prepare-message-ring)
+  (let ((len (ring-length +bd-issue-message-ring)))
+    (if (<= len 0)
+        (progn (message "Empty issue description history") (ding))
+      ;; Save the current non-empty message to the ring
+      (when-let ((message (+bd-issue--buffer-message)))
+        (unless (ring-member +bd-issue-message-ring message)
+          (ring-insert +bd-issue-message-ring message)
+          (cl-incf arg)
+          (setq len (ring-length +bd-issue-message-ring))))
+      ;; Delete the current text but not comment lines
+      (delete-region (point-min) (point-max))
+      ;; Calculate new index and insert the message
+      (setq +bd-issue-message-ring-index (+bd-issue--new-message-index arg len))
+      (message "Issue description %d" (1+ +bd-issue-message-ring-index))
+      (insert (ring-ref +bd-issue-message-ring +bd-issue-message-ring-index))
+      ;; Save position before comments for cursor placement
+      (let ((end-of-message (point)))
+        ;; Re-insert template comments at the end (template already starts with newlines)
+        (goto-char (point-max))
+        (insert +bd-issue-template)
+        ;; Position cursor on the newline before the template comments
+        (goto-char (1+ end-of-message))))))
+
+(defun +bd-issue-next-message (arg)
+  "Cycle forward through message history, after saving current message.
+With a numeric prefix ARG, go forward ARG messages."
+  (interactive "*p")
+  (+bd-issue-prev-message (- arg)))
+
+(defun +bd-issue-save-message ()
+  "Save current issue description to the history ring."
+  (interactive)
+  (+bd-issue--prepare-message-ring)
+  (if-let ((message (+bd-issue--buffer-message)))
+      (progn
+        (when-let ((index (ring-member +bd-issue-message-ring message)))
+          (ring-remove +bd-issue-message-ring index))
+        (ring-insert +bd-issue-message-ring message)
+        (message "Issue description saved to history"))
+    (message "Only whitespace and/or comments; not saved")))
 
 (provide '+bd-issue)
 ;;; +bd-issue.el ends here
