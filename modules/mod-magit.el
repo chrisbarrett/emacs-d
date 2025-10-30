@@ -8,6 +8,88 @@
 (require 'magit)
 (require 'general)
 
+;;; Emoji rendering support
+
+(require 'json)
+(require 'url)
+
+(defvar +git-commit-emoji-data-url
+  "https://raw.githubusercontent.com/github/gemoji/master/db/emoji.json"
+  "URL to GitHub's official emoji data (gemoji project).")
+
+(defvar +git-commit-emoji-cache-file
+  (expand-file-name "github-emoji.json" no-littering-var-directory)
+  "Path to cached emoji data file.")
+
+(defvar +git-commit-emoji-table nil
+  "Hash table mapping emoji shortcodes (e.g., \":smile:\") to Unicode emoji.")
+
+(defun +git-commit-emoji-download-data ()
+  "Download GitHub emoji data from gemoji and cache it locally."
+  (interactive)
+  (let ((url-request-method "GET"))
+    (url-retrieve
+     +git-commit-emoji-data-url
+     (lambda (status)
+       (if (plist-get status :error)
+           (message "Failed to download emoji data: %s" (plist-get status :error))
+         (goto-char (point-min))
+         (re-search-forward "^$")
+         (let ((json-data (buffer-substring-no-properties (point) (point-max)))
+               (coding-system-for-write 'utf-8))
+           (with-temp-file +git-commit-emoji-cache-file
+             (insert json-data))
+           (message "Emoji data downloaded and cached successfully")
+           (+git-commit-emoji-load-data)))))))
+
+(defun +git-commit-emoji-load-data ()
+  "Load emoji data from cache and build hash table."
+  (when (file-exists-p +git-commit-emoji-cache-file)
+    (let* ((json-object-type 'alist)
+           (json-array-type 'list)
+           (json-key-type 'string)
+           (coding-system-for-read 'utf-8)
+           (data (json-read-file +git-commit-emoji-cache-file))
+           (table (make-hash-table :test 'equal :size 2000)))
+      (dolist (entry data)
+        (let ((emoji (cdr (assoc "emoji" entry)))
+              (aliases (cdr (assoc "aliases" entry))))
+          (dolist (alias aliases)
+            (puthash (concat ":" alias ":") emoji table))))
+      (setq +git-commit-emoji-table table)
+      (message "Loaded %d emoji mappings" (hash-table-count table)))))
+
+(defun +git-commit-emoji-ensure-data ()
+  "Ensure emoji data is loaded, downloading if necessary."
+  (unless +git-commit-emoji-table
+    (if (file-exists-p +git-commit-emoji-cache-file)
+        (+git-commit-emoji-load-data)
+      (message "Downloading GitHub emoji data...")
+      (+git-commit-emoji-download-data))))
+
+(defun +git-commit-fontify-emoji (limit)
+  "Fontify emoji codes like :emoji: as actual emoji up to LIMIT."
+  (+git-commit-emoji-ensure-data)
+  (when +git-commit-emoji-table
+    (catch 'found
+      (while (re-search-forward ":\\([a-z0-9_]+\\):" limit t)
+        (let* ((code (match-string 0))
+               (emoji (gethash code +git-commit-emoji-table)))
+          (when emoji
+            (compose-region (match-beginning 0) (match-end 0) emoji)
+            (throw 'found t))))
+      nil)))
+
+(defun +git-commit-enable-emoji-display ()
+  "Enable emoji display in git-commit-mode buffers."
+  (font-lock-add-keywords nil '((+git-commit-fontify-emoji)) t))
+
+(add-hook 'git-commit-mode-hook #'+git-commit-enable-emoji-display)
+
+;; Also enable in magit-revision-mode and magit-log-mode for viewing commits
+(add-hook 'magit-revision-mode-hook #'+git-commit-enable-emoji-display)
+(add-hook 'magit-log-mode-hook #'+git-commit-enable-emoji-display)
+
 (autoload 'evil-insert-state "evil-states")
 (autoload 'gptel-request "gptel")
 (autoload 'magit-run-git-async "magit-process")
