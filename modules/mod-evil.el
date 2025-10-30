@@ -17,6 +17,11 @@
 ;; Initial states for modes
 (evil-set-initial-state '+bd-issue-mode 'insert)
 
+;; Keybindings for +bd-issue-mode (message history navigation)
+(general-def :states '(insert normal) :keymaps '+bd-issue-mode-map
+  "M-p" #'+bd-issue-prev-message
+  "M-n" #'+bd-issue-next-message)
+
 ;; Keep shift-width in sync if mode changes.
 (setq-hook! 'after-change-major-mode
   evil-shift-width tab-width)

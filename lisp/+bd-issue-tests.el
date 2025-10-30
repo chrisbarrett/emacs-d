@@ -274,5 +274,137 @@ All lines starting with '# ' are stripped, including what looks like headers."
                           +bd-issue--claude-instruction))
   (should (string-match-p "Description:" +bd-issue--claude-instruction)))
 
+;;; Message history tests
+
+(ert-deftest +bd-issue-test-prepare-message-ring ()
+  "Test that message ring is initialized correctly."
+  (let ((+bd-issue-message-ring nil))
+    (with-temp-buffer
+      (+bd-issue-mode)
+      (should +bd-issue-message-ring)
+      (should (ring-p +bd-issue-message-ring))
+      (should (= (ring-size +bd-issue-message-ring) +bd-issue-message-ring-size)))))
+
+(ert-deftest +bd-issue-test-buffer-message-extracts-text ()
+  "Test that +bd-issue--buffer-message extracts non-comment text."
+  (with-temp-buffer
+    (+bd-issue-mode)
+    (insert "Fix the login bug\n")
+    (insert "# This is a comment\n")
+    (insert "Users can't login")
+    (should (equal (+bd-issue--buffer-message)
+                   "Fix the login bug\nUsers can't login"))))
+
+(ert-deftest +bd-issue-test-buffer-message-returns-nil-when-empty ()
+  "Test that +bd-issue--buffer-message returns nil for empty content."
+  (with-temp-buffer
+    (+bd-issue-mode)
+    (insert "# Only comments\n")
+    (insert "   \n")
+    (should-not (+bd-issue--buffer-message))))
+
+(ert-deftest +bd-issue-test-save-message ()
+  "Test that save-message adds message to ring."
+  (let ((+bd-issue-message-ring nil))
+    (with-temp-buffer
+      (+bd-issue-mode)
+      (insert "Test issue description")
+      (+bd-issue-save-message)
+      (should (= (ring-length +bd-issue-message-ring) 1))
+      (should (equal (ring-ref +bd-issue-message-ring 0)
+                     "Test issue description")))))
+
+(ert-deftest +bd-issue-test-save-message-removes-duplicates ()
+  "Test that saving duplicate message removes old copy."
+  (let ((+bd-issue-message-ring nil))
+    (with-temp-buffer
+      (+bd-issue-mode)
+      (insert "Test issue")
+      (+bd-issue-save-message)
+      (should (= (ring-length +bd-issue-message-ring) 1))
+      ;; Save same message again
+      (+bd-issue-save-message)
+      ;; Should still be only 1 entry
+      (should (= (ring-length +bd-issue-message-ring) 1)))))
+
+(ert-deftest +bd-issue-test-prev-message-cycles-backward ()
+  "Test that M-p cycles backward through history."
+  (let ((+bd-issue-message-ring nil))
+    (with-temp-buffer
+      (+bd-issue-mode)
+      ;; Add two messages to history
+      (insert "First message")
+      (+bd-issue-save-message)
+      (erase-buffer)
+      (insert "Second message")
+      (+bd-issue-save-message)
+      (erase-buffer)
+
+      ;; Now cycle backward
+      (+bd-issue-prev-message 1)
+      (let ((text (+bd-issue--get-buffer-text)))
+        (should (equal text "Second message")))
+
+      ;; Cycle backward again
+      (+bd-issue-prev-message 1)
+      (let ((text (+bd-issue--get-buffer-text)))
+        (should (equal text "First message"))))))
+
+(ert-deftest +bd-issue-test-next-message-cycles-forward ()
+  "Test that M-n cycles forward through history."
+  (let ((+bd-issue-message-ring nil))
+    (with-temp-buffer
+      (+bd-issue-mode)
+      ;; Add two messages
+      (insert "First message")
+      (+bd-issue-save-message)
+      (erase-buffer)
+      (insert "Second message")
+      (+bd-issue-save-message)
+      (erase-buffer)
+
+      ;; Go back to first
+      (+bd-issue-prev-message 1)
+      (+bd-issue-prev-message 1)
+
+      ;; Now go forward
+      (+bd-issue-next-message 1)
+      (let ((text (+bd-issue--get-buffer-text)))
+        (should (equal text "Second message"))))))
+
+(ert-deftest +bd-issue-test-prev-message-saves-current ()
+  "Test that cycling backward saves current message first."
+  (let ((+bd-issue-message-ring nil))
+    (with-temp-buffer
+      (+bd-issue-mode)
+      ;; Add one message to history
+      (insert "Old message")
+      (+bd-issue-save-message)
+      (erase-buffer)
+
+      ;; Type new message but don't save
+      (insert "New unsaved message")
+
+      ;; Cycle backward - should save current first
+      (+bd-issue-prev-message 1)
+
+      ;; Should have 2 messages now
+      (should (= (ring-length +bd-issue-message-ring) 2))
+
+      ;; Cycle forward to get back to the new message
+      (+bd-issue-next-message 1)
+      (let ((text (+bd-issue--get-buffer-text)))
+        (should (equal text "New unsaved message"))))))
+
+(ert-deftest +bd-issue-test-empty-history-rings-bell ()
+  "Test that cycling with empty history rings bell."
+  (let ((+bd-issue-message-ring nil))
+    (with-temp-buffer
+      (+bd-issue-mode)
+      ;; Try to cycle with empty history - should not error
+      (should-not (condition-case nil
+                      (progn (+bd-issue-prev-message 1) nil)
+                    (error t))))))
+
 (provide '+bd-issue-tests)
 ;;; +bd-issue-tests.el ends here
