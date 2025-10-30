@@ -82,6 +82,11 @@ Special commands:
   (setq-local comment-start-skip (rx (one-or-more "#") (zero-or-more space)))
   (setq-local fill-column 72)
 
+  ;; Set up font-locking for # comments
+  (setq-local font-lock-defaults
+              '((("^#.*$" . font-lock-comment-face))
+                nil nil nil nil))
+
   ;; Enable auto-fill for description text
   (auto-fill-mode 1)
 
