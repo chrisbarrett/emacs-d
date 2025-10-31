@@ -1977,6 +1977,13 @@ file in your browser at the visited revision."
   ;; NOTE: Initialised automatically via an autoloaded form.
   )
 
+(use-package buttercup :ensure t
+  ;; A BDD-style testing framework for Elisp.
+  ;;
+  ;; Ordinarily it will be installed in relevant packages by eldev; however,
+  ;; it's nice to have here so I can load it and get macro indentation right.
+  )
+
 (use-package nix-ts-mode :ensure t
   :mode "\\.nix\\'"
   :hook (nix-ts-mode-hook . eglot-ensure)
