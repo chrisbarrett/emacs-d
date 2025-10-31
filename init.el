@@ -2477,7 +2477,7 @@ subprocess calls on every file open, especially problematic in TTY."
 
 (use-package separedit :ensure t
   ;; Easily pop open comments or strings for editing in a dedicated buffer.
-  )
+  :commands (separedit-commit))
 
 (use-package org-modern :ensure t
   ;; Provides visual enhancements that make org-mode look less cluttered and
