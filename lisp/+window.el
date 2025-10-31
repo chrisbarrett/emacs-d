@@ -174,44 +174,98 @@ With prefix arg ARG, don't select the new window."
 
 ;;; Directional window swapping
 
+(defun +move-side-window-to-side (new-side)
+  "Move the current side window to NEW-SIDE (left, right, top, or bottom)."
+  (unless (+side-window-p (selected-window))
+    (user-error "Not in a side window"))
+  (let* ((buf (current-buffer))
+         (old-side (window-parameter nil 'window-side))
+         ;; Use stored dimensions if available, otherwise capture current size
+         (width (or (window-parameter nil '+preserved-width)
+                    (window-width)))
+         (height (or (window-parameter nil '+preserved-height)
+                     ;; If moving from left/right to top/bottom, use sensible default
+                     (if (memq old-side '(left right))
+                         0.3
+                       (window-height))))
+         (slot (window-parameter nil 'window-slot))
+         (point-pos (point))
+         ;; Build display parameters based on target side
+         (display-params
+          `((side . ,new-side)
+            (slot . ,(or slot 0))
+            (dedicated . t)
+            ;; Only set width for left/right, height for top/bottom
+            ,@(cond
+               ((memq new-side '(left right))
+                `((window-width . ,width)))
+               ((memq new-side '(top bottom))
+                `((window-height . ,height)))))))
+    ;; Delete the current side window
+    (delete-window)
+    ;; Display the buffer on the new side
+    (let ((new-window (display-buffer-in-side-window buf display-params)))
+      (select-window new-window)
+      ;; Store the dimensions for future moves
+      (set-window-parameter new-window '+preserved-width width)
+      (set-window-parameter new-window '+preserved-height height)
+      (goto-char point-pos)
+      (message "Moved side window from %s to %s" old-side new-side))))
+
 (defun +win-swap-up ()
-  "Swap current window with the one above, excluding side windows."
+  "Swap current window with the one above.
+If current window is a side window, move it to the top side."
   (interactive)
-  (when (+side-window-p (selected-window))
-    (user-error "Cannot swap from a side window"))
-  (when-let* ((target (window-in-direction 'above)))
-    (when (+side-window-p target)
-      (user-error "Cannot swap with a side window")))
-  (windmove-swap-states-up))
+  (if (+side-window-p (selected-window))
+      (let ((side (window-parameter nil 'window-side)))
+        (if (eq side 'top)
+            (user-error "Side window is already at the top")
+          (+move-side-window-to-side 'top)))
+    (when-let* ((target (window-in-direction 'above)))
+      (when (+side-window-p target)
+        (user-error "Cannot swap with a side window")))
+    (windmove-swap-states-up)))
 
 (defun +win-swap-down ()
-  "Swap current window with the one below, excluding side windows."
+  "Swap current window with the one below.
+If current window is a side window, move it to the bottom side."
   (interactive)
-  (when (+side-window-p (selected-window))
-    (user-error "Cannot swap from a side window"))
-  (when-let* ((target (window-in-direction 'below)))
-    (when (+side-window-p target)
-      (user-error "Cannot swap with a side window")))
-  (windmove-swap-states-down))
+  (if (+side-window-p (selected-window))
+      (let ((side (window-parameter nil 'window-side)))
+        (if (eq side 'bottom)
+            (user-error "Side window is already at the bottom")
+          (+move-side-window-to-side 'bottom)))
+    (when-let* ((target (window-in-direction 'below)))
+      (when (+side-window-p target)
+        (user-error "Cannot swap with a side window")))
+    (windmove-swap-states-down)))
 
 (defun +win-swap-left ()
-  "Swap current window with the one to the left, excluding side windows."
+  "Swap current window with the one to the left.
+If current window is a side window, move it to the left side."
   (interactive)
-  (when (+side-window-p (selected-window))
-    (user-error "Cannot swap from a side window"))
-  (when-let* ((target (window-in-direction 'left)))
-    (when (+side-window-p target)
-      (user-error "Cannot swap with a side window")))
-  (windmove-swap-states-left))
+  (if (+side-window-p (selected-window))
+      (let ((side (window-parameter nil 'window-side)))
+        (if (eq side 'left)
+            (user-error "Side window is already on the left")
+          (+move-side-window-to-side 'left)))
+    (when-let* ((target (window-in-direction 'left)))
+      (when (+side-window-p target)
+        (user-error "Cannot swap with a side window")))
+    (windmove-swap-states-left)))
 
 (defun +win-swap-right ()
-  "Swap current window with the one to the right, excluding side windows."
+  "Swap current window with the one to the right.
+If current window is a side window, move it to the right side."
   (interactive)
-  (when (+side-window-p (selected-window))
-    (user-error "Cannot swap from a side window"))
-  (when-let* ((target (window-in-direction 'right)))
-    (when (+side-window-p target)
-      (user-error "Cannot swap with a side window")))
-  (windmove-swap-states-right))
+  (if (+side-window-p (selected-window))
+      (let ((side (window-parameter nil 'window-side)))
+        (if (eq side 'right)
+            (user-error "Side window is already on the right")
+          (+move-side-window-to-side 'right)))
+    (when-let* ((target (window-in-direction 'right)))
+      (when (+side-window-p target)
+        (user-error "Cannot swap with a side window")))
+    (windmove-swap-states-right)))
 
 (provide '+window)
