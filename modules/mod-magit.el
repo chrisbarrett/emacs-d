@@ -8,6 +8,27 @@
 (require 'magit)
 (require 'general)
 
+;;; Display buffer configuration
+
+(defun +magit-display-buffer-same-frame (buffer)
+  "Display BUFFER in the same frame, preferring the selected window.
+Similar to `magit-display-buffer-same-window-except-diff-v1' but
+constrained to the current frame when using per-project frames."
+  (display-buffer
+   buffer
+   (cond
+    ;; If this is a diff buffer, display it in another window in the same frame
+    ((with-current-buffer buffer
+       (derived-mode-p 'magit-diff-mode))
+     '((display-buffer-reuse-window
+        display-buffer-below-selected
+        display-buffer-in-previous-window)
+       . ((inhibit-same-window . t)
+          (reusable-frames . nil))))  ; nil means current frame only
+    ;; For all other Magit buffers, use the same window
+    (t
+     '(display-buffer-same-window)))))
+
 ;;; Emoji rendering support
 
 (require 'json)

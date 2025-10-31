@@ -1656,7 +1656,7 @@ word.  Fall back to regular `expreg-expand'."
   :config
   (use-package mod-magit :demand t)
   :custom
-  (magit-display-buffer-function #'magit-display-buffer-same-window-except-diff-v1)
+  (magit-display-buffer-function #'+magit-display-buffer-same-frame)
   (magit-bury-buffer-function #'magit-restore-window-configuration)
   (magit-diff-visit-prefer-worktree t)
   (magit-diff-refine-hunk t)
