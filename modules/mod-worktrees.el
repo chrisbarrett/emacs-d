@@ -10,8 +10,7 @@
 
 ;;; Code:
 
-(require '+beads)
-(require '+bd-issue)
+(require 'beads)
 (require '+corelib)
 (require 'f)
 (require 'general)
@@ -42,7 +41,7 @@
   ["Beads Issues"
    :if +worktrees--repo-root
    ("n" "Create..." beads-issue-create)
-   ("l" "Show log..." beads-process-show-log)]
+   ("`" "Show log..." beads-process-show-log)]
 
   ["Show"
    :if +worktrees--repo-root
