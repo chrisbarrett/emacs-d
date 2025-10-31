@@ -1669,7 +1669,7 @@ word.  Fall back to regular `expreg-expand'."
   (magit-revision-insert-related-refs nil)
   (magit-format-file-function #'magit-format-file-nerd-icons))
 
-(use-package beads :ensure (beads :host github :repo "chrisbarrett/emacs-beads")
+(use-package beads :ensure (emacs-beads :host github :repo "chrisbarrett/emacs-beads" :main "beads.el")
   ;; Emacs integration for beads issue tracker
   :commands (beads-issue-create
              beads-process-call
