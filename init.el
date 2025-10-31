@@ -1673,7 +1673,9 @@ word.  Fall back to regular `expreg-expand'."
   ;; Emacs integration for beads issue tracker
   :commands (beads-issue-create
              beads-process-call
-             beads-process-show-log))
+             beads-process-show-log)
+  :custom
+  (beads-worktree-root-function #'+worktrees-path-for-selected-tab))
 
 (use-package mod-worktrees
   ;; Integrate git worktrees with tabs
