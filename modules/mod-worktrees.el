@@ -338,8 +338,10 @@ Requires a clean working tree (no uncommitted changes)."
 
       (+worktrees-close-tabs worktree-path)
 
-      (let ((magit-no-confirm '(trash)))
-        (magit-worktree-delete worktree-path))
+      (let ((magit-no-confirm '(trash))
+            (default-directory (+worktrees--repo-root)))
+        (magit-worktree-delete worktree-path)
+        (magit-branch-delete branch-name t))
       (message "Deleted worktree and branch: %s" branch-name))))
 
 (defun +worktrees-absorb-into-main ()
