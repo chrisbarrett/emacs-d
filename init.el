@@ -608,11 +608,18 @@ Runs `+escape-hook'."
                              nil t)))
          key fallback))))
 
+(defconst +chrisbarrett-elpaca-repos (seq-map (lambda (repo)
+                                                (file-name-concat elpaca-repos-directory (concat repo "/")))
+                                              '("emacs-beads" "nursery"))
+  "List of my repos managed via elpaca.")
+
 (when (boundp 'trusted-content)
   (add-to-list 'trusted-content (file-name-concat user-emacs-directory "early-init.el"))
   (add-to-list 'trusted-content (file-name-concat user-emacs-directory "init.el"))
   (add-to-list 'trusted-content +lisp-dir)
-  (add-to-list 'trusted-content +modules-dir))
+  (add-to-list 'trusted-content +modules-dir)
+  (dolist (repo +chrisbarrett-elpaca-repos)
+    (add-to-list 'trusted-content (abbreviate-file-name repo))))
 
 ;; Silence "For information about GNU Emacs and the GNU system..." on startup.
 (advice-add #'display-startup-echo-area-message :override #'ignore)
@@ -831,12 +838,10 @@ Runs `+escape-hook'."
                      file)
      (not
       ;; matches falsey
-      (string-match-p (rx (or
+      (string-match-p (rx-to-string `(or
                            ;;; ...except when they match these patterns.
-
-                           "/.git/" ; Ensure we can still use git.
-                           "/emacs/elpaca/repos/nursery/" ; My nursery repo is pulled in by elpaca
-                           ))
+                                      "/.git/" ; Ensure we can still use git.
+                                      ,@+chrisbarrett-elpaca-repos))
                       file)))))
 
 (add-hook! 'find-file-hook
