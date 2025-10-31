@@ -1965,6 +1965,14 @@ file in your browser at the visited revision."
         (ert t)
       (call-interactively #'ert))))
 
+(use-package flymake-eldev :ensure t
+  ;; Teach flymake to support eldev projects.
+  ;;
+  ;; See: https://emacs-eldev.github.io/eldev
+  ;;
+  ;; NOTE: Initialised automatically via an autoloaded form.
+  )
+
 (use-package nix-ts-mode :ensure t
   :mode "\\.nix\\'"
   :hook (nix-ts-mode-hook . eglot-ensure)
