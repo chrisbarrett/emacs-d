@@ -31,7 +31,8 @@
 
    ["Update"
     :if +worktrees-tab-dedicated-to-child-p
-    ("u" "Rebase on main" +worktrees-rebase-on-main)]
+    ("u" "Rebase on main" +worktrees-rebase-on-local-main)
+    ("U" "Rebase on origin/main" +worktrees-rebase-on-origin-main)]
 
    ["Complete"
     :if +worktrees-tab-dedicated-to-child-p
@@ -373,8 +374,8 @@ Requires a clean working tree (no uncommitted changes)."
     (when tab-bar-mode
       (tab-bar-close-tab))))
 
-(defun +worktrees-rebase-on-main ()
-  "Rebase the current worktree branch on main."
+(defun +worktrees-rebase-on-local-main ()
+  "Rebase the current worktree branch on local main branch."
   (interactive)
   (let ((worktree-path (+worktrees-path-for-selected-tab)))
     (unless worktree-path
@@ -389,10 +390,30 @@ Requires a clean working tree (no uncommitted changes)."
            (default-directory worktree-path)
            (default-branch (+worktrees--default-branch)))
 
-      (unless (yes-or-no-p (format "Rebase branch '%s' on %s? "
-                                   branch-name
-                                   default-branch))
-        (user-error "Rebase cancelled"))
+      (message "Rebasing %s on local %s..." branch-name default-branch)
+      ;; Use synchronous rebase on local branch
+      (unless (zerop (magit-call-git "rebase" default-branch))
+        (user-error "Rebase failed - resolve conflicts and run 'git rebase --continue'"))
+
+      (magit-refresh)
+      (message "Rebase successful: %s rebased on local %s"
+               branch-name default-branch))))
+
+(defun +worktrees-rebase-on-origin-main ()
+  "Rebase the current worktree branch on main."
+  (interactive)
+  (let ((worktree-path (+worktrees-path-for-selected-tab)))
+    (unless worktree-path
+      (user-error "Current tab is not associated with a worktree"))
+    (when (+worktrees-in-repo-root-p worktree-path)
+      (user-error "Refusing to act on root worktree"))
+
+    (unless (+worktrees--worktree-clean-p worktree-path)
+      (user-error "Worktree has uncommitted changes. Please commit or stash changes before rebase"))
+
+    (let* ((branch-name (+worktrees--worktree-branch worktree-path))
+           (default-directory worktree-path)
+           (default-branch (+worktrees--default-branch)))
 
       (let ((remote (magit-primary-remote)))
         (unless remote
