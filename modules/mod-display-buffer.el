@@ -109,6 +109,10 @@
                      ;; org-roam links
                      ,(rx bos "*org-roam*" eos)
                      ,(rx bos "*org-roam-links*" eos)
+
+                     ;; logs
+                     ,(rx bos "magit-process: ")
+                     ,(rx bos "*beads-process*" eos)
                      )
                    '(window-width . 80))))
 
