@@ -22,6 +22,9 @@
   "M-p" #'+bd-issue-prev-message
   "M-n" #'+bd-issue-next-message)
 
+(general-def :states '(normal) :keymaps '+bd-process-log-mode-map
+  "q" #'bury-buffer)
+
 ;; Keep shift-width in sync if mode changes.
 (setq-hook! 'after-change-major-mode
   evil-shift-width tab-width)

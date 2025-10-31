@@ -41,7 +41,8 @@
 
   ["Beads Issues"
    :if +worktrees--repo-root
-   ("n" "Create..." +bd-issue-create)]
+   ("n" "Create..." +bd-issue-create)
+   ("l" "Show log..." +bd-process-show-log)]
 
   ["Show"
    :if +worktrees--repo-root
