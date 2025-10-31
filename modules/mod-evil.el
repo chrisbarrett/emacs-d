@@ -15,14 +15,14 @@
 (setq evil-visual-state-cursor 'hollow)
 
 ;; Initial states for modes
-(evil-set-initial-state '+bd-issue-mode 'insert)
+(evil-set-initial-state 'beads-issue-mode 'insert)
 
-;; Keybindings for +bd-issue-mode (message history navigation)
-(general-def :states '(insert normal) :keymaps '+bd-issue-mode-map
-  "M-p" #'+bd-issue-prev-message
-  "M-n" #'+bd-issue-next-message)
+;; Keybindings for beads-issue-mode (message history navigation)
+(general-def :states '(insert normal) :keymaps 'beads-issue-mode-map
+  "M-p" #'beads-issue-prev-message
+  "M-n" #'beads-issue-next-message)
 
-(general-def :states '(normal) :keymaps '+bd-process-log-mode-map
+(general-def :states '(normal) :keymaps 'beads-process-log-mode-map
   "q" #'bury-buffer)
 
 ;; Keep shift-width in sync if mode changes.
