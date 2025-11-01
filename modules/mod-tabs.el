@@ -51,6 +51,10 @@
             (`())
             ('root
              (propertize "" 'face `(:background ,tab-bg :inherit success)))
+            ('epic
+             (propertize "" 'face `(:background ,tab-bg :inherit font-lock-constant-face)))
+            ('subagent
+             (propertize "" 'face `(:background ,tab-bg :inherit font-lock-builtin-face)))
             (_
              (propertize "" 'face `(:background ,tab-bg :inherit success)))))
          (name (propertize (alist-get 'name tab) 'face face)))
