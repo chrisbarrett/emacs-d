@@ -1834,7 +1834,9 @@ file in your browser at the visited revision."
            (claude-code-ide-continue))
          (select-window win)))))
   :config
-  (add-to-list 'project-list-exclude (rx "/.worktrees/"))
+  (pushnew! project-list-exclude
+            (rx "/.worktrees/")
+            (rx bol "/nix/store/"))
 
   (project-remember-project (project-try-vc user-emacs-directory))
   (project-remember-project (project-try-vc org-directory)))
