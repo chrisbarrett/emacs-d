@@ -45,7 +45,7 @@
    ("`" "Show log..." beads-process-show-log)]
 
   ["Show"
-   :if +worktrees--repo-root
+   :inapt-if-not +worktrees--repo-root
    ("g" "git status" +worktrees-magit-status)
    ("c" "claude-code" +worktrees-claude-code)])
 
