@@ -173,6 +173,32 @@ If EXCLUDE-ROOT is non-nil, return nil if the worktree is the repo root."
          (message "Warning: Failed to update .claude.json: %s"
                   (error-message-string err)))))))
 
+(defun +worktrees--write-claude-worktree-info (worktree-path issue)
+  (let* ((id (alist-get 'id issue))
+         (title (alist-get 'title issue))
+         (description (alist-get 'description issue))
+         (claude-dir (expand-file-name ".claude" worktree-path))
+         (context-file (expand-file-name "issue-context.md" claude-dir))
+         (prompt (format "# Working on: %s\n\n## %s\n\n%s"
+                         id title (or description ""))))
+    ;; Ensure .claude directory exists
+    (make-directory claude-dir t)
+    (with-current-buffer (get-buffer-create "*claude-issue-context*")
+      (erase-buffer)
+      (insert prompt)
+      (write-region (point-min) (point-max) context-file nil 'silent))
+    (message "Issue context saved for Claude: %s" id)))
+
+
+;;; Worktree layouts
+
+(cl-defgeneric +worktrees-new-tab-layout (_type worktree-path)
+  (magit-status-setup-buffer worktree-path)
+  (+worktrees-claude-code worktree-path))
+
+(cl-defmethod +worktrees-new-tab-layout ((_type (eql 'subagent)) worktree-path)
+  (magit-status-setup-buffer worktree-path))
+
 
 ;;; Worktree operations
 
@@ -225,8 +251,11 @@ If no such worktree exists, create it."
       (tab-bar-rename-tab project-name)
       t)))
 
-(defun +worktrees-open-tab (worktree-path &optional issue)
+(defun +worktrees-open-tab (worktree-path &optional type issue)
   "Open a tab for WORKTREE-PATH, creating it if needed.
+
+If TYPE is set, this will be used to determine the type of tab
+that will be created.
 
 If ISSUE is provided, write a markdown description of the issue into the
 new worktree to hand over the context to a dedicated claude-code
@@ -235,91 +264,24 @@ instance."
   (if-let* ((existing-tab (+worktrees--tab-for-worktree worktree-path)))
       (tab-bar-select-tab (1+ (tab-bar--tab-index existing-tab)))
     ;; Initialise new tab
-    (let ((tab-name (+worktrees--worktree-branch worktree-path)))
+    (let ((tab-name (+worktrees--worktree-branch worktree-path))
+          (type (if type (symbol-name type) 'branch)))
       (tab-bar-new-tab)
       (tab-bar-rename-tab tab-name)
-      ;; Store worktree path in the current tab
+
+      ;; Store contextual information in the current tab.
+      ;;
+      ;; This information is interpreted into an initial layout for the tab, and
+      ;; is also used to customise the icon for the tab.
       (let ((current-tab (tab-bar--current-tab-find)))
-        (setf (alist-get 'worktree-type (cdr current-tab)) 'child)
+        (setf (alist-get 'worktree-type (cdr current-tab)) type)
         (setf (alist-get 'worktree-path (cdr current-tab)) worktree-path)))
 
-    (magit-status-setup-buffer worktree-path)
-    (+worktrees-claude-code worktree-path))
+    ;; Dispatch to a concrete layout via generic method.
+    (+worktrees-new-tab-layout type worktree-path)
 
-
-  ;; If an issue was provided, save issue context for Claude
-  (when issue
-    (let* ((id (alist-get 'id issue))
-           (title (alist-get 'title issue))
-           (description (alist-get 'description issue))
-           (claude-dir (expand-file-name ".claude" worktree-path))
-           (context-file (expand-file-name "issue-context.md" claude-dir))
-           (prompt (format "# Working on: %s\n\n## %s\n\n%s"
-                           id title (or description ""))))
-      ;; Ensure .claude directory exists
-      (make-directory claude-dir t)
-      (with-current-buffer (get-buffer-create "*claude-issue-context*")
-        (erase-buffer)
-        (insert prompt)
-        (write-region (point-min) (point-max) context-file nil 'silent))
-      (message "Issue context saved for Claude: %s" id))))
-
-(defun +worktrees-open-epic-tab (worktree-path)
-  "Open epic tab for WORKTREE-PATH.
-
-Shows magit status on left and logs directory on right with refresh-on-focus."
-  (if-let* ((existing-tab (+worktrees--tab-for-worktree worktree-path)))
-      (tab-bar-select-tab (1+ (tab-bar--tab-index existing-tab)))
-    ;; Initialise new tab
-    (let ((tab-name (+worktrees--worktree-branch worktree-path)))
-      (tab-bar-new-tab)
-      (tab-bar-rename-tab tab-name)
-      ;; Store worktree path in the current tab
-      (let ((current-tab (tab-bar--current-tab-find)))
-        (setf (alist-get 'worktree-type (cdr current-tab)) 'epic)
-        (setf (alist-get 'worktree-path (cdr current-tab)) worktree-path)))
-    (magit-status-setup-buffer worktree-path)
-    (+worktrees-claude-code worktree-path)))
-
-(defun +worktrees-open-subagent-tab (worktree-path)
-  "Open orchestrator monitoring tab for WORKTREE-PATH.
-
-Shows magit status on left and logs directory on right with refresh-on-focus."
-  (if-let* ((existing-tab (+worktrees--tab-for-worktree worktree-path)))
-      (tab-bar-select-tab (1+ (tab-bar--tab-index existing-tab)))
-    ;; Initialise new tab
-    (let ((tab-name (+worktrees--worktree-branch worktree-path)))
-      (tab-bar-new-tab)
-      (tab-bar-rename-tab tab-name)
-      ;; Store worktree path in the current tab
-      (let ((current-tab (tab-bar--current-tab-find)))
-        (setf (alist-get 'worktree-type (cdr current-tab)) 'subagent)
-        (setf (alist-get 'worktree-path (cdr current-tab)) worktree-path)))
-    (magit-status-setup-buffer worktree-path)))
-
-(defun +worktrees--refresh-logs-buffer-on-focus (window)
-  "Refresh logs buffer when WINDOW is selected, if marked for refresh-on-focus."
-  (when (and (eq window (selected-window))
-             (buffer-local-value '+worktrees--refresh-on-focus (window-buffer window)))
-    (with-current-buffer (window-buffer window)
-      (when (derived-mode-p 'dired-mode)
-        (revert-buffer nil t)))))  ; NOCONFIRM PRESERVE-MODES
-
-(defun +worktrees--refresh-orchestrator-tab (&rest _)
-  "Refresh logs buffer in orchestrator tabs when switching to them.
-Hook function for `tab-bar-post-select-functions'."
-  (when tab-bar-mode
-    (let ((current-tab (tab-bar--current-tab)))
-      (when (eq (alist-get 'worktree-type current-tab) 'orchestrator)
-        ;; Find the logs dired buffer in this tab and refresh it
-        (dolist (window (window-list))
-          (with-current-buffer (window-buffer window)
-            (when (and (derived-mode-p 'dired-mode)
-                       (buffer-local-value '+worktrees--refresh-on-focus (current-buffer)))
-              (revert-buffer nil t))))))))
-
-;; Refresh orchestrator logs when switching tabs
-(add-hook 'tab-bar-post-select-functions #'+worktrees--refresh-orchestrator-tab)
+    (when issue
+      (+worktrees--write-claude-worktree-info worktree-path issue))))
 
 (defun +worktrees--branch-name-from-issue (issue)
   "Generate a git branch name from ISSUE."
