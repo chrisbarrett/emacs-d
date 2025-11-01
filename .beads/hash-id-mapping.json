@@ -1,0 +1,66 @@
+{
+  "count": 15,
+  "mapping": [
+    {
+      "old_id": "emacs-1",
+      "new_id": "emacs-6147a721"
+    },
+    {
+      "old_id": "emacs-10",
+      "new_id": "emacs-67066ad8"
+    },
+    {
+      "old_id": "emacs-11",
+      "new_id": "emacs-55761d1d"
+    },
+    {
+      "old_id": "emacs-12",
+      "new_id": "emacs-84f4c8a0"
+    },
+    {
+      "old_id": "emacs-13",
+      "new_id": "emacs-1ed27f39"
+    },
+    {
+      "old_id": "emacs-14",
+      "new_id": "emacs-faf46391"
+    },
+    {
+      "old_id": "emacs-15",
+      "new_id": "emacs-5857448b"
+    },
+    {
+      "old_id": "emacs-2",
+      "new_id": "emacs-9c75319a"
+    },
+    {
+      "old_id": "emacs-3",
+      "new_id": "emacs-80dc54ea"
+    },
+    {
+      "old_id": "emacs-4",
+      "new_id": "emacs-00a1f4e9"
+    },
+    {
+      "old_id": "emacs-5",
+      "new_id": "emacs-4cf0181a"
+    },
+    {
+      "old_id": "emacs-6",
+      "new_id": "emacs-94eea8ad"
+    },
+    {
+      "old_id": "emacs-7",
+      "new_id": "emacs-839ed1e8"
+    },
+    {
+      "old_id": "emacs-8",
+      "new_id": "emacs-6cf6a599"
+    },
+    {
+      "old_id": "emacs-9",
+      "new_id": "emacs-58511580"
+    }
+  ],
+  "migrated_at": "2025-11-01T22:29:46+13:00"
+}
