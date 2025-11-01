@@ -2522,6 +2522,7 @@ subprocess calls on every file open, especially problematic in TTY."
   :custom
   (claude-code-ide-terminal-backend 'eat)
   (claude-code-ide-enable-mcp-server t)
+  (claude-code-ide-cli-path "~/.local/bin/claude")
   ;; disable ediff for proposed changes--too interruptive.
   (claude-code-ide-use-ide-diff nil)
   :config
