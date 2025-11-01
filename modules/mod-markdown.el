@@ -49,6 +49,11 @@
   "Face for [!CAUTION] callout markers."
   :group 'markdown-faces)
 
+(defface +markdown-prettier-ignore-comment-face
+  '((t :inherit shadow :weight light))
+  "Face for prettier-ignore comments."
+  :group 'markdown-faces)
+
 ;; Add font-lock support for GitHub Flavored Markdown callouts
 (defun +markdown-fontify-gfm-callouts ()
   "Add font-lock keywords for GFM callout syntax."
@@ -62,7 +67,10 @@
                             ;; WARNING - potential problems (warning face, semibold)
                             (,(rx bol "> " "[!" (group "WARNING") "]") 1 '+markdown-gfm-callout-warning-face prepend)
                             ;; CAUTION - danger/severe issues (error face, semibold)
-                            (,(rx bol "> " "[!" (group "CAUTION") "]") 1 '+markdown-gfm-callout-caution-face prepend))))
+                            (,(rx bol "> " "[!" (group "CAUTION") "]") 1 '+markdown-gfm-callout-caution-face prepend)
+                            ;; prettier-ignore comments - subtle, light weight
+                            (,(rx bol (* space) "<!--" (1+ space) "prettier-ignore-start" (1+ space) "-->") 0 '+markdown-prettier-ignore-comment-face prepend)
+                            (,(rx bol (* space) "<!--" (1+ space) "prettier-ignore-end" (1+ space) "-->") 0 '+markdown-prettier-ignore-comment-face prepend))))
 
 (add-hook 'markdown-mode-hook #'+markdown-fontify-gfm-callouts)
 (add-hook 'gfm-mode-hook #'+markdown-fontify-gfm-callouts)
