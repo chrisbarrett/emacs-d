@@ -264,6 +264,63 @@ instance."
         (write-region (point-min) (point-max) context-file nil 'silent))
       (message "Issue context saved for Claude: %s" id))))
 
+(defun +worktrees-open-epic-tab (worktree-path)
+  "Open epic tab for WORKTREE-PATH.
+
+Shows magit status on left and logs directory on right with refresh-on-focus."
+  (if-let* ((existing-tab (+worktrees--tab-for-worktree worktree-path)))
+      (tab-bar-select-tab (1+ (tab-bar--tab-index existing-tab)))
+    ;; Initialise new tab
+    (let ((tab-name (+worktrees--worktree-branch worktree-path)))
+      (tab-bar-new-tab)
+      (tab-bar-rename-tab tab-name)
+      ;; Store worktree path in the current tab
+      (let ((current-tab (tab-bar--current-tab-find)))
+        (setf (alist-get 'worktree-type (cdr current-tab)) 'epic)
+        (setf (alist-get 'worktree-path (cdr current-tab)) worktree-path)))
+    (magit-status-setup-buffer worktree-path)
+    (+worktrees-claude-code worktree-path)))
+
+(defun +worktrees-open-subagent-tab (worktree-path)
+  "Open orchestrator monitoring tab for WORKTREE-PATH.
+
+Shows magit status on left and logs directory on right with refresh-on-focus."
+  (if-let* ((existing-tab (+worktrees--tab-for-worktree worktree-path)))
+      (tab-bar-select-tab (1+ (tab-bar--tab-index existing-tab)))
+    ;; Initialise new tab
+    (let ((tab-name (+worktrees--worktree-branch worktree-path)))
+      (tab-bar-new-tab)
+      (tab-bar-rename-tab tab-name)
+      ;; Store worktree path in the current tab
+      (let ((current-tab (tab-bar--current-tab-find)))
+        (setf (alist-get 'worktree-type (cdr current-tab)) 'subagent)
+        (setf (alist-get 'worktree-path (cdr current-tab)) worktree-path)))
+    (magit-status-setup-buffer worktree-path)))
+
+(defun +worktrees--refresh-logs-buffer-on-focus (window)
+  "Refresh logs buffer when WINDOW is selected, if marked for refresh-on-focus."
+  (when (and (eq window (selected-window))
+             (buffer-local-value '+worktrees--refresh-on-focus (window-buffer window)))
+    (with-current-buffer (window-buffer window)
+      (when (derived-mode-p 'dired-mode)
+        (revert-buffer nil t)))))  ; NOCONFIRM PRESERVE-MODES
+
+(defun +worktrees--refresh-orchestrator-tab (&rest _)
+  "Refresh logs buffer in orchestrator tabs when switching to them.
+Hook function for `tab-bar-post-select-functions'."
+  (when tab-bar-mode
+    (let ((current-tab (tab-bar--current-tab)))
+      (when (eq (alist-get 'worktree-type current-tab) 'orchestrator)
+        ;; Find the logs dired buffer in this tab and refresh it
+        (dolist (window (window-list))
+          (with-current-buffer (window-buffer window)
+            (when (and (derived-mode-p 'dired-mode)
+                       (buffer-local-value '+worktrees--refresh-on-focus (current-buffer)))
+              (revert-buffer nil t))))))))
+
+;; Refresh orchestrator logs when switching tabs
+(add-hook 'tab-bar-post-select-functions #'+worktrees--refresh-orchestrator-tab)
+
 (defun +worktrees--branch-name-from-issue (issue)
   "Generate a git branch name from ISSUE."
   (let* ((id (alist-get 'id issue))
