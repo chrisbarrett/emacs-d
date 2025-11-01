@@ -7,11 +7,27 @@
 (require 'markdown-mode)
 (require 'general)
 
+;;; TAB behavior
+
+(defun +markdown-tab-dwim ()
+  "Try to expand a snippet, otherwise fall back to `markdown-cycle'.
+This function first attempts tempel snippet expansion. If no snippet
+expansion occurs, it falls back to the default `markdown-cycle' behavior."
+  (interactive)
+  (or (when (fboundp 'tempel-expand)
+        (condition-case nil
+            (tempel-expand t)
+          (user-error nil)))
+      (markdown-cycle)))
+
 ;;; Keybindings
 
 (+local-leader-set-key 'markdown-mode-map
   "l" '(markdown-toggle-url-hiding :wk "toggle URLs")
   "f" '(markdown-insert-footnote :wk "insert footnote"))
+
+(general-def :states 'insert :keymaps '(markdown-mode-map gfm-mode-map)
+  "TAB" #'+markdown-tab-dwim)
 
 ;;; Formatting
 
