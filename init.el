@@ -1833,6 +1833,15 @@ file in your browser at the visited revision."
          (when (display-graphic-p)
            (claude-code-ide-continue))
          (select-window win)))))
+
+  :preface
+  (defun +project-find-file-other-window ()
+    (interactive)
+    (other-window-prefix)
+    (call-interactively #'project-find-file))
+  :general
+  ("M-?" '+project-find-file-other-window)
+
   :config
   (pushnew! project-list-exclude
             (rx "/.worktrees/")
