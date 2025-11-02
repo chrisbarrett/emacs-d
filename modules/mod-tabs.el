@@ -52,7 +52,10 @@
             ('root
              (propertize "" 'face `(:background ,tab-bg :inherit success)))
             ('epic
-             (propertize "" 'face `(:background ,tab-bg :inherit font-lock-constant-face)))
+             (propertize ""
+                         'face `(:background ,tab-bg :inherit font-lock-constant-face)
+                         ;; Manual centring
+                         'display '(raise 0.13)))
             ('subagent
              (propertize "" 'face `(:background ,tab-bg :inherit font-lock-builtin-face)))
             (_
