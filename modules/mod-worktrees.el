@@ -508,6 +508,33 @@ Returns a list of closed tab names."
   (with-no-warnings
     (magit-status (+worktrees-path-for-selected-tab))))
 
+(defun +worktrees-refresh-magit (worktree-path)
+  "Refresh magit buffers for WORKTREE-PATH.
+Find the tab showing WORKTREE-PATH, and if it exists, look through
+the magit-status buffers in that frame and call `magit-refresh' with
+each buffer as current.
+
+Returns t if any refresh took place, otherwise nil."
+  (when-let* ((tab (+worktrees--tab-for-worktree worktree-path)))
+    (let ((refreshed nil)
+          (tab-index (seq-position (funcall tab-bar-tabs-function) tab)))
+      (when tab-index
+        ;; Find the frame containing this tab
+        (dolist (frame (frame-list))
+          (with-selected-frame frame
+            (when (seq-find (lambda (tab-in-frame)
+                              (equal (alist-get 'name tab-in-frame)
+                                     (alist-get 'name tab)))
+                            (funcall tab-bar-tabs-function))
+              ;; Found the frame, now look for magit buffers
+              (dolist (buf (buffer-list frame))
+                (with-current-buffer buf
+                  (when (and (derived-mode-p 'magit-status-mode)
+                             (string-prefix-p worktree-path default-directory))
+                    (magit-refresh)
+                    (setq refreshed t))))))))
+      refreshed)))
+
 (provide 'mod-worktrees)
 
 ;;; mod-worktrees.el ends here
