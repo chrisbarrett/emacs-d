@@ -265,7 +265,11 @@ instance."
       (tab-bar-select-tab (1+ (tab-bar--tab-index existing-tab)))
     ;; Initialise new tab
     (let ((tab-name (+worktrees--worktree-branch worktree-path))
-          (type (if type (symbol-name type) 'branch)))
+          (type (cond
+                 ((null type) 'branch)
+                 ((symbolp type) type)
+                 ((stringp type) (intern type))
+                 (t 'branch))))
       (tab-bar-new-tab)
       (tab-bar-rename-tab tab-name)
 
