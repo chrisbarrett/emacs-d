@@ -302,7 +302,9 @@ Runs `+escape-hook'."
   ("M-S-."  #'tab-bar-switch-to-next-tab
    "M->"    #'tab-bar-switch-to-next-tab
    "M-S-,"  #'tab-bar-switch-to-prev-tab
-   "M-<"    #'tab-bar-switch-to-prev-tab)
+   "M-<"    #'tab-bar-switch-to-prev-tab
+   "M-C-," #'tab-bar-move-tab-backward
+   "M-C-." #'tab-bar-move-tab)
   :init
   (tab-bar-mode +1)
   :config
