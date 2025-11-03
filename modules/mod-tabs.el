@@ -56,7 +56,7 @@
                          'face `(:background ,tab-bg :inherit font-lock-constant-face)
                          ;; Manual centring
                          'display '(raise 0.13)))
-            ('subagent
+            ((or 'subagent 'task)
              (propertize "" 'face `(:background ,tab-bg :inherit font-lock-builtin-face)))
             (_
              (propertize "" 'face `(:background ,tab-bg :inherit success)))))
