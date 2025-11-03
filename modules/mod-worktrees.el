@@ -21,6 +21,8 @@
 
 (autoload 'dired-jump "dired-x")
 (autoload 'claude-code-ide "claude-code-ide")
+(autoload 'claude-code-ide-send-prompt "claude-code-ide")
+(autoload 'claude-code-ide--get-process "claude-code-ide")
 
 (transient-define-prefix +worktrees-menu ()
   "Transient menu for git worktree operations."
@@ -192,11 +194,11 @@ If EXCLUDE-ROOT is non-nil, return nil if the worktree is the repo root."
 
 ;;; Worktree layouts
 
-(cl-defgeneric +worktrees-new-tab-layout (_type worktree-path)
+(cl-defgeneric +worktrees-new-tab-layout (_type worktree-path &optional initial-command)
   (magit-status-setup-buffer worktree-path)
-  (+worktrees-claude-code worktree-path))
+  (+worktrees-claude-code worktree-path initial-command))
 
-(cl-defmethod +worktrees-new-tab-layout ((_type (eql 'subagent)) worktree-path)
+(cl-defmethod +worktrees-new-tab-layout ((_type (eql 'subagent)) worktree-path  &optional _initial-command)
   (magit-status-setup-buffer worktree-path))
 
 
@@ -224,13 +226,19 @@ If no such worktree exists, create it."
         (magit-worktree-branch path branch start-point)
         (+worktrees-open-tab path)))))
 
-(defun +worktrees-claude-code (worktree-path)
-  "Run claude-code for the worktree at WORKTREE-PATH."
+(defun +worktrees-claude-code (worktree-path &optional initial-command)
+  "Run claude-code for the worktree at WORKTREE-PATH.
+
+When INITIAL-COMMAND is provided, run that."
   (interactive (list (or (+worktrees-path-for-selected-tab)
                          (user-error "Selected tab not associated with a worktree"))))
   (+worktrees--ensure-claude-trust worktree-path)
   (let ((default-directory worktree-path)
-        (project-find-functions nil))
+        (project-find-functions nil)
+        (claude-code-ide-cli-extra-flags (concat claude-code-ide-cli-extra-flags
+                                                 (if initial-command
+                                                     (shell-quote-argument initial-command)
+                                                   ""))))
     (ignore-errors
       (claude-code-ide))))
 
@@ -251,7 +259,7 @@ If no such worktree exists, create it."
       (tab-bar-rename-tab project-name)
       t)))
 
-(defun +worktrees-open-tab (worktree-path &optional type issue)
+(defun +worktrees-open-tab (worktree-path &optional type issue claude-command)
   "Open a tab for WORKTREE-PATH, creating it if needed.
 
 If TYPE is set, this will be used to determine the type of tab
@@ -259,7 +267,10 @@ that will be created.
 
 If ISSUE is provided, write a markdown description of the issue into the
 new worktree to hand over the context to a dedicated claude-code
-instance."
+instance.
+
+If CLAUDE-COMMAND is provided, run claude-code with that command as its
+initial action."
   (interactive (list (completing-read "Worktree: " (magit-list-worktrees) nil t)))
   (if-let* ((existing-tab (+worktrees--tab-for-worktree worktree-path)))
       (tab-bar-select-tab (1+ (tab-bar--tab-index existing-tab)))
@@ -282,7 +293,7 @@ instance."
         (setf (alist-get 'worktree-path (cdr current-tab)) worktree-path)))
 
     ;; Dispatch to a concrete layout via generic method.
-    (+worktrees-new-tab-layout type worktree-path)
+    (+worktrees-new-tab-layout type worktree-path claude-command)
 
     (when issue
       (+worktrees--write-claude-worktree-info worktree-path issue))))
