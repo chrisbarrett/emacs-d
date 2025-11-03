@@ -74,17 +74,13 @@ expansion occurs, it falls back to the default `markdown-cycle' behavior."
 (defun +markdown-fontify-gfm-callouts ()
   "Add font-lock keywords for GFM callout syntax."
   (font-lock-add-keywords nil
-                          `(;; NOTE - informational (cyan, semibold)
+                          `(
                             (,(rx bol "> " "[!" (group "NOTE") "]") 1 '+markdown-gfm-callout-note-face prepend)
-                            ;; TIP - helpful suggestion (keyword color, semibold)
                             (,(rx bol "> " "[!" (group "TIP") "]") 1 '+markdown-gfm-callout-tip-face prepend)
-                            ;; IMPORTANT - critical information (warning color, semibold)
                             (,(rx bol "> " "[!" (group "IMPORTANT") "]") 1 '+markdown-gfm-callout-important-face prepend)
-                            ;; WARNING - potential problems (warning face, semibold)
                             (,(rx bol "> " "[!" (group "WARNING") "]") 1 '+markdown-gfm-callout-warning-face prepend)
-                            ;; CAUTION - danger/severe issues (error face, semibold)
                             (,(rx bol "> " "[!" (group "CAUTION") "]") 1 '+markdown-gfm-callout-caution-face prepend)
-                            ;; prettier-ignore comments - subtle, light weight
+                            (,(rx bol "> " "[!" (group "CRITICAL") "]") 1 '+markdown-gfm-callout-caution-face prepend)
                             (,(rx bol (* space) "<!--" (1+ space) "prettier-ignore-start" (1+ space) "-->") 0 '+markdown-prettier-ignore-comment-face prepend)
                             (,(rx bol (* space) "<!--" (1+ space) "prettier-ignore-end" (1+ space) "-->") 0 '+markdown-prettier-ignore-comment-face prepend))))
 
