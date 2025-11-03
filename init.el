@@ -1088,6 +1088,11 @@ Runs `+escape-hook'."
   :config
   (+local-leader-set-key 'dired-mode-map
     "t" '(dired-toggle-marks :wk "toggle marks")
+    "d" '(dired-hide-details-mode :wk "toggle details")
+    "l" '(nil :wk "fs links")
+    "ls" '(dired-do-symlink :wk "symlink (absolute)")
+    "lr" '(dired-do-relsymlink :wk "symlink (relative)")
+    "lh" '(dired-do-hardlink :wk "hardlink")
     "s" '(nil :wk "subdir")
     "si" '(dired-insert-subdir :wk "insert")
     "sx" '(dired-kill-subdir :wk "kill"))
