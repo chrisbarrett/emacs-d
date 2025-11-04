@@ -77,6 +77,19 @@
     (or (and branch (cdr (magit-split-branch-name branch)))
         "main")))
 
+(defun +worktrees--github-repo-name ()
+  "Extract GitHub repository name in owner/name format from remote URL."
+  (when-let* ((remote (or (magit-primary-remote) "origin"))
+              (url (magit-git-string "remote" "get-url" remote)))
+    (when (string-match (rx (or "git@github.com:" "https://github.com/")
+                            (group (+ (not (any "/"))))  ; owner
+                            "/"
+                            (group (+ (not (any "/" space))))  ; name
+                            (? ".git")
+                            eos)
+                        url)
+      (format "%s/%s" (match-string 1 url) (match-string 2 url)))))
+
 (defun +worktrees--project-root ()
   (when-let* ((project (project-current)))
     (project-root project)))
@@ -246,7 +259,8 @@ When INITIAL-COMMAND is provided, run that."
   "Set up the initial tab to represent the repo root."
   (when tab-bar-mode
     (let* ((repo-root (+worktrees--repo-root))
-           (project-name (or (and (frame-parameter nil 'project-root)
+           (project-name (or (+worktrees--github-repo-name)
+                             (and (frame-parameter nil 'project-root)
                                   (file-name-nondirectory
                                    (directory-file-name (frame-parameter nil 'project-root))))
                              (file-name-nondirectory
