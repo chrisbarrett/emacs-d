@@ -5,6 +5,7 @@
 ;;; Code:
 
 (require '+corelib)
+(require '+git)
 (require 'beframe)
 (require 'general)
 (require 'project)
@@ -56,8 +57,10 @@ current beframe context."
             (other-frame-prefix))))
 
        (project-switch-project dir)
-       (set-frame-parameter nil 'name (file-name-nondirectory dir))
        (set-frame-parameter nil 'project-root dir)
+       (let ((frame-name (or (+git-repo-display-name)
+                             (file-name-nondirectory dir))))
+         (set-frame-parameter nil 'name frame-name))
        (when (fboundp '+worktrees-adopt-initial-tab)
          (+worktrees-adopt-initial-tab)))
 
