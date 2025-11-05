@@ -298,6 +298,7 @@ Runs `+escape-hook'."
   ;; worktrees.
   :custom
   (tab-bar-close-button-show 'selected)
+  (tab-bar-auto-width-max '((270) 25))
   :general
   ("M-S-."  #'tab-bar-switch-to-next-tab
    "M->"    #'tab-bar-switch-to-next-tab
