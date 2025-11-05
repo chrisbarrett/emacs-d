@@ -21,9 +21,15 @@
 (require 'transient)
 
 (autoload 'dired-jump "dired-x")
+
 (autoload 'claude-code-ide "claude-code-ide")
 (autoload 'claude-code-ide-send-prompt "claude-code-ide")
 (autoload 'claude-code-ide--get-process "claude-code-ide")
+(defvar claude-code-ide-cli-extra-flags nil)
+
+;; (autoload 'beads-workon-issue "beads")
+(defun beads-workon-issue ()
+  (user-error "Not implemented"))
 
 (transient-define-prefix +worktrees-menu ()
   "Transient menu for git worktree operations."
@@ -176,22 +182,6 @@ If EXCLUDE-ROOT is non-nil, return nil if the worktree is the repo root."
          (message "Warning: Failed to update .claude.json: %s"
                   (error-message-string err)))))))
 
-(defun +worktrees--write-claude-worktree-info (worktree-path issue)
-  (let* ((id (alist-get 'id issue))
-         (title (alist-get 'title issue))
-         (description (alist-get 'description issue))
-         (claude-dir (expand-file-name ".claude" worktree-path))
-         (context-file (expand-file-name "issue-context.md" claude-dir))
-         (prompt (format "# Working on: %s\n\n## %s\n\n%s"
-                         id title (or description ""))))
-    ;; Ensure .claude directory exists
-    (make-directory claude-dir t)
-    (with-current-buffer (get-buffer-create "*claude-issue-context*")
-      (erase-buffer)
-      (insert prompt)
-      (write-region (point-min) (point-max) context-file nil 'silent))
-    (message "Issue context saved for Claude: %s" id)))
-
 
 ;;; Worktree layouts
 
@@ -261,15 +251,11 @@ When INITIAL-COMMAND is provided, run that."
       (tab-bar-rename-tab project-name)
       t)))
 
-(defun +worktrees-open-tab (worktree-path &optional type issue claude-command)
+(defun +worktrees-open-tab (worktree-path &optional type claude-command)
   "Open a tab for WORKTREE-PATH, creating it if needed.
 
-If TYPE is set, this will be used to determine the type of tab
-that will be created.
-
-If ISSUE is provided, write a markdown description of the issue into the
-new worktree to hand over the context to a dedicated claude-code
-instance.
+If TYPE is set, this will be used to determine the type of tab that will
+be created. See generic function `+worktrees-new-tab-layout'.
 
 If CLAUDE-COMMAND is provided, run claude-code with that command as its
 initial action."
@@ -295,10 +281,7 @@ initial action."
         (setf (alist-get 'worktree-path (cdr current-tab)) worktree-path)))
 
     ;; Dispatch to a concrete layout via generic method.
-    (+worktrees-new-tab-layout type worktree-path claude-command)
-
-    (when issue
-      (+worktrees--write-claude-worktree-info worktree-path issue))))
+    (+worktrees-new-tab-layout type worktree-path claude-command)))
 
 (defun +worktrees--branch-name-from-issue (issue)
   "Generate a git branch name from ISSUE."
@@ -319,7 +302,7 @@ worktree with a branch name derived from the issue ID and title."
   (unless (+worktrees--project-root)
     (user-error "Not in a git project"))
 
-  (when-let* ((issue (+beads-pick-issue))
+  (when-let* ((issue (beads-workon-issue))
               (branch-name (+worktrees--branch-name-from-issue issue))
               (worktrees (magit-list-worktrees))
               (default-directory (+worktrees--repo-root)))
@@ -331,7 +314,7 @@ worktree with a branch name derived from the issue ID and title."
                          worktrees)))
         (progn
           (message "Switching to existing worktree for %s" branch-name)
-          (+worktrees-open-tab (car existing-worktree) issue))
+          (+worktrees-open-tab (car existing-worktree)))
 
       ;; Create new worktree
       (let* ((worktree-path (file-name-concat (+worktrees--repo-root)
@@ -342,7 +325,7 @@ worktree with a branch name derived from the issue ID and title."
         (magit-run-git "worktree" "add" "-b" branch-name
                        (magit--expand-worktree worktree-path)
                        "HEAD")
-        (+worktrees-open-tab worktree-path issue)
+        (+worktrees-open-tab worktree-path)
 
         ;; Update beads to mark issue as in_progress
         (let ((issue-id (alist-get 'id issue)))
