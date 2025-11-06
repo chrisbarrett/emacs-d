@@ -1839,7 +1839,7 @@ file in your browser at the visited revision."
            (magit-status-setup-buffer root)
          (dired root))
        (let ((win (selected-window)))
-         (when (display-graphic-p)
+         (when (and (display-graphic-p) (null current-prefix-arg))
            (claude-code-ide-continue))
          (select-window win)))))
 
