@@ -878,7 +878,7 @@ Runs `+escape-hook'."
   :hook ((completion-list-mode-hook
           Man-mode-hook
           ielm-mode-hook
-          magit-status-mode
+          magit-setup-buffer-hook
           calendar-mode-hook
           eshell-mode-hook
           compilation-mode-hook
