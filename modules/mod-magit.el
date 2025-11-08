@@ -7,6 +7,10 @@
 (require '+corelib)
 (require 'magit)
 (require 'general)
+(require 'no-littering)
+
+(cl-eval-when (compile)
+  (require 'pulsar nil t))
 
 ;;; Display buffer configuration
 
@@ -102,7 +106,7 @@ constrained to the current frame when using per-project frames."
       nil)))
 
 (defun +git-commit-enable-emoji-display ()
-  "Enable emoji display in git-commit-mode buffers."
+  "Enable emoji display in `git-commit-mode' buffers."
   (font-lock-add-keywords nil '((+git-commit-fontify-emoji)) t))
 
 (add-hook 'git-commit-mode-hook #'+git-commit-enable-emoji-display)
