@@ -2036,19 +2036,8 @@ file in your browser at the visited revision."
 
 (use-package typescript-ts-mode
   :hook (typescript-ts-mode-hook . eglot-ensure)
-  :init
-  (with-eval-after-load 'project
-    (pushnew! project-vc-ignores ".nx/")
-    (pushnew! project-vc-extra-root-markers "nx.json" "cdk.json"))
   :config
-  (pushnew! find-sibling-rules
-            ;; Tests -> impl
-            (list (rx (group (+? any)) (or ".test" ".integration") ".ts" eos)
-                  (rx (backref 1) ".ts"))
-            ;; Impl -> tests
-            (list (rx (group (+? any)) ".ts" eos)
-                  (rx (backref 1) ".test.ts")
-                  (rx (backref 1) ".integration.ts"))))
+  (use-package mod-typescript :demand t))
 
 (use-package c-ts-mode
   :general-config
