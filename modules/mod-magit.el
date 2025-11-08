@@ -200,6 +200,46 @@ Be specific about what changed. Only respond with the commit message, no explana
   (transient-append-suffix 'magit-commit "c"
     '("l" "LLM-generated message" +magit-commit-with-llm)))
 
+
+
+(define-advice magit-log-format-author-margin (:override (author date) handle-error)
+  "Fix issue with attempt to use function name as a number directly.
+
+See: beads:emacs-jtd"
+  (pcase-let ((`(,_ ,style ,width ,details ,details-width)
+               (or magit--right-margin-config
+                   (symbol-value (magit--right-margin-option))
+                   (error "No margin format specified for %s" major-mode))))
+    (magit-make-margin-overlay
+     (concat (and details
+                  (concat (magit--propertize-face
+                           (truncate-string-to-width
+                            (or author "")
+                            details-width
+                            nil ?\s
+                            (magit--ellipsis 'margin))
+                           'magit-log-author)
+                          " "))
+             (magit--propertize-face
+              (if (stringp style)
+                  (format-time-string
+                   style
+                   (seconds-to-time (string-to-number date)))
+                (pcase-let* ((abbr (eq style 'age-abbreviated))
+                             (`(,cnt ,unit) (magit--age date abbr)))
+                  (format (format (if abbr "%%2d%%-%dc" "%%2d %%-%ds")
+                                  (-
+                                   ;; HACK
+                                   ;; See arglist for `magit-log-margin-width'.
+                                   (if (functionp width)
+                                       (funcall width style details details-width)
+                                     width)
+                                   ;; END HACK
+
+                                   (if details (1+ details-width) 0)))
+                          cnt unit)))
+              'magit-log-date)))))
+
 (provide 'mod-magit)
 
 ;;; mod-magit.el ends here
