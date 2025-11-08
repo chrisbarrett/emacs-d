@@ -1,4 +1,4 @@
-;;; early-init.el --- early Emacs init file -*- lexical-binding: t; -*-
+;;; early-init.el --- early Emacs init file -*- lexical-binding: t; no-byte-compile: t; -*-
 
 ;;; Commentary:
 
@@ -27,6 +27,8 @@
 (setq package-enable-at-startup nil)
 
 
+
+(setq load-prefer-newer t)
 
 ;;; Configure use-package
 

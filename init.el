@@ -1,4 +1,4 @@
-;;; init.el --- main Emacs init file -*- lexical-binding: t; -*-
+;;; init.el --- main Emacs init file -*- lexical-binding: t; no-byte-compile: t; -*-
 
 ;;; Commentary:
 
@@ -113,6 +113,12 @@
   ;; key bindings much easier.
   :config
   (use-package mod-leader :demand t))
+
+(use-package auto-compile :ensure t :demand t
+  ;; Ensure we never attempt to load outdated ELC files.
+  :config
+  (auto-compile-on-load-mode)
+  (auto-compile-on-save-mode))
 
 
 ;; Adapt the escape key customisation from Doom.
