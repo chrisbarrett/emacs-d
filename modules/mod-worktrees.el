@@ -140,7 +140,10 @@ If EXCLUDE-ROOT is non-nil, return nil if the worktree is the repo root."
                        (when-let* ((detected (+worktrees--detect-child-worktree-path)))
                          (let ((tab (tab-bar--current-tab-find)))
                            (setf (alist-get 'worktree-path (cdr tab)) detected))
-                         detected))))
+                         detected)
+                       ;; We don't have any worktree tabs at all--set up this tab.
+                       (when (null (alist-get 'worktree-path current-tab))
+                         (+worktrees-adopt-initial-tab)))))
         (if exclude-root
             (unless (+worktrees-in-repo-root-p worktree-path)
               worktree-path)
@@ -249,7 +252,8 @@ When INITIAL-COMMAND is provided, run that."
       (setf (alist-get 'worktree-type (cdr current-tab)) 'root)
       ;; Rename to project name
       (tab-bar-rename-tab project-name)
-      t)))
+
+      repo-root)))
 
 (defun +worktrees-open-tab (worktree-path &optional type claude-command)
   "Open a tab for WORKTREE-PATH, creating it if needed.
