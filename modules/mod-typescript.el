@@ -31,6 +31,19 @@
                              ((file-exists-p (file-name-concat dir "package.json"))
                               'node)))))
 
+(defun +ts-shebang-type ()
+  (when-let* ((line
+               (ignore-errors
+                 (save-excursion
+                   (goto-char (point-min))
+                   (when (looking-at-p (rx bol "#!"))
+                     (buffer-substring (point-min) (line-end-position))))))
+              (parts (string-split line "[ /]" t)))
+    (pcase (car (nreverse parts))
+      ("deno" 'deno)
+      ("bun" 'bun)
+      ("node" 'node))))
+
 (with-eval-after-load 'eglot
 
   ;; Deno LSP configuration
@@ -59,7 +72,10 @@
   ;; Dynamically determine which server to use based on project type.
 
   (defun +ts-server-program (&rest _)
-    (pcase (or (+ts-project-type) 'node)
+    (pcase (or
+            (+ts-shebang-type)
+            (+ts-project-type)
+            'node)
       ('deno
        '(eglot-deno "deno" "lsp"))
       ((or 'bun 'node)
