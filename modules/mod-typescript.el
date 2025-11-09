@@ -12,26 +12,65 @@
 
 
 ;;; Select appropriate language server based on project type
+;;
+;; See also:
+;;   https://www.gnu.org/software/emacs/manual/html_node/eglot/JSONRPC-objects-in-Elisp.html
 
+(defun +ts-project-type (&optional dir)
+  (locate-dominating-file (or dir default-directory)
+                          (lambda (dir)
+                            (cond
+                             ((file-exists-p (file-name-concat dir "deno.json"))
+                              'deno)
+                             ((file-exists-p (file-name-concat dir "deno.jsonc"))
+                              'deno)
+                             ((file-exists-p (file-name-concat dir "bun.lockb"))
+                              'bun)
+                             ((file-exists-p (file-name-concat dir "bunfig.toml"))
+                              'bun)
+                             ((file-exists-p (file-name-concat dir "package.json"))
+                              'node)))))
 
 (with-eval-after-load 'eglot
-  ;; https://docs.deno.com/runtime/getting_started/setup_your_environment/
 
-  (add-to-list 'eglot-server-programs '((js-mode typescript-mode typescript-ts-mode) . (eglot-deno "deno" "lsp")))
+  ;; Deno LSP configuration
 
   (defclass eglot-deno (eglot-lsp-server) ()
-    :documentation "A custom class for deno lsp.")
+    :documentation "Deno LSP")
 
   (cl-defmethod eglot-initialization-options ((_server eglot-deno))
     (list
      :enable t
+     :lint t
+     :unstable t))
+
+  ;; Standard TypeScript LSP configuration
+
+  (defclass eglot-typescript (eglot-lsp-server) ()
+    :documentation "TypeScript LSP")
+
+  ;; https://www.npmjs.com/package/typescript-language-server/v/2.3.0#initializationoptions
+  (cl-defmethod eglot-initialization-options ((_server eglot-typescript))
+    (list
+     :enable t
      :unstable t
-     :typescript
-     (:inlayHints
-      (:variableTypes
-       (:enabled t))
-      (:parameterTypes
-       (:enabled t))))))
+     :lint t))
+
+  ;; Dynamically determine which server to use based on project type.
+
+  (defun +ts-server-program (&rest _)
+    (pcase (or (+ts-project-type) 'node)
+      ('deno
+       '(eglot-deno "deno" "lsp"))
+      ((or 'bun 'node)
+       '(eglot-typescript "typescript-language-server" "--stdio"))))
+
+  (add-to-list 'eglot-server-programs (cons '((js-mode :language-id "javascript")
+                                              (js-ts-mode :language-id "javascript")
+                                              (tsx-ts-mode :language-id "typescriptreact")
+                                              (typescript-mode :language-id "typescript")
+                                              (typescript-ts-mode :language-id "typescript"))
+                                            '+ts-server-program)))
 
 
 
