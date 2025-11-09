@@ -2191,10 +2191,6 @@ subprocess calls on every file open, especially problematic in TTY."
   (with-eval-after-load 'project
     (pushnew! project-vc-ignores ".drift-history.json"))
   :config
-  (+define-file-template (rx "terragrunt.hcl" eos) "terragrunt/terragrunt.eld")
-  (+define-file-template (rx "root.hcl" eos) "terragrunt/root.eld")
-  (+define-file-template (rx "region.hcl" eos) "terragrunt/region.eld")
-
   (with-eval-after-load 'apheleia-formatters
     (add-to-list 'apheleia-formatters '(terragrunt . ("terragrunt" "hcl" "fmt" "--stdin")))
     (alist-set! apheleia-mode-alist 'hcl-mode '(terragrunt hclfmt))))
@@ -2342,6 +2338,11 @@ subprocess calls on every file open, especially problematic in TTY."
 
   (+define-file-template (rx ".el" eos) "emacs-lisp.eld")
   (+define-file-template (rx "flake.nix" eos) "flake.eld")
+
+  (+define-file-template (rx "terragrunt.hcl" eos) "terragrunt/terragrunt.eld")
+  (+define-file-template (rx "root.hcl" eos) "terragrunt/root.eld")
+  (+define-file-template (rx "region.hcl" eos) "terragrunt/region.eld")
+  (+define-file-template (rx "." (or "sh" "bash" "zsh") eos) "shell-script.eld")
 
   (+define-file-template-dispatcher 'elixir-ts-mode
     ((string-match-p "/lib/" (buffer-file-name))
