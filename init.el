@@ -966,14 +966,6 @@ Runs `+escape-hook'."
   (dimmer-fraction -0.05)
   (dimmer-use-colorspace :cielab)
   (dimmer-watch-frame-focus-events t)
-
-  ;; Exclude buffers that shouldn't be dimmed
-  (dimmer-buffer-exclusion-regexps
-   '("^ \\*Minibuf-[0-9]+\\*$"  ; Minibuffer
-     "^ \\*Echo Area"            ; Echo area
-     "^ \\*which-key\\*$"        ; which-key display
-     "^\\*LV\\*$"))              ; Transient/hydra displays
-
   :config
   ;; Configure integrations with popular packages
   (dimmer-configure-which-key)
