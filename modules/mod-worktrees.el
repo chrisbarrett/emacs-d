@@ -18,6 +18,10 @@
 (require 'project)
 (require 'tab-bar)
 (require 'transient)
+(require 'json)
+
+(cl-eval-when (eval)
+  (require 'mod-tabs))
 
 (cl-eval-when (eval)
   (require 'mod-tabs))
@@ -119,7 +123,6 @@ If no tab exists for the worktree, this function does nothing.
 Returns t if alert was set, nil otherwise."
   (when-let* ((tab (+worktrees--tab-for-worktree worktree-path))
               (tab-name (alist-get 'name tab)))
-    (require 'mod-tabs)
     (+tab-bar-set-alert tab-name)))
 
 (defun +worktrees-clear-alert (worktree-path)
@@ -128,7 +131,6 @@ If no tab exists for the worktree, this function does nothing.
 Returns t if alert was cleared, nil otherwise."
   (when-let* ((tab (+worktrees--tab-for-worktree worktree-path))
               (tab-name (alist-get 'name tab)))
-    (require 'mod-tabs)
     (+tab-bar-clear-alert tab-name)))
 
 (defun +worktrees--detect-child-worktree-path ()
@@ -180,7 +182,6 @@ If EXCLUDE-ROOT is non-nil, return nil if the worktree is the repo root."
 
 (defun +worktrees--ensure-claude-trust (worktree-path)
   "Ensure WORKTREE-PATH exists in ~/.claude.json projects."
-  (require 'json)
   (let ((claude-config (expand-file-name "~/.claude.json")))
     (when (file-exists-p claude-config)
       (condition-case err
