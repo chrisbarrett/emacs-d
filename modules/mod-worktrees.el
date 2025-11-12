@@ -323,9 +323,16 @@ initial action."
       ;;
       ;; This information is interpreted into an initial layout for the tab, and
       ;; is also used to customise the icon for the tab.
-      (let ((current-tab (tab-bar--current-tab-find)))
-        (setf (alist-get 'worktree-type (cdr current-tab)) type)
-        (setf (alist-get 'worktree-path (cdr current-tab)) worktree-path)))
+      (let* ((tabs (frame-parameter nil 'tabs))
+             (tab-index (tab-bar--current-tab-index tabs))
+             (current-tab (nth tab-index tabs))
+             (tab-type (car current-tab))
+             (tab-rest (cdr current-tab)))
+        (setf (alist-get 'worktree-type tab-rest) type)
+        (setf (alist-get 'worktree-path tab-rest) worktree-path)
+        ;; Reconstruct tab and update frame parameter at the correct index
+        (setf (nth tab-index tabs) (cons tab-type tab-rest))
+        (set-frame-parameter nil 'tabs tabs)))
 
     ;; Dispatch to a concrete layout via generic method.
     (+worktrees-new-tab-layout type worktree-path claude-command)))
