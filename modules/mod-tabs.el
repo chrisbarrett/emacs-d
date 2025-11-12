@@ -58,6 +58,8 @@
                          'display '(raise 0.13)))
             ((or 'subagent 'task)
              (propertize "" 'face `(:background ,tab-bg :inherit font-lock-builtin-face)))
+            ('pullreq
+             (propertize "" 'face `(:background ,tab-bg :inherit font-lock-string-face)))
             (_
              (propertize "" 'face `(:background ,tab-bg :inherit success)))))
          (name (propertize (alist-get 'name tab) 'face face)))
