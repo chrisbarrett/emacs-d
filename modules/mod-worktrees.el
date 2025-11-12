@@ -118,15 +118,27 @@ Normalizes paths to handle trailing slashes correctly."
               (funcall tab-bar-tabs-function))))
 
 (defun +worktrees-set-alert (worktree-path)
-  "Set an alert on the tab associated with WORKTREE-PATH.
+  "Set a persistent alert on the tab associated with WORKTREE-PATH.
+The alert will remain until the user dwells on the tab.
 If no tab exists for the worktree, this function does nothing.
 Returns t if alert was set, nil otherwise."
   (when-let* ((tab (+worktrees--tab-for-worktree worktree-path))
               (tab-name (alist-get 'name tab)))
     (+tab-bar-set-alert tab-name)))
 
+(defun +worktrees-set-transient-alert (worktree-path &optional color cycles)
+  "Set a transient alert on the tab associated with WORKTREE-PATH.
+COLOR is the pulse color (default pulsar-magenta).
+CYCLES is the number of pulses (default 3).
+Transient alerts play their animation and automatically clear.
+If no tab exists for the worktree, this function does nothing.
+Returns t if alert was dispatched, nil otherwise."
+  (when-let* ((tab (+worktrees--tab-for-worktree worktree-path))
+              (tab-name (alist-get 'name tab)))
+    (+tab-bar-set-transient-alert tab-name color cycles)))
+
 (defun +worktrees-clear-alert (worktree-path)
-  "Clear the alert on the tab associated with WORKTREE-PATH.
+  "Clear the persistent alert on the tab associated with WORKTREE-PATH.
 If no tab exists for the worktree, this function does nothing.
 Returns t if alert was cleared, nil otherwise."
   (when-let* ((tab (+worktrees--tab-for-worktree worktree-path))
