@@ -78,36 +78,73 @@ Note: This modifies global alert faces, so only one tab should pulse at a time."
   (when (> iterations 0)
     ;; Cancel any existing pulse timers
     (+tab-bar--cancel-pulse-timers)
+    (when (require 'pulsar nil t)
+      ;; Get the alert colors from the current theme
+      (let* ((alert-bg (or (face-background 'pulsar-magenta nil t) "#71206a"))
+             (default-bg (face-background 'default nil t))
+             (steps 10)  ; Number of steps in fade animation
+             (delay +tab-bar-alert-pulse-delay)
+             ;; Total steps: full cycles minus the final fade-out
+             (total-steps (- (* iterations steps 2) steps)))
 
-    ;; Get the alert colors from the current theme
-    (let* ((alert-bg (or (face-background 'pulsar-magenta nil t) "#71206a"))
-           (default-bg (face-background 'default nil t))
-           (steps 10)  ; Number of steps in fade animation
-           (delay +tab-bar-alert-pulse-delay)
-           ;; Total steps: full cycles minus the final fade-out
-           (total-steps (- (* iterations steps 2) steps)))
+        ;; Create fade-in and fade-out sequence, ending on a fade-in
+        (dotimes (i total-steps)
+          (let* ((cycle-pos (mod i (* steps 2)))
+                 (fade-in (< cycle-pos steps))
+                 (step-in-phase (if fade-in cycle-pos (- (* steps 2) cycle-pos 1)))
+                 (alpha (/ (float step-in-phase) steps))
+                 (timer-delay (* delay i)))
 
-      ;; Create fade-in and fade-out sequence, ending on a fade-in
-      (dotimes (i total-steps)
-        (let* ((cycle-pos (mod i (* steps 2)))
-               (fade-in (< cycle-pos steps))
-               (step-in-phase (if fade-in cycle-pos (- (* steps 2) cycle-pos 1)))
-               (alpha (/ (float step-in-phase) steps))
-               (timer-delay (* delay i)))
+            (push
+             (run-with-timer
+              timer-delay nil
+              (lambda (a bg default)
+                ;; Blend between default and alert background
+                (let ((blended (+tab-bar--blend-colors default bg a)))
+                  ;; Force theme update with blended color
+                  (when (facep 'tab-bar-tab-alert)
+                    (set-face-attribute 'tab-bar-tab-alert nil :background blended)
+                    (set-face-attribute 'tab-bar-tab-inactive-alert nil :background blended)
+                    (tab-bar--update-tab-bar-lines))))
+              alpha alert-bg default-bg)
+             +tab-bar--pulse-timers)))))))
 
-          (push
-           (run-with-timer
-            timer-delay nil
-            (lambda (a bg default)
-              ;; Blend between default and alert background
-              (let ((blended (+tab-bar--blend-colors default bg a)))
-                ;; Force theme update with blended color
-                (when (facep 'tab-bar-tab-alert)
-                  (set-face-attribute 'tab-bar-tab-alert nil :background blended)
-                  (set-face-attribute 'tab-bar-tab-inactive-alert nil :background blended)
-                  (tab-bar--update-tab-bar-lines))))
-            alpha alert-bg default-bg)
-           +tab-bar--pulse-timers))))))
+(defun +tab-bar--pulse-tab-switch ()
+  "Pulse the current tab briefly when switching.
+Uses pulsar-generic color for a subtle visual feedback."
+  ;; Cancel any existing pulse timers
+  (+tab-bar--cancel-pulse-timers)
+
+  (let* ((pulse-bg (or (face-background 'pulsar-generic nil t) "#3a3a3a"))
+         (default-bg (face-background 'tab-bar-tab nil t))
+         (steps 5)   ; Quicker than alert pulse
+         (delay 0.035)) ; Quick but visible - 0.35s total
+
+    ;; Single fade-in and fade-out cycle
+    (dotimes (i (* steps 2))
+      (let* ((fade-in (< i steps))
+             (step-in-phase (if fade-in i (- (* steps 2) i 1)))
+             (alpha (/ (float step-in-phase) steps))
+             (timer-delay (* delay i)))
+
+        (push
+         (run-with-timer
+          timer-delay nil
+          (lambda (a bg default)
+            (let ((blended (+tab-bar--blend-colors default bg a)))
+              (when (facep 'tab-bar-tab)
+                (set-face-attribute 'tab-bar-tab nil :background blended)
+                (tab-bar--update-tab-bar-lines))))
+          alpha pulse-bg default-bg)
+         +tab-bar--pulse-timers)))
+
+    ;; Restore original theme after pulse completes
+    (push
+     (run-with-timer
+      (* delay (* steps 2))
+      nil
+      #'+update-tab-bar-themes)
+     +tab-bar--pulse-timers)))
 
 (defun +tab-bar-set-alert (&optional tab-name)
   "Set alert state on TAB-NAME (or current tab if nil).
@@ -146,36 +183,36 @@ until the user dwells on it for `+tab-bar-alert-clear-delay' seconds."
 Note: This modifies global alert faces."
   ;; Cancel any existing pulse timers
   (+tab-bar--cancel-pulse-timers)
+  (when (require 'pulsar nil t)
+    (let* ((alert-bg (or (face-background 'pulsar-magenta nil t) "#71206a"))
+           (default-bg (face-background 'default nil t))
+           (steps 5)  ; Quick fade-out
+           (delay 0.05))  ; Faster than pulse
 
-  (let* ((alert-bg (or (face-background 'pulsar-magenta nil t) "#71206a"))
-         (default-bg (face-background 'default nil t))
-         (steps 5)  ; Quick fade-out
-         (delay 0.05))  ; Faster than pulse
+      ;; Fade from alert background to default
+      (dotimes (i steps)
+        (let* ((progress (/ (float (1+ i)) steps))
+               (alpha (- 1.0 progress))  ; Fade from 1.0 to 0.0
+               (timer-delay (* delay i)))
+          (push
+           (run-with-timer
+            timer-delay nil
+            (lambda (a bg default)
+              (let ((blended (+tab-bar--blend-colors default bg a)))
+                (when (facep 'tab-bar-tab-alert)
+                  (set-face-attribute 'tab-bar-tab-alert nil :background blended)
+                  (set-face-attribute 'tab-bar-tab-inactive-alert nil :background blended)
+                  (tab-bar--update-tab-bar-lines))))
+            alpha alert-bg default-bg)
+           +tab-bar--pulse-timers)))
 
-    ;; Fade from alert background to default
-    (dotimes (i steps)
-      (let* ((progress (/ (float (1+ i)) steps))
-             (alpha (- 1.0 progress))  ; Fade from 1.0 to 0.0
-             (timer-delay (* delay i)))
-        (push
-         (run-with-timer
-          timer-delay nil
-          (lambda (a bg default)
-            (let ((blended (+tab-bar--blend-colors default bg a)))
-              (when (facep 'tab-bar-tab-alert)
-                (set-face-attribute 'tab-bar-tab-alert nil :background blended)
-                (set-face-attribute 'tab-bar-tab-inactive-alert nil :background blended)
-                (tab-bar--update-tab-bar-lines))))
-          alpha alert-bg default-bg)
-         +tab-bar--pulse-timers)))
-
-    ;; After fade completes, call callback
-    (push
-     (run-with-timer
-      (* delay steps)
-      nil
-      callback)
-     +tab-bar--pulse-timers)))
+      ;; After fade completes, call callback
+      (push
+       (run-with-timer
+        (* delay steps)
+        nil
+        callback)
+       +tab-bar--pulse-timers))))
 
 (defun +tab-bar-clear-alert (&optional tab-name)
   "Clear alert state from TAB-NAME (or current tab if nil).
@@ -322,51 +359,50 @@ The delay includes the pulse animation duration to avoid interrupting it."
 (defun +update-tab-bar-themes (&rest _)
   "Update tab-bar colors to be distinct and theme-aware."
   (when (facep 'tab-bar)
-    (let* ((default-bg (face-background 'default nil t))
-           ;; Detect if theme is dark by checking if background is dark
-           (dark-theme (+theme-dark-p))
-           ;; In dark mode, use mode-line bg for selected tab; in light mode use default
-           (selected-bg (if dark-theme
-                            (face-background 'mode-line nil t)
-                          default-bg))
-           (tab-bar-bg (if dark-theme
-                           (color-lighten-name default-bg +tab-bar-contrast)
-                         (color-darken-name default-bg +tab-bar-contrast)))
-           (inactive-bg (if dark-theme
-                            (color-lighten-name default-bg +inactive-tab-contrast)
-                          (color-darken-name default-bg +inactive-tab-contrast)))
-           ;; Alert colors - use pulsar faces designed for attention-grabbing
-           (alert-bg (or (face-background 'pulsar-magenta nil t)
-                         ;; Fallback if pulsar not available
-                         (if dark-theme "#71206a" "#FFB6D9")))
-           (alert-fg (face-foreground 'default nil t))
-           ;; Slightly dimmed for inactive tabs
-           (alert-inactive-bg (if dark-theme
-                                  (color-darken-name alert-bg 10)
-                                (color-lighten-name alert-bg 10))))
-      (set-face-attribute 'tab-bar nil
-                          :background tab-bar-bg
-                          :box `(:line-width ,(- +tab-internal-padding) :color ,tab-bar-bg))
-      (set-face-attribute 'tab-bar-tab nil
-                          :background selected-bg
-                          :box `(:line-width ,(- +tab-internal-padding) :color ,selected-bg))
-      (set-face-attribute 'tab-bar-tab-inactive nil
-                          :background inactive-bg
-                          :box `(:line-width ,(- +tab-internal-padding) :color ,inactive-bg)
-                          :inherit 'shadow)
-      ;; Alert faces
-      (set-face-attribute 'tab-bar-tab-alert nil
-                          :background alert-bg
-                          :foreground alert-fg
-                          :box `(:line-width ,(- +tab-internal-padding) :color ,alert-bg)
-                          :weight 'bold
-                          :inherit 'tab-bar-tab)
-      (set-face-attribute 'tab-bar-tab-inactive-alert nil
-                          :background alert-inactive-bg
-                          :foreground alert-fg
-                          :box `(:line-width ,(- +tab-internal-padding) :color ,alert-inactive-bg)
-                          :weight 'bold
-                          :inherit 'shadow))))
+    (when (require 'pulsar nil t)
+      (let* ((default-bg (face-background 'default nil t))
+             ;; Detect if theme is dark by checking if background is dark
+             (dark-theme (+theme-dark-p))
+             ;; In dark mode, use mode-line bg for selected tab; in light mode use default
+             (selected-bg (if dark-theme
+                              (face-background 'mode-line nil t)
+                            default-bg))
+             (tab-bar-bg (if dark-theme
+                             (color-lighten-name default-bg +tab-bar-contrast)
+                           (color-darken-name default-bg +tab-bar-contrast)))
+             (inactive-bg (if dark-theme
+                              (color-lighten-name default-bg +inactive-tab-contrast)
+                            (color-darken-name default-bg +inactive-tab-contrast)))
+             ;; Alert colors - use pulsar faces designed for attention-grabbing
+             (alert-bg (face-background 'pulsar-magenta nil t))
+             (alert-fg (face-foreground 'default nil t))
+             ;; Slightly dimmed for inactive tabs
+             (alert-inactive-bg (if dark-theme
+                                    (color-darken-name alert-bg 10)
+                                  (color-lighten-name alert-bg 10))))
+        (set-face-attribute 'tab-bar nil
+                            :background tab-bar-bg
+                            :box `(:line-width ,(- +tab-internal-padding) :color ,tab-bar-bg))
+        (set-face-attribute 'tab-bar-tab nil
+                            :background selected-bg
+                            :box `(:line-width ,(- +tab-internal-padding) :color ,selected-bg))
+        (set-face-attribute 'tab-bar-tab-inactive nil
+                            :background inactive-bg
+                            :box `(:line-width ,(- +tab-internal-padding) :color ,inactive-bg)
+                            :inherit 'shadow)
+        ;; Alert faces
+        (set-face-attribute 'tab-bar-tab-alert nil
+                            :background alert-bg
+                            :foreground alert-fg
+                            :box `(:line-width ,(- +tab-internal-padding) :color ,alert-bg)
+                            :weight 'bold
+                            :inherit 'tab-bar-tab)
+        (set-face-attribute 'tab-bar-tab-inactive-alert nil
+                            :background alert-inactive-bg
+                            :foreground alert-fg
+                            :box `(:line-width ,(- +tab-internal-padding) :color ,alert-inactive-bg)
+                            :weight 'bold
+                            :inherit 'shadow)))))
 
 
 (add-hook '+theme-changed-hook #'+update-tab-bar-themes)
@@ -376,7 +412,10 @@ The delay includes the pulse animation duration to avoid interrupting it."
 ;;; Alert clearing hooks
 
 (define-advice tab-bar-select-tab (:after (&rest _) schedule-alert)
-  "Schedule alert clearing whenever a tab is selected."
+  "Schedule alert clearing and pulse animation whenever a tab is selected."
+  ;; Pulse the current tab for visual feedback
+  (+tab-bar--pulse-tab-switch)
+  ;; Schedule alert clearing if the current tab has an alert
   (+tab-bar--schedule-alert-clear))
 
 ;; Pulse newly opened tabs
