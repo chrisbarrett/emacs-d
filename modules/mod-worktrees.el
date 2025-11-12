@@ -19,8 +19,13 @@
 (require 'tab-bar)
 (require 'transient)
 
+(cl-eval-when (eval)
+  (require 'mod-tabs))
+
 (cl-eval-when (compile)
-  (require 'forge nil t))
+  ;; Silence transitive dep errors during byte compilation.
+  (ignore-errors (require 'mod-tabs))
+  (require 'forge))
 
 (autoload 'dired-jump "dired-x")
 
