@@ -186,6 +186,24 @@ If EXCLUDE-ROOT is non-nil, return nil if the worktree is the repo root."
                   (error-message-string err)))))))
 
 
+;;; Teach magit to create worktrees inside the repo.
+
+(defun +magit-read-worktree-directory-nested (prompt branch)
+  "Call `read-directory-name' in current root worktree.
+For `read-directory-name's INITIAL argument use a string based on
+BRANCH, replacing slashes with dashes.  If BRANCH is nil, use nil
+as INITIAL.  Always forward PROMPT as-is."
+  (let* ((root (+worktrees--repo-root))
+         (initial (when branch
+                    (file-name-concat root ".worktrees" (string-replace "/" "-" branch))))
+         (input (read-directory-name prompt nil nil nil initial)))
+    ;; Ensure parent dir exists.
+    (make-directory (file-name-directory input) t)
+    input))
+
+(setq magit-read-worktree-directory-function #'+magit-read-worktree-directory-nested)
+
+
 ;;; Worktree layouts
 
 (cl-defgeneric +worktrees-new-tab-layout (_type worktree-path &optional initial-command)
