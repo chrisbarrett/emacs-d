@@ -46,6 +46,69 @@ preventing accidental clearing during rapid navigation.")
 (defvar +tab-bar--alert-clear-timer nil
   "Timer for clearing alert state on the current tab.")
 
+(defvar +tab-bar-alert-pulse-iterations 3
+  "Number of times to pulse the alert.")
+
+(defvar +tab-bar-alert-pulse-delay 0.05
+  "Delay in seconds between pulse steps.")
+
+(defvar +tab-bar--pulse-timers nil
+  "List of active pulse timers.")
+
+(defun +tab-bar--cancel-pulse-timers ()
+  "Cancel all active pulse timers."
+  (mapc #'cancel-timer +tab-bar--pulse-timers)
+  (setq +tab-bar--pulse-timers nil))
+
+(defun +tab-bar--blend-colors (color1 color2 alpha)
+  "Blend COLOR1 and COLOR2 with ALPHA (0.0 to 1.0).
+ALPHA of 0.0 returns COLOR1, 1.0 returns COLOR2."
+  (let* ((c1 (color-name-to-rgb color1))
+         (c2 (color-name-to-rgb color2))
+         (r (+ (* (nth 0 c1) (- 1.0 alpha)) (* (nth 0 c2) alpha)))
+         (g (+ (* (nth 1 c1) (- 1.0 alpha)) (* (nth 1 c2) alpha)))
+         (b (+ (* (nth 2 c1) (- 1.0 alpha)) (* (nth 2 c2) alpha))))
+    (color-rgb-to-hex r g b 2)))
+
+(defun +tab-bar--pulse-alert (iterations)
+  "Pulse the alert background for ITERATIONS cycles.
+Fades in and out for (iterations - 1) cycles, then ends with a final fade-in
+to leave the alert visibly highlighted.
+Note: This modifies global alert faces, so only one tab should pulse at a time."
+  (when (> iterations 0)
+    ;; Cancel any existing pulse timers
+    (+tab-bar--cancel-pulse-timers)
+
+    ;; Get the alert colors from the current theme
+    (let* ((alert-bg (or (face-background 'pulsar-magenta nil t) "#71206a"))
+           (default-bg (face-background 'default nil t))
+           (steps 10)  ; Number of steps in fade animation
+           (delay +tab-bar-alert-pulse-delay)
+           ;; Total steps: full cycles minus the final fade-out
+           (total-steps (- (* iterations steps 2) steps)))
+
+      ;; Create fade-in and fade-out sequence, ending on a fade-in
+      (dotimes (i total-steps)
+        (let* ((cycle-pos (mod i (* steps 2)))
+               (fade-in (< cycle-pos steps))
+               (step-in-phase (if fade-in cycle-pos (- (* steps 2) cycle-pos 1)))
+               (alpha (/ (float step-in-phase) steps))
+               (timer-delay (* delay i)))
+
+          (push
+           (run-with-timer
+            timer-delay nil
+            (lambda (a bg default)
+              ;; Blend between default and alert background
+              (let ((blended (+tab-bar--blend-colors default bg a)))
+                ;; Force theme update with blended color
+                (when (facep 'tab-bar-tab-alert)
+                  (set-face-attribute 'tab-bar-tab-alert nil :background blended)
+                  (set-face-attribute 'tab-bar-tab-inactive-alert nil :background blended)
+                  (tab-bar--update-tab-bar-lines))))
+            alpha alert-bg default-bg)
+           +tab-bar--pulse-timers))))))
+
 (defun +tab-bar-set-alert (&optional tab-name)
   "Set alert state on TAB-NAME (or current tab if nil).
 This will cause the tab to display with a visually distinct background
@@ -71,13 +134,52 @@ until the user dwells on it for `+tab-bar-alert-clear-delay' seconds."
         ;; Update the frame parameter
         (set-frame-parameter nil 'tabs tabs)
         (tab-bar--update-tab-bar-lines)
+        ;; Start pulse animation
+        (+tab-bar--pulse-alert +tab-bar-alert-pulse-iterations)
         ;; If setting alert on current tab, start the clear timer
         (when is-current
           (+tab-bar--schedule-alert-clear))
         t))))
 
+(defun +tab-bar--fade-out-alert (callback)
+  "Fade out the alert background, then call CALLBACK.
+Note: This modifies global alert faces."
+  ;; Cancel any existing pulse timers
+  (+tab-bar--cancel-pulse-timers)
+
+  (let* ((alert-bg (or (face-background 'pulsar-magenta nil t) "#71206a"))
+         (default-bg (face-background 'default nil t))
+         (steps 5)  ; Quick fade-out
+         (delay 0.05))  ; Faster than pulse
+
+    ;; Fade from alert background to default
+    (dotimes (i steps)
+      (let* ((progress (/ (float (1+ i)) steps))
+             (alpha (- 1.0 progress))  ; Fade from 1.0 to 0.0
+             (timer-delay (* delay i)))
+        (push
+         (run-with-timer
+          timer-delay nil
+          (lambda (a bg default)
+            (let ((blended (+tab-bar--blend-colors default bg a)))
+              (when (facep 'tab-bar-tab-alert)
+                (set-face-attribute 'tab-bar-tab-alert nil :background blended)
+                (set-face-attribute 'tab-bar-tab-inactive-alert nil :background blended)
+                (tab-bar--update-tab-bar-lines))))
+          alpha alert-bg default-bg)
+         +tab-bar--pulse-timers)))
+
+    ;; After fade completes, call callback
+    (push
+     (run-with-timer
+      (* delay steps)
+      nil
+      callback)
+     +tab-bar--pulse-timers)))
+
 (defun +tab-bar-clear-alert (&optional tab-name)
-  "Clear alert state from TAB-NAME (or current tab if nil)."
+  "Clear alert state from TAB-NAME (or current tab if nil).
+Fades out the alert before removing it."
   (interactive)
   (let* ((tabs (frame-parameter nil 'tabs))
          (tab-index (if tab-name
@@ -86,19 +188,23 @@ until the user dwells on it for `+tab-bar-alert-clear-delay' seconds."
                                         (equal (alist-get 'name tab) name)))
                       (tab-bar--current-tab-index tabs))))
     (when tab-index
-      ;; Get the tab and modify it
-      (let* ((tab (nth tab-index tabs))
-             ;; Preserve the tab type (current-tab or tab) at the beginning
-             (tab-type (car tab))
-             (tab-rest (cdr tab)))
-        ;; Remove the alert property
-        (setf (alist-get 'alert tab-rest) nil)
-        ;; Reconstruct the tab with type first
-        (setf (nth tab-index tabs) (cons tab-type tab-rest))
-        ;; Update the frame parameter
-        (set-frame-parameter nil 'tabs tabs)
-        (tab-bar--update-tab-bar-lines)
-        t))))
+      ;; Fade out, then remove the alert property
+      (+tab-bar--fade-out-alert
+       (lambda ()
+         (let* ((tabs (frame-parameter nil 'tabs))
+                (tab (nth tab-index tabs))
+                (tab-type (car tab))
+                (tab-rest (cdr tab)))
+           ;; Remove the alert property
+           (setf (alist-get 'alert tab-rest) nil)
+           ;; Reconstruct the tab with type first
+           (setf (nth tab-index tabs) (cons tab-type tab-rest))
+           ;; Update the frame parameter
+           (set-frame-parameter nil 'tabs tabs)
+           ;; Restore original theme colors
+           (+update-tab-bar-themes)
+           (tab-bar--update-tab-bar-lines))))
+      t)))
 
 (defun +tab-bar--clear-current-alert ()
   "Internal: Clear alert state from the current tab if it has one."
@@ -109,15 +215,37 @@ until the user dwells on it for `+tab-bar-alert-clear-delay' seconds."
       ;; Force immediate visual update
       (force-mode-line-update t))))
 
+(defun +tab-bar--cleanup-timers-on-close (tab &optional _deleted)
+  "Clean up timers when closing TAB with an alert.
+Called by `tab-bar-tab-pre-close-functions'."
+  (when (alist-get 'alert tab)
+    ;; Cancel pulse timers since they modify global faces
+    (+tab-bar--cancel-pulse-timers)
+    ;; If closing the current tab, also cancel the alert-clear timer
+    (when (eq (car tab) 'current-tab)
+      (when +tab-bar--alert-clear-timer
+        (cancel-timer +tab-bar--alert-clear-timer)
+        (setq +tab-bar--alert-clear-timer nil)))))
+
+(defun +tab-bar--pulse-duration ()
+  "Calculate the total duration of the pulse animation in seconds.
+Animation does full cycles for (iterations - 1), then a final fade-in."
+  (let ((steps 10))  ; Must match +tab-bar--pulse-alert
+    (* +tab-bar-alert-pulse-delay
+       (- (* +tab-bar-alert-pulse-iterations steps 2)
+          steps))))
+
 (defun +tab-bar--schedule-alert-clear ()
   "Internal: Schedule clearing alert on current tab after dwell delay.
-Cancels any existing timer first to ensure only one timer runs at a time."
+Cancels any existing timer first to ensure only one timer runs at a time.
+The delay includes the pulse animation duration to avoid interrupting it."
   (when +tab-bar--alert-clear-timer
     (cancel-timer +tab-bar--alert-clear-timer)
     (setq +tab-bar--alert-clear-timer nil))
-  (setq +tab-bar--alert-clear-timer
-        (run-with-timer +tab-bar-alert-clear-delay nil
-                        #'+tab-bar--clear-current-alert)))
+  (let ((total-delay (+ +tab-bar-alert-clear-delay (+tab-bar--pulse-duration))))
+    (setq +tab-bar--alert-clear-timer
+          (run-with-timer total-delay nil
+                          #'+tab-bar--clear-current-alert))))
 
 
 ;; Left-pad the tab name.
@@ -250,6 +378,20 @@ Cancels any existing timer first to ensure only one timer runs at a time."
 (define-advice tab-bar-select-tab (:after (&rest _) schedule-alert)
   "Schedule alert clearing whenever a tab is selected."
   (+tab-bar--schedule-alert-clear))
+
+;; Clean up timers when closing tabs with alerts
+(add-hook 'tab-bar-tab-pre-close-functions #'+tab-bar--cleanup-timers-on-close)
+
+;; Clean up all timers when frame is deleted
+(defun +tab-bar--cleanup-timers-on-delete-frame (_frame)
+  "Clean up all alert timers when a frame is deleted.
+Called by `delete-frame-functions'."
+  (+tab-bar--cancel-pulse-timers)
+  (when +tab-bar--alert-clear-timer
+    (cancel-timer +tab-bar--alert-clear-timer)
+    (setq +tab-bar--alert-clear-timer nil)))
+
+(add-hook 'delete-frame-functions #'+tab-bar--cleanup-timers-on-delete-frame)
 
 (provide 'mod-tabs)
 
