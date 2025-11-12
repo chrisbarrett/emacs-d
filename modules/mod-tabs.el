@@ -9,8 +9,8 @@
 
 (require '+theme)
 (require 'cl-lib)
-(require 'color)
 (require 'tab-bar)
+(require 'color)
 
 (cl-eval-when (compile)
   (require 'transient))
@@ -422,43 +422,83 @@ The delay includes the pulse animation duration to avoid interrupting it."
 (defun +tab-bar--pulse-new-tab (&optional _tab)
   "Pulse animation when a new tab is opened.
 Called by `tab-bar-tab-post-open-functions'."
-  ;; Temporarily set alert property on current tab so it uses alert faces during pulse
-  (let* ((tabs (frame-parameter nil 'tabs))
-         (tab-index (tab-bar--current-tab-index tabs))
-         (current-tab (nth tab-index tabs))
-         (tab-type (car current-tab))
-         (tab-rest (cdr current-tab)))
-    ;; Set alert property temporarily
-    (setf (alist-get 'alert tab-rest) t)
-    (setf (nth tab-index tabs) (cons tab-type tab-rest))
-    (set-frame-parameter nil 'tabs tabs)
-    (tab-bar--update-tab-bar-lines)
+  ;; Cancel any alert-clear timer since this is a new tab pulse, not an actual alert
+  (when +tab-bar--alert-clear-timer
+    (cancel-timer +tab-bar--alert-clear-timer)
+    (setq +tab-bar--alert-clear-timer nil))
 
-    ;; Cancel any alert-clear timer since this is a new tab pulse, not an actual alert
-    (when +tab-bar--alert-clear-timer
-      (cancel-timer +tab-bar--alert-clear-timer)
-      (setq +tab-bar--alert-clear-timer nil))
+  ;; Cancel any existing pulse timers
+  (+tab-bar--cancel-pulse-timers)
 
-    ;; Do a single pulse cycle (fade in and out)
-    (+tab-bar--pulse-alert 1)
+  (let* ((pulse-bg (or (face-background 'pulsar-green nil t) "#00c06f"))
+         (default-bg (face-background 'tab-bar-tab nil t))
+         (steps 5)    ; Fewer steps for speed
+         (delay 0.045) ; Fast - completes in 1s total
+         (gap 0.1))   ; Brief gap between pulses
 
-    ;; After pulse completes, remove the alert property (no fade-out)
-    (run-with-timer
-     (+tab-bar--pulse-duration)
-     nil
-     (lambda ()
-       (let* ((tabs (frame-parameter nil 'tabs))
-              (tab-index (tab-bar--current-tab-index tabs))
-              (current-tab (nth tab-index tabs))
-              (tab-type (car current-tab))
-              (tab-rest (cdr current-tab)))
-         ;; Remove alert property
-         (setf (alist-get 'alert tab-rest) nil)
-         (setf (nth tab-index tabs) (cons tab-type tab-rest))
-         (set-frame-parameter nil 'tabs tabs)
-         ;; Restore theme colors
-         (+update-tab-bar-themes)
-         (tab-bar--update-tab-bar-lines))))))
+    ;; First pulse
+    (dotimes (i (* steps 2))
+      (let* ((fade-in (< i steps))
+             (step-in-phase (if fade-in i (- (* steps 2) i 1)))
+             (alpha (/ (float step-in-phase) steps))
+             (timer-delay (* delay i)))
+
+        (push
+         (run-with-timer
+          timer-delay nil
+          (lambda (a bg default)
+            (let ((blended (+tab-bar--blend-colors default bg a)))
+              (when (facep 'tab-bar-tab)
+                (set-face-attribute 'tab-bar-tab nil :background blended)
+                (tab-bar--update-tab-bar-lines))))
+          alpha pulse-bg default-bg)
+         +tab-bar--pulse-timers)))
+
+    ;; Second pulse (offset by first pulse duration + gap)
+    (let ((first-pulse-duration (* delay (* steps 2))))
+      (dotimes (i (* steps 2))
+        (let* ((fade-in (< i steps))
+               (step-in-phase (if fade-in i (- (* steps 2) i 1)))
+               (alpha (/ (float step-in-phase) steps))
+               (timer-delay (+ first-pulse-duration gap (* delay i))))
+
+          (push
+           (run-with-timer
+            timer-delay nil
+            (lambda (a bg default)
+              (let ((blended (+tab-bar--blend-colors default bg a)))
+                (when (facep 'tab-bar-tab)
+                  (set-face-attribute 'tab-bar-tab nil :background blended)
+                  (tab-bar--update-tab-bar-lines))))
+            alpha pulse-bg default-bg)
+           +tab-bar--pulse-timers))))
+
+    ;; Third pulse (offset by two pulse durations + two gaps)
+    (let ((two-pulses-duration (* 2 (* delay (* steps 2)))))
+      (dotimes (i (* steps 2))
+        (let* ((fade-in (< i steps))
+               (step-in-phase (if fade-in i (- (* steps 2) i 1)))
+               (alpha (/ (float step-in-phase) steps))
+               (timer-delay (+ two-pulses-duration (* 2 gap) (* delay i))))
+
+          (push
+           (run-with-timer
+            timer-delay nil
+            (lambda (a bg default)
+              (let ((blended (+tab-bar--blend-colors default bg a)))
+                (when (facep 'tab-bar-tab)
+                  (set-face-attribute 'tab-bar-tab nil :background blended)
+                  (tab-bar--update-tab-bar-lines))))
+            alpha pulse-bg default-bg)
+           +tab-bar--pulse-timers))))
+
+    ;; Restore original theme after all three pulses complete
+    (push
+     (run-with-timer
+      (+ (* 3 (* delay (* steps 2))) (* 2 gap))
+      nil
+      #'+update-tab-bar-themes)
+     +tab-bar--pulse-timers)))
 
 (add-hook 'tab-bar-tab-post-open-functions #'+tab-bar--pulse-new-tab)
 
