@@ -108,6 +108,24 @@ Normalizes paths to handle trailing slashes correctly."
                   (f-same-p worktree-path tab-path)))
               (funcall tab-bar-tabs-function))))
 
+(defun +worktrees-set-alert (worktree-path)
+  "Set an alert on the tab associated with WORKTREE-PATH.
+If no tab exists for the worktree, this function does nothing.
+Returns t if alert was set, nil otherwise."
+  (when-let* ((tab (+worktrees--tab-for-worktree worktree-path))
+              (tab-name (alist-get 'name tab)))
+    (require 'mod-tabs)
+    (+tab-bar-set-alert tab-name)))
+
+(defun +worktrees-clear-alert (worktree-path)
+  "Clear the alert on the tab associated with WORKTREE-PATH.
+If no tab exists for the worktree, this function does nothing.
+Returns t if alert was cleared, nil otherwise."
+  (when-let* ((tab (+worktrees--tab-for-worktree worktree-path))
+              (tab-name (alist-get 'name tab)))
+    (require 'mod-tabs)
+    (+tab-bar-clear-alert tab-name)))
+
 (defun +worktrees--detect-child-worktree-path ()
   "Detect the worktree path for the current directory, if in a worktree.
 
