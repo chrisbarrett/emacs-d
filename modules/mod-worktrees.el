@@ -14,11 +14,13 @@
 (require '+corelib)
 (require '+git)
 (require 'f)
-(require 'general)
 (require 'magit)
 (require 'project)
 (require 'tab-bar)
 (require 'transient)
+
+(cl-eval-when (compile)
+  (require 'forge nil t))
 
 (autoload 'dired-jump "dired-x")
 
@@ -193,15 +195,38 @@ If EXCLUDE-ROOT is non-nil, return nil if the worktree is the repo root."
 For `read-directory-name's INITIAL argument use a string based on
 BRANCH, replacing slashes with dashes.  If BRANCH is nil, use nil
 as INITIAL.  Always forward PROMPT as-is."
-  (let* ((root (+worktrees--repo-root))
-         (initial (when branch
-                    (file-name-concat root ".worktrees" (string-replace "/" "-" branch))))
+  (let* ((initial (when branch
+                    (file-name-concat ".worktrees" (string-replace "/" "-" branch))))
          (input (read-directory-name prompt nil nil nil initial)))
-    ;; Ensure parent dir exists.
+
+    (when (equal input "")
+      (user-error "The empty string isn't a valid path"))
+
     (make-directory (file-name-directory input) t)
+
     input))
 
 (setq magit-read-worktree-directory-function #'+magit-read-worktree-directory-nested)
+
+(defun +forge-checkout-worktree-default-read-directory-function (pullreq)
+  ;; Don't ask, just do.
+  (pcase-let* (((eieio number head-ref) pullreq)
+               (branch (forge--pullreq-branch-internal pullreq))
+               (formatted-branch-name (if (string-match-p "\\`pr-[0-9]+\\'" branch)
+                                          (number-to-string number)
+                                        (format "%s-%s" number
+                                                (string-replace "/" "-" head-ref)))))
+    (file-name-concat (+worktrees--repo-root) ".worktrees" formatted-branch-name)))
+
+(setq forge-checkout-worktree-read-directory-function #'+forge-checkout-worktree-default-read-directory-function)
+
+(define-advice forge-checkout-worktree (:around (fn path pullreq) open-tab-for-worktree)
+  "Teach `forge-checkout-worktree' to open a tab for the given worktree."
+  (prog1
+      (save-window-excursion
+        (save-excursion
+          (funcall fn path pullreq)))
+    (+worktrees-open-tab path 'pullreq)))
 
 
 ;;; Worktree layouts
