@@ -1828,31 +1828,13 @@ file in your browser at the visited revision."
   ;; Emacs' built-in project lib
   :custom
   (project-vc-ignores '(".cache/"))
-  (project-switch-commands
-   (defun +project-switch-magit-status ()
-     (interactive)
-     (let* ((proj (project-current t))
-            (root (project-root proj)))
-       (if (file-directory-p (file-name-concat root ".git"))
-           (magit-status-setup-buffer root)
-         (dired root))
-       (let ((win (selected-window)))
-         (when (and (display-graphic-p) (null current-prefix-arg))
-           (claude-code-ide-continue))
-         (select-window win)))))
-
-  :preface
-  (defun +project-find-file-other-window ()
-    (interactive)
-    (other-window-prefix)
-    (call-interactively #'project-find-file))
-  :general
-  ("M-?" '+project-find-file-other-window)
-
+  (project-list-exclude (list (rx "/." (+ nonl))
+                              (rx bol "/nix/store/")))
   :config
-  (pushnew! project-list-exclude
-            (rx "/." (+ nonl))
-            (rx bol "/nix/store/"))
+  (use-package mod-project
+    :demand t
+    :general
+    (:keymaps 'project-prefix-map "R" #'+projects-rescan))
 
   (project-remember-project (project-try-vc user-emacs-directory))
   (project-remember-project (project-try-vc org-directory)))
