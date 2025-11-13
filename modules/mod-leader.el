@@ -245,7 +245,7 @@
 
   "s" (list (defun +goto-emacs-site-file ()
               (interactive)
-              (project-find-file-in nil +site-files-directory
+              (project-find-file-in nil (list +site-files-directory)
                                     (project-current nil user-emacs-directory)))
             :wk "site file...")
 
