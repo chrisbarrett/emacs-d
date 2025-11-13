@@ -1851,7 +1851,7 @@ file in your browser at the visited revision."
 
   :config
   (pushnew! project-list-exclude
-            (rx "/.worktrees/")
+            (rx "/." (+ nonl))
             (rx bol "/nix/store/"))
 
   (project-remember-project (project-try-vc user-emacs-directory))
