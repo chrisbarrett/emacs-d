@@ -1828,8 +1828,13 @@ file in your browser at the visited revision."
   ;; Emacs' built-in project lib
   :custom
   (project-vc-ignores '(".cache/"))
-  (project-list-exclude (list (rx "/." (+ nonl))
-                              (rx bol "/nix/store/")))
+  (project-list-exclude (list
+                         (rx bol "/nix/store/")
+                         (defun +project-exclude-hidden-dirs (project)
+                           "Exclude projects in any hidden directory, except for the ~/.config dir."
+                           (let ((root (project-root project)))
+                             (and (string-match-p  (rx "/.") root)
+                                  (not (string-prefix-p "~/.config/" root)))))))
   :config
   (use-package mod-project
     :demand t
