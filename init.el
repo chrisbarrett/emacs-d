@@ -1984,7 +1984,8 @@ file in your browser at the visited revision."
   ;;
   ;; Ordinarily it will be installed in relevant packages by eldev; however,
   ;; it's nice to have here so I can load it and get macro indentation right.
-  )
+  :demand t
+  :after elisp-mode)
 
 (use-package nix-ts-mode :ensure t
   :mode "\\.nix\\'"
