@@ -401,6 +401,23 @@ The optional keyword arguments are:
       (read-only-mode +1))
     (display-buffer buf)))
 
+
+
+;;; Add imenu support
+
+(with-eval-after-load 'lisp-mode
+  (alist-set! lisp-imenu-generic-expression "Parsers"
+              (list
+               (rx bol (* (syntax whitespace)) "(define-compilation-error-rx" symbol-end (+ (syntax whitespace)) (group lisp-mode-symbol))
+               1)))
+
+(with-eval-after-load 'consult-imenu
+  (defvar consult-imenu-config)
+  (alist-set! (plist-get (alist-get 'emacs-lisp-mode consult-imenu-config)
+                         :types)
+              ?P
+              '("Parsers" font-lock-variable-name-face)))
+
 (provide '+compile)
 
 ;;; +compile.el ends here
