@@ -163,6 +163,85 @@
 
 
 
+;;; Deno
+
+(define-compilation-error-rx deno-typecheck
+  ;; TS2305 [ERROR]: Module '"file:///Users/chris/.config/nix-configuration/lib/claude/mod.ts"' has no exported member 'resolveHookPath'.
+  ;;   resolveHookPath,
+  ;;   ~~~~~~~~~~~~~~~
+  ;;     at file:///Users/chris/.config/nix-configuration/home/config/claude-code/hooks/stop/announce.test.ts:3:3
+  bol err-code " " level ": " message
+  (*? (and bol (* anything) "\n"))
+  bol (= 4 space) "at " location
+
+  :where err-code = err-code: "TS" (+ digit)
+  :where level = level: "[ERROR]"
+
+  :where location = location: (or (and (binding: (+? nonl)) " (" loc-path ")")
+                                  loc-path)
+  :where loc-path = (or (and "ext:" (+? nonl))
+                        (and "file://" file ":" line ":" col))
+
+  :hyperlink message
+  :highlights ((err-code 'bold)
+               (level 'error)))
+
+(define-compilation-error-rx deno-fmt
+  ;; error[require-await]: Async arrow function has no 'await' expression or 'await using' declaration.
+  ;;  --> /foo/bar/baz.ts:5:14
+  bol level code ":" (* space) message "\n"
+  bol " --> " file ":" line ":" col
+
+  ;; Need to verify these levels are actually legit.
+  :where level = (or (error: "error")
+                     (warn: "warn")
+                     (note: "info"))
+
+  :where code = code: "[" (+? nonl) "]"
+
+  ;; :type (warn . info)
+  :hyperlink message
+  :highlights ((code 'font-lock-constant-face)
+               ;; (warn 'warning)
+               ;; (error 'error)
+               ;; (info 'compilation-info)
+               ))
+
+(define-compilation-error-rx deno-test-failure
+  ;; persistEnvVar: handles empty value => ./mod.test.ts:132:6
+  ;; error: NotCapable: Requires write access to <TMP>, run again with the --allow-write flag
+  bol (+ nonl) " => " file ":" line ":" col "\n"
+  level ": " (? err-class  ": ") message
+
+  :where err-class = err-class: (or alpha "_") (+ (or alnum (any "_")))
+
+  :where level = "error"
+  :highlights ((err-class 'font-lock-type-face))
+  :hyperlink message)
+
+;; persistEnvVar: handles empty value => ./mod.test.ts:132:6
+;; error: NotCapable: Requires write access to <TMP>, run again with the --allow-write flag
+
+(define-compilation-error-rx deno-stacktrace
+  ;;   at Object.makeTempFile (ext:deno_fs/30_fs.js:185:10)
+  ;;   at withTempEnvFile (file:///foo/bar/mod.test.ts:6:31)
+  ;;   at file:///foo/bar/mod.test.ts:133:9
+  bol (= 4 space) "at " location
+
+  :where location = location: (or (and (binding: (+? nonl)) " (" loc-path ")")
+                                  loc-path)
+  :where loc-path = (or (and "ext:" (+? nonl))
+                        (and "file://" file ":" line ":" col))
+
+
+  :hyperlink location
+  :type info
+  :highlights ((binding 'compilation-info)
+               (file 'compilation-info)
+               (line 'compilation-line-number))
+  :type info)
+
+
 ;;; Terraform
 
 (define-compilation-error-rx terraform
