@@ -150,6 +150,19 @@
   :highlights ((fun 'font-lock-function-name-face)))
 
 
+;;; Actionlint
+
+(define-compilation-error-rx actionlint
+  ;; .github/workflows/checks-deno.yml:0:0: could not parse as YAML: yaml: unknown anchor '.nix' referenced [syntax-check]
+  bol file ":" line ":" col ":" (+ space) message code eol
+
+  :where code = code: "[" (+? nonl) "]"
+
+  :hyperlink message
+  :highlights ((code 'font-lock-constant-face)))
+
+
+
 ;;; Terraform
 
 (define-compilation-error-rx terraform
