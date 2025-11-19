@@ -104,6 +104,7 @@
                      (derived-mode . helpful-mode)
                      (derived-mode . Man-mode)
                      (derived-mode . woman-mode)
+                     (derived-mode . magit-log-mode)
                      ,(rx bos "*eldoc*" eos)
 
                      ;; org-roam links
