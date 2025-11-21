@@ -2622,3 +2622,4 @@ This ensures consistent positioning when switching tabs, frames, or windows."
 ;; no-native-compile: t
 ;; no-update-autoloads: t
 ;; End:
+(put 'downcase-region 'disabled nil)
