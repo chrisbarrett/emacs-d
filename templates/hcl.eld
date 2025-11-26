@@ -2,8 +2,7 @@ hcl-mode
 
 (d "dependency \"" (p "NAME" name) "\" {" n>
    "config_path  = \"../" name "\"" n>
-   "mock_outputs = {" q "}" n>
-   "mock_outputs_allowed_terraform_commands = [\"validate\", \"plan\"]" n
+   "mock_outputs = {" q "}" n
    "}" >)
 
 (g "generate \"" (p "NAME") "\" {" n>
@@ -15,8 +14,14 @@ hcl-mode
    "}" >)
 
 (u "unit \"" (p "NAME" name) "\" {" n>
-   "source = \"${local.source_base_url}//PATH?ref=VERSION\"" n>
+   "source = \"\"" n>
    "path   = \"" name "\"" n
+   "}" >)
+
+(st "stack \"" (p "NAME" name) "\" {" n>
+   "source = \"\"" n>
+   "path   = \"" name "\"" n>
+   "values = {}" n
    "}" >)
 
 (in "inputs = {" n>
