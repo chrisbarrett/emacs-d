@@ -4,8 +4,12 @@
 
 ;;; Code:
 
+(require '+corelib)
 (require 'markdown-mode)
 (require 'general)
+
+(cl-eval-when (compile)
+  (require 'apheleia nil t))
 
 ;;; TAB behavior
 
@@ -29,14 +33,26 @@ expansion occurs, it falls back to the default `markdown-cycle' behavior."
 (general-def :states 'insert :keymaps '(markdown-mode-map gfm-mode-map)
   "TAB" #'+markdown-tab-dwim)
 
+
 ;;; Formatting
 
-(with-eval-after-load 'apheleia
-  (add-to-list 'apheleia-formatters '(prettier-markdown . ("prettier" "--stdin-filepath" filepath "--parser=markdown" "--prose-wrap" "always" (apheleia-formatters-fill-column "--print-width"))))
-  (alist-set! apheleia-mode-alist 'markdown-mode 'prettier-markdown)
-  (alist-set! apheleia-mode-alist 'gfm-mode 'prettier-markdown)
-  (alist-set! apheleia-mode-alist 'markdown-ts-mode 'prettier-markdown))
+;; Use deno where available--it handles critical things like GFM callouts and
+;; YAML frontmatter much better than prettier.
 
+(with-eval-after-load 'apheleia
+  (setf (alist-get 'deno-markdown apheleia-formatters)
+        '("deno" "fmt" "--prose-wrap" "always" (apheleia-formatters-fill-column "--line-width") "--ext=md" "-"))
+
+  (setf (alist-get 'prettier-markdown apheleia-formatters)
+        '("prettier" "--stdin-filepath" filepath "--parser=markdown" "--prose-wrap" "always" (apheleia-formatters-fill-column "--print-width")))
+
+  (add-hook! (markdown-mode markdown-ts-mode)
+    (setq-local apheleia-formatter
+                (if (executable-find "deno")
+                    'deno-markdown
+                  'prettier-markdown))))
+
+
 ;;; GitHub Flavored Markdown Callout Support
 
 ;; Define faces for GitHub Flavored Markdown callouts
