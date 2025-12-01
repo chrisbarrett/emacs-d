@@ -9,27 +9,17 @@ markdown-mode
 ;;
 ;; See: https://docs.github.com/en/get-started/writing-on-github/getting-started-with-writing-and-formatting-on-github/basic-writing-and-formatting-syntax
 
-(nb "<!-- prettier-ignore-start -->" n
-    "> [!NOTE]" n
-    "> " q n
-    "<!-- prettier-ignore-end -->")
+(nb "> [!NOTE]" n
+    "> " q n)
 
-(tip "<!-- prettier-ignore-start -->" n
-     "> [!TIP]" n
-     "> " q n
-     "<!-- prettier-ignore-end -->")
+(tip "> [!TIP]" n
+     "> " q n)
 
-(imp "<!-- prettier-ignore-start -->" n
-     "> [!IMPORTANT]" n
-     "> " q n
-     "<!-- prettier-ignore-end -->")
+(imp "> [!IMPORTANT]" n
+     "> " q n)
 
-(wa "<!-- prettier-ignore-start -->" n
-    "> [!WARNING]" n
-    "> " q n
-    "<!-- prettier-ignore-end -->")
+(wa "> [!WARNING]" n
+    "> " q n)
 
-(ca "<!-- prettier-ignore-start -->" n
-    "> [!CAUTION]" n
-    "> " q n
-    "<!-- prettier-ignore-end -->")
+(ca "> [!CAUTION]" n
+    "> " q n)
