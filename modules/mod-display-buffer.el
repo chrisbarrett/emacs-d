@@ -98,7 +98,6 @@
 
             (right `(or
                      ;; Help buffers
-                     ,(mode-active-p 'gptel-mode)
                      (derived-mode . rfc-mode)
                      (derived-mode . help-mode)
                      (derived-mode . helpful-mode)

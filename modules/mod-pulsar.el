@@ -180,24 +180,6 @@ buffer modifications have happened."
   )
 
 
-;;; gptel
-
-(with-eval-after-load 'gptel
-
-  ;; Pulse the part of the buffer being sent to the LLM.
-  (define-advice gptel-send (:after (&optional show-transient) pulse)
-    (when (bound-and-true-p pulsar-mode)
-      (unless show-transient
-        (let ((pulsar-region-face 'pulsar-green))
-          (cond ((region-active-p)
-                 (pulsar-pulse-region))
-                ((and gptel-mode (and (fboundp 'org-at-heading-p) (org-at-heading-p)))
-                 (pulsar-pulse-line-green))
-                (t
-                 (pulsar--pulse nil 'pulsar-green (point-min) (point))))))))
-  )
-
-
 
 (provide 'mod-pulsar)
 
