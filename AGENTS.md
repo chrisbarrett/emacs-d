@@ -39,13 +39,6 @@ Each module in `modules/` configures a specific feature:
 
 ## Development Commands
 
-### Emacs Lisp Development
-
-- **Run tests**: `SPC m t t` (runs ERT tests)
-- **Macro expansion**: `C-c RET` for `pp-macroexpand-last-sexp`
-- When asked to evaluate a buffer, use
-  `emacsclient --eval '(with-current-buffer (find-file-noselect "$<file>") (eval-buffer))'`
-
 ### Testing
 
 - ERT is used for Emacs Lisp testing
