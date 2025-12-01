@@ -19,7 +19,7 @@
 (defvar +capture-context nil
   "A plist containing extra information about the thing being captured.")
 
-(defvar +capture-fast-llm-model 'claude-3-haiku-20240307)
+(defvar +capture-fast-llm-model 'claude-haiku-4-5-20251001)
 
 (defvar +capture-excerpt-length-chars 1500)
 

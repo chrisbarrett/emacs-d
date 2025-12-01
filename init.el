@@ -2497,12 +2497,7 @@ subprocess calls on every file open, especially problematic in TTY."
 (use-package gptel :ensure t
   ;; Provides LLM integrations.
   :custom
-  (gptel-model 'claude-sonnet-4-20250514)
-  :init
-  (use-package mod-gptel
-    :general (:states 'visual "RET" #'+gptel-rewrite-fast))
-  :config
-  (use-package mod-gptel :demand t))
+  (gptel-model 'claude-sonnet-4-5-20250929))
 
 (use-package claude-code-ide :ensure (:host github :repo "manzaltu/claude-code-ide.el")
   ;; Run claude-code inside Emacs; creates an MCP bridge between the processes
