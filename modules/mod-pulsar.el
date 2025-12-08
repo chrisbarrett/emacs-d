@@ -73,10 +73,11 @@ buffer modifications have happened."
            (let ((,gstart ,start)
                  (,gend ,end))
              (when (and ,gstart ,gend)
-               (pulsar--pulse nil
-                              (if ,gfailed 'pulsar-red 'pulsar-green)
-                              ,gstart
-                              ,gend))))))))
+               (let ((pulse-flag t)
+                     (pulse-delay pulsar-delay)
+                     (pulse-iterations pulsar-iterations))
+                 (pulsar--create-pulse (cons ,gstart ,gend)
+                                       (if ,gfailed 'pulsar-red 'pulsar-green))))))))))
 
 
 ;;; Lisp evaluation
@@ -98,7 +99,10 @@ buffer modifications have happened."
 
 (define-advice +elisp-eval-buffer (:after (&rest _) pulsar)
   (when pulsar-mode
-    (pulsar--pulse nil 'pulsar-yellow (point-min) (point-max))))
+    (let ((pulse-flag t)
+          (pulse-delay pulsar-delay)
+          (pulse-iterations pulsar-iterations))
+      (pulsar--create-pulse (cons (point-min) (point-max)) 'pulsar-yellow))))
 
 
 ;;; evil
@@ -119,7 +123,10 @@ buffer modifications have happened."
   (define-advice evil-yank (:after (start end &rest _) pulsar)
     "Pulse yanked lines & regions."
     (when pulsar-mode
-      (pulsar--pulse nil 'pulsar-generic start end)))
+      (let ((pulse-flag t)
+            (pulse-delay pulsar-delay)
+            (pulse-iterations pulsar-iterations))
+        (pulsar--create-pulse (cons start end) 'pulsar-generic))))
 
   (define-advice evil-jump-item (:after (&rest _) pulsar)
     "Pulse if jumping to a different line."
