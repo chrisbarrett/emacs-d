@@ -65,8 +65,9 @@
 (set-face-attribute 'default nil :family "Fira Code")
 (set-face-attribute 'variable-pitch nil :family "Fira Sans")
 
-;; Sync the theme with the window system.
-(+theme-update)
+;; Defer theme loading until after a frame exists
+(add-hook 'after-init-hook #'+theme-update)
+
 
 ;; Make the window-borders appear as padding instead. Not sure if this is really
 ;; usable yet, but it sure looks pretty.
