@@ -173,8 +173,8 @@ Runs `+escape-hook'."
 
 (custom-theme-set-faces 'user
                         '(region ((((background light))
-                                   (:foreground unspecified :background unspecified :inherit modus-themes-search-lazy))))
-                        '(iedit-occurrence ((t (:inherit modus-themes-search-replace))))
+                                   (:inherit lazy-highlight))))
+                        '(iedit-occurrence ((t (:inherit query-replace))))
                         ;; Dim delimiters like commas, semicolons, etc.
                         '(font-lock-delimiter-face ((t (:inherit shadow)))))
 
