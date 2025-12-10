@@ -19,6 +19,12 @@
 
 (pushnew! pulsar-pulse-functions 'forward-button 'backward-button 'isearch-exit)
 
+;; Remove kill-region and delete-region from region pulse functions.
+;; These are called internally by puni commands (e.g., puni-backward-kill-word),
+;; which causes unwanted pulses during routine editing.
+(delq! 'kill-region pulsar-pulse-region-functions)
+(delq! 'delete-region pulsar-pulse-region-functions)
+
 (dolist (hook '(consult-after-jump-hook imenu-after-jump-hook))
   (add-hook hook #'pulsar-recenter-top)
   (add-hook hook #'pulsar-reveal-entry))
