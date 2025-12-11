@@ -174,20 +174,35 @@ With prefix arg ARG, don't select the new window."
 
 ;;; Directional window swapping
 
+(defvar +side-window-default-width 80
+  "Default width for side windows when moved to left or right.")
+
+(defvar +side-window-default-height 0.3
+  "Default height for side windows when moved to top or bottom.")
+
+(defun +display-buffer-alist-dimensions (buffer)
+  "Return alist of dimensions for BUFFER from `display-buffer-alist'.
+Returns an alist that may contain `window-width' and `window-height' keys."
+  (when-let* ((entry (seq-find (lambda (entry)
+                                 (buffer-match-p (car entry) buffer))
+                               display-buffer-alist)))
+    (let ((alist (cdr entry)))
+      (cl-loop for key in '(window-width window-height)
+               for val = (alist-get key alist)
+               when val collect (cons key val)))))
+
 (defun +move-side-window-to-side (new-side)
   "Move the current side window to NEW-SIDE (left, right, top, or bottom)."
   (unless (+side-window-p (selected-window))
     (user-error "Not in a side window"))
   (let* ((buf (current-buffer))
          (old-side (window-parameter nil 'window-side))
-         ;; Use stored dimensions if available, otherwise capture current size
-         (width (or (window-parameter nil '+preserved-width)
-                    (window-width)))
-         (height (or (window-parameter nil '+preserved-height)
-                     ;; If moving from left/right to top/bottom, use sensible default
-                     (if (memq old-side '(left right))
-                         0.3
-                       (window-height))))
+         ;; Look up dimensions from display-buffer-alist, with fallbacks
+         (buf-dims (+display-buffer-alist-dimensions buf))
+         (width (or (alist-get 'window-width buf-dims)
+                    +side-window-default-width))
+         (height (or (alist-get 'window-height buf-dims)
+                     +side-window-default-height))
          (slot (window-parameter nil 'window-slot))
          (point-pos (point))
          ;; Build display parameters based on target side
@@ -206,9 +221,6 @@ With prefix arg ARG, don't select the new window."
     ;; Display the buffer on the new side
     (let ((new-window (display-buffer-in-side-window buf display-params)))
       (select-window new-window)
-      ;; Store the dimensions for future moves
-      (set-window-parameter new-window '+preserved-width width)
-      (set-window-parameter new-window '+preserved-height height)
       (goto-char point-pos)
       (message "Moved side window from %s to %s" old-side new-side))))
 

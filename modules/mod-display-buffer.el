@@ -51,6 +51,7 @@
                                     ,@overrides
                                     (dedicated . t)
                                     (window-height . 0.2)
+                                    (window-width . 80)
                                     (side . top)
                                     (slot . 0)))))
            (list
@@ -65,6 +66,8 @@
                        (cons pred `((display-buffer-reuse-window display-buffer-in-side-window)
                                     ,@overrides
                                     (dedicated . t)
+                                    (window-height . 0.3)
+                                    (window-width . 80)
                                     (side . left)
                                     (slot . 0)))))
            (list
@@ -87,6 +90,8 @@
                        (cons pred `((display-buffer-reuse-window display-buffer-in-side-window)
                                     ,@overrides
                                     (dedicated . t)
+                                    (window-height . 0.3)
+                                    (window-width . 80)
                                     (side . right)
                                     (slot . 0)))))
            (list
@@ -122,6 +127,8 @@
          (cl-labels ((bottom (pred &rest overrides)
                        (cons pred `((display-buffer-reuse-window display-buffer-in-side-window)
                                     ,@overrides
+                                    (window-height . 0.3)
+                                    (window-width . 80)
                                     (side . bottom)
                                     (dedicated . t)
                                     (slot . 0)))))
