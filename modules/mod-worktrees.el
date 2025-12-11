@@ -318,7 +318,7 @@ When INITIAL-COMMAND is provided, run that."
 (defun +worktrees-adopt-initial-tab ()
   "Set up the initial tab to represent the repo root."
   (when tab-bar-mode
-    (let* ((repo-root (+worktrees--repo-root))
+    (let* ((repo-root (file-truename (or (+worktrees--repo-root) (funcall project-prompter))))
            (project-name (or (+git-repo-display-name)
                              (and (frame-parameter nil 'project-root)
                                   (file-name-nondirectory
