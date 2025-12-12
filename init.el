@@ -2122,6 +2122,8 @@ subprocess calls on every file open, especially problematic in TTY."
   (:keymaps 'eglot-mode-map
    :states '(normal)
    "C-c C-r" #'eglot-rename)
+  :custom
+  (eglot-code-action-indicator "")
 
   ;; Make RET open markdown links in the eldoc buffer.
   ;;
