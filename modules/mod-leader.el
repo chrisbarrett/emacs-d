@@ -238,6 +238,11 @@
               (display-buffer "*Messages*"))
             :wk "messages")
 
+  "c" (list (defun +goto-claude-settings ()
+              (interactive)
+              (find-file "~/.claude/settings.json"))
+            :wk "init file")
+
   "e" (list (defun +goto-emacs-init-file ()
               (interactive)
               (find-file (file-name-concat user-emacs-directory "init.el")))
