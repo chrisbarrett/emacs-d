@@ -621,6 +621,68 @@ Returns t if any refresh took place, otherwise nil."
                     (setq refreshed t))))))))
       refreshed)))
 
+
+;;; Claude Code context-aware file opening
+
+(defun +worktrees--find-worktree-for-file (file-path)
+  "Find the worktree path that contains FILE-PATH.
+Returns the worktree path, or nil if not in a worktree."
+  (let ((expanded-file (expand-file-name file-path)))
+    (car (seq-keep
+          (pcase-lambda (`(,worktree-path . ,_rest))
+            (when (string-prefix-p (expand-file-name worktree-path) expanded-file)
+              worktree-path))
+          (magit-list-worktrees)))))
+
+(defun +worktrees--find-frame-with-tab-for-worktree (worktree-path)
+  "Find the frame and tab that contains WORKTREE-PATH.
+Returns a cons of (frame . tab) if found, nil otherwise.
+Searches all frames for a tab with matching `worktree-path' property."
+  (catch 'found
+    (dolist (frame (frame-list))
+      (with-selected-frame frame
+        (when-let* ((tab (seq-find
+                          (lambda (tab)
+                            (when-let* ((tab-path (alist-get 'worktree-path tab)))
+                              (f-same-p worktree-path tab-path)))
+                          (funcall tab-bar-tabs-function))))
+          (throw 'found (cons frame tab)))))
+    nil))
+
+(defun +worktrees--switch-to-context-for-file (file-path)
+  "Switch to the correct frame and tab for FILE-PATH.
+Returns non-nil if context was switched, nil otherwise."
+  (when-let* ((worktree-path (+worktrees--find-worktree-for-file file-path))
+              (frame-and-tab (+worktrees--find-frame-with-tab-for-worktree worktree-path)))
+    (let ((target-frame (car frame-and-tab))
+          (tab (cdr frame-and-tab)))
+      ;; Switch to the correct frame
+      (unless (eq target-frame (selected-frame))
+        (select-frame-set-input-focus target-frame))
+      ;; Switch to the correct tab within that frame
+      (with-selected-frame target-frame
+        (let ((tab-index (tab-bar--tab-index tab)))
+          (when tab-index
+            (tab-bar-select-tab (1+ tab-index)))))
+      t)))
+
+(define-advice find-file (:around (fn filename &rest args) +worktrees-context-switch)
+  "Switch to the correct frame/tab before opening files from Claude Code."
+  (when (and (bound-and-true-p claude-code-ide-mcp--sessions)
+             (> (hash-table-count claude-code-ide-mcp--sessions) 0))
+    (+worktrees--switch-to-context-for-file filename))
+  (apply fn filename args))
+
+(define-advice server-visit-files (:around (fn files client &rest args) +worktrees-context-switch)
+  "Switch to the correct frame/tab when opening files via emacsclient.
+This ensures files opened via emacsclient (e.g. clicking paths in Claude Code
+terminal) appear in the correct worktree's frame and tab."
+  (when files
+    (let* ((first-file (car files))
+           (filename (if (consp first-file) (car first-file) first-file)))
+      (+worktrees--switch-to-context-for-file filename)))
+  (apply fn files client args))
+
 (provide 'mod-worktrees)
 
 ;;; mod-worktrees.el ends here
