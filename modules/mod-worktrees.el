@@ -296,7 +296,8 @@ If no such worktree exists, create it."
              (start-point (magit-read-branch-or-commit "Start worktree at"))
              (path (file-name-concat (+worktrees--repo-root) +worktrees-worktree-base-dir branch)))
         (make-directory (file-name-directory path) t)
-        (magit-worktree-branch path branch start-point)
+        (save-window-excursion
+          (magit-worktree-branch path branch start-point))
         (+worktrees-open-tab path)))))
 
 (defun +worktrees-claude-code (worktree-path &optional initial-command)
