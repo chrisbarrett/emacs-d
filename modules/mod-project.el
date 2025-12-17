@@ -8,20 +8,15 @@
 (require 'project)
 
 (autoload 'magit-status-setup-buffer "magit-status")
-(autoload 'claude-code-ide-continue "claude-code-ide")
 
 (defun +project-switch-magit-status ()
-  "Show magit & the `claude-code-ide' buffer on switch."
+  "Show `magit-status' buffer on switch."
   (interactive)
   (let* ((proj (project-current t))
          (root (project-root proj)))
     (if (file-directory-p (file-name-concat root ".git"))
         (magit-status-setup-buffer root)
-      (dired root))
-    (let ((win (selected-window)))
-      (when (and (display-graphic-p) (null current-prefix-arg))
-        (claude-code-ide-continue))
-      (select-window win))))
+      (dired root))))
 
 (setq project-switch-commands '+project-switch-magit-status)
 

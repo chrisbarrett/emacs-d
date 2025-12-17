@@ -267,11 +267,7 @@ as INITIAL.  Always forward PROMPT as-is."
 
 ;;; Worktree layouts
 
-(cl-defgeneric +worktrees-new-tab-layout (_type worktree-path &optional initial-command)
-  (magit-status-setup-buffer worktree-path)
-  (+worktrees-claude-code worktree-path initial-command))
-
-(cl-defmethod +worktrees-new-tab-layout ((_type (eql 'subagent)) worktree-path  &optional _initial-command)
+(cl-defgeneric +worktrees-new-tab-layout (_type worktree-path)
   (magit-status-setup-buffer worktree-path))
 
 
@@ -341,14 +337,11 @@ When INITIAL-COMMAND is provided, run that."
 
       repo-root)))
 
-(defun +worktrees-open-tab (worktree-path &optional type claude-command)
+(defun +worktrees-open-tab (worktree-path &optional type)
   "Open a tab for WORKTREE-PATH, creating it if needed.
 
 If TYPE is set, this will be used to determine the type of tab that will
-be created. See generic function `+worktrees-new-tab-layout'.
-
-If CLAUDE-COMMAND is provided, run claude-code with that command as its
-initial action."
+be created. See generic function `+worktrees-new-tab-layout'."
   (interactive (list (completing-read "Worktree: " (magit-list-worktrees) nil t)))
   (if-let* ((existing-tab (+worktrees--tab-for-worktree worktree-path)))
       (tab-bar-select-tab (1+ (tab-bar--tab-index existing-tab)))
@@ -378,7 +371,7 @@ initial action."
         (set-frame-parameter nil 'tabs tabs)))
 
     ;; Dispatch to a concrete layout via generic method.
-    (+worktrees-new-tab-layout type worktree-path claude-command)))
+    (+worktrees-new-tab-layout type worktree-path)))
 
 (defun +worktrees--branch-name-from-issue (issue)
   "Generate a git branch name from ISSUE."
@@ -604,7 +597,7 @@ Returns a list of closed tab names."
 (defun +worktrees-refresh-magit (worktree-path)
   "Refresh magit buffers for WORKTREE-PATH.
 Find the tab showing WORKTREE-PATH, and if it exists, look through
-the magit-status buffers in that frame and call `magit-refresh' with
+the `magit-status' buffers in that frame and call `magit-refresh' with
 each buffer as current.
 
 Returns t if any refresh took place, otherwise nil."
@@ -633,7 +626,8 @@ Returns t if any refresh took place, otherwise nil."
 
 (defun +worktrees--find-worktree-for-file (file-path)
   "Find the worktree path that contains FILE-PATH.
-Returns the most specific worktree path (longest match), or nil if not in a worktree."
+Returns the most specific worktree path (longest match), or nil if not
+in a worktree."
   (let ((expanded-file (expand-file-name file-path)))
     (car (seq-sort-by #'length #'>
                       (seq-keep
