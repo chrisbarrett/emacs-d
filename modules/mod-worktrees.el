@@ -280,10 +280,16 @@ as INITIAL.  Always forward PROMPT as-is."
 (defun +worktrees-create-switch ()
   "Read a worktree from the user and create a tab for it.
 
-If no such worktree exists, create it."
+The worktrees are for the repo associated with the selected tab. If no
+such worktree exists, create it.
+
+Omits the beads-sync worktree, if present."
   (interactive)
-  (let* ((worktrees (magit-list-worktrees))
-         (worktree-paths (seq-map #'car worktrees))
+  (let* ((default-directory (+worktrees-path-for-selected-tab))
+         (worktree-paths (seq-keep (pcase-lambda (`(,path ,_rev, branch . ,_rest ))
+                                     (unless (equal branch "beads-sync")
+                                       path))
+                                   (magit-list-worktrees)))
          (input (completing-read "Existing worktree, or name for new branch: " (remove (+worktrees-path-for-selected-tab) worktree-paths) nil
                                  (lambda (input)
                                    (or (member input worktree-paths)
