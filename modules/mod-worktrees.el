@@ -633,13 +633,15 @@ Returns t if any refresh took place, otherwise nil."
 
 (defun +worktrees--find-worktree-for-file (file-path)
   "Find the worktree path that contains FILE-PATH.
-Returns the worktree path, or nil if not in a worktree."
+Returns the most specific worktree path (longest match), or nil if not in a worktree."
   (let ((expanded-file (expand-file-name file-path)))
-    (car (seq-keep
-          (pcase-lambda (`(,worktree-path . ,_rest))
-            (when (string-prefix-p (expand-file-name worktree-path) expanded-file)
-              worktree-path))
-          (magit-list-worktrees)))))
+    (car (seq-sort-by #'length #'>
+                      (seq-keep
+                       (pcase-lambda (`(,worktree-path . ,_rest))
+                         (let ((expanded-worktree (expand-file-name worktree-path)))
+                           (when (string-prefix-p expanded-worktree expanded-file)
+                             expanded-worktree)))
+                       (magit-list-worktrees))))))
 
 (defun +worktrees--find-frame-with-tab-for-worktree (worktree-path)
   "Find the frame and tab that contains WORKTREE-PATH.
