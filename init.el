@@ -1725,36 +1725,8 @@ word.  Fall back to regular `expreg-expand'."
 (use-package browse-at-remote :ensure t
   :custom
   (browse-at-remote-add-line-number-if-no-region-selected nil)
-
   :config
-  (define-advice browse-at-remote--get-local-branch (:after-until () const-main)
-    "Return 'main' in detached state."
-    "main")
-
-  ;; Integrate browse-at-remote with git-timemachine
-  :config
-  (define-advice browse-at-remote-get-url (:around (fn &rest args) git-timemachine-integration)
-    "Allow `browse-at-remote' commands in git-timemachine buffers to open that
-file in your browser at the visited revision."
-    (if (bound-and-true-p git-timemachine-mode)
-        (let* ((start-line (line-number-at-pos (min (region-beginning) (region-end))))
-               (end-line (line-number-at-pos (max (region-beginning) (region-end))))
-               (remote-ref (browse-at-remote--remote-ref buffer-file-name))
-               (remote (car remote-ref))
-               (ref (car git-timemachine-revision))
-               (relname
-                (file-relative-name
-                 buffer-file-name (expand-file-name (vc-git-root buffer-file-name))))
-               (target-repo (browse-at-remote--get-url-from-remote remote))
-               (remote-type (browse-at-remote--get-remote-type target-repo))
-               (repo-url (cdr target-repo))
-               (url-formatter (browse-at-remote--get-formatter 'region-url remote-type)))
-          (unless url-formatter
-            (error (format "Origin repo parsing failed: %s" repo-url)))
-          (funcall url-formatter repo-url ref relname
-                   (if start-line start-line)
-                   (if (and end-line (not (equal start-line end-line))) end-line)))
-      (apply fn args))))
+  (use-package mod-browse-at-remote :demand t))
 
 (use-package forge :ensure t
   ;; Teach magit how to work with pull requests on GitHub and other git hosting
