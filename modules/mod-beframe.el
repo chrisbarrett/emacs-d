@@ -53,7 +53,8 @@ current beframe context."
           )
          (_
           ;; Initial frame has been dedicated; prepare to create a new one.
-          (let ((message-log-max nil))
+          (let ((message-log-max nil)
+                (inhibit-message t))
             (other-frame-prefix))))
 
        (project-switch-project dir)
