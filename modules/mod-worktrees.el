@@ -451,6 +451,7 @@ Requires a clean working tree (no uncommitted changes)."
       (let ((magit-no-confirm '(trash))
             (default-directory (+worktrees--repo-root)))
         (magit-worktree-delete worktree-path)
+        (magit-run-git "worktree" "prune")
         (magit-run-git "branch" "-D" branch-name))
       (message "Deleted worktree and branch: %s" branch-name))))
 
@@ -477,6 +478,7 @@ Requires a clean working tree (no uncommitted changes)."
 
     (+worktree--kill-worktree-buffers worktree-path)
     (magit-worktree-delete worktree-path) ; if this fails, the branch is still around for recovery.
+    (magit-run-git "worktree" "prune")
     (magit-run-git "switch" default-branch)
     (magit-merge-absorb worktree-branch) ; NB. async
 
