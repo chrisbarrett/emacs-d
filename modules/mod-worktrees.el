@@ -86,6 +86,18 @@
   (when-let* ((gitdir (magit-gitdir)))
     (file-name-directory (directory-file-name gitdir))))
 
+(defun +worktrees--repo-root-for-file (file-path)
+  "Get the git repository root for FILE-PATH."
+  (let ((default-directory (file-name-directory (expand-file-name file-path))))
+    (+worktrees--repo-root)))
+
+(defun +worktrees--find-frame-for-repo (repo-root)
+  "Find the frame dedicated to REPO-ROOT via its `project-root' parameter."
+  (seq-find (lambda (frame)
+              (when-let* ((proj-root (frame-parameter frame 'project-root)))
+                (f-same-p repo-root proj-root)))
+            (frame-list)))
+
 (defun +worktrees--default-branch ()
   "Get the default branch name for the current repository."
   (let* ((remote (magit-primary-remote))
@@ -640,19 +652,20 @@ in a worktree."
                        (magit-list-worktrees))))))
 
 (defun +worktrees--find-frame-with-tab-for-worktree (worktree-path)
-  "Find the frame and tab that contains WORKTREE-PATH.
+  "Find the frame and tab for WORKTREE-PATH using repo→frame→tab hierarchy.
 Returns a cons of (frame . tab) if found, nil otherwise.
-Searches all frames for a tab with matching `worktree-path' property."
-  (catch 'found
-    (dolist (frame (frame-list))
-      (with-selected-frame frame
-        (when-let* ((tab (seq-find
-                          (lambda (tab)
-                            (when-let* ((tab-path (alist-get 'worktree-path tab)))
-                              (f-same-p worktree-path tab-path)))
-                          (funcall tab-bar-tabs-function))))
-          (throw 'found (cons frame tab)))))
-    nil))
+Uses the invariant that frames are dedicated to repos (via `project-root'
+frame parameter) and tabs are dedicated to worktrees (via `worktree-path'
+tab property)."
+  (when-let* ((repo-root (+worktrees--repo-root-for-file worktree-path))
+              (frame (+worktrees--find-frame-for-repo repo-root)))
+    (with-selected-frame frame
+      (when-let* ((tab (seq-find
+                        (lambda (tab)
+                          (when-let* ((tab-path (alist-get 'worktree-path tab)))
+                            (f-same-p worktree-path tab-path)))
+                        (funcall tab-bar-tabs-function))))
+        (cons frame tab)))))
 
 (defun +worktrees--switch-to-context-for-file (file-path)
   "Switch to the correct frame and tab for FILE-PATH.
@@ -669,6 +682,8 @@ Returns non-nil if context was switched, nil otherwise."
         (let ((tab-index (tab-bar--tab-index tab)))
           (when tab-index
             (tab-bar-select-tab (1+ tab-index)))))
+      ;; Pulse the tab to draw attention to the opened file
+      (+worktrees-set-transient-alert worktree-path)
       t)))
 
 (define-advice find-file (:around (fn filename &rest args) +worktrees-context-switch)
