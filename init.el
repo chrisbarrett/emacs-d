@@ -2209,6 +2209,12 @@ subprocess calls on every file open, especially problematic in TTY."
   ;; Major-mode for the KDL file format used by Zellij.
   :mode "\\.kdl\\'")
 
+(use-package reader ; native deps--package injected via Nix
+  ;; General-purpose document reader. Uses native modules with buffered
+  ;; rendering to improve performance.
+  :init
+  (require 'reader-autoloads))
+
 ;; Use tree-sitter modes.
 
 (alist-set! major-mode-remap-alist #'c-mode #'c-ts-mode)
