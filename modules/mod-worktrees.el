@@ -638,18 +638,34 @@ Returns t if any refresh took place, otherwise nil."
 
 ;;; Claude Code context-aware file opening
 
+(defun +worktrees--git-dir-file-p (file-path)
+  "Return non-nil if FILE-PATH is inside a .git directory.
+Git transient files (COMMIT_EDITMSG, MERGE_MSG, etc.) are stored in the
+shared .git directory and should not be routed based on path alone."
+  (string-match-p "/\\.git/" (expand-file-name file-path)))
+
+(defun +worktrees--current-tab-worktree ()
+  "Return the worktree-path of the currently selected tab, or nil."
+  (alist-get 'worktree-path (tab-bar--current-tab)))
+
 (defun +worktrees--find-worktree-for-file (file-path)
   "Find the worktree path that contains FILE-PATH.
 Returns the most specific worktree path (longest match), or nil if not
-in a worktree."
+in a worktree.  For git directory files (e.g., COMMIT_EDITMSG), returns
+the current tab's worktree to keep them in the context where the git
+operation was initiated."
   (let ((expanded-file (expand-file-name file-path)))
-    (car (seq-sort-by #'length #'>
-                      (seq-keep
-                       (pcase-lambda (`(,worktree-path . ,_rest))
-                         (let ((expanded-worktree (expand-file-name worktree-path)))
-                           (when (string-prefix-p expanded-worktree expanded-file)
-                             expanded-worktree)))
-                       (magit-list-worktrees))))))
+    (if (+worktrees--git-dir-file-p expanded-file)
+        ;; Git transient files: use current tab's worktree
+        (+worktrees--current-tab-worktree)
+      ;; Normal files: find by path matching
+      (car (seq-sort-by #'length #'>
+                        (seq-keep
+                         (pcase-lambda (`(,worktree-path . ,_rest))
+                           (let ((expanded-worktree (expand-file-name worktree-path)))
+                             (when (string-prefix-p expanded-worktree expanded-file)
+                               expanded-worktree)))
+                         (magit-list-worktrees)))))))
 
 (defun +worktrees--find-frame-with-tab-for-worktree (worktree-path)
   "Find the frame and tab for WORKTREE-PATH using repo→frame→tab hierarchy.
