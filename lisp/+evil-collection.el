@@ -59,6 +59,7 @@
     dictionary
     diff-hl
     diff-mode
+    difftastic
     dired
     dired-sidebar
     disk-usage
@@ -109,6 +110,7 @@
     help
     helpful
     hg-histedit
+    hideshow
     hungry-delete
     hyrolo
     ibuffer
@@ -138,6 +140,7 @@
     magit-section
     magit-todos
     markdown-mode
+    minesweeper
     ,@(when evil-collection-setup-minibuffer '(minibuffer))
     monky
     mpc
@@ -155,6 +158,7 @@
     org-roam
     osx-dictionary
     outline
+    ovpn-mode
     p4
     (package-menu package)
     pass
@@ -169,6 +173,7 @@
     quickrun
     racer
     racket-describe
+    reader
     realgud
     reftex
     replace ;; For `occur'.
