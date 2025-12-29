@@ -120,6 +120,11 @@
   (auto-compile-on-load-mode)
   (auto-compile-on-save-mode))
 
+;; Load init/**.el
+
+(dolist (file (directory-files-recursively +init-dir (rx ".el" eos)))
+  (load-file file))
+
 
 ;; Adapt the escape key customisation from Doom.
 
@@ -625,6 +630,7 @@ Runs `+escape-hook'."
 (when (boundp 'trusted-content)
   (add-to-list 'trusted-content (file-name-concat user-emacs-directory "early-init.el"))
   (add-to-list 'trusted-content (file-name-concat user-emacs-directory "init.el"))
+  (add-to-list 'trusted-content +init-dir)
   (add-to-list 'trusted-content +lisp-dir)
   (add-to-list 'trusted-content +modules-dir)
   (dolist (repo +chrisbarrett-elpaca-repos)

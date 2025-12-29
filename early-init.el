@@ -19,8 +19,10 @@
 
 
 (defvar +lisp-dir (file-name-concat user-emacs-directory "lisp/"))
+(defvar +init-dir (file-name-concat user-emacs-directory "init/"))
 (defvar +modules-dir (file-name-concat user-emacs-directory "modules/"))
 
+(add-to-list 'load-path +init-dir)
 (add-to-list 'load-path +lisp-dir)
 (add-to-list 'load-path +modules-dir)
 
