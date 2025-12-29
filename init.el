@@ -1273,40 +1273,6 @@ subprocess calls on every file open, especially problematic in TTY."
   (use-package mod-debug :demand t))
 
 
-;;; Code formatting
-
-(use-package apheleia :ensure t
-  ;; Apply code formatting on save. Works for a range of languages.
-  :after-call +first-file-hook
-  :custom
-  (apheleia-remote-algorithm 'local)
-  (apheleia-formatters-respect-fill-column t)
-  :config
-  (apheleia-global-mode +1))
-
-;; By default, trim trailing whitespace aggressively.
-
-(defvar-local +trim-trailing-whitespace-aggressively t)
-
-(add-hook! 'before-save-hook
-  (when +trim-trailing-whitespace-aggressively
-    (delete-trailing-whitespace)))
-
-;; TODO: Evaluate whether ws-butler is something I need. Do I ever work in
-;; codebases where I want to preserve existing trailing whitespace?
-
-(use-package ws-butler :ensure t :disabled t
-  ;; Delete trailing whitespace on visited lines.
-  :hook (prog-mode-hook text-mode-hook conf-mode-hook)
-  :config
-  (pushnew! ws-butler-global-exempt-modes
-            'special-mode
-            'comint-mode
-            'term-mode
-            'eshell-mode
-            'diff-mode))
-
-
 ;;; Templating
 
 (use-package tempel :ensure t
