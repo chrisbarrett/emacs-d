@@ -909,36 +909,6 @@ Runs `+escape-hook'."
                     "+" #'+expreg-expand-dwim)
 
 
-;;; Modeline
-
-(use-package doom-modeline :ensure t
-  ;; The modeline from doom, packaged independently.
-  :hook elpaca-after-init-hook
-  :custom
-  (doom-modeline-bar-width 3)
-  (doom-modeline-buffer-encoding 'nondefault)
-  (doom-modeline-buffer-state-icon nil)
-  (doom-modeline-major-mode-icon nil)
-  (doom-modeline-check-simple-format t)
-  (doom-modeline-modal nil)
-  :config
-  (add-hook! 'magit-mode-hook
-    (defun +modeline-hide-in-non-status-buffer-h ()
-      "Show minimal modeline in magit-status buffer, no modeline elsewhere."
-      (if (eq major-mode 'magit-status-mode)
-          (doom-modeline-set-modeline 'magit)
-        (hide-mode-line-mode)))))
-
-(use-package anzu :ensure t
-  ;; Display number of isearch results in the modeline
-  :after-call isearch-mode)
-
-(use-package evil-anzu
-  ;; Extends anzu to evil-mode commands.
-  :after-call evil-ex-start-search evil-ex-start-word-search evil-ex-search-activate-highlight
-  :config (global-anzu-mode +1))
-
-
 ;;; projects
 
 (use-package project
