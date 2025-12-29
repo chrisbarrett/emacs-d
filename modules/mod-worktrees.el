@@ -45,7 +45,7 @@
 (transient-define-prefix +worktrees-menu ()
   "Transient menu for git worktree operations."
   [["Change"
-    :if +worktrees--repo-root
+    :if +worktrees--repo-root-for-selected-frame
     ("r" "Ready (work on issue)" +worktrees-work-on-issue)
     ("o" "Switch or new..." +worktrees-create-switch)]
 
@@ -60,12 +60,12 @@
     ("x" "Destroy" +worktrees-destroy-current)]]
 
   ["Beads Issues"
-   :if +worktrees--repo-root
+   :if +worktrees--repo-root-for-selected-frame
    ("n" "Create..." beads-issue-create)
    ("`" "Show log..." beads-process-show-log)]
 
   ["Show"
-   :inapt-if-not +worktrees--repo-root
+   :inapt-if-not +worktrees--repo-root-for-selected-frame
    ("g" "git status" +worktrees-magit-status)
    ("c" "claude-code" +worktrees-claude-code)])
 
@@ -89,6 +89,11 @@
 (defun +worktrees--repo-root-for-file (file-path)
   "Get the git repository root for FILE-PATH."
   (let ((default-directory (file-name-directory (expand-file-name file-path))))
+    (+worktrees--repo-root)))
+
+(defun +worktrees--repo-root-for-selected-frame ()
+  (let ((default-directory (or (frame-parameter (selected-frame) 'project-root)
+                               default-directory)))
     (+worktrees--repo-root)))
 
 (defun +worktrees--find-frame-for-repo (repo-root)
