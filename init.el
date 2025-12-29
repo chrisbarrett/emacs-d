@@ -1025,71 +1025,6 @@ Runs `+escape-hook'."
   (breadcrumb-idle-time 0.3))
 
 
-;;; Spell-checking
-
-
-;;; Dired
-
-(use-package dired
-  ;; Emacs' built-in file management interface.
-  :hook
-  (dired-mode-hook . dired-hide-details-mode)
-  (dired-mode-hook . hl-line-mode)
-  :custom
-  (dired-garbage-files-regexp (rx (or ".log" ".toc" ".dvi" ".bak" ".orig" ".rej" ".aux" ".DS_Store")
-                                  eos))
-  (dired-recursive-copies 'always)
-  (dired-recursive-deletes 'always)
-  (dired-kill-when-opening-new-dired-buffer t)
-  (delete-by-moving-to-trash t)
-  (dired-dwim-target t)
-  (dired-auto-revert-buffer 'dired-directory-changed-p)
-  (dired-create-destination-dirs 'ask)
-  (dired-vc-rename-file t)
-  :config
-  (+local-leader-set-key 'dired-mode-map
-    "t" '(dired-toggle-marks :wk "toggle marks")
-    "d" '(dired-hide-details-mode :wk "toggle details")
-    "l" '(nil :wk "fs links")
-    "ls" '(dired-do-symlink :wk "symlink (absolute)")
-    "lr" '(dired-do-relsymlink :wk "symlink (relative)")
-    "lh" '(dired-do-hardlink :wk "hardlink")
-    "s" '(nil :wk "subdir")
-    "si" '(dired-insert-subdir :wk "insert")
-    "sx" '(dired-kill-subdir :wk "kill"))
-  (setq-hook! 'dired-mode-hook
-    dired-listing-switches (if (file-remote-p default-directory)
-                               "-al"
-                             "--almost-all --human-readable --group-directories-first --no-group")))
-
-(use-package dired-x
-  ;; Extra functionality around omitting files, etc.
-  :hook (dired-mode-hook . dired-omit-mode)
-  :custom
-  (dired-omit-files (rx bos (or "." "__pycache__" "node_modules")))
-  :init
-  (+local-leader-set-key 'dired-mode-map
-    "h" '(dired-omit-mode :wk "toggle hidden files")))
-
-(use-package nerd-icons :ensure t
-  ;; Icon set used by various packages.
-  :autoload nerd-icons-codicon nerd-icons-faicon)
-
-(use-package nerd-icons-dired :ensure t
-  ;; Show icons in dired.
-  :hook dired-mode-hook)
-
-(use-package wdired
-  ;; Makes dired buffers directly editable; the changes are interpreted into
-  ;; operations on the corresponding file names.
-  :general
-  (:keymaps 'dired-mode-map "C-c C-e" #'wdired-change-to-wdired-mode))
-
-(use-package diredfl :ensure t
-  ;; Add extra font-lock to dired file listings.
-  :hook (dired-mode-hook))
-
-
 ;;; evil-mode
 
 (use-package evil :ensure t
