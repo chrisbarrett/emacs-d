@@ -8,18 +8,12 @@
 (require 's)
 (require 'dash)
 
-(autoload 'gptel-request "gptel")
-(defvar gptel-model nil)
-
 (cl-eval-when (compile)
   (require 'eww)
-  (require 'gptel)
   (require 'org-roam))
 
 (defvar +capture-context nil
   "A plist containing extra information about the thing being captured.")
-
-(defvar +capture-fast-llm-model 'claude-haiku-4-5-20251001)
 
 (defvar +capture-excerpt-length-chars 1500)
 
@@ -82,28 +76,37 @@ Do not return any prose; only return the alist (unquoted) so that it may be pass
 
 
 (defun +capture--metadata-for-web-document (url title rendered-content)
-  (let* ((gptel-model +capture-fast-llm-model)
-         (gptel-use-context nil)
-         (gptel-use-tools nil)
-         (reporter (make-progress-reporter "Interpreting page for metadata"))
+  (let* ((reporter (make-progress-reporter "Interpreting page for metadata"))
          (prompt
           (cond ((string-prefix-p "https://www.youtube.com/" url)
                  (+capture--prompt-for-youtube-video title))
                 (t
                  (+capture--prompt-for-generic-web-page title rendered-content))))
-         (result))
-
-    (gptel-request prompt
-      :system nil
-      :callback (lambda (response _info)
-                  (setq result response)))
-
+         (output-buffer (generate-new-buffer " *claude-capture*"))
+         (result nil)
+         (proc (make-process
+                :name "claude-capture"
+                :buffer output-buffer
+                :command (list "claude" "--print" "--model" "haiku" "--max-turns" "1" prompt)
+                :sentinel (lambda (proc _event)
+                            (unwind-protect
+                                (pcase (process-status proc)
+                                  ('exit
+                                   (if (zerop (process-exit-status proc))
+                                       (with-current-buffer (process-buffer proc)
+                                         (goto-char (point-min))
+                                         (setq result (read (current-buffer))))
+                                     (setq result 'error)))
+                                  (_ (setq result 'error)))
+                              (kill-buffer output-buffer))))))
     (progress-reporter-update reporter)
     (while (null result)
-      (sleep-for 0.05)
+      (accept-process-output proc 0.05)
       (progress-reporter-update reporter))
-    (prog1 (append (list :url url) (read result))
-      (progress-reporter-done reporter))))
+    (progress-reporter-done reporter)
+    (when (eq result 'error)
+      (error "Claude CLI failed"))
+    (append (list :url url) result)))
 
 (defun +litnote-meta-try-from-eww ()
   (when-let* ((eww-buffer (seq-find (lambda (buf)

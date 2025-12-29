@@ -891,7 +891,6 @@ Runs `+escape-hook'."
           help-mode-hook
           shell-command-mode-hook
           eat-mode-hook
-          gptel-mode-hook
           org-roam-mode-hook
           )
          . hide-mode-line-mode)
@@ -2473,11 +2472,6 @@ subprocess calls on every file open, especially problematic in TTY."
 (use-package elfeed :ensure t)
 
 
-
-(use-package gptel :ensure t
-  ;; Provides LLM integrations.
-  :custom
-  (gptel-model 'claude-sonnet-4-5-20250929))
 
 (use-package claude-code-ide :ensure (:host github :repo "manzaltu/claude-code-ide.el")
   ;; Run claude-code inside Emacs; creates an MCP bridge between the processes
