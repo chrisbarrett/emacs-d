@@ -60,7 +60,7 @@ current beframe context."
        (project-switch-project dir)
        (set-frame-parameter nil 'project-root dir)
        (let ((frame-name (or (+git-repo-display-name)
-                             (file-name-nondirectory dir))))
+                             (file-name-nondirectory (expand-file-name dir)))))
          (set-frame-parameter nil 'name frame-name))
        (when (fboundp '+worktrees-adopt-initial-tab)
          (+worktrees-adopt-initial-tab)))
