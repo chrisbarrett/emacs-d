@@ -32,16 +32,16 @@
 
 ;; Configure aspects of elpaca not required for initial package bootstrap.
 ;;
+;; NB. `:general-config' not available until later in init sequence; hand-roll
+;; something equivalently lazy.
 
-(with-eval-after-load 'general
-  ;; KLUDGE: `:general-config' isn't available until after `general' has been
-  ;; loaded, which is later in the init sequence. Use a quote+eval to suppress
-  ;; macro-expansion of this form.
-  (eval
-   '(use-package elpaca
-      :general-config
-      (:states 'normal :keymaps 'elpaca-manager-mode-map "/" #'elpaca-ui-search)
-      (:keymaps 'elpaca-info-mode-map "q" #'quit-window))))
+(use-package elpaca
+  :after general
+  :preface
+  (autoload 'general-def "general")
+  :config
+  (general-def :states 'normal :keymaps 'elpaca-manager-mode-map "/" 'elpaca-ui-search)
+  (general-def :keymaps 'elpaca-info-mode-map "q" 'quit-window))
 
 (provide 'init-elpaca)
 

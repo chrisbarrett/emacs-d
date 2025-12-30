@@ -21,14 +21,28 @@
 (use-package init-elpaca
   :demand t
   :config
-  (defconst +chrisbarrett-elpaca-repos (seq-map (lambda (repo)
-                                                  (file-name-concat elpaca-repos-directory (concat repo "/")))
-                                                '("emacs-beads" "nursery"))
+  (defconst +chrisbarrett-elpaca-repos
+    (seq-map (lambda (repo)
+               (file-name-concat elpaca-repos-directory (concat repo "/")))
+             '("emacs-beads" "nursery"))
     "List of my repos managed via elpaca."))
 
+(use-package no-littering :ensure (:wait t) :demand t
+  :config
+  (no-littering-theme-backups))
+
+;; Ensure we never attempt to load outdated ELC files.
+(use-package auto-compile :ensure (:wait t) :demand t
+  :config
+  (auto-compile-on-load-mode)
+  (auto-compile-on-save-mode))
+
+;; General provides a featureful key binding system. It makes defining leader
+;; key bindings much easier.
+(use-package general :ensure (:wait t) :demand t)
+
 (use-package init-hooks :demand t)
-(use-package init-nolitter :demand t)
-(use-package init-autocompile :demand t)
+
 (use-package init-input :demand t)
 
 ;; Load init/**.el

@@ -4,10 +4,7 @@
 
 ;;; Code:
 
-
-;; General provides a featureful key binding system. It makes defining leader
-;; key bindings much easier.
-(use-package general :ensure (:wait t) :demand t
+(use-package general
   :config
   (use-package mod-leader :demand t))
 
