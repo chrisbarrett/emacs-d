@@ -233,8 +233,9 @@
     youtube-dl
     zmusic
     (ztree ztree-diff ztree-dir))
-  "List of modes supported by evil-collection. Elements are
-either target mode symbols or lists which `car' is the mode
+  "List of modes supported by evil-collection.
+
+Elements are either target mode symbols or lists which `car' is the mode
 symbol and `cdr' the packages to register.")
 
 (defvar +evil-collection-disabled-list
@@ -266,10 +267,12 @@ symbol and `cdr' the packages to register.")
 (defvar evil-collection--supported-modes nil)
 
 (defun +evil-collection-init (module &optional disabled-list)
-  "Initialize evil-collection-MODULE.
+  "Initialise evil-collection-$module MODULE.
 
 Unlike `evil-collection-init', this respects `+evil-collection-disabled-list',
-and complains if a module is loaded too early (during startup)."
+and complains if a module is loaded too early (during startup).
+
+DISABLED-LIST is used to conditionally disable specific modules."
   (unless (memq (or (car-safe module) module) disabled-list)
     (+log "editor:evil: loading evil-collection-%s %s"
           (or (car-safe module) module)
@@ -297,3 +300,5 @@ and complains if a module is loaded too early (during startup)."
         (+evil-collection-init mode +evil-collection-disabled-list)))))
 
 (provide '+evil-collection)
+
+;;; +evil-collection.el ends here
