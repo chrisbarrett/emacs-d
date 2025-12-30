@@ -129,13 +129,14 @@ advised)."
   (let ((append? (if (eq (car forms) :after) (pop forms)))
         (fn (gensym "+transient-hook")))
     `(let ((sym ,hook-or-function))
-       (defun ,fn (&rest _)
-         ,(format "Transient hook for %S" (+unquote hook-or-function))
-         ,@forms
-         (let ((sym ,hook-or-function))
-           (cond ((functionp sym) (advice-remove sym #',fn))
-                 ((symbolp sym)   (remove-hook sym #',fn))))
-         (unintern ',fn nil))
+       (eval-and-compile
+         (defun ,fn (&rest _)
+           ,(format "Transient hook for %S" (+unquote hook-or-function))
+           ,@forms
+           (let ((sym ,hook-or-function))
+             (cond ((functionp sym) (advice-remove sym #',fn))
+                   ((symbolp sym)   (remove-hook sym #',fn))))
+           (unintern ',fn nil)))
        (cond ((functionp sym)
               (advice-add ,hook-or-function ,(if append? :after :before) #',fn))
              ((symbolp sym)
@@ -399,7 +400,7 @@ Every time PRED returns non-nil, the list is split into a new chunk."
       (`(,l . ,r)
        (cons (+tree-map fn l) (+tree-map fn r)))
       (it
-       it))))
+          it))))
 
 (defmacro alist-set! (alist key value)
   `(setf (alist-get ,key ,alist nil nil #'equal) ,value))
