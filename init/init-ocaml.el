@@ -10,7 +10,9 @@
 (use-package neocaml
   :ensure (neocaml :host github :repo "bbatsov/neocaml" :main "neocaml.el")
 
-  :mode ("\\.ocamlinit\\'"))
+  :mode ("\\.ocamlinit\\'")
+  :config
+  (add-to-list 'eglot-server-programs '((neocaml-mode :language-id "ocaml") . ("nix" "develop" "--command" "ocamllsp"))))
 
 ;; Extend eglot to support extra functionality provided by the OCaml LSP.
 (use-package ocaml-eglot
