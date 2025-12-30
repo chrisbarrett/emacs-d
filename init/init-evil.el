@@ -6,22 +6,14 @@
 
 (require '+corelib)
 
-;; Since I use evil, I have no need for the usual rectangular selection
-;; keybinding.
-(keymap-global-set "C-x SPC"
-                   (defun +insert-char ()
-                     "Insert a character at point."
-                     (interactive)
-                     (evil-insert-state)
-                     (call-interactively
-                      (if (equal system-type 'darwin)
-                          #'ns-do-show-character-palette
-                        #'insert-char))))
-
+(autoload '+leader-key "init-leader")
+(autoload 'evil-insert-state "evil")
+(autoload 'general-define-key "general")
 
 ;; Evil is a better vim emulation implementation than the one that
 ;; ships with Emacs.
-(use-package evil :ensure t
+(use-package evil
+  :ensure t
   :demand t
   :general-config
   (:states 'emacs
@@ -65,11 +57,25 @@
                        "Like `backward-kill-word', but doesn't affect the kill-ring."
                        (interactive "p")
                        (let ((kill-ring nil) (kill-ring-yank-pointer nil))
-                         (ignore-errors (backward-kill-word arg))))))
+                         (ignore-errors (backward-kill-word arg)))))
+
+  ;; Replace redundant rectangular selection keybinding with a character picker.
+  :preface
+  (defun +insert-char ()
+    "Insert a character at point."
+    (interactive)
+    (evil-insert-state)
+    (call-interactively
+     (if (equal system-type 'darwin)
+         #'ns-do-show-character-palette
+       #'insert-char)))
+  :general
+  ("C-x SPC" '+insert-char))
 
 
 ;; Visualise the Emacs undo history.
-(use-package vundo :ensure (vundo :host github :repo "casouri/vundo")
+(use-package vundo
+  :ensure (vundo :host github :repo "casouri/vundo")
   :general ("C-x u" #'vundo)
   :config
   (setq vundo-glyph-alist vundo-unicode-symbols))
@@ -77,7 +83,8 @@
 
 ;; Community-managed collection of evil keybindings; makes evil behave more
 ;; consistently across many modes.
-(use-package evil-collection :ensure t
+(use-package evil-collection
+  :ensure t
   :custom
   ;; Ensure we do not overwrite the global leader key binding.
   (evil-collection-key-blacklist '("SPC" "S-SPC"))
@@ -86,28 +93,40 @@
   ;; conflicts.
   (evil-collection-outline-enable-in-minor-mode-p nil)
 
+  ;; Disable default bindings for forge; these will be set by evil-collection
+  ;; instead. Setting to nil suppresses warning about this.
+  (forge-add-default-bindings nil)
+
   ;; Be a bit smarter about the evil-collection load sequence; in particular,
   ;; set up bindings in hooks first time we activate a major-mode. This makes
   ;; key binding setup more performant and more predictable.
   :init
-  (with-eval-after-load 'evil
-    (require '+evil-collection)
-    (+evil-collection-defer-install-to-mode-activation))
-  :config
-  (+evil-collection-init 'comint)
+  (use-package +evil-collection
+    :after evil
+    :demand t
+    :functions (+evil-collection-defer-install-to-mode-activation +evil-collection-init)
+    :config
+    (+evil-collection-defer-install-to-mode-activation)
+    (+evil-collection-init 'comint))
 
   ;; Fix leader keybindings that get clobbered by evil-collection.
-
-  (define-advice evil-collection-magit-init (:after (&rest _) bind-leader)
-    (general-define-key :keymaps (append evil-collection-magit-maps
-                                         evil-collection-magit-section-maps)
-                        :states '(normal)
-                        "SPC" #'+leader-key)))
+  :config
+  (use-package evil-collection-magit
+    :defines (evil-collection-magit-maps
+              evil-collection-magit-section-maps)
+    :config
+    (eval-and-compile
+      (define-advice evil-collection-magit-init (:after (&rest _) bind-leader)
+        (general-define-key :keymaps (append evil-collection-magit-maps
+                                             evil-collection-magit-section-maps)
+                            :states '(normal)
+                            "SPC" #'+leader-key)))))
 
 
 ;; Evil-surround makes the S key work as an operator to surround an
 ;; object with, e.g., matched parentheses.
-(use-package evil-surround :ensure t
+(use-package evil-surround
+  :ensure t
   :hook ((text-mode-hook prog-mode-hook) . evil-surround-mode)
   ;; Use lowercase 's' for surround instead of 'S'.
   :general-config (:states '(visual) :keymaps 'evil-surround-mode-map "s" #'evil-surround-region)
@@ -136,12 +155,14 @@
 (use-package evil-tty-cursor
   :after evil
   :demand t
+  :commands (global-evil-tty-cursor-mode)
   :config
   (global-evil-tty-cursor-mode +1))
 
 
 ;; Evil-compatible multiple cursors.
-(use-package evil-multiedit :ensure t
+(use-package evil-multiedit
+  :ensure t
   :after evil
   :demand t
   :config
@@ -184,7 +205,8 @@
 
 ;; Show an indication in the modeline of how many evil-search hits are in the
 ;; buffer, and which one point last moved to.
-(use-package evil-anzu :ensure t
+(use-package evil-anzu
+  :ensure t
   :after-call evil-ex-start-search evil-ex-start-word-search evil-ex-search-activate-highlight
   :config (global-anzu-mode +1))
 
