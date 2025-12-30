@@ -182,30 +182,6 @@
    "S" #'evil-multiedit--change-line))
 
 
-;; Use tree-sitter to mark syntactic elements.
-(use-package expreg :ensure t
-  :init
-  (defun +expreg-expand-n (n)
-    "Expand to N syntactic units, defaulting to 1 if none is provided interactively."
-    (interactive "p")
-    (dotimes (_ n)
-      (expreg-expand)))
-
-  (defun +expreg-expand-dwim ()
-    "Do-What-I-Mean `expreg-expand' to start with symbol or word.
-If over a real symbol, mark that directly, else start with a
-word.  Fall back to regular `expreg-expand'."
-    (interactive)
-    (when iedit-mode
-      (iedit-done))
-    (let ((symbol (bounds-of-thing-at-point 'symbol)))
-      (cond
-       ((equal (bounds-of-thing-at-point 'word) symbol)
-        (+expreg-expand-n 1))
-       (symbol (+expreg-expand-n 2))
-       (t (expreg-expand))))))
-
-
 ;; Show an indication in the modeline of how many evil-search hits are in the
 ;; buffer, and which one point last moved to.
 (use-package evil-anzu :ensure t
