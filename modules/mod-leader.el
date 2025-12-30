@@ -125,7 +125,6 @@
   "x" '(puni-split :wk "split"))
 
 (+define-leader-keys :prefix "SPC a" ;; apps
-  "n" #'elfeed
   "w" #'eww
   "c" #'quick-calc
   "C" #'full-calc
