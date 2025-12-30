@@ -14,7 +14,7 @@
 
 
 ;; Dark theme.
-(use-package catppuccin-theme :ensure (:wait t) :demand t
+(use-package catppuccin-theme :ensure t :demand t
   :init
   (setq +theme-dark 'catppuccin)
   (+theme-update))

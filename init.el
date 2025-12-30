@@ -39,19 +39,22 @@
 ;; General provides a featureful key binding system. It makes defining leader
 ;; key bindings much easier, and must be loaded immediately for its use-package
 ;; integration.
-(use-package general :ensure (:wait t) :demand t)
+(use-package general :ensure t :demand t)
 
 ;; Configure Emacs features & packages to follow a structured approach to
 ;; writing cache files, temp data, etc.
-(use-package no-littering :ensure (:wait t) :demand t
+(use-package no-littering :ensure t :demand t
   :config
   (no-littering-theme-backups))
 
 ;; Ensure we never attempt to load outdated ELC files.
-(use-package auto-compile :ensure (:wait t) :demand t
+(use-package auto-compile :ensure t :demand t
   :config
   (auto-compile-on-load-mode)
   (auto-compile-on-save-mode))
+
+;; Block until these packages are activated.
+(elpaca-wait)
 
 
 ;; Key init files that must be loaded early in the sequence.
