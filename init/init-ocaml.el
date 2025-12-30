@@ -5,9 +5,17 @@
 ;;; Code:
 
 ;; Experimental OCaml major mode using tree-sitter.
-(use-package neocaml :ensure (neocaml :host github :repo "bbatsov/neocaml" :main "neocaml.el")
-  :init
-  (require 'neocaml-autoloads))
+(use-package neocaml
+  :ensure (neocaml :host github :repo "bbatsov/neocaml" :main "neocaml.el")
+
+  :mode ("\\.ocamlinit\\'"))
+
+(use-package ocaml-eglot
+  :ensure t
+  :after neocaml
+  :hook
+  (neocaml-mode-hook . ocaml-eglot)
+  (ocaml-eglot-hook . eglot-ensure))
 
 (provide 'init-ocaml)
 
