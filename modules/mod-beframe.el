@@ -5,12 +5,11 @@
 ;;; Code:
 
 (require '+corelib)
-(require 'beframe)
-(require 'general)
-(require 'project)
+(require '+git)
 
-(cl-eval-when (compile)
-  (require '+git nil t))
+(require 'beframe "~/.config/emacs/elpaca/repos/beframe/beframe.el")
+(require 'general "~/.config/emacs/elpaca/repos/general/general.el")
+(require 'project)
 
 (autoload 'eat "eat")
 
@@ -23,7 +22,9 @@
 (defvar eat-buffer-name)
 
 (defun eat-beframed (&optional arg)
-  "Run an `eat' instance for the current beframe context."
+  "Run an `eat' instance for the current beframe context.
+
+With prefix argument ARG, create a new session."
   (interactive "P")
   (let ((eat-buffer-name (format "*eat %s*" (frame-parameter (selected-frame) 'name))))
     (eat nil arg)))

@@ -301,11 +301,6 @@
   (split-height-threshold nil))
 
 
-;;; Set up display-buffer
-
-(add-hook! '+first-input-hook
-  (use-package mod-display-buffer :demand t))
-
 (provide 'init-ui)
 
 ;;; init-ui.el ends here

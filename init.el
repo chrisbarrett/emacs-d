@@ -63,6 +63,8 @@
 
 (use-package init-hooks :demand t)
 
+(use-package init-leader :demand t)
+
 (use-package init-input :demand t)
 
 ;; Load init/**.el

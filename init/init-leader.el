@@ -1,19 +1,33 @@
-;;; mod-leader.el --- Leader key -*- lexical-binding: t; -*-
+;;; init-leader.el --- Leader key -*- lexical-binding: t; -*-
 
 ;;; Commentary:
 
 ;;; Code:
 
-(require 'general)
 (require '+window)
 (require '+org-roam)
 (require '+edit-cmds)
 (require '+files)
 
+;; SAFETY: Definitely loaded early in init sequence.
+(require 'general "~/.config/emacs/elpaca/repos/general/general.el")
+
+(autoload 'parent-mode-list "parent-mode")
+(autoload 'project-find-file-in "project")
+
+(defvar +site-files-directory)
+(defvar org-default-notes-file)
+(defvar org-roam-directory)
+
+
+
 (general-auto-unbind-keys)
 (general-unbind :states '(normal motion) "SPC" "M-m")
 
-(general-create-definer +define-leader-keys :states '(normal motion))
+(with-no-warnings ;; SAFETY: Warning about macro-generated docstring.
+  (general-create-definer +define-leader-keys :states '(normal motion)))
+
+
 
 (+define-leader-keys :prefix "SPC" ;; root-level
   :prefix-command '+leader-key
@@ -34,7 +48,7 @@
               (derived-mode-p 'dired-mode) #'dired)
             :wk "dir editor")
   "i" '(consult-imenu :wk "imenu")
-  "r" #'vertico-repeat
+  "r" 'vertico-repeat
   "s" '(save-buffer :wk "save buf")
   "S" '(save-some-buffers :wk "save some bufs...")
   "u" '(universal-argument :wk "C-u")
@@ -71,7 +85,8 @@
   "/" '(consult-ripgrep :wk "search (rg)")
   "*" (list (defun +consult-ripgrep-symbol ()
               (interactive)
-              (consult-ripgrep nil (format "%s" (symbol-at-point))))
+              (with-no-warnings
+                (consult-ripgrep nil (format "%s" (symbol-at-point)))))
             :wk "search (symbol)")
 
   "TAB" (list (defun +swap-buffers ()
@@ -147,11 +162,11 @@
   "p"  '(nil :wk "elpaca"))
 
 (+define-leader-keys :prefix "SPC a p" ;; elpaca
-  "p" #'elpaca-manager
-  "l" #'elpaca-log
-  "i" #'elpaca-info
-  "b" #'elpaca-browse
-  "v" #'elpaca-visit)
+  "p" 'elpaca-manager
+  "l" 'elpaca-log
+  "i" 'elpaca-info
+  "b" 'elpaca-browse
+  "v" 'elpaca-visit)
 
 (+define-leader-keys :prefix "SPC b" ;; buffers
   "b" '(bury-buffer :wk "bury")
@@ -208,8 +223,9 @@
 
   "d" (list (defun +copy-file-directory ()
               (interactive)
-              (let ((dir (or (-some->> (buffer-file-name) (file-name-directory))
-                             default-directory)))
+              (let ((dir (if-let* ((file (buffer-file-name)))
+                             (file-name-directory file)
+                           default-directory)))
                 (kill-new dir)
                 (message "Copied to clipboard => %s" dir)))
             :wk "copy (dir)")
@@ -351,8 +367,8 @@
 
 ;; Define alternative M-m key sequence for non-evil modes.
 
-(general-def "M-m" #'+leader-key)
+(general-def "M-m" '+leader-key)
 
-(provide 'mod-leader)
+(provide 'init-leader)
 
-;;; mod-leader.el ends here
+;;; init-leader.el ends here

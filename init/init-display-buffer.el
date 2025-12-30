@@ -1,4 +1,4 @@
-;;; mod-display-buffer.el --- The Dark Pit of Display Buffer and Despair -*- lexical-binding: t; -*-
+;;; init-display-buffer.el --- The Dark Pit of Display Buffer and Despair -*- lexical-binding: t; -*-
 
 ;;; Commentary:
 
@@ -216,6 +216,6 @@
 (setq window-combination-resize t)
 (setq switch-to-buffer-in-dedicated-window 'pop)
 
-(provide 'mod-display-buffer)
+(provide 'init-display-buffer)
 
-;;; mod-display-buffer.el ends here
+;;; init-display-buffer.el ends here

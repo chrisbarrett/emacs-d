@@ -7,10 +7,7 @@
 (require '+corelib)
 
 (use-package general
-  :functions (general-define-key)
-  :config
-  (use-package mod-leader :demand t)
-  (general-define-key :keymaps +default-minibuffer-maps "s-v" #'yank))
+  :general-config (:keymaps +default-minibuffer-maps "s-v" #'yank))
 
 ;; Insert non-breaking space on C-c SPC
 

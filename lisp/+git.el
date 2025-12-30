@@ -6,7 +6,8 @@
 
 ;;; Code:
 
-(require 'magit)
+(autoload 'magit-primary-remote "magit-git")
+(autoload 'magit-git-string "magit-git")
 
 (defun +git-repo-display-name ()
   "Get a display name for the current repository.

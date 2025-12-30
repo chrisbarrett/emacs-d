@@ -5,7 +5,11 @@
 ;;; Code:
 
 (require 'vc-git)
-(require 'browse-at-remote)
+
+(autoload 'browse-at-remote--get-formatter "browse-at-remote")
+(autoload 'browse-at-remote--get-remote-type "browse-at-remote")
+(autoload 'browse-at-remote--get-url-from-remote "browse-at-remote")
+(autoload 'browse-at-remote--remote-ref "browse-at-remote")
 
 (defvar git-timemachine-revision)
 
