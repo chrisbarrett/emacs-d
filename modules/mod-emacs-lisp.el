@@ -33,11 +33,6 @@
 
 (setq checkdoc-force-docstrings-flag nil)
 
-(setq-default elisp-flymake-byte-compile-load-path (list
-                                                    "./"
-                                                    (file-name-concat user-emacs-directory "lisp/")))
-
-
 
 ;;; Extra visual feedback for eval commands
 
