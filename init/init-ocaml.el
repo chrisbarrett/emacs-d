@@ -10,6 +10,9 @@
 
   :mode ("\\.ocamlinit\\'"))
 
+(use-package lisp-mode
+  :mode ("/dune-project\\'" . lisp-data-mode))
+
 (use-package ocaml-eglot
   :ensure t
   :after neocaml
