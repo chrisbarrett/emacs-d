@@ -4,7 +4,7 @@
 
 ;;; Code:
 
-(require 'subr-x)
+(require '+corelib)
 
 (defvar +templates-dir (file-name-concat user-emacs-directory "templates/"))
 
@@ -13,6 +13,7 @@
   ;; NB. Field navigation uses M-{ and M-}.
   :custom
   (tempel-path (file-name-concat +templates-dir "*.eld"))
+  :functions (tempel-expand tempel--active-p tempel-done)
   :init
   (add-hook! '(prog-mode-hook text-mode-hook config-mode-hook)
     (add-hook 'completion-at-point-functions #'tempel-expand -90 t))
@@ -39,37 +40,8 @@
   :after autoinsert
   :demand t
   :config
-  (require 'string-inflection nil t)
-
-  (+define-file-template (rx ".el" eos) "emacs-lisp.eld")
-  (+define-file-template (rx "flake.nix" eos) "flake.eld")
-
-  (+define-file-template (rx "terragrunt.hcl" eos) "terragrunt/terragrunt.eld")
-  (+define-file-template (rx "root.hcl" eos) "terragrunt/root.eld")
-  (+define-file-template (rx "region.hcl" eos) "terragrunt/region.eld")
-  (+define-file-template (rx "." (or "sh" "bash" "zsh") eos) "shell-script.eld")
-
-  (+define-file-template-dispatcher 'elixir-ts-mode
-    ((string-match-p "/lib/" (buffer-file-name))
-     "elixir/lib.eld")
-    ((string-match-p (rx "/test/" (+? nonl) ".exs" eos) (buffer-file-name))
-     "elixir/test.eld"))
-
-  (defun +cdk-project-p (&optional dir)
-    (locate-dominating-file (or dir default-directory) "cdk.json"))
-
-  (defun +index-ts-p (file)
-    (equal "index.ts" (file-name-nondirectory (buffer-file-name))))
-
-  (+define-file-template-dispatcher 'typescript-ts-mode
-    ((and (string-match-p "construct" (buffer-file-name))
-          (+cdk-project-p)
-          (not (+index-ts-p (buffer-file-name))))
-     "cdk/construct.eld")
-    ((and (string-match-p "/stacks/" (buffer-file-name))
-          (+cdk-project-p)
-          (not (+index-ts-p (buffer-file-name))))
-     "cdk/stack.eld")))
+  (require 'string-inflection nil t) ;; Used by some templates.
+  )
 
 
 (provide 'init-templates)

@@ -16,17 +16,33 @@
 
 (defvar +site-files-directory (file-name-concat user-emacs-directory "site/"))
 
-;; Key init files that must be loaded early in the sequence.
+(add-to-list 'trusted-content (file-name-concat user-emacs-directory "early-init.el"))
+(add-to-list 'trusted-content (file-name-concat user-emacs-directory "init.el"))
+(add-to-list 'trusted-content +init-dir)
+(add-to-list 'trusted-content +lisp-dir)
+(add-to-list 'trusted-content +modules-dir)
 
-(use-package init-elpaca
-  :demand t
-  :config
-  (defconst +chrisbarrett-elpaca-repos
-    (seq-map (lambda (repo)
-               (file-name-concat elpaca-repos-directory (concat repo "/")))
-             '("emacs-beads" "nursery"))
-    "List of my repos managed via elpaca."))
+
+;;; Bootstrap Elpaca & critical packages
 
+;; Suppress warning when loading Elpaca with latest Emacs.
+(add-to-list 'warning-suppress-types '(elpaca core \30.2))
+(add-to-list 'warning-suppress-types '(elpaca core \31.0.50))
+
+(unless (featurep 'elpaca)
+  (load-file (file-name-concat user-emacs-directory "elpaca-bootstrap.el")))
+
+(with-no-warnings
+  (elpaca elpaca-use-package
+    (elpaca-use-package-mode)))
+
+;; General provides a featureful key binding system. It makes defining leader
+;; key bindings much easier, and must be loaded immediately for its use-package
+;; integration.
+(use-package general :ensure (:wait t) :demand t)
+
+;; Configure Emacs features & packages to follow a structured approach to
+;; writing cache files, temp data, etc.
 (use-package no-littering :ensure (:wait t) :demand t
   :config
   (no-littering-theme-backups))
@@ -37,9 +53,10 @@
   (auto-compile-on-load-mode)
   (auto-compile-on-save-mode))
 
-;; General provides a featureful key binding system. It makes defining leader
-;; key bindings much easier.
-(use-package general :ensure (:wait t) :demand t)
+
+;; Key init files that must be loaded early in the sequence.
+
+(use-package init-elpaca :demand t)
 
 (use-package init-hooks :demand t)
 

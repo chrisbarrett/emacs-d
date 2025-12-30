@@ -4,6 +4,8 @@
 
 ;;; Code:
 
+(require '+corelib)
+
 ;; Use the shell to get some environment vars; necessary when the window
 ;; system runs Emacs under a very different process environment.
 ;;
@@ -61,6 +63,7 @@
 (use-package server
   :if (display-graphic-p)
   :demand t
+  :functions server-running-p
   :config
   (unless (server-running-p)
     (server-start)))

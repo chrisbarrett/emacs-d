@@ -14,6 +14,14 @@
 (defvar +modules-dir nil)
 (defvar +lisp-dir nil)
 
+(defvar +default-minibuffer-maps
+  '(minibuffer-local-map
+    minibuffer-local-ns-map
+    minibuffer-local-completion-map
+    minibuffer-local-must-match-map
+    minibuffer-local-isearch-map
+    read-expression-map))
+
 
 ;;; Logging
 
@@ -112,9 +120,10 @@ list is returned as-is."
   (declare (indent 1))
   (macroexp-progn
    (cl-loop for (var val hook fn) in (--setq-hook-fns hooks var-vals)
-            collect `(defun ,fn (&rest _)
-                       ,(format "%s = %s" var (pp-to-string val))
-                       (setq-local ,var ,val))
+            collect `(eval-and-compile
+                       (defun ,fn (&rest _)
+                         ,(format "Set `%s' to `%s'." var (string-trim (pp-to-string val)))
+                         (setq-local ,var ,val)))
             collect `(add-hook ',hook #',fn -90))))
 
 (defmacro add-transient-hook! (hook-or-function &rest forms)
@@ -479,6 +488,9 @@ P is the point at which we run `syntax-ppss'"
 
 (defmacro +local-leader-set-key (keymaps &rest general-args)
   (declare (indent 1))
-  `(general-define-key :prefix "," :states '(normal motion) :keymaps ,keymaps ,@general-args))
+  `(progn
+     (cl-eval-when (compile)
+       (autoload 'general-define-key "general"))
+     (general-define-key :prefix "," :states '(normal motion) :keymaps ,keymaps ,@general-args)))
 
 (provide '+corelib)

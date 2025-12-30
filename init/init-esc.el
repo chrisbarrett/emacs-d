@@ -4,24 +4,18 @@
 
 ;;; Code:
 
-(require 'general)
+(require '+corelib)
 
-(defvar +default-minibuffer-maps
-  '(minibuffer-local-map
-    minibuffer-local-ns-map
-    minibuffer-local-completion-map
-    minibuffer-local-must-match-map
-    minibuffer-local-isearch-map
-    read-expression-map))
-
-(general-def :keymaps +default-minibuffer-maps "s-v" #'yank)
+(autoload 'general-define-key "general")
 
 (defvar +escape-hook nil
   "Hook functions run until success when ESC is pressed.")
 
 (defun +escape (&optional interactive)
   "Quit things, abort things, and finish things.
-Runs `+escape-hook'."
+Runs `+escape-hook'.
+
+INTERACTIVE is set when called interactively."
   (interactive (list 'interactive))
   (let ((inhibit-quit t)
         (in-minibuffer? (minibuffer-window-active-p (minibuffer-window))))
@@ -44,9 +38,8 @@ Runs `+escape-hook'."
 
 (global-set-key [remap keyboard-quit] #'+escape)
 (global-set-key [remap abort-recursive-edit] #'+escape)
-(general-def :states 'normal [escape] #'+escape)
-
-(general-def :keymaps +default-minibuffer-maps [escape] #'+escape)
+(general-define-key :states 'normal [escape] #'+escape)
+(general-define-key :keymaps +default-minibuffer-maps [escape] #'+escape)
 
 (with-eval-after-load 'eldoc
   (eldoc-add-command '+escape))

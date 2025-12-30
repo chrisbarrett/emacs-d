@@ -7,18 +7,15 @@
 (require '+corelib)
 (require '+load-incrementally)
 
-;;; Bootstrap Elpaca
+(defvar elpaca-repos-directory nil)
 
-;; Suppress warning when loading Elpaca with latest Emacs.
-(add-to-list 'warning-suppress-types '(elpaca core \30.2))
-(add-to-list 'warning-suppress-types '(elpaca core \31.0.50))
+(defconst +chrisbarrett-elpaca-repos
+  (seq-map (lambda (repo)
+             (file-name-concat elpaca-repos-directory (concat repo "/")))
+           '("emacs-beads" "nursery")))
 
-(unless (featurep 'elpaca)
-  (load-file (file-name-concat user-emacs-directory "elpaca-bootstrap.el")))
-
-(with-no-warnings
-  (elpaca elpaca-use-package
-    (elpaca-use-package-mode)))
+(dolist (repo +chrisbarrett-elpaca-repos)
+  (add-to-list 'trusted-content (abbreviate-file-name repo)))
 
 ;; Make sure I don't accidentally start loading super-expensive packages on startup.
 
@@ -31,17 +28,11 @@
 (add-hook 'elpaca-after-init-hook #'+load-packages-incrementally-h)
 
 ;; Configure aspects of elpaca not required for initial package bootstrap.
-;;
-;; NB. `:general-config' not available until later in init sequence; hand-roll
-;; something equivalently lazy.
 
 (use-package elpaca
-  :after general
-  :preface
-  (autoload 'general-def "general")
-  :config
-  (general-def :states 'normal :keymaps 'elpaca-manager-mode-map "/" 'elpaca-ui-search)
-  (general-def :keymaps 'elpaca-info-mode-map "q" 'quit-window))
+  :general-config
+  (:states 'normal :keymaps 'elpaca-manager-mode-map "/" 'elpaca-ui-search)
+  (:keymaps 'elpaca-info-mode-map "q" 'quit-window))
 
 (provide 'init-elpaca)
 

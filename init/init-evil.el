@@ -4,6 +4,21 @@
 
 ;;; Code:
 
+(require '+corelib)
+
+;; Since I use evil, I have no need for the usual rectangular selection
+;; keybinding.
+(keymap-global-set "C-x SPC"
+                   (defun +insert-char ()
+                     "Insert a character at point."
+                     (interactive)
+                     (evil-insert-state)
+                     (call-interactively
+                      (if (equal system-type 'darwin)
+                          #'ns-do-show-character-palette
+                        #'insert-char))))
+
+
 ;; Evil is a better vim emulation implementation than the one that
 ;; ships with Emacs.
 (use-package evil :ensure t

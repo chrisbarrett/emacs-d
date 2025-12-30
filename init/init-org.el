@@ -4,6 +4,8 @@
 
 ;;; Code:
 
+(require '+corelib)
+
 
 ;; org is a chonker; decompose the load process into smaller, incrementally
 ;; loaded features so it's less noticeable.

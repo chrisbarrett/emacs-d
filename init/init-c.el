@@ -4,6 +4,8 @@
 
 ;;; Code:
 
+(require '+corelib)
+
 (use-package c-ts-mode
   :general-config
   (:keymaps 'c-ts-mode-map :states 'insert

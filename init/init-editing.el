@@ -4,23 +4,12 @@
 
 ;;; Code:
 
+(require '+corelib)
 
 ;;; General editing
 
 (put 'erase-buffer 'disabled nil)
 (put 'narrow-to-region 'disabled nil)
-
-;; Since I use evil, I have no need for the usual rectangular selection
-;; keybinding.
-(keymap-global-set "C-x SPC"
-                   (defun +insert-char ()
-                     "Insert a character at point."
-                     (interactive)
-                     (evil-insert-state)
-                     (call-interactively
-                      (if (equal system-type 'darwin)
-                          #'ns-do-show-character-palette
-                        #'insert-char))))
 
 (when (equal system-type 'darwin)
   ;; Delete some unneeded macOS-like keybindings.
@@ -41,8 +30,9 @@
 (setq-default truncate-lines t)
 (setq truncate-partial-width-windows nil)
 
+
+;; Core editing functionality.
 (use-package simple
-  ;; Core editing functionality.
   :custom
   (kill-do-not-save-duplicates t)
   ;; Hide commands that don't work in the current major-mode.
@@ -60,8 +50,8 @@
 (keymap-global-set "C-c e e" #'toggle-debug-on-error)
 
 
+;; General built-in file IO.
 (use-package files
-  ;; General built-in file IO.
   :custom
   (backup-inhibited t)
   (require-final-newline t)
@@ -73,24 +63,27 @@
   (backup-by-copying t)
   (delete-old-versions t)
   (kept-old-versions 5)
-  (kept-new-versions 5)
-  :config
-  (define-advice after-find-file (:around (fn &rest args) dont-block-on-autosave-exists)
-    "Prevent the editor blocking to inform you when an autosave file exists."
-    (cl-letf (((symbol-function #'sit-for) #'ignore))
-      (apply fn args))))
+  (kept-new-versions 5))
 
+(define-advice after-find-file (:around (fn &rest args) dont-block-on-autosave-exists)
+  "Prevent the editor blocking to inform you when an autosave file exists."
+  (cl-letf (((symbol-function #'sit-for) #'ignore))
+    (apply fn args)))
+
+
+;; Controls how buffers with conflicting names are managed.
 (use-package uniquify
-  ;; Controls how buffers with conflicting names are managed.
   :custom
   (uniquify-buffer-name-style 'forward))
 
+
+;; Automatically revert buffers.
+;;
+;; This configuration is adapted from Doom; it disables the file watcher
+;; mechanism and instead auto-reverts based on users switching windows &
+;; buffers. This is much less resource-intensive.
 (use-package autorevert
-  ;; Automatically revert buffers.
-  ;;
-  ;; This configuration is adapted from Doom; it disables the file watcher
-  ;; mechanism and instead auto-reverts based on users switching windows &
-  ;; buffers. This is much less resource-intensive.
+  :functions (auto-revert-handler)
   :config
   (defun +auto-revert-current-buffer-h ()
     (unless (or auto-revert-mode
@@ -120,22 +113,15 @@
   ;; Only prompts for confirmation when buffer is unsaved.
   (revert-without-query (list ".")))
 
+
+;; Maintain a list of visited files.
 (use-package recentf
-  ;; Maintain a list of visited files.
   :after-call recentf consult-buffer
   :defer-incrementally t
   :custom
   (recentf-max-saved-items 100)
   :config
   (recentf-mode +1))
-
-(use-package profiler
-  :general-config
-  (:keymaps 'profiler-report-mode-map
-   :states 'normal
-   "A" #'profiler-report-ascending-sort
-   "D" #'profiler-report-descending-sort
-   "K" #'profiler-report-describe-entry))
 
 (put 'downcase-region 'disabled nil)
 

@@ -4,6 +4,7 @@
 
 ;;; Code:
 
+(require '+corelib)
 
 ;; Vertico provides a better completion UI than the built-in default.
 (use-package vertico :ensure t
@@ -98,6 +99,7 @@
   :custom
   (savehist-autosave-interval nil) ; on exit
   (history-delete-duplicates t)
+  :functions (savehist-printable)
   :config
   (pushnew! savehist-additional-variables
             'kill-ring

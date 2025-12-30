@@ -4,6 +4,7 @@
 
 ;;; Code:
 
+(require '+corelib)
 
 (use-package rust-ts-mode
   :hook (rust-ts-mode-hook . eglot-ensure)

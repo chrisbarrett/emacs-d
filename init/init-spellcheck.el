@@ -4,6 +4,7 @@
 
 ;;; Code:
 
+
 ;; Built-in spellchecker. I don't actually use it directly, but other packages
 ;; reference its configuration.
 (use-package ispell
@@ -27,6 +28,7 @@
   (add-to-list 'file-coding-system-alist
                (cons (rx "aspell." (+? nonl) ".pws" eos) 'utf-8-unix)))
 
+
 ;; A more lightweight spell-checker than the built-in.
 (use-package spell-fu :ensure t
   :hook (text-mode-hook prog-mode-hook conf-mode-hook)
@@ -47,11 +49,13 @@
                              org-block-begin-line org-block-end-line
                              org-footnote org-tag org-modern-tag org-verbatim)))
 
+
 ;; Provides a nicer command for working with spelling corrections.
 (use-package flyspell-correct :ensure t
   :after spell-fu
   :general
   (:states 'normal "z SPC" #'flyspell-correct-at-point))
+
 
 (provide 'init-spellcheck)
 

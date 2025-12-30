@@ -4,6 +4,8 @@
 
 ;;; Code:
 
+(require '+corelib)
+
 ;; The modeline from doom, packaged independently.
 (use-package doom-modeline :ensure t
   :hook elpaca-after-init-hook
@@ -14,13 +16,20 @@
   (doom-modeline-major-mode-icon nil)
   (doom-modeline-check-simple-format t)
   (doom-modeline-modal nil)
+
+
+  ;; Make modeline more minimal in magit-status buffer.
+
+  :functions doom-modeline-set-modeline
+  :preface
+  (autoload 'hide-mode-line-mode "hide-mode-line")
   :config
-  (add-hook! 'magit-mode-hook
-    (defun +modeline-hide-in-non-status-buffer-h ()
-      "Show minimal modeline in magit-status buffer, no modeline elsewhere."
-      (if (eq major-mode 'magit-status-mode)
-          (doom-modeline-set-modeline 'magit)
-        (hide-mode-line-mode)))))
+  (add-hook 'magit-mode-hook
+            (defun +modeline-hide-in-non-status-buffer-h ()
+              "Show minimal modeline in magit-status buffer, no modeline elsewhere."
+              (if (eq major-mode 'magit-status-mode)
+                  (doom-modeline-set-modeline 'magit)
+                (hide-mode-line-mode)))))
 
 
 ;; Display number of isearch results in the modeline

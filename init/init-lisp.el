@@ -4,10 +4,18 @@
 
 ;;; Code:
 
-(use-package debug
-  ;; The built-in debugger for the Emacs Lisp runtime.
-  :config
-  (use-package mod-debug :demand t))
+(require '+corelib)
+
+
+;; Emacs' built-in profiler.
+(use-package profiler
+  :general-config
+  (:keymaps 'profiler-report-mode-map
+   :states 'normal
+   "A" #'profiler-report-ascending-sort
+   "D" #'profiler-report-descending-sort
+   "K" #'profiler-report-describe-entry))
+
 
 ;; General configuration for all derived lisp modes.
 (use-package lisp-mode
@@ -15,10 +23,16 @@
   (add-hook! '(lisp-data-mode-hook emacs-lisp-mode-hook)
     (add-hook 'before-save-hook #'check-parens nil t)))
 
+(use-package +file-templates
+  :config
+  (+define-file-template (rx ".el" eos) "emacs-lisp.eld"))
+
+;; Emacs Lisp dialect-specific language.
 (use-package elisp-mode
   :config
   (use-package mod-emacs-lisp :demand t))
 
+;; Emacs' built-in test framework.
 (use-package ert
   :general
   (:keymaps '(ert-results-mode-map emacs-lisp-mode-map)
@@ -42,9 +56,9 @@
 ;;
 ;; See: https://emacs-eldev.github.io/eldev
 (use-package flymake-eldev :ensure t
-  ;;
-  ;; NOTE: Initialised automatically via an autoloaded form.
-  )
+  :init
+  (require 'flymake-eldev-autoloads))
+
 
 ;; A BDD-style testing framework for Elisp.
 ;;

@@ -4,8 +4,7 @@
 
 ;;; Code:
 
-(cl-eval-when (compile)
-  (require '+corelib))
+(require '+corelib)
 
 ;; Tune scrolling behaviour
 (setq hscroll-margin 2)
@@ -202,11 +201,15 @@
   (dimmer-watch-frame-focus-events t)
   :config
   ;; Configure integrations with popular packages
-  (dimmer-configure-which-key)
-  (dimmer-configure-magit)
-  (dimmer-configure-org)
-  (dimmer-configure-hydra)
-  (dimmer-configure-posframe)
+
+  ;; SAFETY: Functions provided via autoloads.
+  (with-no-warnings
+    (dimmer-configure-which-key)
+    (dimmer-configure-magit)
+    (dimmer-configure-org)
+    (dimmer-configure-hydra)
+    (dimmer-configure-posframe))
+
   (dimmer-mode t))
 
 
@@ -231,14 +234,15 @@
   (show-paren-when-point-in-periphery t)
   (show-paren-context-when-offscreen 'overlay)
   :config
-  (define-advice show-paren--show-context-in-overlay (:after (&rest _) format-overlay)
-    (let ((current-text (overlay-get show-paren--context-overlay 'display)))
-      (overlay-put show-paren--context-overlay 'display
-                   (string-pad (concat "↑ " current-text)
-                               (window-width)
-                               (string-to-char " "))))
-    (overlay-put show-paren--context-overlay
-                 'face `(:box (:line-width (0 . 1) :color ,(face-attribute 'shadow :foreground))))))
+  (eval-and-compile
+    (define-advice show-paren--show-context-in-overlay (:after (&rest _) format-overlay)
+      (let ((current-text (overlay-get show-paren--context-overlay 'display)))
+        (overlay-put show-paren--context-overlay 'display
+                     (string-pad (concat "↑ " current-text)
+                                 (window-width)
+                                 (string-to-char " "))))
+      (overlay-put show-paren--context-overlay
+                   'face `(:box (:line-width (0 . 1) :color ,(face-attribute 'shadow :foreground)))))))
 
 
 ;; Adds a face for parentheses in lisps. I hijack it to dim semicolons and

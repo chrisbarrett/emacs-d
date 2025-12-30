@@ -4,9 +4,15 @@
 
 ;;; Code:
 
+(require '+corelib)
+
 (use-package general
+  :functions (general-define-key)
   :config
-  (use-package mod-leader :demand t))
+  (use-package mod-leader :demand t)
+  (general-define-key :keymaps +default-minibuffer-maps "s-v" #'yank))
+
+;; Insert non-breaking space on C-c SPC
 
 (keymap-global-set "C-c SPC"
                    (defun +insert-nbsp ()
@@ -14,6 +20,7 @@
                      (insert-char #x00A0)))
 
 ;; Teach Emacs that C-i and C-m do in fact exist.
+
 (pcase-dolist (`(,key ,fallback . ,events)
                '(([C-i] [?\C-i] tab kp-tab)
                  ([C-m] [?\C-m] return kp-return)))

@@ -9,9 +9,14 @@
   :init
   (add-to-list 'magic-mode-alist `(,(rx bol "#!" (+? nonl) "nix-shell" eol) . bash-ts-mode))
   :config
-  (define-advice sh-set-shell (:around (fn &rest args) silence-messages)
-    (cl-letf (((symbol-function 'message) #'ignore))
-      (apply fn args))))
+  (eval-and-compile
+    (define-advice sh-set-shell (:around (fn &rest args) silence-messages)
+      (cl-letf (((symbol-function 'message) #'ignore))
+        (apply fn args)))))
+
+(use-package +file-templates
+  :config
+  (+define-file-template (rx "." (or "sh" "bash" "zsh") eos) "shell-script.eld"))
 
 
 ;; Make shell-scripts etc executable on save.

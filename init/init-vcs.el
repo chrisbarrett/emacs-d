@@ -4,6 +4,7 @@
 
 ;;; Code:
 
+(require '+corelib)
 
 ;; Lib for showing pop-up menus of key commands, often with switches to modify
 ;; behaviour.

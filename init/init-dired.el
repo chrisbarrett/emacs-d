@@ -1,8 +1,10 @@
-;;; init-dired.el --- DESC -*- lexical-binding: t; -*-
+;;; init-dired.el --- Directory browser -*- lexical-binding: t; -*-
 
 ;;; Commentary:
 
 ;;; Code:
+
+(require '+corelib)
 
 ;; Emacs' built-in file management interface.
 (use-package dired

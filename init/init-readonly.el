@@ -4,6 +4,7 @@
 
 ;;; Code:
 
+(require '+corelib)
 (require 'init-elpaca)
 
 ;;; Open some files as read-only, e.g. vendored deps.

@@ -4,15 +4,11 @@
 
 ;;; Code:
 
+(require '+corelib)
+
 (use-package elixir-ts-mode
   :mode ("\\.ex\\'" "\\.exs\\'")
-  :init
-  (with-eval-after-load 'project
-    (pushnew! project-vc-extra-root-markers "mix.exs"))
   :config
-  (with-eval-after-load 'eglot
-    (add-to-list 'eglot-server-programs '(elixir-ts-mode "elixir-ls")))
-
   (pushnew! find-sibling-rules
             ;; Impl -> tests
             (list (rx (group-n 1 (+? nonl)) "/lib/" (group-n 2 (+? any)) ".ex" eos)
@@ -24,6 +20,21 @@
 
 (use-package inf-elixir :ensure t)
 
+(use-package project
+  :config
+  (pushnew! project-vc-extra-root-markers "mix.exs"))
+
+(use-package eglot
+  :config
+  (add-to-list 'eglot-server-programs '(elixir-ts-mode "elixir-ls")))
+
+(use-package +file-templates
+  :config
+  (+define-file-template-dispatcher 'elixir-ts-mode
+    ((string-match-p "/lib/" (buffer-file-name))
+     "elixir/lib.eld")
+    ((string-match-p (rx "/test/" (+? nonl) ".exs" eos) (buffer-file-name))
+     "elixir/test.eld")))
 
 (provide 'init-elixir)
 

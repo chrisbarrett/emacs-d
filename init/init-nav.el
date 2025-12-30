@@ -65,14 +65,15 @@
   :init (save-place-mode +1)
 
   :config
-  (define-advice save-place-find-file-hook (:after-while (&rest _) recenter)
-    "Recenter on cursor when loading a saved place."
-    (when buffer-file-name (ignore-errors (recenter))))
+  (eval-and-compile
+    (define-advice save-place-find-file-hook (:after-while (&rest _) recenter)
+      "Recenter on cursor when loading a saved place."
+      (when buffer-file-name (ignore-errors (recenter))))
 
-  (define-advice save-place-alist-to-file (:around (fn &rest args) use-prin1-not-pp)
-    "Use the faster prin1 for saving history."
-    (cl-letf (((symbol-function #'pp) #'prin1))
-      (apply fn args))))
+    (define-advice save-place-alist-to-file (:around (fn &rest args) use-prin1-not-pp)
+      "Use the faster prin1 for saving history."
+      (cl-letf (((symbol-function #'pp) #'prin1))
+        (apply fn args)))))
 
 
 ;; Provides a few commands for arranging windows in pre-configured
@@ -81,6 +82,7 @@
 ;; TODO: Define my own version that ignores side-windows when re-arranging.
 (use-package rotate :ensure t
   :commands (rotate-layout)
+  :defines rotate-functions
   :config
   (setq rotate-functions '(rotate:even-horizontal rotate:even-vertical)))
 
