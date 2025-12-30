@@ -303,6 +303,10 @@
             'docview-mode 'pdf-view-mode))
 
 
+(use-package find-func
+  :custom
+  (find-library-include-other-files nil))
+
 (provide 'init-completion)
 
 ;;; init-completion.el ends here

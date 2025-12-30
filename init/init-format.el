@@ -4,7 +4,18 @@
 
 ;;; Code:
 
-;;; Code formatting
+;; Emacs has an extensible mode-specific alignment system. In this age of code
+;; formatters it's not terribly useful, but I do use `align-regexp' from
+;; time-to-time.
+(use-package align
+  :general ("C-x a a" #'align-regexp))
+
+
+;; Indentation behaviour.
+(use-package indent
+  :custom
+  (tab-first-completion 'word-or-paren-or-punct))
+
 
 ;; Apply code formatting on save. Works for a range of languages.
 (use-package apheleia :ensure t
@@ -37,6 +48,11 @@
             'eshell-mode
             'diff-mode))
 
+
+;; Tab-to-space conversion
+(use-package tabify
+  :custom
+  (tabify-regexp "^\t* [ \t]+"))
 
 (provide 'init-format)
 

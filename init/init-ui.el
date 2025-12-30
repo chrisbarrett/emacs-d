@@ -4,10 +4,92 @@
 
 ;;; Code:
 
-(use-package catppuccin-theme :ensure (:wait t) :demand t
+(cl-eval-when (compile)
+  (require '+corelib))
+
+;; Tune scrolling behaviour
+(setq hscroll-margin 2)
+(setq hscroll-step 1)
+(setq scroll-conservatively 10)
+(setq scroll-margin 0)
+(setq scroll-preserve-screen-position t)
+(setq auto-window-vscroll nil)
+
+(blink-cursor-mode -1)
+(setq blink-matching-paren nil)
+(setq x-stretch-cursor nil)
+(setq delete-pair-blink-delay 0.1)
+
+(setq use-dialog-box nil)
+
+(setq next-error-recenter '(4))
+
+;; Show keystrokes in minibuffer pretty much immediately.
+(setq echo-keystrokes 0.02)
+
+
+;; Disable bidirectional text by default.
+(setq-default bidi-display-reordering 'left-to-right)
+(setq-default bidi-paragraph-direction 'left-to-right)
+(setq bidi-inhibit-bpa t)
+
+;; Don't render cursors or regions in non-focused windows.
+(setq-default cursor-in-non-selected-windows nil)
+(setq highlight-nonselected-windows nil)
+
+
+(setq fast-but-imprecise-scrolling t)
+(setq redisplay-skip-fontification-on-input t)
+
+
+;; Emacs' built-in tooltip system. Just disable the thing.
+(use-package tooltip
+  :init (tooltip-mode -1))
+
+
+;; Silence "For information about GNU Emacs and the GNU system..." on startup.
+(advice-add #'display-startup-echo-area-message :override #'ignore)
+
+;; Don't tell me what key I could have used instead of M-x.
+(advice-add #'execute-extended-command--describe-binding-msg :override #'ignore)
+
+
+;; Emacs' built-in tab-bar. I use it pretty much just use it for git
+;; worktrees.
+(use-package tab-bar
+  :custom
+  (tab-bar-close-button-show 'selected)
+  (tab-bar-auto-width-max '((270) 25))
+  :general
+  ("M-S-."  #'tab-bar-switch-to-next-tab
+   "M->"    #'tab-bar-switch-to-next-tab
+   "M-S-,"  #'tab-bar-switch-to-prev-tab
+   "M-<"    #'tab-bar-switch-to-prev-tab
+   "M-C-," #'tab-bar-move-tab-backward
+   "M-C-." #'tab-bar-move-tab)
   :init
-  (setq +theme-dark 'catppuccin)
-  (+theme-update))
+  (tab-bar-mode +1)
+  :config
+  (delq! 'tab-bar-format-add-tab tab-bar-format)
+
+  (custom-theme-set-faces 'user
+                          '(tab-bar-tab ((t (:bold t)))))
+
+  (use-package mod-tabs
+    :demand t
+    :general (:keymaps 'override-global-map "M-B" #'+tabs-menu)))
+
+
+;; Teach Emacs how to display ligatures when available.
+(use-package ligature :ensure t
+  :after-call +first-buffer-hook +first-file-hook
+  :config
+  (ligature-set-ligatures 't '("www"))
+  (ligature-set-ligatures 'prog-mode (+read-eld "ligatures/prog-mode.eld"))
+  (ligature-set-ligatures 'compilation-mode (+read-eld "ligatures/prog-mode.eld"))
+  (ligature-set-ligatures '(text-mode org-agenda-mode) (+read-eld "ligatures/text-mode.eld"))
+
+  (global-ligature-mode t))
 
 
 ;; Basic code folding.
@@ -176,6 +258,49 @@
   :custom
   (breadcrumb-idle-time 0.3))
 
+
+;; A better buffer list than the default.
+(use-package bufler :ensure t
+  :config
+  (use-package mod-bufler :demand t))
+
+
+;; Turns URLs in the buffer into clickable buttons.
+(use-package goto-addr
+  :init
+  (defun +goto-address-maybe-h ()
+    (unless (derived-mode-p 'org-mode 'org-agenda-mode)
+      (goto-address)
+      (goto-address-mode +1)))
+  :hook ((prog-mode-hook text-mode-hook conf-mode-hook magit-process-mode-hook) . +goto-address-maybe-h))
+
+
+;; Improve performance of files with very long lines.
+(use-package so-long
+  :hook (elpaca-after-init-hook . global-so-long-mode))
+
+
+;; User-process management UI.
+(use-package proced
+  :custom
+  (proced-enable-color-flag t))
+
+
+;; Window management stuff that's not in the C layer.
+(use-package window
+  :general (:keymaps 'override-global-map "M-o" #'other-window)
+
+  ;; Prefer vertical splits--better when the Emacs GUI window is wide rather
+  ;; than tall.
+  :custom
+  (split-width-threshold 160)
+  (split-height-threshold nil))
+
+
+;;; Set up display-buffer
+
+(add-hook! '+first-input-hook
+  (use-package mod-display-buffer :demand t))
 
 (provide 'init-ui)
 

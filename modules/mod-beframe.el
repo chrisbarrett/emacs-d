@@ -5,10 +5,12 @@
 ;;; Code:
 
 (require '+corelib)
-(require '+git)
 (require 'beframe)
 (require 'general)
 (require 'project)
+
+(cl-eval-when (compile)
+  (require '+git nil t))
 
 (autoload 'eat "eat")
 

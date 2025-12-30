@@ -6,6 +6,8 @@
 
 (require 'subr-x)
 
+(defvar +templates-dir (file-name-concat user-emacs-directory "templates/"))
+
 ;; Text snippets.
 (use-package tempel :ensure t
   ;; NB. Field navigation uses M-{ and M-}.
