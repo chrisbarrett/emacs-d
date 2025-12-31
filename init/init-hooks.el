@@ -88,6 +88,17 @@
   "If non-nil, `+run-local-var-hooks-h' is suppressed.
 Set this to prevent recursive hook triggering.")
 
+(defmacro +with-inhibit-local-var-hooks (&rest body)
+  "Run BODY forms with ${major-mode}-local-var-hooks inhibited."
+  (declare (indent 0))
+  `(let ((+inhibit-local-var-hooks t))
+     ,@body))
+
+(defun +inhibit-local-var-hooks-a (fn &rest args)
+  "Apply FN to ARGS with ${major-mode}-local-var-hooks inhibited."
+  (+with-inhibit-local-var-hooks
+    (apply fn args)))
+
 (defun +run-local-var-hooks-h ()
   "Run MODE-local-vars-hook after local variables are set.
 This hook runs after file and directory local variables have been
@@ -95,13 +106,13 @@ applied, allowing mode-specific configuration that depends on those
 settings."
   (unless (or +inhibit-local-var-hooks
               delay-mode-hooks
-              (string-prefix-p " " (buffer-name)))
-    (let ((+inhibit-local-var-hooks t)
-          (hooks (seq-keep
-                  (lambda (mode)
-                    (intern-soft (format "%s-local-vars-hook" mode)))
-                  (derived-mode-all-parents major-mode))))
-      (apply #'run-hooks (nreverse hooks)))))
+              (string-prefix-p " " (buffer-name)) ; hidden buffer
+              )
+    (+with-inhibit-local-var-hooks
+      (apply #'run-hooks (nreverse
+                          (seq-keep (lambda (mode)
+                                      (intern-soft (format "%s-local-vars-hook" mode)))
+                                    (derived-mode-all-parents major-mode)))))))
 
 ;; Run ${major-mode}-local-vars-hook after setting/changing a buffer's major
 ;; mode, in the 'hack local variables' buffer setup phase.
