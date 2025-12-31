@@ -44,7 +44,7 @@
 ;;   https://www.gnu.org/software/emacs/manual/html_node/eglot/JSONRPC-objects-in-Elisp.html
 
 (use-package eglot
-  :hook (typescript-ts-mode-hook . eglot-ensure)
+  :hook (typescript-ts-mode-local-vars-hook . eglot-ensure)
 
   :preface
 

@@ -136,7 +136,7 @@
     (setq +org--agenda-update-process
           (start-process "update-org-agenda-files" nil +agenda-files-update-script))))
 
-(add-hook! 'org-mode-hook
+(add-hook! 'org-mode-local-vars-hook
   (add-hook 'after-save-hook #'+org-agenda-update-files nil t))
 
 

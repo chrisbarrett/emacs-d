@@ -17,11 +17,11 @@
 
 
 (use-package json-ts-mode
-  :hook (json-ts-mode-hook . eglot-ensure))
+  :hook (json-ts-mode-local-vars-hook . eglot-ensure))
 
 
 (use-package yaml-ts-mode
-  :hook (yaml-ts-mode-hook . eglot-ensure)
+  :hook (yaml-ts-mode-local-vars-hook . eglot-ensure)
   :config
   (setq-hook! 'yaml-ts-mode-hook
     tab-width 2))

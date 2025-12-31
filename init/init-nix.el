@@ -8,7 +8,7 @@
 
 (use-package nix-ts-mode :ensure t
   :mode "\\.nix\\'"
-  :hook (nix-ts-mode-hook . eglot-ensure)
+  :hook (nix-ts-mode-local-vars-hook . eglot-ensure)
   :init
   (add-to-list 'auto-mode-alist `(,(rx "/flake.lock" eos) . json-ts-mode)))
 

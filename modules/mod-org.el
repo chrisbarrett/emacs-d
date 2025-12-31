@@ -251,7 +251,7 @@
 
 ;;; Clocking
 
-(add-transient-hook! 'org-mode-hook #'org-clock-persistence-insinuate)
+(add-transient-hook! 'org-mode-local-vars-hook #'org-clock-persistence-insinuate)
 
 (require '+clockreport) ; used in my org config
 

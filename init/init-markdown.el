@@ -130,7 +130,7 @@ expansion occurs, it falls back to the default `markdown-cycle' behavior."
   (setf (alist-get 'prettier-markdown apheleia-formatters)
         '("prettier" "--stdin-filepath" filepath "--parser=markdown" "--prose-wrap" "always" (apheleia-formatters-fill-column "--print-width")))
 
-  (add-hook! (markdown-mode markdown-ts-mode)
+  (add-hook! (markdown-mode-local-vars markdown-ts-mode-local-vars)
     (setq-local apheleia-formatter
                 (if (executable-find "deno")
                     'deno-markdown

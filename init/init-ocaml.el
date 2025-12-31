@@ -23,7 +23,7 @@
   (defun +utop-minor-mode-h ()
     (when (executable-find "utop")
       (utop-minor-mode +1)))
-  :config (add-hook 'tuareg-mode-hook #'+utop-minor-mode-h))
+  :config (add-hook 'tuareg-mode-local-vars-hook #'+utop-minor-mode-h))
 
 
 (use-package project
@@ -36,7 +36,7 @@
   :ensure t
   :hook
   (tuareg-mode-hook . ocaml-eglot)
-  (ocaml-eglot-hook . eglot-ensure))
+  (ocaml-eglot-local-vars-hook . eglot-ensure))
 
 ;; OPAM files use a complex config language, but `conf-colon-mode' is probably good
 ;; enough as a basis for syntax highlighting.

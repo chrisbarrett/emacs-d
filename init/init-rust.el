@@ -7,7 +7,7 @@
 (require '+corelib)
 
 (use-package rust-ts-mode
-  :hook (rust-ts-mode-hook . eglot-ensure)
+  :hook (rust-ts-mode-local-vars-hook . eglot-ensure)
   :config
   (setq-hook! 'rust-ts-mode-hook separedit-default-mode 'markdown-mode)
   ;; Make cargo commands run from Emacs look pretty.
