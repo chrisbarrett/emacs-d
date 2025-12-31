@@ -99,18 +99,20 @@ Each module in `modules/` configures a specific feature:
 
 ## Development Best Practices
 
-- Use the full hook symbol when settings hooks via the `:hooks` form in
+- Use the full hook symbol when settings hooks via the `:hook` form in
   `use-package`
 - Use general-def or :general in use-package as appropriate when setting
   keybindings
 
 ## Landing the Plane (Session Completion)
 
-**When ending a work session**, you MUST complete ALL steps below. Work is NOT complete until `git push` succeeds.
+**When ending a work session**, you MUST complete ALL steps below. Work is NOT
+complete until `git push` succeeds.
 
 **MANDATORY WORKFLOW:**
 
-1. **File issues for remaining work** - Create issues for anything that needs follow-up
+1. **File issues for remaining work** - Create issues for anything that needs
+   follow-up
 2. **Run quality gates** (if code changed) - Tests, linters, builds
 3. **Update issue status** - Close finished work, update in-progress items
 4. **PUSH TO REMOTE** - This is MANDATORY:
@@ -125,6 +127,7 @@ Each module in `modules/` configures a specific feature:
 7. **Hand off** - Provide context for next session
 
 **CRITICAL RULES:**
+
 - Work is NOT complete until `git push` succeeds
 - NEVER stop before pushing - that leaves work stranded locally
 - NEVER say "ready to push when you are" - YOU must push
