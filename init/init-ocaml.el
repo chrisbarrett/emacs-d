@@ -6,10 +6,15 @@
 
 (require '+corelib)
 
-;; Experimental OCaml major mode using tree-sitter.
-(use-package neocaml
-  :ensure (neocaml :host github :repo "bbatsov/neocaml" :main "neocaml.el")
-  :mode ("\\.ocamlinit\\'"))
+;; OCaml major mode.
+;;
+;; NOTE: Keep an eye on neocaml; it's much simpler, but I haven't had much luck
+;; with an E2E configuration.
+
+(use-package tuareg
+  :ensure t
+  )
+
 
 
 (use-package project
@@ -17,17 +22,11 @@
   (add-to-list 'project-vc-extra-root-markers "dune-project"))
 
 
-(use-package eglot
-  :config
-  (add-to-list 'eglot-server-programs '((neocaml-mode :language-id "ocaml") . ("nix" "develop" "--command" "ocamllsp"))))
-
-
 ;; Extend eglot to support extra functionality provided by the OCaml LSP.
 (use-package ocaml-eglot
   :ensure t
-  :after neocaml
   :hook
-  (neocaml-mode-hook . ocaml-eglot)
+  (tuareg-mode-hook . ocaml-eglot)
   (ocaml-eglot-hook . eglot-ensure))
 
 ;; OPAM files use a complex config language, but `conf-colon-mode' is probably good
