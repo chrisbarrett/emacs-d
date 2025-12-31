@@ -9,11 +9,7 @@
 ;; Experimental OCaml major mode using tree-sitter.
 (use-package neocaml
   :ensure (neocaml :host github :repo "bbatsov/neocaml" :main "neocaml.el")
-
-  :mode ("\\.ocamlinit\\'")
-
-  :hook
-  (neocaml-mode-hook . neocaml-repl-minor-mode))
+  :mode ("\\.ocamlinit\\'"))
 
 
 (use-package project
