@@ -60,6 +60,50 @@
   (add-hook 'window-buffer-change-functions #'+run-switch-buffer-hooks-h)
   (add-hook 'server-visit-hook #'+run-switch-buffer-hooks-h))
 
+
+;;; Local Vars Hooks - `${major-mode}-local-vars-hook'
+
+;; Dynamically define hooks that run after a buffer's major-mode has completed
+;; setup and all buffer-local variables have been resolved.
+;;
+;; This is a more reliable customisation point for hooks that depend on
+;; buffer-local variables, including variables set via dir-locals.
+;;
+;; GUIDELINES: Use `${major-mode}-local-vars-hook' for any user hooks that:
+;;
+;; - start processes
+;; - perform filesystem access
+;; - access the process environment, especially PATH or `exec-path'
+;; - are otherwise slow or expensive
+;;
+;; CRITICAL: Any hooks that attempt to launch programs or read `exec-path',
+;; directly or indirectly, MUST use these local-vars-hooks. This is because
+;; `exec-path' may be set as a buffer-local variable via `envrc-mode'.
+;;
+;; Setting `+inhibit-local-var-hooks' dynamically will inhibit these hooks. The
+;; typical use-case would be to avoid expensive system access for
+;; temporary/non-file buffers.
+
+(defvar +inhibit-local-var-hooks nil
+  "If non-nil, `+run-local-var-hooks-h' is suppressed.
+Set this to prevent recursive hook triggering.")
+
+(defun +run-local-var-hooks-h ()
+  "Run MODE-local-vars-hook after local variables are set.
+This hook runs after file and directory local variables have been
+applied, allowing mode-specific configuration that depends on those
+settings."
+  (unless (or +inhibit-local-var-hooks
+              delay-mode-hooks
+              (string-prefix-p " " (buffer-name)))
+    (let ((+inhibit-local-var-hooks t))
+      (run-hooks (intern-soft (format "%s-local-vars-hook" major-mode))))))
+
+;; Run ${major-mode}-local-vars-hook after setting/changing a buffer's major
+;; mode, in the 'hack local variables' buffer setup phase.
+
+(add-hook 'hack-local-variables-hook #'+run-local-var-hooks-h)
+
 (provide 'init-hooks)
 
 ;;; init-hooks.el ends here
