@@ -6,15 +6,16 @@
 
 (require '+agenda)
 (require '+corelib)
-(require 'general)
 (require 'org-agenda)
 (require 'org-habit)
 
-(general-def :keymaps 'org-agenda-mode-map :states 'motion
-  [remap save-buffer] #'org-save-all-org-buffers
-  "J" #'org-agenda-goto-date
-  "C-n" #'org-agenda-later
-  "C-p" #'org-agenda-earlier)
+(use-package org-agenda
+  :general (:keymaps 'org-agenda-mode-map
+            :states 'motion
+            [remap save-buffer] #'org-save-all-org-buffers
+            "J"                 #'org-agenda-goto-date
+            "C-n"               #'org-agenda-later
+            "C-p"               #'org-agenda-earlier))
 
 (setq org-agenda-files (file-name-concat org-directory "org-agenda-files"))
 (setq org-agenda-text-search-extra-files `(agenda-archives ,(file-name-concat org-directory "archive.org")))
@@ -112,17 +113,20 @@
 
 (setq org-agenda-block-separator (char-to-string ?\f))
 
-(cl-eval-when (compile)
-  (require 'page-break-lines))
+(use-package page-break-lines
+  :after org-agenda
 
-(with-eval-after-load 'page-break-lines
+  :defines page-break-lines-modes
+  :functions page-break-lines--update-display-tables
+
+  :config
   (add-to-list 'page-break-lines-modes 'org-agenda-mode)
+  (eval-and-compile
+    (define-advice org-agenda (:after (&rest _) draw-separator)
+      (page-break-lines--update-display-tables))
 
-  (define-advice org-agenda (:after (&rest _) draw-separator)
-    (page-break-lines--update-display-tables))
-
-  (define-advice org-agenda-redo (:after (&rest _) draw-separator)
-    (page-break-lines--update-display-tables)))
+    (define-advice org-agenda-redo (:after (&rest _) draw-separator)
+      (page-break-lines--update-display-tables))))
 
 
 ;; Automatically set agenda-files by scanning `org-directory' for files that
