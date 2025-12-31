@@ -15,6 +15,15 @@
   :ensure t
   )
 
+;; REPL support.
+(use-package utop
+  :ensure t
+  :functions (utop-minor-mode)
+  :preface
+  (defun +utop-minor-mode-h ()
+    (when (executable-find "utop")
+      (utop-minor-mode +1)))
+  :config (add-hook 'tuareg-mode-hook #'+utop-minor-mode-h))
 
 
 (use-package project
