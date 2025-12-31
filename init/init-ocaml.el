@@ -13,10 +13,13 @@
   :mode ("\\.ocamlinit\\'")
 
   :hook
-  (neocaml-mode-hook . neocaml-repl-minor-mode)
+  (neocaml-mode-hook . neocaml-repl-minor-mode))
 
+
+(use-package eglot
   :config
   (add-to-list 'eglot-server-programs '((neocaml-mode :language-id "ocaml") . ("nix" "develop" "--command" "ocamllsp"))))
+
 
 ;; Extend eglot to support extra functionality provided by the OCaml LSP.
 (use-package ocaml-eglot
