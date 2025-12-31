@@ -292,7 +292,9 @@
 
 ;; Window management stuff that's not in the C layer.
 (use-package window
-  :general (:keymaps 'override-global-map "M-o" #'other-window)
+  :general (:keymaps 'override-global-map
+                     "M-o" #'other-window
+                     "M-_" #'window-toggle-side-windows)
 
   ;; Prefer vertical splits--better when the Emacs GUI window is wide rather
   ;; than tall.

@@ -26,6 +26,7 @@
             "M-o" nil
             "M-<" nil
             "M->" nil
+            "M-_" nil
             ;; Commands that should be passed through
             "C-u" 'eat-self-input
             "C-o" 'eat-self-input
