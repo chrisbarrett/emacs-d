@@ -135,8 +135,7 @@
            (list
             (bottom `(or
                       ;; REPLs
-                      (derived-mode . inferior-emacs-lisp-mode)
-                      (derived-mode . inf-elixir-mode)
+                      (derived-mode . comint-mode)
 
                       ;; shells
                       (derived-mode . eat-mode)
