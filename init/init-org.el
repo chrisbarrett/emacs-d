@@ -87,7 +87,9 @@
 
 ;; Easily pop open comments or strings for editing in a dedicated buffer.
 (use-package separedit :ensure t
-  :commands (separedit-commit))
+  :commands (separedit-commit)
+  :custom
+  (separedit-default-mode 'gfm-mode))
 
 
 ;; Provides visual enhancements that make org-mode look less cluttered and
