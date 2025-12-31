@@ -11,6 +11,10 @@
   :ensure (neocaml :host github :repo "bbatsov/neocaml" :main "neocaml.el")
 
   :mode ("\\.ocamlinit\\'")
+
+  :hook
+  (neocaml-mode-hook . neocaml-repl-minor-mode)
+
   :config
   (add-to-list 'eglot-server-programs '((neocaml-mode :language-id "ocaml") . ("nix" "develop" "--command" "ocamllsp"))))
 
