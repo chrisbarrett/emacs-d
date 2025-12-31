@@ -16,6 +16,11 @@
   (neocaml-mode-hook . neocaml-repl-minor-mode))
 
 
+(use-package project
+  :config
+  (add-to-list 'project-vc-extra-root-markers "dune-project"))
+
+
 (use-package eglot
   :config
   (add-to-list 'eglot-server-programs '((neocaml-mode :language-id "ocaml") . ("nix" "develop" "--command" "ocamllsp"))))
