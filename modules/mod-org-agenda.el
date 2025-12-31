@@ -101,6 +101,11 @@
           ("w" "work agenda" ,sections
            ((org-agenda-tag-filter-preset (list "-ignore" (format "+%s" (timekeep-work-tag)))))))))
 
+;; Avoid running possibly expensive ${major-mode}-local-vars-hook while building
+;; the agenda.
+
+(autoload '+inhibit-local-var-hooks-a "init-hooks")
+(advice-add 'org-get-agenda-file-buffer :around #'+inhibit-local-var-hooks-a)
 
 
 ;; Use page-break separator for sections

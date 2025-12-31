@@ -266,6 +266,24 @@
 (setq org-archive-location (file-name-concat org-directory "archive.org::datetree/"))
 
 
+;;; Babel
+
+;; Inhibit expensive local-var hooks (e.g., LSP) in temporary babel edit
+;; buffers. These buffers are ephemeral and don't need full tooling setup.
+
+(define-advice org-src--edit-element (:around (fn datum name &optional initialize &rest args) +org-inhibit-local-var-hooks-a)
+  "Prevent potentially expensive mode hooks in `org-babel-do-in-edit-buffer' ops."
+  (apply fn
+         datum
+         name
+         (if (and (eq org-src-window-setup 'switch-invisibly) (functionp initialize))
+             (lambda ()
+               (+with-inhibit-local-var-hooks
+                 (funcall initialize)))
+           initialize)
+         args))
+
+
 ;;; Export settings
 
 ;; Disable table of contents by default for all exports
