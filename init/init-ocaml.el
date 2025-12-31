@@ -13,7 +13,10 @@
 
 (use-package tuareg
   :ensure t
-  )
+
+  :init
+  ;; KLUDGE: Fix some unbound var errors in tuareg-opam.
+  (defvar tuareg-opam--flymake-proc-allowed-file-name-masks nil))
 
 ;; REPL support.
 (use-package utop
