@@ -96,8 +96,12 @@ settings."
   (unless (or +inhibit-local-var-hooks
               delay-mode-hooks
               (string-prefix-p " " (buffer-name)))
-    (let ((+inhibit-local-var-hooks t))
-      (run-hooks (intern-soft (format "%s-local-vars-hook" major-mode))))))
+    (let ((+inhibit-local-var-hooks t)
+          (hooks (seq-keep
+                  (lambda (mode)
+                    (intern-soft (format "%s-local-vars-hook" mode)))
+                  (derived-mode-all-parents major-mode))))
+      (apply #'run-hooks (nreverse hooks)))))
 
 ;; Run ${major-mode}-local-vars-hook after setting/changing a buffer's major
 ;; mode, in the 'hack local variables' buffer setup phase.
