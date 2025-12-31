@@ -35,8 +35,11 @@
 (use-package ocaml-eglot
   :ensure t
   :hook
-  (tuareg-mode-hook . ocaml-eglot)
-  (ocaml-eglot-local-vars-hook . eglot-ensure))
+  (tuareg-mode-local-vars-hook . ocaml-eglot)
+  ;; NOTE: Eglot is not automatically activated in OCaml right now. Something's
+  ;; borked in the flake+direnv integration in the repo I'm testing with,
+  ;; meaning `exec-path' isn't set correctly and the LSP cannot be found.
+  )
 
 ;; OPAM files use a complex config language, but `conf-colon-mode' is probably good
 ;; enough as a basis for syntax highlighting.
