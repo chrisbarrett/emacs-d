@@ -13,6 +13,10 @@
   ;; NB. Field navigation uses M-{ and M-}.
   :custom
   (tempel-path (file-name-concat +templates-dir "*.eld"))
+
+  :general
+  (:keymaps '(text-mode-map prog-mode-map) :states 'insert "M-e" #'tempel-expand)
+
   :functions (tempel-expand tempel--active-p tempel-done)
   :init
   (add-hook! '(prog-mode-hook text-mode-hook config-mode-hook)
