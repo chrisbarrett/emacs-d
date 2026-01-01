@@ -22,12 +22,15 @@
 (use-package apheleia
   :defines apheleia-mode-alist
   :config
-  (alist-set! apheleia-mode-alist 'neocaml-mode 'ocamlformat))
+  (alist-set! apheleia-mode-alist 'neocaml-mode 'ocamlformat)
+  (alist-set! apheleia-mode-alist 'neocamli-mode 'ocamlformat))
 
 
 (use-package eglot
   :config
-  (add-to-list 'eglot-server-programs '((neocaml-mode :language-id "ocaml") . ("ocamllsp"))))
+  (add-to-list 'eglot-server-programs '(((neocaml-mode :language-id "ocaml")
+                                         (neocamli-mode :language-id "ocaml"))
+                                        . ("ocamllsp"))))
 
 
 (use-package project
@@ -40,6 +43,7 @@
   :ensure t
   :hook
   (neocaml-mode-local-vars-hook . ocaml-eglot)
+  (neocamli-mode-local-vars-hook . ocaml-eglot)
   ;; NOTE: Eglot is not automatically activated in OCaml right now. Something's
   ;; borked in the flake+direnv integration in the repo I'm testing with,
   ;; meaning `exec-path' isn't set correctly and the LSP cannot be found.
