@@ -122,7 +122,6 @@ list is returned as-is."
    (cl-loop for (var val hook fn) in (--setq-hook-fns hooks var-vals)
             collect `(eval-and-compile
                        (defun ,fn (&rest _)
-                         ,(format "Set `%s' to `%s'." var (string-trim (pp-to-string val)))
                          (setq-local ,var ,val)))
             collect `(add-hook ',hook #',fn -90))))
 
