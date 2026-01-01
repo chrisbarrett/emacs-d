@@ -1,4 +1,4 @@
-tuareg-mode
+neocaml-mode
 
 (l (+ocaml-capture-let-context) "let " p " = " q (+ocaml-maybe-in))
 (lr (+ocaml-capture-let-context) "let rec " p " = " q (+ocaml-maybe-in))
