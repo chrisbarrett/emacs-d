@@ -16,7 +16,10 @@
 
   :init
   ;; KLUDGE: Fix some unbound var errors in tuareg-opam.
-  (defvar tuareg-opam--flymake-proc-allowed-file-name-masks nil))
+  (defvar tuareg-opam--flymake-proc-allowed-file-name-masks nil)
+
+  :config
+  (require 'mod-ocaml))
 
 ;; REPL support.
 (use-package utop
