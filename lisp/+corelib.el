@@ -492,4 +492,61 @@ P is the point at which we run `syntax-ppss'"
        (autoload 'general-define-key "general"))
      (general-define-key :prefix "," :states '(normal motion) :keymaps ,keymaps ,@general-args)))
 
+
+
+(defvar +dirlocals--path-patterns-alist nil
+  "An alist of path patterns (regexps) to directory variables.")
+
+(defun +dirlocals-set (prefix-or-prefixes variables)
+  "Set directory variables based on a path prefix.
+
+PREFIX-OR-PREFIXES is an absolute path (a string) or list thereof.
+VARIABLES will be applied to any file beginning with one of these."
+  (declare (indent 1))
+  (+dirlocals-set-regexp (seq-map (lambda (path)
+				    (rx-to-string `(seq bos ,(expand-file-name (if (string-suffix-p "/" path) ; must end with /
+								                   path
+                                                                                 (concat path "/"))))
+						  t))
+				  (ensure-list prefix-or-prefixes))
+    variables))
+
+(defun +dirlocals-set-regexp (regexp-or-regexps variables)
+  "Set directory variables based on a regular expression.
+
+REGEXP-OR-REGEXPS is a regular expression (a string) or list thereof.
+VARIABLES will be applied to any matching file."
+  (declare (indent 1))
+  (dolist (pat (ensure-list regexp-or-regexps))
+    (alist-set! +dirlocals--path-patterns-alist pat variables)))
+
+(defun +dirlocals--specs-for-path (&optional path)
+  "Return pattern-based directory variables.
+
+  Return variables for the current file by default. If PATH is non-nil,
+  return variables for PATH instead.
+
+  Used in `hack-dir-local-get-variables-functions' to apply directory
+  variables to files based on a regular expression match."
+
+  ;; Expected output structure is one of, or a list of:
+  ;;
+  ;; ("/Users/chris/.config/emacs/init/" .
+  ;;   ((elisp-flymake-byte-compile-load-path . ("./" "~/.config/emacs/lisp"))
+  ;;    (mode . elpaca-packages-load-path)))
+
+  (when (and enable-local-variables enable-dir-local-variables)
+    (let ((path (or path (buffer-file-name) default-directory)))
+      (seq-keep (pcase-lambda (`(,path-pat . ,settings))
+                  (save-match-data
+                    (when (string-match path-pat path)
+                      (let ((matched-prefix (substring path 0 (match-end 0))))
+                        (cons matched-prefix
+                              (dir-locals-collect-variables settings
+                                                            path
+                                                            nil))))))
+                +dirlocals--path-patterns-alist))))
+
+(add-hook 'hack-dir-local-get-variables-functions #'+dirlocals--specs-for-path)
+
 (provide '+corelib)
