@@ -10,7 +10,7 @@
   :mode "\\.nix\\'"
   :hook (nix-ts-mode-local-vars-hook . eglot-ensure)
   :init
-  (add-to-list 'auto-mode-alist `(,(rx "/flake.lock" eos) . json-ts-mode)))
+  (add-to-list 'auto-mode-alist (cons (rx "/flake.lock" eos) #'json-ts-mode)))
 
 (use-package +file-templates
   :config
