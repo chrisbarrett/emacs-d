@@ -4,13 +4,12 @@
 
 ;;; Code:
 
-(require '+window)
 (require '+org-roam)
 (require '+edit-cmds)
 (require '+files)
-
-;; SAFETY: Definitely loaded early in init sequence.
-(require 'general "~/.config/emacs/elpaca/repos/general/general.el")
+(require '+window)
+(require 'general) ; SAFETY: init.el installs before loading this file.
+(require 'subr-x)
 
 (autoload 'parent-mode-list "parent-mode")
 (autoload 'project-find-file-in "project")

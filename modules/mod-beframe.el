@@ -7,8 +7,8 @@
 (require '+corelib)
 (require '+git)
 
-(require 'beframe "~/.config/emacs/elpaca/repos/beframe/beframe.el")
-(require 'general "~/.config/emacs/elpaca/repos/general/general.el")
+(require 'beframe)
+(require 'general)
 (require 'project)
 
 (autoload 'eat "eat")
