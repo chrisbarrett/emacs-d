@@ -58,7 +58,9 @@
 ;; This is a macro instead of a function to prevent the potentially expensive
 ;; evaluation of its arguments when debug mode is off. Return non-nil.
 (defmacro +log (message &rest args)
-  "Log a message to stderr or *Messages* (without displaying in the echo area)."
+  "Log a message to stderr or *Messages* (without displaying in the echo area).
+
+MESSAGE and ARGS are interpreted as in `message'."
   (declare (debug t))
   (let ((level (if (integerp message)
                    (prog1 message
@@ -115,6 +117,12 @@ list is returned as-is."
 
 (defmacro setq-hook! (hooks &rest var-vals)
   "Set buffer-local variables on HOOKS.
+
+HOOKS is a symbol or list of symbols representing hook names. See
+`add-hook!' for more details.
+
+
+VAR-VALS are alternating pairs of variable names and values to set.
 
 \(fn HOOKS &rest [SYM VAL]...)"
   (declare (indent 1))
@@ -184,11 +192,14 @@ Is used as advice to replace `run-hooks'."
        (signal '+corelib-hook-error (cons hook (cdr e)))))))
 
 (defun +run-hook-once (hook-var trigger-hooks)
-  "Configure HOOK-VAR to be invoked exactly once when any of the TRIGGER-HOOKS
-are invoked *after* Emacs has initialized (to reduce false positives). Once
-HOOK-VAR is triggered, it is reset to nil.
+  "Configure a hook to run after any of another set of hooks, but only once.
 
-HOOK-VAR is a quoted hook.
+HOOK-VAR will be invoked exactly once when any of the TRIGGER-HOOKS are
+invoked *after* Emacs has initialized (to reduce false positives).
+
+HOOK-VAR is a quoted hook. Once HOOK-VAR is triggered, it is reset to
+nil.
+
 TRIGGER-HOOK is a list of quoted hooks and/or sharp-quoted functions."
   (dolist (hook trigger-hooks)
     (let ((fn (make-symbol (format "chain-%s-to-%s-h" hook-var hook)))
@@ -279,7 +290,12 @@ This macro accepts, in order:
 
 
 (defun +visible-buffers (&optional buffer-list all-frames)
-  "Return a list of visible buffers (i.e. not buried)."
+  "Return a list of visible buffers (i.e. not buried).
+
+BUFFER-LIST is a list of buffers to inspect; the global buffer list is
+used if unset.
+
+Returns buffers visible in the selected frame, unless ALL-FRAMES is set."
   (let ((buffers
 	 (delete-dups
 	  (cl-loop for frame in (if all-frames (visible-frame-list) (list (selected-frame)))
@@ -550,3 +566,5 @@ VARIABLES will be applied to any matching file."
 (add-hook 'hack-dir-local-get-variables-functions #'+dirlocals--specs-for-path)
 
 (provide '+corelib)
+
+;;; +corelib.el ends here
