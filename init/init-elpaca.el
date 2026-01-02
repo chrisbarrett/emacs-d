@@ -5,7 +5,6 @@
 ;;; Code:
 
 (require '+corelib)
-(require '+load-incrementally)
 
 (defvar elpaca-repos-directory nil)
 
@@ -16,16 +15,6 @@
 
 (dolist (repo +chrisbarrett-elpaca-repos)
   (add-to-list 'trusted-content (abbreviate-file-name repo)))
-
-;; Make sure I don't accidentally start loading super-expensive packages on startup.
-
-(defconst +expensive-packages '(org org-roam org-agenda forge))
-
-(add-transient-hook! 'after-init-hook
-  (when-let* ((loaded (seq-filter #'featurep +expensive-packages)))
-    (warn "The following package(s) were loaded eagerly, rather than deferred: %S" loaded)))
-
-(add-hook 'elpaca-after-init-hook #'+load-packages-incrementally-h)
 
 ;; Configure aspects of elpaca not required for initial package bootstrap.
 

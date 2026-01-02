@@ -6,14 +6,6 @@
 
 (require '+corelib)
 
-
-;; org is a chonker; decompose the load process into smaller, incrementally
-;; loaded features so it's less noticeable.
-(+load-packages-incrementally '(calendar find-func format-spec org-macs org-compat org-faces org-entities
-                                org-list org-pcomplete org-src org-footnote org-macro ob org org-modern
-                                org-habit org-agenda org-capture))
-
-
 ;; org-mode - the reason why I can probably never switch to another editor.
 (use-package org :ensure t ; NB. installed from org package archive.
 

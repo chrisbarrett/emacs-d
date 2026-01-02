@@ -61,11 +61,27 @@
 
 (use-package init-elpaca :demand t)
 
-(use-package init-hooks :demand t)
+(use-package init-hooks
+  :demand t
+  :init
+  (defconst +expensive-packages '(org org-roam org-agenda forge))
+  :config
+  ;; Warn if expensive packages were loaded during init sequence.
+  (add-transient-hook! 'after-init-hook
+    (when-let* ((loaded (seq-filter #'featurep +expensive-packages)))
+      (warn "The following package(s) were loaded eagerly, rather than deferred: %S" loaded))))
 
 (use-package init-leader :demand t)
 
 (use-package init-input :demand t)
+
+(use-package +load-incrementally
+  :demand t
+  :hook (elpaca-after-init-hook . +load-packages-incrementally-h)
+  :config
+  (+load-packages-incrementally '(calendar find-func format-spec org-macs org-compat org-faces org-entities
+                                  org-list org-pcomplete org-src org-footnote org-macro ob org org-modern
+                                  org-habit org-agenda org-capture)))
 
 ;; Load init/**.el
 

@@ -5,7 +5,6 @@
 ;;; Code:
 
 (require '+corelib)
-(require '+load-incrementally)
 
 ;;; Extra UI & session lifecycle hooks
 
