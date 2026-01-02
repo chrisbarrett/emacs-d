@@ -11,21 +11,20 @@
   (require 'org-clock)
   (require 'org-roam))
 
-(defun +org-roam-node-find (&optional other-window)
+(defvar +org-roam-sensitive-tags '("daily" "private"))
+
+(defun +org-roam-node-find (&optional include-sensitive)
   "Find an org-roam node. See `org-roam-node-find'.
 
-With optional prefix arg OTHER-WINDOW, visit the node in another
-window."
+With optional prefix arg INCLUDE-SENSITIVE, include nodes with tags in
+`+org-roam-sensitive-tags'."
   (interactive "P")
-  (org-roam-node-find other-window
+  (org-roam-node-find nil
                       nil
-                      (lambda (node)
-                        (let* ((tags (org-roam-node-tags node))
-                               (disallowed (flatten-list (list '("daily")
-                                                               (when (and (bound-and-true-p timekeep-mode)
-                                                                          (org-clocking-p))
-                                                                 "private")))))
-                          (null (seq-intersection tags disallowed))))))
+                      (unless include-sensitive
+                        (lambda (node)
+                          (let ((tags (org-roam-node-tags node)))
+                            (null (seq-intersection tags +org-roam-sensitive-tags)))))))
 
 (defun +org-roam-node-title-or-olp (node &optional full-olp)
   (funcall (if (or full-olp current-prefix-arg)
