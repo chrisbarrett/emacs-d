@@ -10,6 +10,9 @@
   :mode ("\\.[mc]?js" . js-ts-mode))
 
 
+(+dirlocals-set-regexp (rx "/node_modules/")
+  '((nil . ((mode . read-only)))))
+
 
 (use-package typescript-ts-mode
   :init
