@@ -65,26 +65,6 @@
   (setq org-super-agenda-header-map (make-sparse-keymap)))
 
 
-;; Provides workflows for working with documents for atomic notes (e.g. a
-;; Zettelkasten); implements backlinks between documents for discovering
-;; connected notes.
-(use-package org-roam :ensure t
-  :after org
-  :config
-  (use-package mod-org-roam :demand t)
-
-  :defer-incrementally
-  ansi-color dash f rx seq magit-section emacsql
-
-  ;; Autoload entrypoints
-  :commands (org-roam-buffer-toggle)
-  :init
-  (+local-leader-set-key 'org-mode-map "TAB" #'org-roam-buffer-toggle)
-  :general
-  (:states '(motion insert normal) :keymaps 'org-mode-map
-           "C-c C-i" #'org-roam-node-insert))
-
-
 ;; Easily pop open comments or strings for editing in a dedicated buffer.
 (use-package separedit :ensure t
   :commands (separedit-commit)
