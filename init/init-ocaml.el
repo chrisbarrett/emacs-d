@@ -24,6 +24,12 @@
   (require 'mod-ocaml))
 
 
+(use-package org
+  :config
+  (alist-set! org-src-lang-modes "ocaml" 'neocaml)
+  (alist-set! org-src-lang-modes "ocamli" 'neocamli))
+
+
 (use-package apheleia
   :defines apheleia-mode-alist
   :config
