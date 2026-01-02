@@ -4,8 +4,8 @@
 
 ;;; Code:
 
-(require 'subr-x)
 (require 'cl-lib)
+(require 'subr-x)
 
 (cl-eval-when (compile)
   (require 'org-clock)
@@ -27,7 +27,13 @@ window."
                                                                  "private")))))
                           (null (seq-intersection tags disallowed))))))
 
-(defun +org-roam-node-title-hierarchy (node)
+(defun +org-roam-node-title-or-olp (node &optional full-olp)
+  (funcall (if (or full-olp current-prefix-arg)
+               #'+org-roam-node-formatted-olp
+             #'org-roam-node-title)
+           node))
+
+(defun +org-roam--node-title-hierarchy (node)
   (thread-last
     (append (list (org-roam-node-file-title node))
             (org-roam-node-olp node)
@@ -37,22 +43,13 @@ window."
     (seq-map #'string-trim)
     (seq-uniq)))
 
-(defun +org-roam-node-title-or-olp (node &optional full-olp)
-  (funcall (if (or full-olp current-prefix-arg)
-               #'org-roam-node-formatted-olp
-             #'org-roam-node-title)
-           node))
+(defun +org-roam-node-formatted-olp (node)
+  (pcase-let ((`(,title . ,rest) (nreverse (+org-roam--node-title-hierarchy node))))
+    (let ((prefix (seq-map (lambda (it) (propertize it 'face 'org-property-value)) (nreverse rest)))
+          (title (propertize title 'face 'org-roam-title)))
 
-(cl-defgeneric org-roam-node-formatted-olp (node))
-
-(with-eval-after-load 'org-roam
-  (cl-defmethod org-roam-node-formatted-olp ((node org-roam-node))
-    (pcase-let ((`(,title . ,rest) (nreverse (+org-roam-node-title-hierarchy node))))
-      (let ((prefix (seq-map (lambda (it) (propertize it 'face 'org-property-value)) (nreverse rest)))
-            (title (propertize title 'face 'org-roam-title)))
-
-        (string-join (append prefix (list title))
-                     (propertize ": " 'face 'org-property-value))))))
+      (string-join (append prefix (list title))
+                   (propertize ": " 'face 'org-property-value)))))
 
 (provide '+org-roam)
 

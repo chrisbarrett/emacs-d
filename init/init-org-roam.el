@@ -10,6 +10,9 @@
 
 (require '+corelib)
 
+(autoload '+org-roam-node-formatted-olp "+org-roam")
+(autoload '+org-roam-node-title-or-olp "+org-roam")
+
 
 (use-package org-roam :ensure t
   :after org
@@ -41,14 +44,16 @@
       "lx" #'org-roam-alias-remove))
 
   :custom
+  (org-roam-node-display-template #'+org-roam-node-formatted-olp)
+  (org-roam-extract-new-file-path "notes/${slug}.org")
+  (org-roam-mode-sections '((org-roam-backlinks-section :unique t) (org-roam-reflinks-section)))
+  (org-roam-list-files-commands '(fd fdfind rg find)) ; Prefer faster utilities
+
   (org-roam-capture-templates
    '(("d" "default" plain "%?"
       :target (file+head "notes/${slug}.org" "#+title: ${title}\n")
       :immediate-finish t
       :unnarrowed t)))
-  (org-roam-extract-new-file-path "notes/${slug}.org")
-  (org-roam-mode-sections '((org-roam-backlinks-section :unique t) (org-roam-reflinks-section)))
-  (org-roam-list-files-commands '(fd fdfind rg find)) ; Prefer faster utilities
 
   ;; I conventionally use lines starting with `LINKS:' to create backlinks.
   ;; Highlight these.
@@ -61,23 +66,30 @@
   ;; Create IDs automatically when storing links into org buffers.
 
   (setq-hook! 'org-roam-find-file-hook
-    org-id-link-to-org-use-id 'create-if-interactive)
+    org-id-link-to-org-use-id 'create-if-interactive))
 
 
-  ;; Customise displayed node format. Using a function instead of a template
-  ;; string improves performance of the completions list.
-
+(use-package marginalia
+  :after org-roam
   :config
   (eval-and-compile
-    (defun +org-roam-node-display-format (node)
-      ;; FIXME
-      (concat
-       "${formatted-olp:*} "
-       (propertize "@${slipbox:9}" 'face 'org-tag)
-       "${tags:*}")))
+    (require 'org-roam-slipbox)
+    (autoload 'org-roam-node-tags "org-roam-node")
+    (autoload 'org-roam-node-slipbox "org-roam-slipbox"))
 
-  :custom
-  (org-roam-node-display-template #'+org-roam-node-display-format))
+  (defun +org-roam-node-tags-annotator (cand)
+    (let* ((node (get-text-property 0 'node cand))
+           (slipbox (org-roam-node-slipbox node))
+           (all-tags (seq-filter #'identity
+                                 (seq-keep (lambda (tag)
+                                             (unless (equal tag slipbox)
+                                               (concat "#" tag)))
+                                           (org-roam-node-tags node)))))
+      (marginalia--fields
+       ((concat "@" slipbox) :face 'org-roam-dim)
+       ((string-join all-tags " ") :face 'org-tag))))
+
+  (alist-set! marginalia-annotators 'org-roam-node '(+org-roam-node-tags-annotator builtin none)))
 
 
 ;;; org-roam buffer customisations
@@ -126,7 +138,7 @@
 
 (use-package org-roam-review
   :custom
-  (org-roam-review-title-formatter #'org-roam-node-formatted-olp))
+  (org-roam-review-title-formatter #'+org-roam-node-formatted-olp))
 
 
 (provide 'init-org-roam)
