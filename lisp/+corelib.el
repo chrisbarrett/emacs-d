@@ -568,3 +568,7 @@ VARIABLES will be applied to any matching file."
 (provide '+corelib)
 
 ;;; +corelib.el ends here
+
+;; Local Variables:
+;; checkdoc-arguments-missing-flag: nil
+;; End:
