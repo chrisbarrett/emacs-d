@@ -32,9 +32,8 @@
 (unless (featurep 'elpaca)
   (load-file (file-name-concat user-emacs-directory "elpaca-bootstrap.el")))
 
-(with-no-warnings
-  (elpaca elpaca-use-package
-    (elpaca-use-package-mode)))
+(elpaca elpaca-use-package
+  (elpaca-use-package-mode))
 
 ;; General provides a featureful key binding system. It makes defining leader
 ;; key bindings much easier, and must be loaded immediately for its use-package
@@ -98,3 +97,10 @@
     (let ((basename (file-name-base file)))
       (unless (string-match-p (rx bol (any ".~#_")) basename)
         (load file t nil nil t)))))
+
+
+;;; No-op footer to silence byte-compiler warning.
+
+;; (provide 'init)
+
+;;; init.el ends here
