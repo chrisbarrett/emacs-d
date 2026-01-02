@@ -6,6 +6,11 @@
 
 (require '+corelib)
 
+
+(+dirlocals-set-regexp "/_build/"
+  '((nil . ((mode . read-only)))))
+
+
 ;; Experimental OCaml major mode using tree-sitter.
 (use-package neocaml
   :ensure (neocaml :host github :repo "bbatsov/neocaml" :main "neocaml.el")
