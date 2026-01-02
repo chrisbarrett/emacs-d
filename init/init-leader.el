@@ -4,7 +4,6 @@
 
 ;;; Code:
 
-(require '+org-roam)
 (require '+edit-cmds)
 (require '+files)
 (require '+window)
