@@ -11,3 +11,6 @@ neocaml-mode
 (l (+ocaml-capture-let-context) "let " p " = " q (+ocaml-maybe-in))
 (lr (+ocaml-capture-let-context) "let rec " p " = " q (+ocaml-maybe-in))
 (m "match " p " with " n "| " > q)
+(ms "module " p " = struct" n> q n "end")
+(mt "module type " p " = sig" n> q n "end")
+(inc "include " q)
