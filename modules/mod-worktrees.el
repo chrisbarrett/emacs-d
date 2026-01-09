@@ -209,36 +209,6 @@ If EXCLUDE-ROOT is non-nil, return nil if the worktree is the repo root."
   (let ((default-directory worktree-path))
     (not (magit-anything-modified-p))))
 
-(defun +worktrees--ensure-claude-trust (worktree-path)
-  "Ensure WORKTREE-PATH exists in ~/.claude.json projects."
-  (let ((claude-config (expand-file-name "~/.claude.json")))
-    (when (file-exists-p claude-config)
-      (condition-case err
-          (with-temp-buffer
-            (insert-file-contents claude-config)
-            (let* ((json-object-type 'alist)
-                   (json-key-type 'string)
-                   (config (json-read))
-                   (projects (or (alist-get "projects" config nil nil #'equal)
-                                 (make-hash-table :test 'equal))))
-              ;; Ensure projects is a hash table
-              (unless (hash-table-p projects)
-                (let ((new-projects (make-hash-table :test 'equal)))
-                  (dolist (pair projects)
-                    (puthash (car pair) (cdr pair) new-projects))
-                  (setq projects new-projects)))
-              ;; Add worktree-path if not present
-              (unless (gethash worktree-path projects)
-                (puthash worktree-path (make-hash-table :test 'equal) projects))
-              ;; Update config
-              (setf (alist-get "projects" config nil nil #'equal) projects)
-              ;; Write back
-              (erase-buffer)
-              (insert (json-encode config))
-              (write-region nil nil claude-config nil 'silent)))
-        (error
-         (message "Warning: Failed to update .claude.json: %s"
-                  (error-message-string err)))))))
 
 
 ;;; Teach magit to create worktrees inside the repo.
@@ -325,7 +295,6 @@ Omits the beads-sync worktree, if present."
 When INITIAL-COMMAND is provided, run that."
   (interactive (list (or (+worktrees-path-for-selected-tab)
                          (user-error "Selected tab not associated with a worktree"))))
-  (+worktrees--ensure-claude-trust worktree-path)
   (let ((default-directory worktree-path)
         (project-find-functions nil)
         (claude-code-ide-cli-extra-flags (concat claude-code-ide-cli-extra-flags
