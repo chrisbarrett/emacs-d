@@ -22,7 +22,7 @@
     (pushnew! evil-buffer-regexps `(,(rx bol "*claude-code"))))
 
   (define-advice claude-code-ide--create-terminal-session (:around (fn &rest args))
-    "Teach claude-code to use the mise environment, when available"
+    "Teach claude-code to use the mise environment, when available."
     (let* ((mise-vars
             (when (and (executable-find "mise")
                        (locate-dominating-file default-directory ".mise.toml"))
