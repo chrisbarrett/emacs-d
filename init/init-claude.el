@@ -4,6 +4,10 @@
 
 ;;; Code:
 
+(defsubst +claude-code-ide-active-buffer-p (buf)
+  (and (buffer-live-p buf)
+       (string-match-p (rx bol "*claude-code") (buffer-name buf))))
+
 ;; Run claude-code inside Emacs; creates an MCP bridge between the processes
 ;; to provide editor integration.
 (use-package claude-code-ide :ensure (:host github :repo "manzaltu/claude-code-ide.el")
@@ -48,6 +52,16 @@ This ensures consistent positioning when switching tabs, frames, or windows."
 
   (add-hook '+switch-window-hook #'+claude-code-ide-scroll-to-bottom-h)
   (add-hook '+switch-buffer-hook #'+claude-code-ide-scroll-to-bottom-h))
+
+;; Prevent non-breaking-space in prompt from being visible.
+
+(defun +eat-remap-nbsp (proc)
+  (when-let* ((buf (process-buffer proc)))
+    (when (+claude-code-ide-active-buffer-p buf)
+      (with-current-buffer buf
+        (face-remap-add-relative 'nobreak-space :inherit 'default)))))
+
+(add-hook 'eat-exec-hook #'+eat-remap-nbsp)
 
 
 (provide 'init-claude)
