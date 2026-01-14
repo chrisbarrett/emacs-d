@@ -51,7 +51,11 @@
 
 ;; Icon set used by various packages.
 (use-package nerd-icons :ensure t
-  :autoload nerd-icons-codicon nerd-icons-faicon)
+  :autoload nerd-icons-codicon nerd-icons-faicon nerd-icons-set-font
+  :init
+  ;; Configure fontset for Nerd Font icon ranges to ensure consistent
+  ;; rendering across all faces (e.g., org-block-begin-line).
+  (add-hook 'elpaca-after-init-hook #'nerd-icons-set-font))
 
 
 ;; Show icons in dired.
