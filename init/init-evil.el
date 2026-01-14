@@ -127,7 +127,7 @@
 ;; object with, e.g., matched parentheses.
 (use-package evil-surround
   :ensure t
-  :hook ((text-mode-hook prog-mode-hook) . evil-surround-mode)
+  :hook ((text-mode-hook prog-mode-hook conf-mode-hook) . evil-surround-mode)
   ;; Use lowercase 's' for surround instead of 'S'.
   :general-config (:states '(visual) :keymaps 'evil-surround-mode-map "s" #'evil-surround-region)
   :custom
