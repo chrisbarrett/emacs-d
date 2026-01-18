@@ -111,7 +111,6 @@ With optional prefix arg INCLUDE-SENSITIVE, include nodes with tags in
 (use-package org-roam
   :custom
   (org-roam-node-display-template #'+org-roam-node-formatted-olp)
-  (org-roam-node-formatter #'+org-roam-node-title-or-olp)
   (org-roam-review-title-formatter #'+org-roam-node-formatted-olp)
 
   :config
