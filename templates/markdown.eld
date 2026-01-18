@@ -12,6 +12,9 @@ markdown-mode
 (nb "> [!NOTE]" n
     "> " q n)
 
+(note "> [!NOTE]" n
+    "> " q n)
+
 (tip "> [!TIP]" n
      "> " q n)
 
