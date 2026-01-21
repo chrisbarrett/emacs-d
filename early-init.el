@@ -39,6 +39,7 @@
 (setq use-package-enable-imenu-support t)
 (setq use-package-minimum-reported-time 0.01)
 (setq use-package-hook-name-suffix nil)
+(setq use-package-compute-statistics t)
 
 (unless init-file-debug
   (add-hook 'after-init-hook
