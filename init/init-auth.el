@@ -8,24 +8,14 @@
 
 ;;; Code:
 
-(require 'elpaca)
-
-(let ((local-path (expand-file-name "~/src/chrisbarrett/emacs-auth-source-op")))
-
-  (if (file-directory-p local-path)
-      (add-to-list 'load-path local-path)
-    (elpaca (auth-source-op :host github :repo "chrisbarrett/emacs-auth-source-op"))))
-
-
 (use-package auth-source-op
+  :ensure-unless-local ("~/src/chrisbarrett/emacs-auth-source-op"
+                        (auth-source-op :host github :repo "chrisbarrett/emacs-auth-source-op"))
   :after auth-source
   :demand t
-
   :custom
   (auth-sources '(1password))
   (auth-source-op-vaults '("Emacs"))
-
-  :functions (auth-source-op-enable)
   :config
   (auth-source-op-enable))
 
