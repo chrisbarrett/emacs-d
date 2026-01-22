@@ -137,6 +137,18 @@ constrained to the current frame when using per-project frames."
 
 
 
+;;; Worktree prune command
+
+(defun +magit-worktree-prune ()
+  "Prune stale worktree information."
+  (interactive)
+  (magit-run-git "worktree" "prune"))
+
+(transient-append-suffix 'magit-worktree "g"
+  '("p" "Prune" +magit-worktree-prune))
+
+;;; Log margin fix
+
 (define-advice magit-log-format-author-margin (:override (author date) handle-error)
   "Fix issue with attempt to use function name as a number directly.
 
