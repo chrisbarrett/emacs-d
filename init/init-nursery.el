@@ -4,9 +4,11 @@
 
 ;;; Code:
 
-(use-package nursery :ensure (nursery :host github
-                                      :repo "chrisbarrett/nursery"
-                                      :files (:defaults "extensions/*"))
+(use-package nursery
+  :ensure-unless-local ("~/src/chrisbarrett/nursery/lisp"
+                        (nursery :host github
+                                 :repo "chrisbarrett/nursery"
+                                 :files (:defaults "lisp/*")))
   :init
   (use-package org-roam-review
     :commands (org-roam-review org-roam-review-list-recently-added)
