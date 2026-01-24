@@ -48,7 +48,6 @@
 ;; Adds direnv support.
 (use-package envrc :ensure t
   :hook (+first-file-hook . envrc-global-mode)
-  :if (executable-find "direnv")
   :custom
   (envrc-show-summary-in-minibuffer nil) ; very noisy.
 
