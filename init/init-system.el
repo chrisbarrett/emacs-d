@@ -85,7 +85,9 @@
   :ensure-unless-local ("~/src/chrisbarrett/emacs-misery"
                         (nursery :host github
                                  :repo "chrisbarrett/emacs-misery"))
-  :hook (+first-file-hook . misery-global-mode))
+  :hook (+first-file-hook . misery-global-mode)
+  :custom
+  (misery-show-summary-in-minibuffer nil))
 
 
 ;; Use existing Emacs instances to edit files as $EDITOR.
