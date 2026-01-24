@@ -51,11 +51,12 @@ expansion occurs, it falls back to the default `markdown-cycle' behavior."
   (autoload 'vc-git-root "vc-git")
   (defun +markdown-ts-mode-maybe-gfm ()
     "Use gfm-mode in git repos, markdown-ts-mode otherwise."
-    (if (and buffer-file-name (vc-git-root buffer-file-name))
+    (if (and buffer-file-name (locate-dominating-file default-directory ".git"))
         (gfm-mode)
       (markdown-ts-mode)))
   :init
-  (add-to-list 'major-mode-remap-alist '(markdown-ts-mode . +markdown-ts-mode-maybe-gfm)))
+  (alist-set! major-mode-remap-alist 'markdown-mode '+markdown-ts-mode-maybe-gfm)
+  (alist-set! major-mode-remap-alist 'markdown-ts-mode  '+markdown-ts-mode-maybe-gfm))
 
 
 ;;; GitHub Flavored Markdown Callout Support
