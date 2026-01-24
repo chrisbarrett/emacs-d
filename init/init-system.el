@@ -82,9 +82,11 @@
 
 
 ;; Adds support for mise - https://mise.jdx.dev.
-(use-package mise :ensure t
-  :hook (+first-file-hook . global-mise-mode)
-  :if (executable-find "mise"))
+(use-package misery
+  :ensure-unless-local ("~/src/chrisbarrett/emacs-misery"
+                        (nursery :host github
+                                 :repo "chrisbarrett/emacs-misery"))
+  :hook (+first-file-hook . misery-global-mode))
 
 
 ;; Use existing Emacs instances to edit files as $EDITOR.
