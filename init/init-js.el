@@ -7,7 +7,7 @@
 (require '+corelib)
 
 (use-package js
-  :mode ("\\.[mc]?js" . js-ts-mode))
+  :mode ("\\.[mc]?js\\'" . js-ts-mode))
 
 
 (+dirlocals-set-regexp (rx "/node_modules/")
