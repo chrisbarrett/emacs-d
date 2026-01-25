@@ -12,8 +12,7 @@
   (:keymaps 'markdown-mode-map "C-c f" #'markdown-insert-footnote)
   (:keymaps 'markdown-mode-map :states 'normal "SPC n s" #'markdown-narrow-to-subtree)
 
-  :hook ((markdown-mode-hook . visual-line-mode)
-         (markdown-ts-mode-hook . visual-line-mode))
+  :hook (gfm-mode-hook . visual-line-mode)
   :custom
   (markdown-fontify-code-blocks-natively t)
   (markdown-hide-urls t)
@@ -43,21 +42,11 @@ expansion occurs, it falls back to the default `markdown-cycle' behavior."
                    :keymaps '(markdown-mode-map gfm-mode-map)
                    "TAB" #'+markdown-tab-dwim))
 
-;; Prefer `gfm-mode' in git repos.
-
 (use-package markdown-mode
   :commands (gfm-mode)
-  :preface
-  (autoload 'vc-git-root "vc-git")
-  (defun +markdown-ts-mode-maybe-gfm ()
-    "Use gfm-mode in git repos, markdown-ts-mode otherwise."
-    (if (and buffer-file-name (locate-dominating-file default-directory ".git"))
-        (gfm-mode)
-      (markdown-ts-mode)))
   :init
   (alist-set! auto-mode-alist (rx "/prompt" eos) 'gfm-mode)
-  (alist-set! major-mode-remap-alist 'markdown-mode '+markdown-ts-mode-maybe-gfm)
-  (alist-set! major-mode-remap-alist 'markdown-ts-mode  '+markdown-ts-mode-maybe-gfm))
+  (alist-set! major-mode-remap-alist 'markdown-mode 'gfm-mode))
 
 
 ;;; GitHub Flavored Markdown Callout Support
@@ -113,7 +102,6 @@ expansion occurs, it falls back to the default `markdown-cycle' behavior."
                                 (,(rx bol (* space) "<!--" (1+ space) "prettier-ignore-start" (1+ space) "-->") 0 '+markdown-prettier-ignore-comment-face prepend)
                                 (,(rx bol (* space) "<!--" (1+ space) "prettier-ignore-end" (1+ space) "-->") 0 '+markdown-prettier-ignore-comment-face prepend)))))
 
-  (add-hook 'markdown-mode-hook #'+markdown-fontify-gfm-callouts)
   (add-hook 'gfm-mode-hook #'+markdown-fontify-gfm-callouts))
 
 
@@ -132,7 +120,7 @@ expansion occurs, it falls back to the default `markdown-cycle' behavior."
   (setf (alist-get 'prettier-markdown apheleia-formatters)
         '("prettier" "--stdin-filepath" filepath "--parser=markdown" "--prose-wrap" "always" (apheleia-formatters-fill-column "--print-width")))
 
-  (add-hook! (markdown-mode-local-vars markdown-ts-mode-local-vars)
+  (add-hook! (gfm-mode-local-vars)
     (setq-local apheleia-formatter
                 (if (executable-find "deno")
                     'deno-markdown
