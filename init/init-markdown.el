@@ -55,6 +55,7 @@ expansion occurs, it falls back to the default `markdown-cycle' behavior."
         (gfm-mode)
       (markdown-ts-mode)))
   :init
+  (alist-set! auto-mode-alist (rx "/prompt" eos) 'gfm-mode)
   (alist-set! major-mode-remap-alist 'markdown-mode '+markdown-ts-mode-maybe-gfm)
   (alist-set! major-mode-remap-alist 'markdown-ts-mode  '+markdown-ts-mode-maybe-gfm))
 
