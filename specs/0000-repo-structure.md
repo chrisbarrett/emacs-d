@@ -1,20 +1,20 @@
 # Feature: Repository Structure
 
-Spec-driven Emacs configuration with self-contained feature units.
+Spec-driven Emacs configuration with self-contained module units.
 
 ## User Outcomes
 
-- Features are self-contained: spec, packages, init, lib, tests co-located
+- Modules are self-contained: spec, packages, init, lib, tests co-located
 - Clear mapping from spec to implementation
-- LLM agents can work autonomously within feature boundaries
+- LLM agents can work autonomously within module boundaries
 - Incremental migration from existing config
 
 ## Structure
 
 ```
-features/
+modules/
   {slug}/
-    spec.md        # feature specification
+    spec.md        # module specification
     packages.eld   # elpaca specs (data only)
     init.el        # evaluated during init
     lib.el         # autoloaded functions
@@ -26,19 +26,19 @@ specs/
   NNNN-{slug}.md   # symlinks to active specs
 ```
 
-**Verify:** `fd -t d . features/ | head -1 | xargs ls` shows expected files
+**Verify:** `fd -t d . modules/ | head -1 | xargs ls` shows expected files
 
-## R1: Feature Discovery
+## R1: Module Discovery
 
-**Given** features exist under `features/`
+**Given** modules exist under `modules/`
 **When** Emacs starts
-**Then** all feature directories are discovered
+**Then** all module directories are discovered
 
 **Verify:** Unit test with mock directory structure
 
 ## R2: Package Loading
 
-**Given** discovered features with `packages.eld` files
+**Given** discovered modules with `packages.eld` files
 **When** packages are loaded
 **Then** each `packages.eld` is read as data (not eval'd)
 **And** elpaca specs are collected and processed
@@ -54,7 +54,7 @@ specs/
 
 ## R3: Autoload Registration
 
-**Given** discovered features
+**Given** discovered modules
 **When** autoloads are registered
 **Then** functions in `lib.el` are autoloaded
 **And** functions in `lib/**/*.el` are autoloaded
@@ -73,19 +73,19 @@ Order: packages.eld (all) → autoloads (all) → init.el (all)
 
 ## R5: Active Specs Workflow
 
-**Given** a feature under active development
+**Given** a module under active development
 **When** spec is promoted to active
 **Then** symlink exists at `specs/NNNN-{slug}.md`
 
-**Given** a feature that has stabilized
+**Given** a module that has stabilized
 **When** spec is demoted
-**Then** symlink is removed; `spec.md` remains in feature dir
+**Then** symlink is removed; `spec.md` remains in module dir
 
-**Verify:** `readlink specs/NNNN-*.md` resolves to feature dir
+**Verify:** `readlink specs/NNNN-*.md` resolves to module dir
 
 ## R6: Test Execution
 
-**Given** a feature with `tests.el`
+**Given** a module with `tests.el`
 **When** tests are run
 **Then** ERT executes in batch mode
 **And** exit code reflects pass/fail
@@ -95,13 +95,13 @@ Order: packages.eld (all) → autoloads (all) → init.el (all)
 ## Constraints
 
 - Flat structure initially; nesting permitted later as patterns emerge
-- Feature names are simple slugs (e.g., `modal-editing`)
+- Module names are simple slugs (e.g., `modal-editing`)
 - No conditional package installation
 - Incremental migration: existing config untouched until manually moved
 
 ## Tasks
 
-- [ ] [R1] Implement feature discovery function
+- [ ] [R1] Implement module discovery function
 - [ ] [R2] Implement packages.eld reader
 - [ ] [R2] Integrate with elpaca
 - [ ] [R3] Implement autoload registration
