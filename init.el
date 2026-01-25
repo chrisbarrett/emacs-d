@@ -20,7 +20,7 @@
 (add-to-list 'trusted-content (file-name-concat user-emacs-directory "init.el"))
 (add-to-list 'trusted-content +init-dir)
 (add-to-list 'trusted-content +lisp-dir)
-(add-to-list 'trusted-content +modules-dir)
+(add-to-list 'trusted-content +config-dir)
 
 
 ;;; Bootstrap Elpaca & critical packages

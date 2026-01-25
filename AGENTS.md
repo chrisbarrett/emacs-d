@@ -16,7 +16,7 @@ vim-like keybindings.
 - `init.el` - Main configuration entry point
 - `early-init.el` - Early initialization (UI, themes, performance)
 - `lisp/` - Core utility libraries and helpers
-- `modules/` - Feature-specific configuration modules
+- `config/` - Feature-specific configuration modules
 - `templates/` - File templates and snippets
 - `capture-templates/` - Org-mode capture templates
 - `site/` - Site-specific customizations
@@ -30,7 +30,7 @@ vim-like keybindings.
 
 ### Modules
 
-Each module in `modules/` configures a specific feature:
+Each module in `config/` configures a specific feature:
 
 - `mod-evil.el` - Evil mode configuration
 - `mod-org*.el` - Org-mode related modules

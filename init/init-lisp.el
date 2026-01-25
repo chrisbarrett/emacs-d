@@ -52,7 +52,7 @@
 
   (+dirlocals-set (list (file-name-concat user-emacs-directory "lisp")
                         (file-name-concat user-emacs-directory "init")
-                        (file-name-concat user-emacs-directory "modules"))
+                        (file-name-concat user-emacs-directory "config"))
     `((emacs-lisp-mode . ((mode . emacs-config)))))
 
   ;; Add lisp/ dir to load path in init files.
