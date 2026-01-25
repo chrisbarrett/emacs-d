@@ -43,13 +43,14 @@ Each module in `config/` configures a specific feature:
 
 ```bash
 make test        # Run all quality gates (tests, byte-compile, checkdoc)
-make test-quick  # Run ERT tests only
+make test-quick  # Run ERT tests for affected files only
 make setup-hooks # Install pre-commit hooks
 ```
 
 - ERT is used for Emacs Lisp testing
 - Tests follow `-tests.el` naming convention
 - Use `find-sibling-rules` to navigate between implementation and tests
+- `test-quick` analyzes `require` dependencies to run only tests affected by changes
 
 ### Compilation
 
