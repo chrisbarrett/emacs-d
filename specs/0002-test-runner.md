@@ -63,10 +63,63 @@ emacs -Q --batch -l tests.el "prefix-*"          # run tests matching pattern
 | `+test-runner-run`      | function | Main entry point               |
 | `+test-runner-load-paths` | function | Set up Elpaca load paths     |
 
+## Feature: Pre-commit Orchestration
+
+Makefile-driven checks for staged files, running only affected targets.
+
+### R1: Dependency Analysis Script
+
+`scripts/affected.sh` computes transitive dependents of input files.
+
+**Given** a list of Emacs Lisp files
+**When** the script runs
+**Then** it outputs all files that transitively depend on the inputs
+**And** dependency is defined as: `load`, `require`, or `use-package :after`
+
+**Verify:** `make test` passes
+
+### R2: Build Affected Files
+
+**Given** staged files include Emacs Lisp changes
+**When** `make build-affected` runs
+**Then** byte-compilation runs on transitively affected files
+**And** exits non-zero on warnings or errors
+
+**Verify:** `make build-affected` with clean files exits 0
+
+### R3: Test Affected Files
+
+**Given** staged files include Emacs Lisp changes
+**When** `make test-affected` runs
+**Then** ERT tests run for transitively affected files and modules
+**And** test discovery uses existing `-tests.el` convention
+
+**Verify:** `make test-affected` with clean files exits 0
+
+### R4: Lint Affected Files
+
+**Given** staged files include Emacs Lisp changes
+**When** `make lint-affected` runs
+**Then** checkdoc runs on directly affected files (not transitive)
+**And** exits non-zero on violations
+
+**Verify:** `make lint-affected` with clean files exits 0
+
+### R5: Pre-commit Composition
+
+**Given** a git pre-commit hook
+**When** `make pre-commit` runs
+**Then** it executes lint-affected, build-affected, test-affected in sequence
+**And** fails fast on first error
+
+**Verify:** `make pre-commit` with clean files exits 0
+
 ## Tasks
 
-- [ ] Implement load-path setup
-- [ ] Implement argument parsing
-- [ ] Implement test file discovery
-- [ ] Integrate with ERT batch runner
-- [ ] Update AGENTS.md with new command
+- [ ] [R1] Create `scripts/affected.sh` with dependency parser
+- [ ] [R1] Handle `load`, `require`, `use-package :after` patterns
+- [ ] [R2] Add `build-affected` target to Makefile
+- [ ] [R3] Add `test-affected` target to Makefile
+- [ ] [R4] Add `lint-affected` target to Makefile
+- [ ] [R5] Add `pre-commit` target composing all checks
+- [ ] [R5] Update `make setup-hooks` to install pre-commit hook
