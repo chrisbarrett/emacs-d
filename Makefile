@@ -21,5 +21,10 @@ test-quick:
 
 setup-hooks:
 	@if [ ! -f .git/hooks/pre-commit ]; then \
-		./scripts/setup-hooks.sh; \
+		printf '%s\n' \
+			'#!/usr/bin/env bash' \
+			'exec nix-shell -p pre-commit --run "pre-commit run --hook-stage pre-commit"' \
+			> .git/hooks/pre-commit; \
+		chmod +x .git/hooks/pre-commit; \
+		echo "Pre-commit hook installed"; \
 	fi
