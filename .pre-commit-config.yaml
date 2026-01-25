@@ -1,0 +1,29 @@
+# Pre-commit hooks for Emacs configuration
+# Install hooks: pre-commit install
+# Run manually: pre-commit run --all-files
+
+repos:
+  - repo: local
+    hooks:
+      - id: ert-tests
+        name: ERT Tests
+        entry: ./scripts/run-tests.sh
+        language: script
+        pass_filenames: false
+        always_run: true
+
+      - id: byte-compile
+        name: Byte Compilation
+        entry: ./scripts/byte-compile.sh
+        language: script
+        files: '^(lisp|lib)/.*\.el$'
+        exclude: '-tests\.el$'
+        pass_filenames: false
+
+      - id: checkdoc
+        name: Checkdoc
+        entry: ./scripts/checkdoc.sh
+        language: script
+        files: '^(lisp|lib)/.*\.el$'
+        exclude: '-tests\.el$'
+        pass_filenames: false
