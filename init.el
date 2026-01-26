@@ -53,6 +53,44 @@
   (auto-compile-on-load-mode)
   (auto-compile-on-save-mode))
 
+;; Use the shell to get some environment vars; necessary when the window
+;; system runs Emacs under a very different process environment.
+;;
+;; Also, turns out we need this for direnv to work right in compilation buffers.
+(use-package exec-path-from-shell :ensure t
+  :after-call +first-buffer-hook +first-file-hook
+  :if (memq system-type '(darwin x))
+  :demand t
+  :config
+  (pushnew! exec-path-from-shell-variables
+            ;; Add variables needed for M-x compile with Nix. See:
+            ;; https://github.com/purcell/envrc/issues/92#issuecomment-2415612472
+            "SSH_AUTH_SOCK"
+            "SSH_AGENT_PID"
+            "XDG_CACHE_HOME"
+            "XDG_CONFIG_DIRS"
+            "XDG_DATA_DIRS"
+            "XDG_STATE_HOME"
+            "__NIX_DARWIN_SET_ENVIRONMENT_DONE"
+            "__HM_SESS_VARS_SOURCED"
+            "NIX_USER_PROFILE_DIR"
+            "NIX_SSL_CERT_FILE"
+            "NIX_PROFILES"
+            "NIX_PATH"
+            ;; Extra environment variables set via home-manager.
+            "RIPGREP_CONFIG_PATH"
+            "NIX_EMACS_DARWIN_PATH_EXTRAS"
+            )
+
+  ;; Speed up by using a non-interactive shell.
+  (delq! "-i" exec-path-from-shell-arguments)
+
+  (exec-path-from-shell-initialize)
+  (when-let* ((path-from-nix (getenv "NIX_EMACS_DARWIN_PATH_EXTRAS"))
+              (paths (string-split path-from-nix ":")))
+    (eval `(pushnew! exec-path ,@paths))
+    (setenv "PATH" (string-join exec-path ":"))))
+
 ;; Block until these packages are activated.
 (elpaca-wait)
 
