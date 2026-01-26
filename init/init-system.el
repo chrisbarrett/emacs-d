@@ -51,16 +51,6 @@
   (misery-show-summary-in-minibuffer nil))
 
 
-;; Use existing Emacs instances to edit files as $EDITOR.
-(use-package server
-  :if (display-graphic-p)
-  :demand t
-  :functions server-running-p
-  :config
-  (unless (server-running-p)
-    (server-start)))
-
-
 ;; Copy to and paste from GUI clipboard in terminal.
 (use-package clipetty :ensure t
   :after-call +first-input-hook +first-file-hook

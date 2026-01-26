@@ -94,6 +94,15 @@
 ;; Block until these packages are activated.
 (elpaca-wait)
 
+;; Use existing Emacs instances to edit files as $EDITOR.
+(use-package server
+  :if (display-graphic-p)
+  :demand t
+  :functions server-running-p
+  :config
+  (unless (server-running-p)
+    (server-start)))
+
 
 ;;; Module System Integration
 
