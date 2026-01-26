@@ -335,7 +335,7 @@ Core infrastructure files to KEEP (not deprecate):
 
 ### 5.4 Remove deprecated files entirely
 
-**Status:** Not started
+**Status:** Complete
 
 After 5.1-5.3 complete and tested:
 1. Remove deprecated init/*.el files (47 files)
@@ -371,4 +371,4 @@ May require module system changes to support "pre-init" modules.
 Execute in order listed. Each task should be completed and committed
 before starting the next.
 
-Current task: **5.4 Remove deprecated files entirely**
+Current task: **5.5 Evaluate bootstrap file migration**
