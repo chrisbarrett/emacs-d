@@ -64,14 +64,38 @@ exist or is empty."
             (read (current-buffer))
           (end-of-file nil))))))
 
+(defun +modules--package-name (spec)
+  "Extract the package name from SPEC.
+SPEC can be a symbol or a list with the package name as the first element."
+  (if (consp spec) (car spec) spec))
+
 (defun +modules-collect-packages ()
   "Collect all package specs from discovered modules.
 
 Returns a flat list of all package specifications from all
-modules' packages.eld files."
-  (let ((modules (+modules-discover)))
-    (apply #'append
-           (mapcar #'+modules-read-packages modules))))
+modules' packages.eld files, de-duplicated by package name.
+When duplicates are found, the first occurrence is kept."
+  (let ((modules (+modules-discover))
+        (seen (make-hash-table :test 'eq))
+        (result nil))
+    (dolist (module modules)
+      (dolist (spec (+modules-read-packages module))
+        (let ((name (+modules--package-name spec)))
+          (unless (gethash name seen)
+            (puthash name t seen)
+            (push spec result)))))
+    (nreverse result)))
+
+(defun +modules-read-extra-packages (path)
+  "Read extra package specs from PATH.
+PATH should be a lisp-data file containing a list of package specs.
+Returns nil if PATH doesn't exist."
+  (when (file-exists-p path)
+    (with-temp-buffer
+      (insert-file-contents path)
+      (condition-case nil
+          (read (current-buffer))
+        (end-of-file nil)))))
 
 (defun +modules-install-packages (package-specs)
   "Install PACKAGE-SPECS using elpaca.

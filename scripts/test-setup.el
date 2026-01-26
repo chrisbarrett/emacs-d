@@ -10,8 +10,11 @@
 (require 'ert)
 
 (defvar +test-setup-root-dir
-  (file-name-directory (or load-file-name buffer-file-name default-directory))
-  "Root directory of the Emacs configuration.")
+  (file-name-directory
+   (directory-file-name
+    (file-name-directory (or load-file-name buffer-file-name default-directory))))
+  "Root directory of the Emacs configuration.
+This is the parent of the scripts/ directory where test-setup.el lives.")
 
 (defun +test-setup-load-paths ()
   "Set up load paths for test execution."
