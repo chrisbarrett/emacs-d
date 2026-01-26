@@ -21,8 +21,7 @@ repos:
 
       - id: checkdoc
         name: Checkdoc
-        entry: ./scripts/checkdoc.sh
+        entry: ./scripts/checkdoc.sh --affected
         language: script
-        files: '^(lisp|lib)/.*\.el$'
-        exclude: '-tests\.el$'
         pass_filenames: false
+        always_run: true

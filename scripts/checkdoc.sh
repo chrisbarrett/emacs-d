@@ -2,12 +2,31 @@
 set -euo pipefail
 
 # Run checkdoc on Emacs Lisp files and report errors
-# Usage: checkdoc.sh [file...]
-# If no files specified, checks files in lisp/ and lib/
+# Usage:
+#   ./checkdoc.sh              # Check all files in lisp/ and lib/
+#   ./checkdoc.sh --affected   # Check affected files only
+#   ./checkdoc.sh file1 file2  # Check specific files
 
 cd "$(dirname "$0")/.."
 
-if [[ $# -eq 0 ]]; then
+# Handle --affected flag
+if [[ $# -eq 1 && "$1" == "--affected" ]]; then
+    mapfile -t affected < <(./scripts/affected.sh)
+    if [[ ${#affected[@]} -eq 0 ]]; then
+        echo "No affected files"
+        exit 0
+    fi
+    if [[ "${affected[0]}" == "all" ]]; then
+        # Run full check
+        mapfile -t files < <(git ls-files 'lisp/*.el' 'lib/**/*.el' | grep -v -e '-tests\.el$')
+    elif [[ "${affected[0]}" == "none" ]]; then
+        echo "No files to check for affected changes"
+        exit 0
+    else
+        # Filter to only lisp/ and lib/ files (checkdoc's scope)
+        mapfile -t files < <(printf '%s\n' "${affected[@]}" | grep -E '^(lisp|lib)/' | grep -v -e '-tests\.el$' || true)
+    fi
+elif [[ $# -eq 0 ]]; then
     mapfile -t files < <(git ls-files 'lisp/*.el' 'lib/**/*.el' | grep -v -e '-tests\.el$')
 else
     files=("$@")
