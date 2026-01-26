@@ -1,0 +1,2 @@
+;; -*- lisp-data -*-
+((catppuccin-theme))

@@ -157,7 +157,7 @@ Migrate existing configuration to self-contained module structure.
 
 ### 4.1 Create first pilot module
 
-**Status:** Not started
+**Status:** Complete
 
 Select a well-bounded feature (low dependencies, clear scope) for pilot migration.
 
