@@ -2,13 +2,32 @@
 set -euo pipefail
 
 # Byte-compile Emacs Lisp files and fail on warnings
-# Usage: byte-compile.sh [file...]
-# If no files specified, compiles files in lisp/ and lib/
+# Usage:
+#   ./byte-compile.sh              # Compile all files in lisp/ and lib/
+#   ./byte-compile.sh --affected   # Compile affected files only
+#   ./byte-compile.sh file1 file2  # Compile specific files
 
 cd "$(dirname "$0")/.."
 ROOT=$(pwd)
 
-if [[ $# -eq 0 ]]; then
+# Handle --affected flag
+if [[ $# -eq 1 && "$1" == "--affected" ]]; then
+    mapfile -t affected < <(./scripts/affected.sh)
+    if [[ ${#affected[@]} -eq 0 ]]; then
+        echo "No affected files"
+        exit 0
+    fi
+    if [[ "${affected[0]}" == "all" ]]; then
+        # Run full compilation
+        mapfile -t files < <(git ls-files 'lisp/*.el' 'lib/**/*.el' | grep -v -e '-tests\.el$')
+    elif [[ "${affected[0]}" == "none" ]]; then
+        echo "No files to compile for affected changes"
+        exit 0
+    else
+        # Filter to only lisp/ and lib/ files (byte-compile's scope)
+        mapfile -t files < <(printf '%s\n' "${affected[@]}" | grep -E '^(lisp|lib)/' | grep -v -e '-tests\.el$' || true)
+    fi
+elif [[ $# -eq 0 ]]; then
     mapfile -t files < <(git ls-files 'lisp/*.el' 'lib/**/*.el' | grep -v -e '-tests\.el$')
 else
     files=("$@")

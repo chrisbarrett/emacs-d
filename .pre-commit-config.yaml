@@ -14,11 +14,10 @@ repos:
 
       - id: byte-compile
         name: Byte Compilation
-        entry: ./scripts/byte-compile.sh
+        entry: ./scripts/byte-compile.sh --affected
         language: script
-        files: '^(lisp|lib)/.*\.el$'
-        exclude: '-tests\.el$'
         pass_filenames: false
+        always_run: true
 
       - id: checkdoc
         name: Checkdoc
