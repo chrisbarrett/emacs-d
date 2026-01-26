@@ -177,6 +177,31 @@ the symbol `fboundp' without loading its source file."
       (when autoload-form
         (eval autoload-form t)))))
 
+
+;;; Init Loading
+
+(defun +modules--find-init-file (module-dir)
+  "Return the init.el path for MODULE-DIR if it exists, nil otherwise."
+  (let ((init-file (expand-file-name "init.el" module-dir)))
+    (when (file-exists-p init-file)
+      init-file)))
+
+(defun +modules-collect-init-files ()
+  "Collect all init.el files from discovered modules.
+
+Returns a list of absolute paths to init.el files, in the order
+modules are discovered."
+  (let ((modules (+modules-discover)))
+    (delq nil (mapcar #'+modules--find-init-file modules))))
+
+(defun +modules-load-inits (init-files)
+  "Load all INIT-FILES.
+
+INIT-FILES is a list of absolute paths to init.el files.
+Each file is loaded using `load', which evaluates its contents."
+  (dolist (init-file init-files)
+    (load init-file nil 'nomessage)))
+
 (provide '+modules)
 
 ;;; +modules.el ends here

@@ -106,7 +106,7 @@ Register autoloads from `lib.el` and `lib/**/*.el` in modules.
 
 ### 2.5 Implement init.el loader
 
-**Status:** Not started
+**Status:** Complete
 
 Load all module `init.el` files after packages and autoloads.
 
@@ -156,4 +156,4 @@ For each confirmed feature:
 Execute in order listed. Each task should be completed and committed
 before starting the next.
 
-Current task: **2.5 Implement init.el loader**
+Current task: **2.6 Document active specs workflow**

@@ -486,6 +486,125 @@
     ;; Should not error
     (+modules-register-autoloads entries)))
 
+;;; Tests for +modules--find-init-file
+
+(ert-deftest modules--find-init-file--returns-path-when-exists ()
+  "Returns init.el path when file exists."
+  (let ((temp-dir (make-temp-file "module-" t)))
+    (unwind-protect
+        (let ((init-file (expand-file-name "init.el" temp-dir)))
+          (write-region "" nil init-file)
+          (should (equal init-file (+modules--find-init-file temp-dir))))
+      (delete-directory temp-dir t))))
+
+(ert-deftest modules--find-init-file--returns-nil-when-missing ()
+  "Returns nil when init.el doesn't exist."
+  (let ((temp-dir (make-temp-file "module-" t)))
+    (unwind-protect
+        (should (null (+modules--find-init-file temp-dir)))
+      (delete-directory temp-dir t))))
+
+
+;;; Tests for +modules-collect-init-files
+
+(ert-deftest modules--collect-init-files--returns-empty-when-no-modules ()
+  "Returns nil when no modules exist."
+  (let ((+modules-directory (make-temp-name "/tmp/nonexistent-")))
+    (should (null (+modules-collect-init-files)))))
+
+(ert-deftest modules--collect-init-files--finds-init-files ()
+  "Finds init.el files from discovered modules."
+  (let ((+modules-directory (make-temp-file "modules-" t)))
+    (unwind-protect
+        (let ((module-a (expand-file-name "module-a" +modules-directory))
+              (module-b (expand-file-name "module-b" +modules-directory)))
+          (make-directory module-a)
+          (make-directory module-b)
+          (write-region "" nil (expand-file-name "init.el" module-a))
+          (write-region "" nil (expand-file-name "init.el" module-b))
+          (let ((result (+modules-collect-init-files)))
+            (should (= 2 (length result)))
+            (should (cl-every (lambda (f) (string-suffix-p "init.el" f)) result))))
+      (delete-directory +modules-directory t))))
+
+(ert-deftest modules--collect-init-files--skips-modules-without-init ()
+  "Skips modules that don't have init.el."
+  (let ((+modules-directory (make-temp-file "modules-" t)))
+    (unwind-protect
+        (let ((with-init (expand-file-name "with-init" +modules-directory))
+              (without-init (expand-file-name "without-init" +modules-directory)))
+          (make-directory with-init)
+          (make-directory without-init)
+          (write-region "" nil (expand-file-name "init.el" with-init))
+          (write-region "" nil (expand-file-name "lib.el" without-init))
+          (let ((result (+modules-collect-init-files)))
+            (should (= 1 (length result)))
+            (should (string-match-p "with-init" (car result)))))
+      (delete-directory +modules-directory t))))
+
+
+;;; Tests for +modules-load-inits
+
+(ert-deftest modules--load-inits--loads-init-files ()
+  "Loading inits evaluates init.el contents."
+  (let ((temp-dir (make-temp-file "module-" t))
+        (test-var-sym (make-symbol "test-init-loaded")))
+    (setq test-var-sym (intern (symbol-name test-var-sym)))
+    (unwind-protect
+        (let ((init-file (expand-file-name "init.el" temp-dir)))
+          ;; Set up a var to prove init was loaded
+          (set test-var-sym nil)
+          ;; Write init.el that sets the var
+          (write-region (format "(setq %s t)" test-var-sym) nil init-file)
+          ;; Load the init
+          (+modules-load-inits (list init-file))
+          ;; Check the var was set
+          (should (symbol-value test-var-sym)))
+      (makunbound test-var-sym)
+      (delete-directory temp-dir t))))
+
+(ert-deftest modules--load-inits--loads-multiple-files ()
+  "Loading inits evaluates multiple init.el files."
+  (let ((temp-dir (make-temp-file "modules-" t))
+        (counter-sym (make-symbol "test-init-counter")))
+    (setq counter-sym (intern (symbol-name counter-sym)))
+    (unwind-protect
+        (let ((init-a (expand-file-name "init-a.el" temp-dir))
+              (init-b (expand-file-name "init-b.el" temp-dir)))
+          (set counter-sym 0)
+          (write-region (format "(setq %s (1+ %s))" counter-sym counter-sym) nil init-a)
+          (write-region (format "(setq %s (1+ %s))" counter-sym counter-sym) nil init-b)
+          (+modules-load-inits (list init-a init-b))
+          (should (= 2 (symbol-value counter-sym))))
+      (makunbound counter-sym)
+      (delete-directory temp-dir t))))
+
+(ert-deftest modules--load-inits--handles-empty-list ()
+  "Handles empty init file list without error."
+  (+modules-load-inits nil)
+  (+modules-load-inits '()))
+
+(ert-deftest modules--load-inits--side-effects-visible ()
+  "Init side-effects are visible after loading."
+  (let ((+modules-directory (make-temp-file "modules-" t))
+        (marker-sym (make-symbol "test-module-init-marker")))
+    (setq marker-sym (intern (symbol-name marker-sym)))
+    (unwind-protect
+        (let ((module-dir (expand-file-name "test-module" +modules-directory)))
+          (make-directory module-dir)
+          (set marker-sym nil)
+          ;; Write init that sets marker
+          (write-region
+           (format "(setq %s 'initialized-from-module)" marker-sym)
+           nil (expand-file-name "init.el" module-dir))
+          ;; Full workflow: collect and load
+          (let ((init-files (+modules-collect-init-files)))
+            (+modules-load-inits init-files))
+          ;; Verify side effect
+          (should (eq 'initialized-from-module (symbol-value marker-sym))))
+      (makunbound marker-sym)
+      (delete-directory +modules-directory t))))
+
 (provide '+modules-tests)
 
 ;;; +modules-tests.el ends here
