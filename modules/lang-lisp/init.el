@@ -1,0 +1,356 @@
+;;; init.el --- Emacs Lisp development -*- lexical-binding: t; -*-
+
+;;; Commentary:
+
+;; Emacs Lisp development configuration with testing, linting, and enhanced indentation.
+
+;;; Code:
+
+(require '+corelib)
+
+;;; Profiler Mode
+
+(use-package profiler
+  :general-config
+  (:keymaps 'profiler-report-mode-map
+   :states 'normal
+   "A" #'profiler-report-ascending-sort
+   "D" #'profiler-report-descending-sort
+   "K" #'profiler-report-describe-entry))
+
+;;; Lisp Mode (all dialects)
+
+(use-package lisp-mode
+  :config
+  (add-hook! '(lisp-data-mode-hook emacs-lisp-mode-hook)
+    (add-hook 'before-save-hook #'check-parens nil t)))
+
+;;; Emacs Lisp Mode
+
+(use-package elisp-mode
+  :general
+  (:keymaps 'emacs-lisp-mode-map
+   "C-c RET" #'pp-macroexpand-last-sexp
+   "C-c C-c" #'+elisp-eval-dwim)
+
+  :config
+  (pushnew! find-sibling-rules
+            ;; Tests -> impl
+            (list (rx (group (+? any)) "-tests.el" eos)
+                  (rx (backref 1) ".el"))
+            ;; Impl -> tests
+            (list (rx (group (+? any)) ".el" eos)
+                  (rx (backref 1) "-tests.el")))
+
+  ;; Correct value is project-dependent; avoid using global value and set via
+  ;; hooks instead.
+  (make-variable-buffer-local 'elisp-flymake-byte-compile-load-path)
+
+  :preface
+  ;; Define a minor-mode for my emacs lisp configuration files.
+  (define-minor-mode emacs-config-mode
+    "Minor mode for Emacs Lisp files forming part of my configuration.")
+
+  (+dirlocals-set (list (file-name-concat user-emacs-directory "lisp")
+                        (file-name-concat user-emacs-directory "init")
+                        (file-name-concat user-emacs-directory "config"))
+    `((emacs-lisp-mode . ((mode . emacs-config)))))
+
+  ;; Add lisp/ dir to load path in init files.
+  :config
+  (add-hook! 'emacs-config-mode-hook
+    (pushnew! elisp-flymake-byte-compile-load-path
+              (file-name-concat user-emacs-directory "lisp")))
+
+  (+local-leader-set-key '(emacs-lisp-mode-map lisp-interaction-mode-map)
+    "e" '(nil :which-key "eval")
+    "eb" #'+elisp-eval-buffer))
+
+;;; Elpaca Load Path Integration
+
+(use-package elpaca
+  :config
+  (setq-hook! 'emacs-config-mode-hook
+    elisp-flymake-byte-compile-load-path
+    (append elisp-flymake-byte-compile-load-path
+            (seq-filter (lambda (path)
+                          (string-prefix-p elpaca-builds-directory path))
+                        load-path))))
+
+;;; Prettify Symbols
+
+(use-package prog-mode
+  :hook (emacs-lisp-mode-hook . prettify-symbols-mode))
+
+;;; File Template
+
+(use-package +file-templates
+  :after elisp-mode
+  :config
+  (+define-file-template (rx ".el" eos) "emacs-lisp.eld"))
+
+;;; Evil Integration
+
+(use-package evil
+  :after elisp-mode
+  :functions (evil-normal-state)
+
+  :config
+  (eval-and-compile
+    (autoload 'helpful-at-point "helpful"))
+
+  (setq-hook! 'emacs-lisp-mode-hook
+    evil-lookup-func #'+emacs-lisp-lookup-func)
+
+  ;; Enter normal state after evaluating a region.
+  :config
+  (eval-and-compile
+    (define-advice eval-region (:around (fn &rest args) clear-visual-state)
+      (unwind-protect (apply fn args)
+        (when (eq evil-state 'visual)
+          (evil-normal-state))))))
+
+;;; Checkdoc
+
+(use-package checkdoc
+  :custom
+  (checkdoc-force-docstrings-flag nil))
+
+;;; ERT
+
+(use-package ert
+  :general
+  (:keymaps '(ert-results-mode-map emacs-lisp-mode-map)
+   "C-c C-t" #'+ert)
+  (:states 'motion :keymaps 'ert-results-mode-map
+   "L" 'ert-results-toggle-printer-limits-for-test-at-point
+   "T" 'ert-results-pop-to-timings
+   "B" 'ert-results-pop-to-backtrace-for-test-at-point
+   "H" 'ert-results-describe-test-at-point
+   "M-n" 'ert-results-next-test
+   "M-p" 'ert-results-previous-test)
+
+  :config
+  (+local-leader-set-key '(emacs-lisp-mode-map lisp-interaction-mode-map)
+    "t" '(nil :which-key "test")
+    "tt" '+ert
+    "td" 'ert-delete-test
+    "tD" 'ert-delete-all-tests))
+
+;;; Flymake Eldev
+
+(use-package flymake-eldev :ensure t
+  :init
+  (require 'flymake-eldev-autoloads))
+
+;;; Buttercup
+
+(use-package buttercup :ensure t
+  :demand t
+  :after elisp-mode)
+
+;;; Lisp Indentation
+
+(define-advice calculate-lisp-indent (:override (&optional parse-start) improve-indentation)
+  "Add better indentation for quoted and backquoted lists.
+
+Copied from doom, which itself adapts from:
+`https://www.reddit.com/r/emacs/comments/d7x7x8'."
+  ;; This line because `calculate-lisp-indent-last-sexp` was defined with
+  ;; `defvar` with it's value ommited, marking it special and only defining it
+  ;; locally. So if you don't have this, you'll get a void variable error.
+  (defvar calculate-lisp-indent-last-sexp)
+  (save-excursion
+    (beginning-of-line)
+    (let ((indent-point (point))
+          state
+          ;; setting this to a number inhibits calling hook
+          (desired-indent nil)
+          (retry t)
+          calculate-lisp-indent-last-sexp containing-sexp)
+      (cond ((or (markerp parse-start) (integerp parse-start))
+             (goto-char parse-start))
+            ((null parse-start)
+             (beginning-of-defun))
+            ((setq state parse-start)))
+      (unless state
+        ;; Find outermost containing sexp
+        (while (< (point) indent-point)
+          (setq state (parse-partial-sexp (point) indent-point 0))))
+      ;; Find innermost containing sexp
+      (while (and retry
+                  state
+                  (> (elt state 0) 0))
+        (setq retry nil)
+        (setq calculate-lisp-indent-last-sexp (elt state 2))
+        (setq containing-sexp (elt state 1))
+        ;; Position following last unclosed open.
+        (goto-char (1+ containing-sexp))
+        ;; Is there a complete sexp since then?
+        (if (and calculate-lisp-indent-last-sexp
+                 (> calculate-lisp-indent-last-sexp (point)))
+            ;; Yes, but is there a containing sexp after that?
+            (let ((peek (parse-partial-sexp calculate-lisp-indent-last-sexp
+                                            indent-point 0)))
+              (if (setq retry (car (cdr peek))) (setq state peek)))))
+      (if retry
+          nil
+        ;; Innermost containing sexp found
+        (goto-char (1+ containing-sexp))
+        (if (not calculate-lisp-indent-last-sexp)
+            ;; indent-point immediately follows open paren. Don't call hook.
+            (setq desired-indent (current-column))
+          ;; Find the start of first element of containing sexp.
+          (parse-partial-sexp (point) calculate-lisp-indent-last-sexp 0 t)
+          (cond ((looking-at "\\s(")
+                 ;; First element of containing sexp is a list.  Indent under
+                 ;; that list.
+                 )
+                ((> (save-excursion (forward-line 1) (point))
+                    calculate-lisp-indent-last-sexp)
+                 ;; This is the first line to start within the containing sexp.
+                 ;; It's almost certainly a function call.
+                 (if (or
+                      ;; Containing sexp has nothing before this line except the
+                      ;; first element. Indent under that element.
+                      (= (point) calculate-lisp-indent-last-sexp)
+
+                      (or
+                       ;; Align keywords in plists if each newline begins with
+                       ;; a keyword. This is useful for "unquoted plist
+                       ;; function" macros, like `map!' and `defhydra'.
+                       (when-let* ((first (elt state 1))
+                                   (char (char-after (1+ first))))
+                         (and (eq char ?:)
+                              (ignore-errors
+                                (or (save-excursion
+                                      (goto-char first)
+                                      ;; FIXME Can we avoid `syntax-ppss'?
+                                      (when-let* ((parse-sexp-ignore-comments t)
+                                                  (end (scan-lists (point) 1 0))
+                                                  (depth (ppss-depth (syntax-ppss))))
+                                        (and (re-search-forward "^\\s-*:" end t)
+                                             (= (ppss-depth (syntax-ppss))
+                                                (1+ depth)))))
+                                    (save-excursion
+                                      (cl-loop for pos in (reverse (elt state 9))
+                                               unless (memq (char-after (1+ pos)) '(?: ?\())
+                                               do (goto-char (1+ pos))
+                                               for fn = (read (current-buffer))
+                                               if (symbolp fn)
+                                               return (function-get fn 'indent-plists-as-data)))))))
+
+                       ;; Check for quotes or backquotes around.
+                       (let ((positions (elt state 9))
+                             (quotep 0))
+                         (while positions
+                           (let ((point (pop positions)))
+                             (or (when-let* ((char (char-before point)))
+                                   (cond
+                                    ((eq char ?\())
+                                    ((memq char '(?\' ?\`))
+                                     (or (save-excursion
+                                           (goto-char (1+ point))
+                                           (skip-chars-forward "( ")
+                                           (when-let* ((fn (ignore-errors (read (current-buffer)))))
+                                             (if (and (symbolp fn)
+                                                      (fboundp fn)
+                                                      ;; Only special forms and
+                                                      ;; macros have special
+                                                      ;; indent needs.
+                                                      (not (functionp fn)))
+                                                 (setq quotep 0))))
+                                         (cl-incf quotep)))
+                                    ((memq char '(?, ?@))
+                                     (setq quotep 0))))
+                                 ;; If the spelled out `quote' or `backquote'
+                                 ;; are used, let's assume
+                                 (save-excursion
+                                   (goto-char (1+ point))
+                                   (and (looking-at-p "\\(\\(?:back\\)?quote\\)[\t\n\f\s]+(")
+                                        (cl-incf quotep 2)))
+                                 (setq quotep (max 0 (1- quotep))))))
+                         (> quotep 0))))
+                     ;; Containing sexp has nothing before this line except the
+                     ;; first element.  Indent under that element.
+                     nil
+                   ;; Skip the first element, find start of second (the first
+                   ;; argument of the function call) and indent under.
+                   (progn (forward-sexp 1)
+                          (parse-partial-sexp (point)
+                                              calculate-lisp-indent-last-sexp
+                                              0 t)))
+                 (backward-prefix-chars))
+                (t
+                 ;; Indent beneath first sexp on same line as
+                 ;; `calculate-lisp-indent-last-sexp'.  Again, it's almost
+                 ;; certainly a function call.
+                 (goto-char calculate-lisp-indent-last-sexp)
+                 (beginning-of-line)
+                 (parse-partial-sexp (point) calculate-lisp-indent-last-sexp
+                                     0 t)
+                 (backward-prefix-chars)))))
+      ;; Point is at the point to indent under unless we are inside a string.
+      ;; Call indentation hook except when overridden by lisp-indent-offset or
+      ;; if the desired indentation has already been computed.
+      (let ((normal-indent (current-column)))
+        (cond ((elt state 3)
+               ;; Inside a string, don't change indentation.
+               nil)
+              ((and (integerp lisp-indent-offset) containing-sexp)
+               ;; Indent by constant offset
+               (goto-char containing-sexp)
+               (+ (current-column) lisp-indent-offset))
+              ;; in this case calculate-lisp-indent-last-sexp is not nil
+              (calculate-lisp-indent-last-sexp
+               (or
+                ;; try to align the parameters of a known function
+                (and lisp-indent-function
+                     (not retry)
+                     (funcall lisp-indent-function indent-point state))
+                ;; If the function has no special alignment or it does not apply
+                ;; to this argument, try to align a constant-symbol under the
+                ;; last preceding constant symbol, if there is such one of the
+                ;; last 2 preceding symbols, in the previous uncommented line.
+                (and (save-excursion
+                       (goto-char indent-point)
+                       (skip-chars-forward " \t")
+                       (looking-at ":"))
+                     ;; The last sexp may not be at the indentation where it
+                     ;; begins, so find that one, instead.
+                     (save-excursion
+                       (goto-char calculate-lisp-indent-last-sexp)
+                       ;; Handle prefix characters and whitespace following an
+                       ;; open paren. (Bug#1012)
+                       (backward-prefix-chars)
+                       (while (not (or (looking-back "^[ \t]*\\|([ \t]+"
+                                                     (line-beginning-position))
+                                       (and containing-sexp
+                                            (>= (1+ containing-sexp) (point)))))
+                         (forward-sexp -1)
+                         (backward-prefix-chars))
+                       (setq calculate-lisp-indent-last-sexp (point)))
+                     (> calculate-lisp-indent-last-sexp
+                        (save-excursion
+                          (goto-char (1+ containing-sexp))
+                          (parse-partial-sexp (point) calculate-lisp-indent-last-sexp 0 t)
+                          (point)))
+                     (let ((parse-sexp-ignore-comments t)
+                           indent)
+                       (goto-char calculate-lisp-indent-last-sexp)
+                       (or (and (looking-at ":")
+                                (setq indent (current-column)))
+                           (and (< (line-beginning-position)
+                                   (prog2 (backward-sexp) (point)))
+                                (looking-at ":")
+                                (setq indent (current-column))))
+                       indent))
+                ;; another symbols or constants not preceded by a constant as
+                ;; defined above.
+                normal-indent))
+              ;; in this case calculate-lisp-indent-last-sexp is nil
+              (desired-indent)
+              (normal-indent))))))
+
+(provide 'lang-lisp-init)
+;;; init.el ends here
