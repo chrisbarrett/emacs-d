@@ -27,6 +27,20 @@
 (add-to-list 'load-path +lisp-dir)
 (add-to-list 'load-path +config-dir)
 
+;; Add module directories to load-path so module files (e.g. theme-lib) are
+;; available before the full module system initializes in init.el.
+(defun +module-directory-p (dir)
+  "Return non-nil if DIR contains module system files."
+  (and (file-directory-p dir)
+       (cl-some (lambda (file)
+                  (file-exists-p (file-name-concat dir file)))
+                '("init.el" "lib.el" "packages.eld"))))
+
+(when (file-directory-p +modules-directory)
+  (dolist (dir (directory-files +modules-directory t "\\`[^.]"))
+    (when (+module-directory-p dir)
+      (add-to-list 'load-path dir))))
+
 (setq package-enable-at-startup nil)
 
 

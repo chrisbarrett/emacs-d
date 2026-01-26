@@ -1,6 +1,6 @@
 # Implementation Plan
 
-Plan generated from specs: test-runner.md, repo-structure.md, 003-config-analysis.md
+Plan generated from specs: test-runner.md, repo-structure.md, 003-config-analysis.md, 001-integration-testing.md
 
 ## Phase 1: Pre-commit Orchestration (test-runner.md)
 
@@ -370,6 +370,96 @@ Bootstrap files define infrastructure that module init.el files depend on.
 
 ---
 
-## Phase 5 Complete
+## Phase 6: Integration Testing (001-integration-testing.md)
 
-All tasks in Phase 5 (Cleanup) are complete. The module migration is finished.
+Verify modules work correctly as an integrated system.
+
+### 6.1 Add module directories to load-path in early-init
+
+**Status:** Complete
+
+The `theme-lib.el` file is required by `early-init.el` but lives in
+`modules/theme/`. Early-init runs before the module system is initialized,
+so module directories aren't on load-path yet.
+
+**Fix:** Add validated module directories to load-path in early-init.el,
+before requiring any module files. Only add directories that contain
+canonical module files (init.el, lib.el, packages.eld).
+
+```elisp
+(defun +module-directory-p (dir)
+  "Return non-nil if DIR contains module system files."
+  (and (file-directory-p dir)
+       (cl-some (lambda (file)
+                  (file-exists-p (file-name-concat dir file)))
+                '("init.el" "lib.el" "packages.eld"))))
+
+(dolist (dir (directory-files +modules-directory t "\\`[^.]"))
+  (when (+module-directory-p dir)
+    (add-to-list 'load-path dir)))
+```
+
+**Acceptance:** `emacs --batch -l early-init.el` exits 0
+
+### 6.2 Create integration test script
+
+**Status:** Pending
+
+Create `scripts/integration-test.sh` that:
+1. Starts Emacs daemon with isolated socket
+2. Runs integration checks via emacsclient
+3. Verifies: Evil mode, theme, leader keys, autoloads
+4. Cleans up daemon on exit
+
+**Acceptance:** `./scripts/integration-test.sh` passes
+
+### 6.3 Add `test-integration` Makefile target
+
+**Status:** Pending
+
+```makefile
+test-integration:
+	@./scripts/integration-test.sh
+```
+
+**Acceptance:** `make test-integration` passes
+
+### 6.4 Diagnose and fix Evil mode initialization
+
+**Status:** Pending
+
+Evil mode not active in initial buffers. Possible causes:
+- Evil module init.el not loaded
+- Evil not enabled globally
+- Load order issue with hooks
+
+Debug approach:
+```bash
+emacsclient -s "$SOCKET" --eval '(list
+  (featurep (quote evil))
+  (bound-and-true-p evil-mode)
+  (with-current-buffer "*scratch*" evil-state))'
+```
+
+**Acceptance:** `evil-state` is `normal` in `*scratch*` after startup
+
+### 6.5 Verify all integration checks pass
+
+**Status:** Pending
+
+Run full integration test suite:
+- IC-1: Startup completes (exit 0)
+- IC-2: No missing files
+- IC-3: Evil mode active
+- IC-4: Theme loaded
+- IC-5: Leader keys bound
+- IC-6: Module packages installed
+- IC-7: Autoloads registered
+
+**Acceptance:** `make test-integration` passes all checks
+
+---
+
+## Phase 6 In Progress
+
+Phase 6 addresses integration issues discovered after Phase 5 cleanup.

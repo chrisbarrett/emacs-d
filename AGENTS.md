@@ -4,11 +4,12 @@ Emacs 30+ configuration with Elpaca, Evil mode, and modular architecture.
 
 ## Commands
 
-| Task        | Command            |
-| :---------- | :----------------- |
-| All checks  | `make test`        |
-| Quick tests | `make test-quick`  |
-| Setup hooks | `make setup-hooks` |
+| Task             | Command                 |
+| :--------------- | :---------------------- |
+| All checks       | `make test`             |
+| Quick tests      | `make test-quick`       |
+| Integration test | `make test-integration` |
+| Setup hooks      | `make setup-hooks`      |
 
 ## Structure
 
@@ -45,6 +46,10 @@ infrastructure that modules depend on:
 | `init-elpaca.el`   | Configures Elpaca after bootstrap            |
 | `init-system.el`   | Requires hooks from `init-hooks.el`          |
 | `init-readonly.el` | Requires `init-elpaca.el` for repo paths     |
+
+**Module load-path** is set up in early-init.el before requiring module files.
+Only directories containing canonical module files (init.el, lib.el, packages.eld)
+are added, so `theme-lib.el` from `modules/theme/` is available for early-init.
 
 ## Module System
 
