@@ -1,35 +1,14 @@
-;;; mod-tty-frames.el --- Configuration specific to TTY frames -*- lexical-binding: t; -*-
+;;; mod-tty-frames.el --- DEPRECATED: TTY frame configuration -*- lexical-binding: t; -*-
 
 ;;; Commentary:
 
+;; DEPRECATED: This file is deprecated. TTY frame configuration is now in modules/nav/.
+;; This file exists only for backward compatibility and will be removed in a
+;; future version.
+
 ;;; Code:
 
-(defun +tty-frame-setup (frame)
-  "On TTY FRAME, use Unicode box-drawing for window separators."
-  (unless (display-graphic-p frame)
-    (with-selected-frame frame
-      (let ((dt (or (frame-parameter frame '+vborder-dtable)
-                    (let ((dt (make-display-table)))
-                      (set-display-table-slot dt 'vertical-border (make-glyph-code ?│))
-                      (set-frame-parameter frame '+vborder-dtable dt)
-                      dt))))
-        (set-display-table-slot dt 'truncation (make-glyph-code ?… 'warning))
-
-        (dolist (window (window-list frame 'no-minibuf))
-          (set-window-display-table window dt))
-
-        (let ((update-display-table (lambda ()
-                                      (when (eq (selected-frame) frame)
-                                        (dolist (window (window-list frame 'no-minibuf))
-                                          (unless (eq (window-display-table window) dt)
-                                            (set-window-display-table window dt)))))))
-          (with-current-buffer (window-buffer (frame-selected-window frame))
-            (add-hook 'window-configuration-change-hook update-display-table nil t)))))))
-
-
-(add-hook 'after-make-frame-functions #'+tty-frame-setup)
-
-(+tty-frame-setup (selected-frame))
+(display-warning 'config "mod-tty-frames.el is deprecated. TTY frame configuration is now in modules/nav/." :warning)
 
 (provide 'mod-tty-frames)
 

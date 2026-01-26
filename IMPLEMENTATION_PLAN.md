@@ -275,7 +275,7 @@ Remove explicit `(use-package init-leader :demand t)` and
 
 ### 5.2 Deprecate config/*.el files
 
-**Status:** Not started
+**Status:** Complete
 
 17 config files have been migrated to modules but not deprecated:
 
