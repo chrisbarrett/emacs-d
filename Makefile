@@ -1,4 +1,4 @@
-.PHONY: test test-quick setup-hooks help build-affected test-affected lint-affected
+.PHONY: test test-quick setup-hooks help build-affected test-affected lint-affected pre-commit
 
 help:
 	@echo "Targets:"
@@ -7,6 +7,7 @@ help:
 	@echo "  build-affected - Byte-compile transitively affected files"
 	@echo "  test-affected  - Run ERT tests for transitively affected files"
 	@echo "  lint-affected  - Run checkdoc on directly affected files"
+	@echo "  pre-commit     - Run lint-affected, build-affected, test-affected in sequence"
 	@echo "  setup-hooks    - Install pre-commit hooks"
 
 test: setup-hooks
@@ -63,11 +64,13 @@ lint-affected:
 		./scripts/checkdoc.sh $$files; \
 	fi
 
+pre-commit: lint-affected build-affected test-affected
+
 setup-hooks:
 	@if [ ! -f .git/hooks/pre-commit ]; then \
 		printf '%s\n' \
 			'#!/usr/bin/env bash' \
-			'exec nix-shell -p pre-commit --run "pre-commit run --hook-stage pre-commit"' \
+			'exec make -C "$$(git rev-parse --show-toplevel)" pre-commit' \
 			> .git/hooks/pre-commit; \
 		chmod +x .git/hooks/pre-commit; \
 		echo "Pre-commit hook installed"; \
