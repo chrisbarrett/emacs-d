@@ -98,11 +98,14 @@ passed to the `elpaca' macro for installation."
 
 Returns a list of absolute paths to lib files. Checks for:
 - lib.el in the module root
+- Any *-lib.el file in the module root
 - All .el files in the lib/ subdirectory"
   (let ((lib-el (expand-file-name "lib.el" module-dir))
         (lib-dir (expand-file-name "lib" module-dir)))
     (append
      (when (file-exists-p lib-el) (list lib-el))
+     ;; Find module-specific lib files (e.g., project-lib.el)
+     (directory-files module-dir t "-lib\\.el\\'" t)
      (when (file-directory-p lib-dir)
        (directory-files lib-dir t "\\.el\\'" t)))))
 
@@ -126,10 +129,15 @@ preceded by ;;;###autoload."
 (defun +modules--autoload-form (form source-file)
   "Generate an autoload form for FORM defined in SOURCE-FILE.
 
-FORM should be a definition form like defun, defmacro, or
-define-minor-mode. Returns an autoload form or nil if FORM is
-not a recognized definition type."
+FORM should be a definition form like defun, defmacro,
+define-minor-mode, defvar, or defconst. Returns an autoload
+form (for functions/macros) or the form itself (for variables),
+or nil if FORM is not a recognized definition type."
+  (ignore source-file) ;; Used by autoload but not variable definitions
   (pcase form
+    ;; defvar/defconst - return the form directly (variables are evaluated immediately)
+    (`(,(or 'defvar 'defconst) ,_name . ,_rest)
+     form)
     ;; defun/cl-defun - check for optional docstring
     (`(,(and (or 'defun 'defun* 'cl-defun) _) ,name ,_args ,docstring . ,_)
      `(autoload ',name ,source-file ,(if (stringp docstring) docstring nil) t))

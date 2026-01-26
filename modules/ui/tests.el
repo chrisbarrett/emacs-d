@@ -13,8 +13,8 @@
   (file-name-directory (or load-file-name buffer-file-name))
   "Directory containing the ui module.")
 
-;; Load lib.el to get autoloaded functions
-(let ((lib-file (expand-file-name "lib.el" ui-test--module-dir)))
+;; Load ui-lib.el to get autoloaded functions
+(let ((lib-file (expand-file-name "ui-lib.el" ui-test--module-dir)))
   (when (file-exists-p lib-file)
     (load lib-file nil 'nomessage)))
 
@@ -43,8 +43,8 @@
     (should (file-exists-p init-file))))
 
 (ert-deftest ui-module-has-lib ()
-  "P0: Module should have lib.el."
-  (let ((lib-file (expand-file-name "lib.el" ui-test--module-dir)))
+  "P0: Module should have ui-lib.el."
+  (let ((lib-file (expand-file-name "ui-lib.el" ui-test--module-dir)))
     (should (file-exists-p lib-file))))
 
 

@@ -1,2 +1,3 @@
 ;; -*- lisp-data -*-
-((beframe :host github :repo "protesilaos/beframe"))
+;; Packages installed via use-package :ensure
+()

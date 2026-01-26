@@ -188,8 +188,8 @@
 ;;; Module structure tests
 
 (ert-deftest anthropic-test-module-has-lib ()
-  "Module has lib.el file."
-  (let ((lib-file (expand-file-name "modules/anthropic/lib.el" user-emacs-directory)))
+  "Module has anthropic-lib.el file."
+  (let ((lib-file (expand-file-name "modules/anthropic/anthropic-lib.el" user-emacs-directory)))
     (should (file-exists-p lib-file))))
 
 (ert-deftest anthropic-test-module-has-spec ()

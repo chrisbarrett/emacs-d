@@ -14,7 +14,7 @@
   "Directory of the org-agenda module.")
 
 ;; Load lib at top level
-(let ((lib-file (expand-file-name "lib.el" org-agenda-test--module-dir)))
+(let ((lib-file (expand-file-name "org-agenda-lib.el" org-agenda-test--module-dir)))
   (when (file-exists-p lib-file)
     (condition-case nil
         (load lib-file nil t)
@@ -183,7 +183,7 @@
 
 (ert-deftest org-agenda/test-module-lib ()
   "Module has lib.el."
-  (let ((file (expand-file-name "lib.el" org-agenda-test--module-dir)))
+  (let ((file (expand-file-name "org-agenda-lib.el" org-agenda-test--module-dir)))
     (should (file-exists-p file))))
 
 (provide 'org-agenda-tests)

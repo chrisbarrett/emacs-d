@@ -14,7 +14,7 @@
 
 (defun vcs-test--load-module ()
   "Load the VCS module."
-  (let ((lib-file (expand-file-name "lib.el" vcs-test--module-dir))
+  (let ((lib-file (expand-file-name "vcs-lib.el" vcs-test--module-dir))
         (init-file (expand-file-name "init.el" vcs-test--module-dir)))
     (when (file-exists-p lib-file)
       (condition-case nil
@@ -39,8 +39,8 @@
   (should (file-exists-p (expand-file-name "spec.md" vcs-test--module-dir))))
 
 (ert-deftest vcs-module-has-lib-el ()
-  "Module has lib.el file."
-  (should (file-exists-p (expand-file-name "lib.el" vcs-test--module-dir))))
+  "Module has vcs-lib.el file."
+  (should (file-exists-p (expand-file-name "vcs-lib.el" vcs-test--module-dir))))
 
 (ert-deftest vcs-module-has-init-el ()
   "Module has init.el file."

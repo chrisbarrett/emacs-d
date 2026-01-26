@@ -10,7 +10,7 @@
 
 (defun editing-test--load-module ()
   "Load the editing module files."
-  (load (expand-file-name "modules/editing/lib.el" user-emacs-directory) nil t)
+  (load (expand-file-name "modules/editing/editing-lib.el" user-emacs-directory) nil t)
   (load (expand-file-name "modules/editing/init.el" user-emacs-directory) nil t))
 
 ;; P1: erase-buffer is not disabled

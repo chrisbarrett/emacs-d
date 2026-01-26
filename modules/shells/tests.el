@@ -20,7 +20,7 @@
 
 ;; Load lib for testing
 (condition-case nil
-    (load (expand-file-name "lib.el" shells--test-dir))
+    (load (expand-file-name "shells-lib.el" shells--test-dir))
   (error nil))
 
 
@@ -141,7 +141,7 @@
 (ert-deftest shells/module-structure ()
   "Module has required files."
   (should (file-exists-p (expand-file-name "packages.eld" shells--test-dir)))
-  (should (file-exists-p (expand-file-name "lib.el" shells--test-dir)))
+  (should (file-exists-p (expand-file-name "shells-lib.el" shells--test-dir)))
   (should (file-exists-p (expand-file-name "init.el" shells--test-dir)))
   (should (file-exists-p (expand-file-name "spec.md" shells--test-dir))))
 

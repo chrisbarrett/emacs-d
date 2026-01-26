@@ -11,7 +11,7 @@
 (defvar module-dir (file-name-directory (or load-file-name buffer-file-name)))
 
 (condition-case nil
-    (load (expand-file-name "lib.el" module-dir))
+    (load (expand-file-name "evil-lib.el" module-dir))
   (error nil))
 
 (condition-case nil
@@ -21,20 +21,10 @@
 ;;;; Module structure tests
 
 (ert-deftest evil-module-structure-packages ()
-  "packages.eld exists and contains expected packages."
+  "packages.eld exists (packages now installed via use-package)."
+  ;; Packages are now installed via use-package :ensure in init.el
   (let ((packages-file (expand-file-name "packages.eld" module-dir)))
-    (should (file-exists-p packages-file))
-    (with-temp-buffer
-      (insert-file-contents packages-file)
-      (should (search-forward "evil" nil t))
-      (goto-char (point-min))
-      (should (search-forward "evil-collection" nil t))
-      (goto-char (point-min))
-      (should (search-forward "evil-surround" nil t))
-      (goto-char (point-min))
-      (should (search-forward "puni" nil t))
-      (goto-char (point-min))
-      (should (search-forward "general" nil t)))))
+    (should (file-exists-p packages-file))))
 
 (ert-deftest evil-module-structure-spec ()
   "spec.md exists and is a symlink to specs/005-evil.md."
@@ -44,7 +34,7 @@
 
 (ert-deftest evil-module-structure-lib ()
   "lib.el exists and provides expected functions."
-  (let ((lib-file (expand-file-name "lib.el" module-dir)))
+  (let ((lib-file (expand-file-name "evil-lib.el" module-dir)))
     (should (file-exists-p lib-file))))
 
 (ert-deftest evil-module-structure-init ()

@@ -1,2 +1,3 @@
 ;; -*- lisp-data -*-
-((claude-code-ide :host github :repo "manzaltu/claude-code-ide.el"))
+;; Packages installed via use-package or init files
+()

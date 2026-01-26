@@ -1,3 +1,3 @@
 ;; -*- lisp-data -*-
-((helpful)
- (rfc-mode))
+;; Packages installed via use-package or init files
+()

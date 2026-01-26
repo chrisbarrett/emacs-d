@@ -1,3 +1,3 @@
 ;; -*- lisp-data -*-
-;; External packages for lang-nix module
-((nix-ts-mode))
+;; Packages installed via use-package or init files
+()

@@ -13,7 +13,7 @@
   (file-name-directory (or load-file-name buffer-file-name)))
 
 ;; Load lib.el for autoloaded functions
-(let ((lib-file (expand-file-name "lib.el" org-capture-test--module-dir)))
+(let ((lib-file (expand-file-name "org-capture-lib.el" org-capture-test--module-dir)))
   (when (file-exists-p lib-file)
     (load lib-file nil t)))
 
@@ -35,7 +35,7 @@
 
 (ert-deftest org-capture-test-lib-exists ()
   "lib.el exists in module."
-  (should (file-exists-p (expand-file-name "lib.el" org-capture-test--module-dir))))
+  (should (file-exists-p (expand-file-name "org-capture-lib.el" org-capture-test--module-dir))))
 
 (ert-deftest org-capture-test-init-exists ()
   "init.el exists in module."
@@ -202,32 +202,6 @@
   (let ((file (expand-file-name "capture-templates/language-learning-review.org" user-emacs-directory)))
     (should (file-exists-p file))))
 
-
-;;; Packages tests
-
-(ert-deftest org-capture-test-packages-includes-cliplink ()
-  "packages.eld includes org-cliplink."
-  :tags '(:org-capture)
-  (let ((packages-file (expand-file-name "packages.eld" org-capture-test--module-dir)))
-    (with-temp-buffer
-      (insert-file-contents packages-file)
-      (should (search-forward "org-cliplink" nil t)))))
-
-(ert-deftest org-capture-test-packages-includes-s ()
-  "packages.eld includes s (string library)."
-  :tags '(:org-capture)
-  (let ((packages-file (expand-file-name "packages.eld" org-capture-test--module-dir)))
-    (with-temp-buffer
-      (insert-file-contents packages-file)
-      (should (search-forward "(s)" nil t)))))
-
-(ert-deftest org-capture-test-packages-includes-dash ()
-  "packages.eld includes dash."
-  :tags '(:org-capture)
-  (let ((packages-file (expand-file-name "packages.eld" org-capture-test--module-dir)))
-    (with-temp-buffer
-      (insert-file-contents packages-file)
-      (should (search-forward "(dash)" nil t)))))
 
 (provide 'org-capture-tests)
 

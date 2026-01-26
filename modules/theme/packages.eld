@@ -1,2 +1,3 @@
 ;; -*- lisp-data -*-
-((catppuccin-theme))
+;; Packages installed via use-package or init files
+()

@@ -1,2 +1,3 @@
 ;; -*- lisp-data -*-
-((kdl-ts-mode :host github :repo "merrickluo/kdl-ts-mode"))
+;; Packages installed via use-package or init files
+()

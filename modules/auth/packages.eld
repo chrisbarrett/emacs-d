@@ -1,2 +1,3 @@
 ;; -*- lisp-data -*-
-((auth-source-op :host github :repo "chrisbarrett/emacs-auth-source-op"))
+;; Packages installed via use-package or init files
+()

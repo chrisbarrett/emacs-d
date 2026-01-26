@@ -21,7 +21,7 @@
 
 ;; Load lib.el for +quail-defun macro
 (condition-case nil
-    (load (expand-file-name "lib.el" input-methods--test-module-dir) nil t)
+    (load (expand-file-name "input-methods-lib.el" input-methods--test-module-dir) nil t)
   (error nil))
 
 
@@ -103,7 +103,7 @@
 (ert-deftest input-methods/module-structure ()
   "Module has required files."
   (should (file-exists-p (expand-file-name "init.el" input-methods--test-module-dir)))
-  (should (file-exists-p (expand-file-name "lib.el" input-methods--test-module-dir)))
+  (should (file-exists-p (expand-file-name "input-methods-lib.el" input-methods--test-module-dir)))
   (should (file-exists-p (expand-file-name "packages.eld" input-methods--test-module-dir)))
   (should (file-exists-p (expand-file-name "spec.md" input-methods--test-module-dir))))
 

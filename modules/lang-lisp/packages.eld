@@ -1,3 +1,3 @@
 ;; -*- lisp-data -*-
-((flymake-eldev)
- (buttercup))
+;; Packages installed via use-package :ensure
+()

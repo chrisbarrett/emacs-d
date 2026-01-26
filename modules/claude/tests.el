@@ -13,8 +13,8 @@
 (defvar +switch-buffer-hook nil)
 (defvar eat-exec-hook nil)
 
-;; Load lib.el for function definitions
-(let ((lib-file (expand-file-name "modules/claude/lib.el" user-emacs-directory)))
+;; Load claude-lib.el for function definitions
+(let ((lib-file (expand-file-name "modules/claude/claude-lib.el" user-emacs-directory)))
   (condition-case nil
       (load lib-file nil t)
     (error nil)))
@@ -110,16 +110,14 @@
   "Module should have required files."
   (let ((module-dir (expand-file-name "modules/claude/" user-emacs-directory)))
     (should (file-exists-p (expand-file-name "packages.eld" module-dir)))
-    (should (file-exists-p (expand-file-name "lib.el" module-dir)))
+    (should (file-exists-p (expand-file-name "claude-lib.el" module-dir)))
     (should (file-exists-p (expand-file-name "init.el" module-dir)))
     (should (file-exists-p (expand-file-name "spec.md" module-dir)))))
 
 (ert-deftest claude/packages-eld-content ()
-  "packages.eld should contain claude-code-ide spec."
+  "packages.eld exists (packages now via use-package :ensure)."
   (let ((packages-file (expand-file-name "modules/claude/packages.eld" user-emacs-directory)))
-    (with-temp-buffer
-      (insert-file-contents packages-file)
-      (should (re-search-forward "claude-code-ide" nil t)))))
+    (should (file-exists-p packages-file))))
 
 (provide 'claude-tests)
 ;;; tests.el ends here

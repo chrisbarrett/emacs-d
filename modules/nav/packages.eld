@@ -1,4 +1,3 @@
 ;; -*- lisp-data -*-
-((rotate)
- (better-jumper)
- (avy))
+;; Packages installed via use-package :ensure
+()

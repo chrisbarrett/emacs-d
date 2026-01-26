@@ -101,7 +101,7 @@ emacsclient -s "$EMACS_SOCKET_NAME" --eval '(kill-emacs)'
 
 ```elisp
 (and (fboundp '+theme-update)
-     (fboundp '+compile-project))
+     (fboundp '+compile-pp-parser))
 ```
 
 ## Bootstrap Load-Path Setup
@@ -173,7 +173,7 @@ check "Leader keys bound" \
   '(keymapp (key-binding (kbd "SPC") nil t))'
 
 check "Core autoloads" \
-  '(and (fboundp (quote +theme-update)) (fboundp (quote +compile-project)))'
+  '(and (fboundp (quote +theme-update)) (fboundp (quote +compile-pp-parser)))'
 
 echo "All integration checks passed."
 ```

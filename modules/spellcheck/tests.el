@@ -11,7 +11,7 @@
 
 ;; Load the module files from this directory
 (let* ((module-dir (file-name-directory (or load-file-name buffer-file-name)))
-       (lib-file (expand-file-name "lib.el" module-dir))
+       (lib-file (expand-file-name "spellcheck-lib.el" module-dir))
        (init-file (expand-file-name "init.el" module-dir)))
   ;; org-directory is used by init.el for personal dictionary path
   (unless (boundp 'org-directory)

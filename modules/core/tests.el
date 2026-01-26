@@ -161,16 +161,17 @@ Then the function is called."
 (ert-deftest core-test-p8-package-spec-reading ()
   "P8: +modules-read-packages reads packages.eld correctly."
   (skip-unless (fboundp '+modules-read-packages))
+  ;; Core packages are now installed via use-package :ensure
+  ;; Test just verifies function can read the file
   (let ((packages (+modules-read-packages core-test--module-dir)))
-    (should (listp packages))
-    ;; Core module should have exec-path-from-shell
-    (should (assq 'exec-path-from-shell packages))))
+    (should (listp packages))))
 
 (ert-deftest core-test-p8-package-spec-has-envrc ()
-  "P8: Core packages.eld includes envrc."
-  (skip-unless (fboundp '+modules-read-packages))
-  (let ((packages (+modules-read-packages core-test--module-dir)))
-    (should (assq 'envrc packages))))
+  "P8: Core module still functions with packages.eld."
+  ;; Packages are now installed via use-package :ensure in init.el
+  ;; This test verifies the file exists and is readable
+  (let ((packages-file (expand-file-name "packages.eld" core-test--module-dir)))
+    (should (file-exists-p packages-file))))
 
 ;;; P9: Autoload Registration
 
@@ -247,12 +248,12 @@ Then the function is called."
   "Test +read-eld function reads lisp-data files."
   (skip-unless (fboundp '+read-eld))
   ;; +read-eld expects paths relative to user-emacs-directory
+  ;; Core packages.eld is now empty (packages via use-package :ensure)
   (let* ((relative-path (file-relative-name
                          (expand-file-name "packages.eld" core-test--module-dir)
                          user-emacs-directory))
          (result (+read-eld relative-path)))
-    (should (listp result))
-    (should (assq 'exec-path-from-shell result))))
+    (should (listp result))))
 
 (ert-deftest core-test-corelib-dirlocals-set ()
   "Test +dirlocals-set function exists."

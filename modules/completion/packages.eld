@@ -1,11 +1,3 @@
 ;; -*- lisp-data -*-
-((vertico)
- (marginalia)
- (orderless)
- (corfu)
- (nerd-icons-corfu)
- (cape)
- (which-key)
- (consult)
- (embark)
- (embark-consult))
+;; Packages installed via use-package :ensure
+()

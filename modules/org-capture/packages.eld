@@ -1,4 +1,3 @@
 ;; -*- lisp-data -*-
-((org-cliplink)
- (s)
- (dash))
+;; Packages installed via use-package or init files
+()

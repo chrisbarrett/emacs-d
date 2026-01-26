@@ -9,8 +9,10 @@
 (require '+corelib)
 (require 'cl-lib)
 (require 'map)
-(require 'ht)
 (require 'compile)
+
+;; ht is needed for +compile-pp-parser interactive command
+(declare-function ht-find "ht")
 
 ;; Silence byte-compiler for cl-letf locally-bound functions
 (declare-function rewrite-named-group-to-numbered-group nil)
@@ -373,6 +375,7 @@ The optional keyword arguments are:
                                             nil t))))
       (eval
        (alist-get choice cands)))))
+  (require 'ht) ;; Load ht on demand for ht-find
   (let ((buf (get-buffer-create "*compilation-parser*")))
     (with-current-buffer buf
 

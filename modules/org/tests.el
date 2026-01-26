@@ -13,7 +13,7 @@
   (file-name-directory (or load-file-name buffer-file-name)))
 
 ;; Load the lib.el which contains autoloaded functions
-(let ((lib-file (expand-file-name "lib.el" org-test--module-dir)))
+(let ((lib-file (expand-file-name "org-lib.el" org-test--module-dir)))
   (when (file-exists-p lib-file)
     (load lib-file nil t)))
 
@@ -245,7 +245,7 @@ Checks for org-ellipsis which we set to \" …\" (not the default)."
 
 (ert-deftest org-test-module-has-lib ()
   "Test that module has lib.el."
-  (let ((lib-file (expand-file-name "lib.el" org-test--module-dir)))
+  (let ((lib-file (expand-file-name "org-lib.el" org-test--module-dir)))
     (should (file-exists-p lib-file))))
 
 

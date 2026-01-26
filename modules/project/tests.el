@@ -13,8 +13,8 @@
   "Directory containing the project module.")
 
 (defun project-module--load-lib ()
-  "Load project module lib.el."
-  (load (expand-file-name "lib.el" project-module--dir) nil t))
+  "Load project module project-lib.el."
+  (load (expand-file-name "project-lib.el" project-module--dir) nil t))
 
 (defun project-module--load-init ()
   "Load project module init.el."
@@ -36,8 +36,8 @@
   (should (file-exists-p (expand-file-name "spec.md" project-module--dir))))
 
 (ert-deftest project-test-module-has-lib-el ()
-  "Module has lib.el file."
-  (should (file-exists-p (expand-file-name "lib.el" project-module--dir))))
+  "Module has project-lib.el file."
+  (should (file-exists-p (expand-file-name "project-lib.el" project-module--dir))))
 
 
 ;;; P1: project-vc-ignores contains ".cache/"

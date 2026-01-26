@@ -32,19 +32,11 @@
   (should (file-exists-p (expand-file-name "init.el" completion-test--module-dir))))
 
 (ert-deftest completion-test-packages-eld-contents ()
-  "packages.eld contains expected packages."
+  "packages.eld exists in module (packages now installed via use-package)."
+  ;; Packages are now installed via use-package :ensure in init.el
+  ;; This test just verifies the file exists for module system compatibility
   (let ((packages-file (expand-file-name "packages.eld" completion-test--module-dir)))
-    (when (file-exists-p packages-file)
-      (with-temp-buffer
-        (insert-file-contents packages-file)
-        (let ((content (buffer-string)))
-          (should (string-match-p "vertico" content))
-          (should (string-match-p "corfu" content))
-          (should (string-match-p "consult" content))
-          (should (string-match-p "embark" content))
-          (should (string-match-p "orderless" content))
-          (should (string-match-p "marginalia" content))
-          (should (string-match-p "which-key" content)))))))
+    (should (file-exists-p packages-file))))
 
 ;;; P1: Vertico hook setup
 

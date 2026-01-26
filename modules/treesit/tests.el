@@ -11,7 +11,7 @@
 (let ((module-dir (expand-file-name "modules/treesit/" user-emacs-directory)))
   (condition-case nil
       (progn
-        (load (expand-file-name "lib.el" module-dir) nil t)
+        (load (expand-file-name "treesit-lib.el" module-dir) nil t)
         (load (expand-file-name "init.el" module-dir) nil t))
     (error nil)))
 
@@ -53,7 +53,7 @@
   ;; Load the function to check its implementation
   (let ((module-dir (expand-file-name "modules/treesit/" user-emacs-directory)))
     (with-temp-buffer
-      (insert-file-contents (expand-file-name "lib.el" module-dir))
+      (insert-file-contents (expand-file-name "treesit-lib.el" module-dir))
       ;; Check that the function references bound-and-true-p iedit-mode
       (should (string-match-p "bound-and-true-p iedit-mode" (buffer-string))))))
 
@@ -69,12 +69,10 @@
 ;;; Module structure tests
 
 (ert-deftest treesit/structure-packages-eld ()
-  "Verify packages.eld exists and contains expreg."
+  "Verify packages.eld exists."
+  ;; Package expreg is now installed via use-package :ensure in init.el
   (let ((packages-file (expand-file-name "modules/treesit/packages.eld" user-emacs-directory)))
-    (should (file-exists-p packages-file))
-    (with-temp-buffer
-      (insert-file-contents packages-file)
-      (should (string-match-p "expreg" (buffer-string))))))
+    (should (file-exists-p packages-file))))
 
 (ert-deftest treesit/structure-spec-md ()
   "Verify spec.md symlink exists."
@@ -82,8 +80,8 @@
     (should (file-symlink-p spec-file))))
 
 (ert-deftest treesit/structure-lib-el ()
-  "Verify lib.el exists and provides feature."
-  (let ((lib-file (expand-file-name "modules/treesit/lib.el" user-emacs-directory)))
+  "Verify treesit-lib.el exists and provides feature."
+  (let ((lib-file (expand-file-name "modules/treesit/treesit-lib.el" user-emacs-directory)))
     (should (file-exists-p lib-file))
     (with-temp-buffer
       (insert-file-contents lib-file)

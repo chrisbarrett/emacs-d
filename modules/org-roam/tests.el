@@ -13,7 +13,7 @@
   (file-name-directory (or load-file-name buffer-file-name)))
 
 ;; Load lib.el for autoloaded functions
-(let ((lib-file (expand-file-name "lib.el" org-roam-test--module-dir)))
+(let ((lib-file (expand-file-name "org-roam-lib.el" org-roam-test--module-dir)))
   (when (file-exists-p lib-file)
     (load lib-file nil t)))
 
@@ -152,7 +152,7 @@
 (ert-deftest org-roam-test-lib-el-exists ()
   "Test that lib.el exists."
   :tags '(org-roam module-structure)
-  (let ((lib-file (expand-file-name "lib.el" org-roam-test--module-dir)))
+  (let ((lib-file (expand-file-name "org-roam-lib.el" org-roam-test--module-dir)))
     (should (file-exists-p lib-file))))
 
 (ert-deftest org-roam-test-init-el-exists ()

@@ -8,8 +8,7 @@
 
 (require 'org-capture)
 
-;; Load lib for autoloaded functions
-(require 'org-capture-lib)
+;; org-capture-lib functions are autoloaded; no explicit require needed
 
 (setq org-capture-templates
       (cl-flet ((notes-datetree (key desc template &rest kvps)

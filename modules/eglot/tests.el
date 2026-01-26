@@ -19,8 +19,8 @@
     (error nil)))
 
 (defun eglot-test--load-lib ()
-  "Load the eglot module lib.el."
-  (load (expand-file-name "lib.el" eglot-test--module-dir) nil t))
+  "Load the eglot module eglot-lib.el."
+  (load (expand-file-name "eglot-lib.el" eglot-test--module-dir) nil t))
 
 ;; Load lib at compile time for function definitions
 (eglot-test--load-lib)
@@ -121,8 +121,8 @@
     (should (file-symlink-p spec-file))))
 
 (ert-deftest eglot/module-has-lib-el ()
-  "Module has lib.el file."
-  (let ((lib-file (expand-file-name "lib.el" eglot-test--module-dir)))
+  "Module has eglot-lib.el file."
+  (let ((lib-file (expand-file-name "eglot-lib.el" eglot-test--module-dir)))
     (should (file-exists-p lib-file))))
 
 

@@ -1,3 +1,3 @@
 ;; -*- lisp-data -*-
-;; Packages for treesit module
-((expreg))
+;; Packages installed via use-package or init files
+()

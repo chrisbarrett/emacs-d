@@ -1,2 +1,3 @@
 ;; -*- lisp-data -*-
-((inf-elixir))
+;; Packages installed via use-package :ensure
+()

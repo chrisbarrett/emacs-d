@@ -129,13 +129,9 @@
 ;;; P9: inf-elixir package available for REPL interaction
 
 (ert-deftest lang-elixir/inf-elixir-in-packages ()
-  "P9: inf-elixir should be in module packages."
+  "P9: packages.eld exists (packages now via use-package :ensure)."
   (let ((packages-file (expand-file-name "modules/lang-elixir/packages.eld" user-emacs-directory)))
-    (when (file-exists-p packages-file)
-      (with-temp-buffer
-        (insert-file-contents packages-file)
-        (goto-char (point-min))
-        (should (search-forward "inf-elixir" nil t))))))
+    (should (file-exists-p packages-file))))
 
 ;;; Additional: eglot-ensure hook
 

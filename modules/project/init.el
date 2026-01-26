@@ -7,7 +7,8 @@
 ;;; Code:
 
 (require '+corelib)
-(require 'project-lib)
+
+;; project-lib functions/variables are autoloaded
 
 (defvar org-directory)
 (defvar eat-buffer-name)

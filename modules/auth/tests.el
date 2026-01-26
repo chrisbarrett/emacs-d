@@ -51,12 +51,9 @@
 ;;; Additional: Module structure
 
 (ert-deftest auth/module-has-packages ()
-  "Module has packages.eld with auth-source-op."
+  "Module has packages.eld (packages now via use-package :ensure)."
   (let ((packages-file (expand-file-name "modules/auth/packages.eld" user-emacs-directory)))
-    (should (file-exists-p packages-file))
-    (with-temp-buffer
-      (insert-file-contents packages-file)
-      (should (string-match-p "auth-source-op" (buffer-string))))))
+    (should (file-exists-p packages-file))))
 
 (ert-deftest auth/module-has-spec ()
   "Module has spec.md symlink."

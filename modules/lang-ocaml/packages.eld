@@ -1,3 +1,3 @@
 ;; -*- lisp-data -*-
-((neocaml :host github :repo "bbatsov/neocaml" :main "neocaml.el")
- (ocaml-eglot))
+;; Packages installed via use-package or init files
+()
