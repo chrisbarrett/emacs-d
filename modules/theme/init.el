@@ -3,6 +3,10 @@
 ;;; Commentary:
 
 ;; Initializes theme configuration. Called after autoloads are registered.
+;;
+;; Note: The actual theme application is handled by init-theme.el using
+;; use-package to ensure the catppuccin-theme package is installed first.
+;; This module provides the library functions and face customizations.
 
 ;;; Code:
 
@@ -13,10 +17,6 @@
                         '(iedit-occurrence ((t (:inherit query-replace))))
                         ;; Dim delimiters like commas, semicolons, etc.
                         '(font-lock-delimiter-face ((t (:inherit shadow)))))
-
-;; Set catppuccin as the dark theme and apply.
-(setq +theme-dark 'catppuccin)
-(+theme-update)
 
 (provide 'theme-init)
 

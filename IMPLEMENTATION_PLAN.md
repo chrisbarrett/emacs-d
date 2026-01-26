@@ -177,7 +177,7 @@ modules/theme/
 
 ### 4.2 Wire module loading into init sequence
 
-**Status:** Not started
+**Status:** Complete
 
 Update `init.el` to call module system at appropriate point in startup:
 

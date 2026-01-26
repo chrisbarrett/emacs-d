@@ -21,8 +21,9 @@
 (add-to-list 'trusted-content +init-dir)
 (add-to-list 'trusted-content +lisp-dir)
 (add-to-list 'trusted-content +config-dir)
+(add-to-list 'trusted-content +modules-directory)
 
-
+
 ;;; Bootstrap Elpaca & critical packages
 
 ;; Suppress warning when loading Elpaca with latest Emacs.
@@ -55,7 +56,18 @@
 ;; Block until these packages are activated.
 (elpaca-wait)
 
-
+
+;;; Module System Integration
+
+(require '+modules)
+
+;; Install packages from modules early in the queue.
+(+modules-install-packages (+modules-collect-packages))
+
+;; Register autoloads so module functions are available before loading.
+(+modules-register-autoloads (+modules-collect-autoloads))
+
+
 ;; Key init files that must be loaded early in the sequence.
 
 (use-package init-elpaca :demand t)
@@ -90,6 +102,13 @@
       (eval `(use-package ,(intern basename)
                :demand t)))))
 
+
+;;; Module init files
+
+;; Load module init.el files after all autoloads are registered.
+(+modules-load-inits (+modules-collect-init-files))
+
+
 ;;; Load site/**.el
 
 (when (file-directory-p +site-files-directory)
@@ -98,7 +117,7 @@
       (unless (string-match-p (rx bol (any ".~#_")) basename)
         (load file t nil nil t)))))
 
-
+
 ;;; No-op footer to silence byte-compiler warning.
 
 ;; (provide 'init)
