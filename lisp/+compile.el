@@ -10,6 +10,10 @@
 (require 'ht)
 (require 'compile)
 
+;; Silence byte-compiler for cl-letf locally-bound functions
+(declare-function rewrite-named-group-to-numbered-group nil)
+(declare-function group-name-p nil)
+
 (eval-and-compile
   (defconst +compile-metavars-alist '((file . (and (any alnum "/~._") (*? (not (any "\n:")))))
                                       (line . (or "0"

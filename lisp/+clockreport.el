@@ -41,7 +41,7 @@
     ;; Insert table rows
     (unless (zerop total-time)
       (pcase-dolist (`(,_file-name ,_file-time ,entries) tables)
-        (pcase-dolist (`(,_level ,headline ,_tags ,ts ,time ,_props) entries)
+        (pcase-dolist (`(,_level ,headline ,_tags ,_ts ,time ,_props) entries)
           (insert-before-markers
            "| " headline " | " (org-duration-from-minutes time) "|\n"))))
 

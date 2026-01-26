@@ -147,7 +147,7 @@ Do not return any prose; only return the alist (unquoted) so that it may be pass
                     (dom-by-tag 'head)
                     (dom-by-tag 'title)
                     (car)
-                    (dom-text))))
+                    (dom-inner-text))))
             (erase-buffer)
             (shr-insert-document dom)
             (+capture--metadata-for-web-document url title (buffer-string)))

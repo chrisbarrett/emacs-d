@@ -32,6 +32,10 @@
 (eval-when-compile
   (require 'use-package-core))
 
+(declare-function use-package-process-keywords "use-package-core")
+(declare-function use-package-normalize-symlist "use-package-core")
+(declare-function use-package-list-insert "use-package-core")
+
 (defvar +load-packages--work-queue '(t))
 
 (defvar +load-packages--first-idle-timer (if (daemonp) 0 2.0)

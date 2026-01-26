@@ -6,6 +6,9 @@
 
 (require 'cl-lib)
 
+;; Silence byte-compiler for cl-letf locally-bound functions
+(declare-function expand-backrefs nil)
+
 (defun +find-sibling-file-search-including-nonexisting (file)
   "Like `find-sibling-file-search', but don't require files to actually exist."
   (cl-letf* (((symbol-function 'expand-backrefs)
