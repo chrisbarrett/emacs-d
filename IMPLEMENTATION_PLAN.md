@@ -67,7 +67,7 @@ Establishes self-contained module structure for incremental migration.
 
 ### 2.1 Implement module discovery function
 
-**Status:** Not started
+**Status:** Complete
 
 Create `+modules-discover` that finds all directories under `modules/`.
 
@@ -156,4 +156,4 @@ For each confirmed feature:
 Execute in order listed. Each task should be completed and committed
 before starting the next.
 
-Current task: **2.1 Implement module discovery function**
+Current task: **2.2 Implement packages.eld reader**
