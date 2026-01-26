@@ -139,7 +139,7 @@ Group by coupling indicators (shared deps, cross-calls, require).
 
 ### 3.2 Analyze features and write specs
 
-**Status:** Not started
+**Status:** Complete
 
 For each confirmed feature:
 - Extract dependencies (packages, built-ins, other features)
@@ -147,7 +147,77 @@ For each confirmed feature:
 - Extract API (commands, functions, variables, keybindings)
 - Define testable properties
 
-**Output:** specs/NNN-{slug}.md for each feature (starting at 004)
+**Output:** specs/004-050 written for all 47 features from FEATURE_INVENTORY.md
+
+---
+
+## Phase 4: Module Migration
+
+Migrate existing configuration to self-contained module structure.
+
+### 4.1 Create first pilot module
+
+**Status:** Not started
+
+Select a well-bounded feature (low dependencies, clear scope) for pilot migration.
+
+Recommended pilot: **theme** (8 behaviors, 2 files, minimal cross-cutting concerns)
+
+Create:
+```
+modules/theme/
+  spec.md        # symlink or copy from specs/008-theme.md
+  packages.eld   # catppuccin-theme, modus-themes
+  init.el        # extracted from init/init-theme.el
+  lib.el         # extracted from lisp/+theme.el
+  tests.el       # new tests based on spec
+```
+
+**Acceptance:** `make test` passes; theme loading works from module
+
+### 4.2 Wire module loading into init sequence
+
+**Status:** Not started
+
+Update `init.el` to call module system at appropriate point in startup:
+
+1. `+modules-install-packages` early (package installation)
+2. `+modules-register-autoloads` before feature usage
+3. `+modules-load-inits` after autoloads registered
+
+**Acceptance:** Pilot module loads successfully during Emacs startup
+
+### 4.3 Migrate additional modules
+
+**Status:** Not started
+
+Migrate features in dependency order (leaf features first):
+
+| Priority | Feature       | Reason                              |
+| -------- | ------------- | ----------------------------------- |
+| 1        | theme         | No cross-cutting deps               |
+| 2        | spellcheck    | Minimal deps                        |
+| 3        | help          | Minimal deps                        |
+| 4        | templates     | Self-contained                      |
+| 5        | format        | Depends only on apheleia            |
+| 6        | search        | Depends only on wgrep               |
+| 7        | diff          | No external deps                    |
+| 8        | debug         | No external deps                    |
+| 9        | editing       | Core but minimal deps               |
+| 10       | lang-*        | Each language is self-contained     |
+
+**Acceptance:** Each migrated module has tests; `make test` passes
+
+### 4.4 Deprecate old file structure
+
+**Status:** Not started
+
+Once modules are stable:
+1. Add deprecation warnings to old init/*.el files
+2. Remove duplication (old files just load modules)
+3. Eventually delete old files
+
+**Acceptance:** No functional duplication between modules/ and init/config/
 
 ---
 
@@ -156,4 +226,4 @@ For each confirmed feature:
 Execute in order listed. Each task should be completed and committed
 before starting the next.
 
-Current task: **3.2 Analyze features and write specs** (pending user confirmation of FEATURE_INVENTORY.md)
+Current task: **4.1 Create first pilot module** (theme recommended)
