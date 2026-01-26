@@ -8,10 +8,10 @@ help:
 	@echo "  test-affected  - Run ERT tests for transitively affected files"
 	@echo "  lint-affected  - Run checkdoc on directly affected files"
 	@echo "  pre-commit     - Run lint-affected, build-affected, test-affected in sequence"
-	@echo "  setup-hooks    - Install pre-commit hooks"
+	@echo "  setup-hooks    - Install prek hooks"
 
 test: setup-hooks
-	nix-shell -p pre-commit --run "pre-commit run --all-files"
+	nix develop --command prek run --all-files
 
 test-quick:
 	@affected=$$(./scripts/affected-tests.sh); \
@@ -68,10 +68,5 @@ pre-commit: lint-affected build-affected test-affected
 
 setup-hooks:
 	@if [ ! -f .git/hooks/pre-commit ]; then \
-		printf '%s\n' \
-			'#!/usr/bin/env bash' \
-			'exec make -C "$$(git rev-parse --show-toplevel)" pre-commit' \
-			> .git/hooks/pre-commit; \
-		chmod +x .git/hooks/pre-commit; \
-		echo "Pre-commit hook installed"; \
+		nix develop --command prek install; \
 	fi

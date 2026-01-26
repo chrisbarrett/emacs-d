@@ -1,6 +1,6 @@
-# Pre-commit hooks for Emacs configuration
-# Install hooks: pre-commit install
-# Run manually: pre-commit run --all-files
+# Prek hooks for Emacs configuration
+# Install hooks: prek install
+# Run manually: prek run --all-files
 
 repos:
   - repo: local
