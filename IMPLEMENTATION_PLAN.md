@@ -189,24 +189,61 @@ Update `init.el` to call module system at appropriate point in startup:
 
 ### 4.3 Migrate additional modules
 
-**Status:** Not started
+**Status:** Complete
 
-Migrate features in dependency order (leaf features first):
+All 47 features from FEATURE_INVENTORY.md migrated to modules/:
 
-| Priority | Feature       | Reason                              |
-| -------- | ------------- | ----------------------------------- |
-| 1        | theme         | No cross-cutting deps               |
-| 2        | spellcheck    | Minimal deps                        |
-| 3        | help          | Minimal deps                        |
-| 4        | templates     | Self-contained                      |
-| 5        | format        | Depends only on apheleia            |
-| 6        | search        | Depends only on wgrep               |
-| 7        | diff          | No external deps                    |
-| 8        | debug         | No external deps                    |
-| 9        | editing       | Core but minimal deps               |
-| 10       | lang-*        | Each language is self-contained     |
+| Module          | Spec  | Package Count | Tests |
+| --------------- | ----- | ------------- | ----- |
+| anthropic       | 033   | 0             | 22    |
+| auth            | 031   | 1             | 6     |
+| claude          | 032   | 1             | 14    |
+| compile         | 027   | 0             | 19    |
+| completion      | 006   | 10            | 32    |
+| core            | 004   | 6             | 41    |
+| debug           | 028   | 0             | 5     |
+| diff            | 029   | 0             | 11    |
+| dired           | 017   | 3             | 20    |
+| editing         | 011   | 0             | 18    |
+| eglot           | 019   | 1             | 14    |
+| evil            | 005   | 10            | 33    |
+| format          | 012   | 1             | 11    |
+| help            | 014   | 2             | 15    |
+| hex             | 050   | 0             | 7     |
+| input-methods   | 030   | 0             | 10    |
+| lang-c          | 041   | 0             | 12    |
+| lang-conf       | 044   | 1             | 9     |
+| lang-elixir     | 038   | 1             | 14    |
+| lang-erlang     | 047   | 0             | 5     |
+| lang-js         | 035   | 0             | 17    |
+| lang-latex      | 043   | 0             | 6     |
+| lang-lisp       | 034   | 2             | 18    |
+| lang-markdown   | 042   | 1             | 22    |
+| lang-nix        | 037   | 1             | 9     |
+| lang-ocaml      | 039   | 2             | 17    |
+| lang-rust       | 036   | 0             | 10    |
+| lang-shscript   | 046   | 0             | 7     |
+| lang-terraform  | 040   | 2             | 13    |
+| lang-text       | 045   | 0             | 3     |
+| lang-zig        | 048   | 1             | 4     |
+| leader          | 007   | 0             | 28    |
+| nav             | 010   | 3             | 34    |
+| org             | 023   | 7             | 34    |
+| org-agenda      | 024   | 1             | 21    |
+| org-capture     | 025   | 3             | 24    |
+| org-roam        | 026   | 2             | 23    |
+| project         | 021   | 1             | 18    |
+| reader          | 049   | 0             | 4     |
+| search          | 013   | 1             | 8     |
+| shells          | 018   | 1             | 17    |
+| spellcheck      | 016   | 2             | 14    |
+| templates       | 015   | 1             | 14    |
+| theme           | 008   | 1             | 18    |
+| treesit         | 020   | 1             | 9     |
+| ui              | 009   | 13            | 57    |
+| vcs             | 022   | 7             | 28    |
 
-**Acceptance:** Each migrated module has tests; `make test` passes
+**Acceptance:** All tests pass; `make test` succeeds
 
 ### 4.4 Deprecate old file structure
 
@@ -226,4 +263,4 @@ Once modules are stable:
 Execute in order listed. Each task should be completed and committed
 before starting the next.
 
-Current task: **4.1 Create first pilot module** (theme recommended)
+Current task: **4.4 Deprecate old file structure**
