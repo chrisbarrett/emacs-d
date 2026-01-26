@@ -128,8 +128,6 @@
 
 ;; Key init files that must be loaded early in the sequence.
 
-(use-package init-elpaca :demand t)
-
 (use-package init-hooks
   :demand t
   :init

@@ -10,8 +10,6 @@ The core feature provides the foundational infrastructure for the Emacs configur
 - Package manager bootstrap (Elpaca)
 - Custom use-package keywords for deferred loading
 - Lifecycle hooks for lazy loading
-- System integration (shell environment, direnv, server mode)
-- Read-only protection for vendor directories
 - Foundation utilities (logging, hooks, collection operations)
 - Module system for self-contained config units
 
@@ -26,9 +24,6 @@ The core feature provides the foundational infrastructure for the Emacs configur
 | no-littering          | Organized cache/data file paths        |
 | auto-compile          | Prevent loading stale .elc files       |
 | exec-path-from-shell  | Import shell PATH on macOS             |
-| envrc                 | Direnv integration                     |
-| misery                | Mise (mise.jdx.dev) integration        |
-| clipetty              | Terminal clipboard support             |
 
 ### Built-in Features
 
@@ -37,9 +32,6 @@ The core feature provides the foundational infrastructure for the Emacs configur
 | cl-lib        | Common Lisp compatibility         |
 | subr-x        | Extra subroutines                 |
 | server        | Emacsclient support               |
-| xt-mouse      | Terminal mouse support            |
-| tramp         | Remote file access                |
-| midnight      | Periodic buffer cleanup           |
 | use-package   | Package configuration DSL         |
 
 ## Behavior
@@ -101,28 +93,13 @@ This allows hooks to depend on buffer-local variables set via dir-locals.
 **When** Emacs becomes idle for `+load-packages--first-idle-timer` seconds
 **Then** packages are loaded one-by-one during idle time
 
-### B6: System Integration
-
-**Given** the system feature is loaded
-**When** first file/buffer is opened
-**Then**:
-- Shell environment is imported (PATH, NIX variables)
-- envrc-global-mode is enabled
-- misery-global-mode is enabled
-- clipetty-mode is enabled (terminal sessions)
+### B6: Server Mode
 
 **Given** display-graphic-p returns non-nil
-**When** init-system loads
+**When** init.el loads
 **Then** Emacs server is started if not already running
 
-### B7: Read-Only Protection
-
-**Given** a file is opened
-**When** path matches `/vendor/`, `/elpaca/`, or `/node_modules/`
-**And** path does not match `/.git/` or personal elpaca repos
-**Then** `read-only-mode` is enabled
-
-### B8: use-package Keywords
+### B7: use-package Keywords
 
 The following custom keywords are available:
 
@@ -258,17 +235,7 @@ The following custom keywords are available:
   (should ran))
 ```
 
-### P6: Read-Only Protection
-
-```elisp
-;; Given a file path containing /vendor/
-;; When +file-should-be-opened-read-only-p is called
-;; Then it returns non-nil
-(should (+file-should-be-opened-read-only-p "/project/vendor/lib.el"))
-(should-not (+file-should-be-opened-read-only-p "/project/src/lib.el"))
-```
-
-### P7: Module Discovery
+### P6: Module Discovery
 
 ```elisp
 ;; Given modules/ contains valid module directories
@@ -279,7 +246,7 @@ The following custom keywords are available:
   (should (cl-every #'+modules--valid-module-p modules)))
 ```
 
-### P8: Package Spec Reading
+### P7: Package Spec Reading
 
 ```elisp
 ;; Given a module with packages.eld containing ((foo) (bar :host github))
@@ -289,7 +256,7 @@ The following custom keywords are available:
                (+modules-read-packages "/path/to/module")))
 ```
 
-### P9: Autoload Registration
+### P8: Autoload Registration
 
 ```elisp
 ;; Given a module lib.el with ;;;###autoload before a defun
@@ -300,14 +267,11 @@ The following custom keywords are available:
 
 ## Files
 
-| File                     | Purpose                          |
-| :----------------------- | :------------------------------- |
-| init.el                  | Main entry point                 |
-| early-init.el            | Early UI and path configuration  |
-| init/init-elpaca.el      | Elpaca configuration             |
-| init/init-hooks.el       | Lifecycle hooks                  |
-| init/init-system.el      | System integration               |
-| init/init-readonly.el    | Read-only file protection        |
-| lisp/+corelib.el         | Foundation utilities             |
-| lisp/+load-incrementally.el | Deferred loading keywords     |
-| lisp/+modules.el         | Module system                    |
+| File                        | Purpose                          |
+| :-------------------------- | :------------------------------- |
+| init.el                     | Main entry point                 |
+| early-init.el               | Early UI and path configuration  |
+| init/init-hooks.el          | Lifecycle hooks                  |
+| lisp/+corelib.el            | Foundation utilities             |
+| lisp/+use-package-keywords.el | Deferred loading keywords      |
+| lisp/+modules.el            | Module system                    |
