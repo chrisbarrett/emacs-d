@@ -1,58 +1,19 @@
-;;; init-format.el --- Code formatting -*- lexical-binding: t; -*-
+;;; init-format.el --- DEPRECATED: Migrated to modules/format/ -*- lexical-binding: t; -*-
 
 ;;; Commentary:
 
+;; DEPRECATED: This file has been migrated to modules/format/.
+;;
+;; The module system now handles loading this configuration.
+;; This file will be removed in a future version.
+;;
+;; Migration path:
+;; - All functionality is now in modules/format/init.el
+;; - This file exists only for backward compatibility
+
 ;;; Code:
 
-;; Emacs has an extensible mode-specific alignment system. In this age of code
-;; formatters it's not terribly useful, but I do use `align-regexp' from
-;; time-to-time.
-(use-package align
-  :general ("C-x a a" #'align-regexp))
-
-
-;; Indentation behaviour.
-(use-package indent
-  :custom
-  (tab-first-completion 'word-or-paren-or-punct))
-
-
-;; Apply code formatting on save. Works for a range of languages.
-(use-package apheleia :ensure t
-  :after-call +first-file-hook
-  :custom
-  (apheleia-remote-algorithm 'local)
-  (apheleia-formatters-respect-fill-column t)
-  :config
-  (apheleia-global-mode +1))
-
-;; By default, trim trailing whitespace aggressively.
-
-(defvar-local +trim-trailing-whitespace-aggressively t)
-
-(add-hook! 'before-save-hook
-  (when +trim-trailing-whitespace-aggressively
-    (delete-trailing-whitespace)))
-
-;; TODO: Evaluate whether ws-butler is something I need. Do I ever work in
-;; codebases where I want to preserve existing trailing whitespace?
-
-;; Delete trailing whitespace on visited lines.
-(use-package ws-butler :ensure t :disabled t
-  :hook (prog-mode-hook text-mode-hook conf-mode-hook)
-  :config
-  (pushnew! ws-butler-global-exempt-modes
-            'special-mode
-            'comint-mode
-            'term-mode
-            'eshell-mode
-            'diff-mode))
-
-
-;; Tab-to-space conversion
-(use-package tabify
-  :custom
-  (tabify-regexp "^\t* [ \t]+"))
+(warn "init-format.el is deprecated; functionality has moved to modules/format/")
 
 (provide 'init-format)
 

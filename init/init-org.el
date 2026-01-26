@@ -1,129 +1,21 @@
-;;; init-org.el --- Bootstrap org-mode -*- lexical-binding: t; -*-
+;;; init-org.el --- DEPRECATED: Migrated to modules/org/ -*- lexical-binding: t; -*-
 
 ;;; Commentary:
 
+;; DEPRECATED: This file has been migrated to modules/org/.
+;;
+;; The module system now handles loading this configuration.
+;; This file will be removed in a future version.
+;;
+;; Migration path:
+;; - Core org-mode functionality is now in modules/org/init.el
+;; - Agenda functionality is in modules/org-agenda/init.el
+;; - Capture functionality is in modules/org-capture/init.el
+;; - This file exists only for backward compatibility
+
 ;;; Code:
 
-(require '+corelib)
-
-;; org-mode - the reason why I can probably never switch to another editor.
-(use-package org :ensure t ; NB. installed from org package archive.
-
-  :hook ((org-mode-hook . abbrev-mode)
-         (org-mode-hook . auto-fill-mode))
-
-  :general ("C-c a" #'org-agenda)
-
-  :custom
-  (abbrev-file-name (file-name-concat org-directory "abbrev.el"))
-  (org-babel-load-languages '((emacs-lisp . t)
-                              (C . t)
-                              (calc . t)
-                              (shell . t)))
-  :config
-  (use-package mod-org :demand t)
-  (use-package mod-org-link :after ol :demand t)
-  (use-package mod-org-capture :after org-capture :demand t)
-  (use-package mod-org-agenda :after org-agenda :demand t))
-
-
-;; Provides extra evil keybindings for org-mode, org-agenda etc.
-(use-package evil-org :ensure t
-  :hook (org-mode-hook . evil-org-mode)
-  :custom
-  (evil-org-key-theme '(todo navigation insert textobjects additional calendar))
-  :init
-  (use-package evil-org-agenda
-    :after org-agenda
-    :demand t
-    :config
-    (evil-org-agenda-set-keys)
-    (evil-define-key 'motion org-agenda-mode-map
-      (kbd "v") #'org-agenda-view-mode-dispatch
-      (kbd "SPC") nil
-      (kbd "/") #'org-agenda-filter)))
-
-
-;; Group items in the agenda
-(use-package org-super-agenda :ensure t
-  :after org-agenda
-  :demand t
-  :custom
-  (org-super-agenda-hide-empty-groups t)
-  :config
-  (org-super-agenda-mode +1)
-  ;; Clear the keymap to ensure the regular evil keybindings for org-agenda
-  ;; work.
-  (setq org-super-agenda-header-map (make-sparse-keymap)))
-
-
-;; Easily pop open comments or strings for editing in a dedicated buffer.
-(use-package separedit :ensure t
-  :commands (separedit-commit)
-  :custom
-  (separedit-default-mode 'gfm-mode))
-
-
-;; Provides visual enhancements that make org-mode look less cluttered and
-;; more in-line with modern UX ideas.
-(use-package org-modern :ensure t
-  :after org
-  :demand t
-  :custom
-  (org-modern-hide-stars nil)
-  (org-modern-fold-stars
-   '(("▶" . "▼") ("▹" . "▿") ("▸" . "▾") ("⯈" . "⯆")))
-  (org-modern-block-name
-   `(("src" . ("" "◌"))
-     ("quote" . ("" "◌"))
-     ("example" . ("" "◌"))))
-  :config
-  (global-org-modern-mode +1)
-  (custom-theme-set-faces 'user
-                          '(org-todo ((t (:bold t :inverse-video t))))
-                          ;; Based on `eldoc-highlight-function-argument'
-                          '(org-modern-date-active ((((background dark))
-                                                     (:foreground "#dfaf7a"
-                                                      :background "#381d0f"
-                                                      :weight light
-                                                      :inherit org-modern-label))
-                                                    (((background light))
-                                                     (:foreground "#884900"
-                                                      :background "#f8f0d0"
-                                                      :weight light
-                                                      :inherit org-modern-label)))))
-
-  (let ((custom-todos
-         '(("WAIT" warning org-todo)
-           ("PROJECT" font-lock-keyword-face org-todo))))
-
-    (setq org-modern-todo-faces custom-todos)
-    (setq org-todo-keyword-faces
-          (seq-map (apply-partially #'take 2) custom-todos))))
-
-
-;; Create org-mode links from URLs on the clipboard.
-(use-package org-cliplink :ensure t
-  :general (:keymaps 'org-mode-map "C-c l" #'org-cliplink))
-
-
-;; The calendar widget used in org-mode.
-(use-package calendar
-  :custom
-  (calendar-mode-line-format nil)
-  (calendar-date-style 'iso)
-  (calendar-mark-holidays-flag t)
-  (calendar-week-start-day 1)
-  ;; :config
-  ;; (setf (car calendar-time-display-form) '24-hours)
-  )
-
-
-;; Exporter backend for github-flavoured markdown.
-(use-package ox-gfm :ensure t
-  :after ox
-  :demand t)
-
+(warn "init-org.el is deprecated; functionality has moved to modules/org/")
 
 (provide 'init-org)
 

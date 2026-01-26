@@ -1,24 +1,19 @@
-;;; init-theme.el --- DESC -*- lexical-binding: t; -*-
+;;; init-theme.el --- DEPRECATED: Migrated to modules/theme/ -*- lexical-binding: t; -*-
 
 ;;; Commentary:
 
+;; DEPRECATED: This file has been migrated to modules/theme/.
+;;
+;; The module system now handles loading this configuration.
+;; This file will be removed in a future version.
+;;
+;; Migration path:
+;; - All functionality is now in modules/theme/init.el
+;; - This file exists only for backward compatibility
+
 ;;; Code:
 
-(custom-theme-set-faces 'user
-                        '(region ((((background light))
-                                   (:inherit lazy-highlight))))
-                        '(iedit-occurrence ((t (:inherit query-replace))))
-                        ;; Dim delimiters like commas, semicolons, etc.
-                        '(font-lock-delimiter-face ((t (:inherit shadow)))))
-
-
-
-;; Dark theme.
-(use-package catppuccin-theme :ensure t :demand t
-  :init
-  (setq +theme-dark 'catppuccin)
-  (+theme-update))
-
+(warn "init-theme.el is deprecated; functionality has moved to modules/theme/")
 
 (provide 'init-theme)
 

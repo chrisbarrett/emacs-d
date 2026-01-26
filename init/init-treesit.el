@@ -1,50 +1,19 @@
-;;; init-treesit.el --- Tree-Sitter -*- lexical-binding: t; -*-
+;;; init-treesit.el --- DEPRECATED: Migrated to modules/treesit/ -*- lexical-binding: t; -*-
 
 ;;; Commentary:
 
+;; DEPRECATED: This file has been migrated to modules/treesit/.
+;;
+;; The module system now handles loading this configuration.
+;; This file will be removed in a future version.
+;;
+;; Migration path:
+;; - All functionality is now in modules/treesit/init.el
+;; - This file exists only for backward compatibility
+
 ;;; Code:
 
-(use-package treesit
-  :custom
-  (treesit-enabled-modes t) ; all
-  (treesit-auto-install-grammar 'always))
-
-
-;; Use tree-sitter to mark syntactic elements.
-;;
-;; Use +/- to mark syntactic elements with tree-sitter. However, if I don't have
-;; a selection, make - call avy.
-(use-package expreg
-  :ensure t
-  :functions expreg-expand
-  :init
-  (defun +expreg-expand-n (n)
-    "Expand to N syntactic units, defaulting to 1 if none is provided interactively."
-    (interactive "p")
-    (dotimes (_ n)
-      (expreg-expand)))
-
-  (defun +expreg-expand-dwim ()
-    "Do-What-I-Mean `expreg-expand' to start with symbol or word.
-If over a real symbol, mark that directly, else start with a
-word.  Fall back to regular `expreg-expand'."
-    (interactive)
-
-    (when (bound-and-true-p iedit-mode)
-      (iedit-done))
-
-    (let ((symbol (bounds-of-thing-at-point 'symbol)))
-      (cond
-       ((equal (bounds-of-thing-at-point 'word) symbol)
-        (+expreg-expand-n 1))
-       (symbol (+expreg-expand-n 2))
-       (t (expreg-expand)))))
-
-  :general
-  (:states '(normal motion)
-           "-" (general-predicate-dispatch #'avy-goto-char-timer
-                 (region-active-p) #'expreg-contract)
-           "+" #'+expreg-expand-dwim))
+(warn "init-treesit.el is deprecated; functionality has moved to modules/treesit/")
 
 (provide 'init-treesit)
 
