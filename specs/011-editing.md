@@ -115,6 +115,17 @@ Uses custom hooks instead of file watcher for efficiency.
 | :-------------------- | :---- | :------------------------ |
 | recentf-max-saved-items | 100 | Max files in history      |
 
+### Read-Only Protection
+
+Files in vendor directories are automatically opened in read-only mode.
+
+| Path Pattern     | Effect                                |
+| :--------------- | :------------------------------------ |
+| `/vendor/`       | Opens in read-only mode               |
+| `/elpaca/`       | Opens in read-only mode               |
+| `/node_modules/` | Opens in read-only mode               |
+| `/.git/`         | Excluded (allows git operations)      |
+
 ### Keybinding
 
 | Binding    | Command                |
@@ -125,10 +136,11 @@ Uses custom hooks instead of file watcher for efficiency.
 
 ### Functions
 
-| Function                        | Description                                  |
-| :------------------------------ | :------------------------------------------- |
-| +auto-revert-current-buffer-h   | Revert current buffer if file-backed and stale |
-| +auto-revert-visible-buffers-h  | Revert all visible file buffers              |
+| Function                            | Description                                      |
+| :---------------------------------- | :----------------------------------------------- |
+| +auto-revert-current-buffer-h       | Revert current buffer if file-backed and stale   |
+| +auto-revert-visible-buffers-h      | Revert all visible file buffers                  |
+| +file-should-be-opened-read-only-p  | Check if file path should be opened read-only    |
 
 ## Testable Properties
 
@@ -141,3 +153,5 @@ Uses custom hooks instead of file watcher for efficiency.
 7. `uniquify-buffer-name-style` is 'forward
 8. `recentf-mode` is enabled after trigger
 9. `auto-revert-use-notify` is nil
+10. `+file-should-be-opened-read-only-p` returns t for /vendor/ paths
+11. `+file-should-be-opened-read-only-p` returns nil for /.git/ paths
