@@ -291,6 +291,201 @@
       (+modules-install-packages '())
       (should-not elpaca-called))))
 
+
+;;; Tests for +modules--discover-lib-files
+
+(ert-deftest modules--discover-lib-files--finds-lib-el ()
+  "Discovers lib.el in module root."
+  (let ((temp-dir (make-temp-file "module-" t)))
+    (unwind-protect
+        (progn
+          (write-region "" nil (expand-file-name "lib.el" temp-dir))
+          (let ((result (+modules--discover-lib-files temp-dir)))
+            (should (= 1 (length result)))
+            (should (string-suffix-p "lib.el" (car result)))))
+      (delete-directory temp-dir t))))
+
+(ert-deftest modules--discover-lib-files--finds-lib-directory ()
+  "Discovers .el files in lib/ subdirectory."
+  (let ((temp-dir (make-temp-file "module-" t)))
+    (unwind-protect
+        (let ((lib-dir (expand-file-name "lib" temp-dir)))
+          (make-directory lib-dir)
+          (write-region "" nil (expand-file-name "utils.el" lib-dir))
+          (write-region "" nil (expand-file-name "helpers.el" lib-dir))
+          (let ((result (+modules--discover-lib-files temp-dir)))
+            (should (= 2 (length result)))))
+      (delete-directory temp-dir t))))
+
+(ert-deftest modules--discover-lib-files--finds-both ()
+  "Discovers lib.el and lib/*.el files."
+  (let ((temp-dir (make-temp-file "module-" t)))
+    (unwind-protect
+        (let ((lib-dir (expand-file-name "lib" temp-dir)))
+          (make-directory lib-dir)
+          (write-region "" nil (expand-file-name "lib.el" temp-dir))
+          (write-region "" nil (expand-file-name "extra.el" lib-dir))
+          (let ((result (+modules--discover-lib-files temp-dir)))
+            (should (= 2 (length result)))))
+      (delete-directory temp-dir t))))
+
+(ert-deftest modules--discover-lib-files--returns-nil-when-no-libs ()
+  "Returns nil when no lib files exist."
+  (let ((temp-dir (make-temp-file "module-" t)))
+    (unwind-protect
+        (progn
+          (write-region "" nil (expand-file-name "init.el" temp-dir))
+          (should (null (+modules--discover-lib-files temp-dir))))
+      (delete-directory temp-dir t))))
+
+
+;;; Tests for +modules--extract-autoloads
+
+(ert-deftest modules--extract-autoloads--extracts-defun ()
+  "Extracts autoload-annotated defun."
+  (let ((temp-file (make-temp-file "lib" nil ".el")))
+    (unwind-protect
+        (progn
+          (write-region ";;;###autoload\n(defun my-func () nil)" nil temp-file)
+          (let ((result (+modules--extract-autoloads temp-file)))
+            (should (= 1 (length result)))
+            (should (eq 'defun (caar (car result))))
+            (should (eq 'my-func (cadr (car (car result)))))))
+      (delete-file temp-file))))
+
+(ert-deftest modules--extract-autoloads--extracts-multiple ()
+  "Extracts multiple autoload-annotated forms."
+  (let ((temp-file (make-temp-file "lib" nil ".el")))
+    (unwind-protect
+        (progn
+          (write-region ";;;###autoload\n(defun func-1 () nil)\n\n;;;###autoload\n(defun func-2 () nil)"
+                        nil temp-file)
+          (let ((result (+modules--extract-autoloads temp-file)))
+            (should (= 2 (length result)))))
+      (delete-file temp-file))))
+
+(ert-deftest modules--extract-autoloads--ignores-non-autoload ()
+  "Ignores forms not preceded by ;;;###autoload."
+  (let ((temp-file (make-temp-file "lib" nil ".el")))
+    (unwind-protect
+        (progn
+          (write-region "(defun not-autoloaded () nil)\n\n;;;###autoload\n(defun is-autoloaded () nil)"
+                        nil temp-file)
+          (let ((result (+modules--extract-autoloads temp-file)))
+            (should (= 1 (length result)))
+            (should (eq 'is-autoloaded (cadr (car (car result)))))))
+      (delete-file temp-file))))
+
+(ert-deftest modules--extract-autoloads--returns-nil-for-missing-file ()
+  "Returns nil when file doesn't exist."
+  (should (null (+modules--extract-autoloads "/nonexistent/file.el"))))
+
+
+;;; Tests for +modules--autoload-form
+
+(ert-deftest modules--autoload-form--defun-with-docstring ()
+  "Generates autoload for defun with docstring."
+  (let ((form '(defun my-cmd () "Do thing." (interactive) nil)))
+    (should (equal '(autoload 'my-cmd "/path/lib.el" "Do thing." t)
+                   (+modules--autoload-form form "/path/lib.el")))))
+
+(ert-deftest modules--autoload-form--defun-without-docstring ()
+  "Generates autoload for defun without docstring."
+  (let ((form '(defun my-cmd () (interactive) nil)))
+    (should (equal '(autoload 'my-cmd "/path/lib.el" nil t)
+                   (+modules--autoload-form form "/path/lib.el")))))
+
+(ert-deftest modules--autoload-form--cl-defun ()
+  "Generates autoload for cl-defun."
+  (let ((form '(cl-defun my-cmd (&key arg) "Doc." arg)))
+    (should (equal '(autoload 'my-cmd "/path/lib.el" "Doc." t)
+                   (+modules--autoload-form form "/path/lib.el")))))
+
+(ert-deftest modules--autoload-form--defmacro ()
+  "Generates autoload for defmacro."
+  (let ((form '(defmacro my-macro (x) "Doc." `(foo ,x))))
+    (should (equal '(autoload 'my-macro "/path/lib.el" "Doc." nil 'macro)
+                   (+modules--autoload-form form "/path/lib.el")))))
+
+(ert-deftest modules--autoload-form--define-minor-mode ()
+  "Generates autoload for define-minor-mode."
+  (let ((form '(define-minor-mode my-mode "Toggle mode." :lighter " My")))
+    (should (equal '(autoload 'my-mode "/path/lib.el" "Toggle mode." t)
+                   (+modules--autoload-form form "/path/lib.el")))))
+
+(ert-deftest modules--autoload-form--define-derived-mode ()
+  "Generates autoload for define-derived-mode."
+  (let ((form '(define-derived-mode my-mode prog-mode "MyMode" "Doc.")))
+    (should (equal '(autoload 'my-mode "/path/lib.el" "Doc." t)
+                   (+modules--autoload-form form "/path/lib.el")))))
+
+(ert-deftest modules--autoload-form--returns-nil-for-unknown ()
+  "Returns nil for unrecognized forms."
+  (let ((form '(setq foo 'bar)))
+    (should (null (+modules--autoload-form form "/path/lib.el")))))
+
+
+;;; Tests for +modules-collect-autoloads
+
+(ert-deftest modules--collect-autoloads--collects-from-modules ()
+  "Collects autoloads from all discovered modules."
+  (let ((+modules-directory (make-temp-file "modules-" t)))
+    (unwind-protect
+        (let ((module-dir (expand-file-name "my-module" +modules-directory)))
+          (make-directory module-dir)
+          (write-region ";;;###autoload\n(defun my-func () nil)"
+                        nil (expand-file-name "lib.el" module-dir))
+          (let ((result (+modules-collect-autoloads)))
+            (should (= 1 (length result)))
+            (should (eq 'my-func (cadr (car (car result)))))))
+      (delete-directory +modules-directory t))))
+
+(ert-deftest modules--collect-autoloads--empty-when-no-autoloads ()
+  "Returns empty list when no autoloads found."
+  (let ((+modules-directory (make-temp-file "modules-" t)))
+    (unwind-protect
+        (let ((module-dir (expand-file-name "my-module" +modules-directory)))
+          (make-directory module-dir)
+          (write-region "(defun not-autoloaded () nil)"
+                        nil (expand-file-name "lib.el" module-dir))
+          (should (null (+modules-collect-autoloads))))
+      (delete-directory +modules-directory t))))
+
+
+;;; Tests for +modules-register-autoloads
+
+(ert-deftest modules--register-autoloads--makes-symbol-fboundp ()
+  "Registering autoloads makes symbol fboundp."
+  (let ((temp-file (make-temp-file "lib" nil ".el"))
+        (sym (make-symbol "test-autoloaded-func")))
+    (unwind-protect
+        (progn
+          ;; Intern symbol so we can check fboundp
+          (setq sym (intern (symbol-name sym)))
+          ;; Ensure symbol is not bound
+          (fmakunbound sym)
+          (should-not (fboundp sym))
+          ;; Create autoload entry
+          (let ((entries `(((defun ,sym () "Test." nil) . ,temp-file))))
+            (+modules-register-autoloads entries))
+          ;; Symbol should now be fboundp (as autoload)
+          (should (fboundp sym))
+          (should (autoloadp (symbol-function sym))))
+      (when (fboundp sym)
+        (fmakunbound sym))
+      (delete-file temp-file))))
+
+(ert-deftest modules--register-autoloads--handles-empty-list ()
+  "Handles empty autoload list without error."
+  (+modules-register-autoloads nil)
+  (+modules-register-autoloads '()))
+
+(ert-deftest modules--register-autoloads--skips-unknown-forms ()
+  "Skips forms that can't be converted to autoloads."
+  (let ((entries '(((setq foo 'bar) . "/path/lib.el"))))
+    ;; Should not error
+    (+modules-register-autoloads entries)))
+
 (provide '+modules-tests)
 
 ;;; +modules-tests.el ends here

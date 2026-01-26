@@ -90,6 +90,93 @@ passed to the `elpaca' macro for installation."
     (dolist (spec package-specs)
       (eval `(elpaca ,spec) t))))
 
+
+;;; Autoload Registration
+
+(defun +modules--discover-lib-files (module-dir)
+  "Discover library files in MODULE-DIR.
+
+Returns a list of absolute paths to lib files. Checks for:
+- lib.el in the module root
+- All .el files in the lib/ subdirectory"
+  (let ((lib-el (expand-file-name "lib.el" module-dir))
+        (lib-dir (expand-file-name "lib" module-dir)))
+    (append
+     (when (file-exists-p lib-el) (list lib-el))
+     (when (file-directory-p lib-dir)
+       (directory-files lib-dir t "\\.el\\'" t)))))
+
+(defun +modules--extract-autoloads (lib-file)
+  "Extract autoload-annotated forms from LIB-FILE.
+
+Returns an alist of (FORM . SOURCE-FILE) pairs for each form
+preceded by ;;;###autoload."
+  (when (file-exists-p lib-file)
+    (let ((autoloads nil))
+      (with-temp-buffer
+        (insert-file-contents lib-file)
+        (goto-char (point-min))
+        (while (re-search-forward "^;;;###autoload" nil t)
+          (forward-line 1)
+          (let ((form (ignore-errors (read (current-buffer)))))
+            (when form
+              (push (cons form lib-file) autoloads)))))
+      (nreverse autoloads))))
+
+(defun +modules--autoload-form (form source-file)
+  "Generate an autoload form for FORM defined in SOURCE-FILE.
+
+FORM should be a definition form like defun, defmacro, or
+define-minor-mode. Returns an autoload form or nil if FORM is
+not a recognized definition type."
+  (pcase form
+    ;; defun/cl-defun - check for optional docstring
+    (`(,(and (or 'defun 'defun* 'cl-defun) _) ,name ,_args ,docstring . ,_)
+     `(autoload ',name ,source-file ,(if (stringp docstring) docstring nil) t))
+    (`(,(and (or 'defun 'defun* 'cl-defun) _) ,name ,_args . ,_)
+     `(autoload ',name ,source-file nil t))
+    ;; defmacro/cl-defmacro
+    (`(,(and (or 'defmacro 'cl-defmacro) _) ,name ,_args ,docstring . ,_)
+     `(autoload ',name ,source-file ,(if (stringp docstring) docstring nil) nil 'macro))
+    (`(,(and (or 'defmacro 'cl-defmacro) _) ,name ,_args . ,_)
+     `(autoload ',name ,source-file nil nil 'macro))
+    ;; define-minor-mode
+    (`(define-minor-mode ,name ,docstring . ,_)
+     `(autoload ',name ,source-file ,(if (stringp docstring) docstring nil) t))
+    ;; define-derived-mode
+    (`(define-derived-mode ,name ,_parent ,_name ,docstring . ,_)
+     `(autoload ',name ,source-file ,(if (stringp docstring) docstring nil) t))
+    (`(define-derived-mode ,name ,_parent ,_name . ,_)
+     `(autoload ',name ,source-file nil t))
+    ;; Unrecognized form
+    (_ nil)))
+
+(defun +modules-collect-autoloads ()
+  "Collect all autoload entries from discovered modules.
+
+Returns an alist of (FORM . SOURCE-FILE) pairs for all
+autoload-annotated definitions in module lib files."
+  (let ((modules (+modules-discover)))
+    (apply #'append
+           (mapcar (lambda (module-dir)
+                     (let ((lib-files (+modules--discover-lib-files module-dir)))
+                       (apply #'append
+                              (mapcar #'+modules--extract-autoloads lib-files))))
+                   modules))))
+
+(defun +modules-register-autoloads (autoload-entries)
+  "Register AUTOLOAD-ENTRIES with Emacs.
+
+AUTOLOAD-ENTRIES is an alist of (FORM . SOURCE-FILE) pairs.
+Each FORM is converted to an autoload and evaluated, making
+the symbol `fboundp' without loading its source file."
+  (dolist (entry autoload-entries)
+    (let* ((form (car entry))
+           (source-file (cdr entry))
+           (autoload-form (+modules--autoload-form form source-file)))
+      (when autoload-form
+        (eval autoload-form t)))))
+
 (provide '+modules)
 
 ;;; +modules.el ends here

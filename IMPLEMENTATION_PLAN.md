@@ -98,7 +98,7 @@ Wire package specs into elpaca installation.
 
 ### 2.4 Implement autoload registration
 
-**Status:** Not started
+**Status:** Complete
 
 Register autoloads from `lib.el` and `lib/**/*.el` in modules.
 
@@ -156,4 +156,4 @@ For each confirmed feature:
 Execute in order listed. Each task should be completed and committed
 before starting the next.
 
-Current task: **2.4 Implement autoload registration**
+Current task: **2.5 Implement init.el loader**
