@@ -347,28 +347,29 @@ After 5.1-5.3 complete and tested:
 
 ### 5.5 Evaluate bootstrap file migration
 
-**Status:** Not started
+**Status:** Complete
 
-Evaluate whether init-elpaca.el, init-hooks.el, init-system.el, and
-init-readonly.el can be moved into modules/core/ or loaded via the
-module system.
+Evaluated bootstrap file migration. **Decision: Do not migrate.**
 
-Constraints:
-- These files must load BEFORE the module system initializes
-- init-elpaca.el bootstraps the package manager
-- init-hooks.el defines lifecycle hooks used by modules
-- init-system.el sets up exec-path-from-shell, envrc
-- init-readonly.el protects read-only files
+Analysis:
+- init-hooks.el defines `+first-*-hook` hooks used by modules' `:after-call`
+- init-system.el uses hooks from init-hooks.el
+- init-readonly.el depends on init-elpaca.el for `+chrisbarrett-elpaca-repos`
+- init-elpaca.el configures Elpaca after bootstrap but before modules
 
-May require module system changes to support "pre-init" modules.
+The dependency graph prevents migration:
+1. early-init.el loads +corelib.el, +load-incrementally.el, theme-lib.el
+2. init.el bootstraps Elpaca, loads +modules.el
+3. +modules.el registers packages and autoloads
+4. init/*.el bootstrap files run (hooks must exist before module init.el)
+5. Module init.el files load (can now use +first-*-hook)
 
-**Acceptance:** Document decision in AGENTS.md; implement if feasible
+Bootstrap files define infrastructure that module init.el files depend on.
+
+**Acceptance:** Documented in CLAUDE.md "Bootstrap Architecture" section
 
 ---
 
-## Task Priority
+## Phase 5 Complete
 
-Execute in order listed. Each task should be completed and committed
-before starting the next.
-
-Current task: **5.5 Evaluate bootstrap file migration**
+All tasks in Phase 5 (Cleanup) are complete. The module migration is finished.

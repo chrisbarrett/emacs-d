@@ -16,13 +16,35 @@ Emacs 30+ configuration with Elpaca, Evil mode, and modular architecture.
 | :------------------- | :---------------------------- |
 | `init.el`            | Entry point                   |
 | `early-init.el`      | UI, themes, performance       |
+| `init/`              | Bootstrap files (pre-module)  |
 | `lisp/`              | Core libraries (`+*.el`)      |
-| `config/`            | Feature modules (`mod-*.el`)  |
 | `modules/`           | Self-contained module units   |
 | `specs/`             | Active spec symlinks          |
 | `templates/`         | File templates                |
 | `capture-templates/` | Org capture templates         |
 | `site/`              | Site-specific (not committed) |
+
+### Bootstrap Architecture
+
+The init sequence loads files in this order:
+
+1. `early-init.el` → `+corelib.el`, `+load-incrementally.el`, `theme-lib.el`
+2. `init.el` → Elpaca bootstrap, `+modules.el`
+3. Module packages queued via `+modules-install-packages`
+4. Module autoloads registered via `+modules-register-autoloads`
+5. `init/*.el` bootstrap files (elpaca, hooks, system, readonly)
+6. Module `init.el` files via `+modules-load-inits`
+7. `site/*.el` local customizations
+
+**Bootstrap files cannot be migrated to modules** because they define
+infrastructure that modules depend on:
+
+| File               | Why It's Pre-Module                          |
+| :----------------- | :------------------------------------------- |
+| `init-hooks.el`    | Defines `+first-*-hook` used by `:after-call`|
+| `init-elpaca.el`   | Configures Elpaca after bootstrap            |
+| `init-system.el`   | Requires hooks from `init-hooks.el`          |
+| `init-readonly.el` | Requires `init-elpaca.el` for repo paths     |
 
 ## Module System
 
