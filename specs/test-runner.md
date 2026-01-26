@@ -116,10 +116,10 @@ Makefile-driven checks for staged files, running only affected targets.
 
 ## Tasks
 
-- [ ] [R1] Create `scripts/affected.sh` with dependency parser
-- [ ] [R1] Handle `load`, `require`, `use-package :after` patterns
-- [ ] [R2] Add `build-affected` target to Makefile
-- [ ] [R3] Add `test-affected` target to Makefile
-- [ ] [R4] Add `lint-affected` target to Makefile
-- [ ] [R5] Add `pre-commit` target composing all checks
-- [ ] [R5] Update `make setup-hooks` to install pre-commit hook
+- [x] [R1] Create `scripts/affected.sh` with dependency parser
+- [x] [R1] Handle `load`, `require`, `use-package :after` patterns
+- [x] [R2] Add `build-affected` target to Makefile
+- [x] [R3] Add `test-affected` target to Makefile
+- [x] [R4] Add `lint-affected` target to Makefile
+- [x] [R5] Add `pre-commit` target composing all checks
+- [x] [R5] Update `make setup-hooks` to install pre-commit hook

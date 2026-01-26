@@ -101,10 +101,10 @@ Order: packages.eld (all) → autoloads (all) → init.el (all)
 
 ## Tasks
 
-- [ ] [R1] Implement module discovery function
-- [ ] [R2] Implement packages.eld reader
-- [ ] [R2] Integrate with elpaca
-- [ ] [R3] Implement autoload registration
-- [ ] [R4] Implement init.el loader
-- [ ] [R5] Document active specs workflow
-- [ ] [R6] Add test runner script
+- [x] [R1] Implement module discovery function
+- [x] [R2] Implement packages.eld reader
+- [x] [R2] Integrate with elpaca
+- [x] [R3] Implement autoload registration
+- [x] [R4] Implement init.el loader
+- [x] [R5] Document active specs workflow
+- [x] [R6] Add test runner script
