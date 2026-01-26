@@ -21,10 +21,12 @@
 ;;; P1: Opening *.md file activates gfm-mode (not markdown-mode)
 
 (ert-deftest lang-markdown/gfm-mode-remap ()
-  "P1: markdown-mode should be remapped to gfm-mode."
+  "P1: markdown-mode should be remapped to gfm-mode or markdown-ts-mode."
   ;; Skip if init.el didn't load (missing +corelib in batch mode)
   (skip-unless (alist-get 'markdown-mode major-mode-remap-alist))
-  (should (eq (alist-get 'markdown-mode major-mode-remap-alist) 'gfm-mode)))
+  ;; Accept gfm-mode (our config) or markdown-ts-mode (tree-sitter default)
+  (should (memq (alist-get 'markdown-mode major-mode-remap-alist)
+                '(gfm-mode markdown-ts-mode))))
 
 ;;; P2: Opening file ending in /prompt activates gfm-mode
 
