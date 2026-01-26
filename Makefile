@@ -11,7 +11,9 @@ help:
 	@echo "  setup-hooks    - Install prek hooks"
 
 test: setup-hooks
-	nix develop --command prek run --all-files
+	./scripts/run-tests.sh
+	./scripts/byte-compile.sh
+	./scripts/checkdoc.sh
 
 test-quick:
 	@affected=$$(./scripts/affected-tests.sh); \
