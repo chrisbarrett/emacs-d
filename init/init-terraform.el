@@ -1,39 +1,19 @@
-;;; init-terraform.el --- Configuration for terraform & HCL dialects -*- lexical-binding: t; -*-
+;;; init-terraform.el --- DEPRECATED: Migrated to modules/lang-terraform/ -*- lexical-binding: t; -*-
 
 ;;; Commentary:
 
+;; DEPRECATED: This file has been migrated to modules/lang-terraform/.
+;;
+;; The module system now handles loading this configuration.
+;; This file will be removed in a future version.
+;;
+;; Migration path:
+;; - All functionality is now in modules/lang-terraform/init.el
+;; - This file exists only for backward compatibility
+
 ;;; Code:
 
-(require '+corelib)
-
-(use-package hcl-mode :ensure t
-  :mode ("\\.hcl\\'"))
-
-(use-package terraform-mode :ensure t
-  :mode ("\\.tf\\'"))
-
-;; Ignore Gruntwork Pipelines drift history files.
-(use-package project
-  :config
-  (pushnew! project-vc-ignores ".drift-history.json"))
-
-(use-package apheleia
-  :defines (apheleia-formatters apheleia-mode-alist)
-  :config
-  ;; Use `tofu' for formatting terraform files if on PATH.
-  (add-to-list 'apheleia-formatters '(opentofu . ("tofu" "fmt" "-")))
-  (alist-set! apheleia-mode-alist 'terraform-mode 'opentofu)
-
-  ;; Use `terragrunt' to format HCL files.
-  (add-to-list 'apheleia-formatters '(terragrunt . ("terragrunt" "hcl" "fmt" "--stdin")))
-  (alist-set! apheleia-mode-alist 'hcl-mode '(terragrunt hclfmt)))
-
-
-(use-package +file-templates
-  :config
-  (+define-file-template (rx "terragrunt.hcl" eos) "terragrunt/terragrunt.eld")
-  (+define-file-template (rx "root.hcl" eos) "terragrunt/root.eld")
-  (+define-file-template (rx "region.hcl" eos) "terragrunt/region.eld"))
+(warn "init-terraform.el is deprecated; functionality has moved to modules/lang-terraform/")
 
 (provide 'init-terraform)
 

@@ -1,23 +1,19 @@
-;;; init-auth.el --- Authentication configuration -*- lexical-binding: t; -*-
+;;; init-auth.el --- DEPRECATED: Migrated to modules/auth/ -*- lexical-binding: t; -*-
 
 ;;; Commentary:
 
-;; Auth-source backend for 1Password via the `op' CLI.
-;; Enables auth-source-search to retrieve credentials from 1Password for
-;; packages like Forge, TRAMP, etc.
+;; DEPRECATED: This file has been migrated to modules/auth/.
+;;
+;; The module system now handles loading this configuration.
+;; This file will be removed in a future version.
+;;
+;; Migration path:
+;; - All functionality is now in modules/auth/init.el
+;; - This file exists only for backward compatibility
 
 ;;; Code:
 
-(use-package auth-source-op
-  :ensure-unless-local ("~/src/chrisbarrett/emacs-auth-source-op"
-                        (auth-source-op :host github :repo "chrisbarrett/emacs-auth-source-op"))
-  :after auth-source
-  :demand t
-  :custom
-  (auth-sources '(1password))
-  (auth-source-op-vaults '("Emacs"))
-  :config
-  (auth-source-op-enable))
+(warn "init-auth.el is deprecated; functionality has moved to modules/auth/")
 
 (provide 'init-auth)
 

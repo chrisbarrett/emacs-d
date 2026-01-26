@@ -1,15 +1,19 @@
-;;; init-reader.el --- Document reader -*- lexical-binding: t; -*-
+;;; init-reader.el --- DEPRECATED: Migrated to modules/reader/ -*- lexical-binding: t; -*-
 
 ;;; Commentary:
 
+;; DEPRECATED: This file has been migrated to modules/reader/.
+;;
+;; The module system now handles loading this configuration.
+;; This file will be removed in a future version.
+;;
+;; Migration path:
+;; - All functionality is now in modules/reader/init.el
+;; - This file exists only for backward compatibility
+
 ;;; Code:
 
-;; General-purpose document reader. Uses native modules with buffered
-;; rendering to improve performance.
-(use-package reader ; native deps--package injected via Nix
-  :init
-  (require 'reader-autoloads))
-
+(warn "init-reader.el is deprecated; functionality has moved to modules/reader/")
 
 (provide 'init-reader)
 

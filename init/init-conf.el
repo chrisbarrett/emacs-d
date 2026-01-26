@@ -1,30 +1,19 @@
-;;; init-conf.el --- Configuration files -*- lexical-binding: t; -*-
+;;; init-conf.el --- DEPRECATED: Migrated to modules/lang-conf/ -*- lexical-binding: t; -*-
 
 ;;; Commentary:
 
+;; DEPRECATED: This file has been migrated to modules/lang-conf/.
+;;
+;; The module system now handles loading this configuration.
+;; This file will be removed in a future version.
+;;
+;; Migration path:
+;; - All functionality is now in modules/lang-conf/init.el
+;; - This file exists only for backward compatibility
+
 ;;; Code:
 
-(require '+corelib)
-
-;; Unix configuration files
-(use-package conf-mode
-  :mode ("rc\\'" "\\.dockerignore\\'" "\\.gitignore\\'"))
-
-
-;; KDL file format used by Zellij etc.
-(use-package kdl-ts-mode :ensure (:host github :repo "merrickluo/kdl-ts-mode")
-  :mode "\\.kdl\\'")
-
-
-(use-package json-ts-mode
-  :hook (json-ts-mode-local-vars-hook . eglot-ensure))
-
-
-(use-package yaml-ts-mode
-  :hook (yaml-ts-mode-local-vars-hook . eglot-ensure)
-  :config
-  (setq-hook! 'yaml-ts-mode-hook
-    tab-width 2))
+(warn "init-conf.el is deprecated; functionality has moved to modules/lang-conf/")
 
 (provide 'init-conf)
 

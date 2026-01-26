@@ -1,20 +1,19 @@
-;;; init-text.el --- General text file editing -*- lexical-binding: t; -*-
+;;; init-text.el --- DEPRECATED: Migrated to modules/lang-text/ -*- lexical-binding: t; -*-
 
 ;;; Commentary:
 
+;; DEPRECATED: This file has been migrated to modules/lang-text/.
+;;
+;; The module system now handles loading this configuration.
+;; This file will be removed in a future version.
+;;
+;; Migration path:
+;; - All functionality is now in modules/lang-text/init.el
+;; - This file exists only for backward compatibility
+
 ;;; Code:
 
-(use-package text-mode
-  ;; Emacs' general parent mode for non-programming-language text files.
-
-  :mode  ("/LICENSE\\'")
-
-  ;; Not sure of the performance impact of this... leave off for now.
-  ;;
-  ;; :hook (text-mode-hook . visual-line-mode)
-
-  :custom
-  (text-mode-ispell-word-completion nil))
+(warn "init-text.el is deprecated; functionality has moved to modules/lang-text/")
 
 (provide 'init-text)
 

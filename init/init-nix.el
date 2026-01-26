@@ -1,37 +1,19 @@
-;;; init-nix.el --- Nix configuration language -*- lexical-binding: t; -*-
+;;; init-nix.el --- DEPRECATED: Migrated to modules/lang-nix/ -*- lexical-binding: t; -*-
 
 ;;; Commentary:
 
+;; DEPRECATED: This file has been migrated to modules/lang-nix/.
+;;
+;; The module system now handles loading this configuration.
+;; This file will be removed in a future version.
+;;
+;; Migration path:
+;; - All functionality is now in modules/lang-nix/init.el
+;; - This file exists only for backward compatibility
+
 ;;; Code:
 
-(require '+corelib)
-
-(+dirlocals-set "/nix/store/"
-  '((nil . ((mode . read-only)))))
-
-
-(use-package nix-ts-mode :ensure t
-  :mode "\\.nix\\'"
-  :hook (nix-ts-mode-local-vars-hook . eglot-ensure)
-  :init
-  (add-to-list 'auto-mode-alist (cons (rx "/flake.lock" eos) #'json-ts-mode)))
-
-
-(use-package +file-templates
-  :config
-  (+define-file-template (rx "flake.nix" eos) "flake.eld"))
-
-
-(use-package apheleia
-  :defines apheleia-formatters
-  :config
-  (add-to-list 'apheleia-formatters '(nixpkgs-fmt "nixpkgs-fmt"))
-  (setq-hook! 'nix-ts-mode-hook apheleia-formatter 'nixpkgs-fmt))
-
-
-(use-package project
-  :config
-  (pushnew! project-vc-extra-root-markers "flake.nix"))
+(warn "init-nix.el is deprecated; functionality has moved to modules/lang-nix/")
 
 (provide 'init-nix)
 
