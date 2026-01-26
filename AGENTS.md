@@ -18,9 +18,48 @@ Emacs 30+ configuration with Elpaca, Evil mode, and modular architecture.
 | `early-init.el`      | UI, themes, performance       |
 | `lisp/`              | Core libraries (`+*.el`)      |
 | `config/`            | Feature modules (`mod-*.el`)  |
+| `modules/`           | Self-contained module units   |
+| `specs/`             | Active spec symlinks          |
 | `templates/`         | File templates                |
 | `capture-templates/` | Org capture templates         |
 | `site/`              | Site-specific (not committed) |
+
+## Module System
+
+Modules are self-contained units under `modules/{slug}/`:
+
+| File           | Purpose                     |
+| :------------- | :-------------------------- |
+| `spec.md`      | Module specification        |
+| `packages.eld` | Elpaca specs (data only)    |
+| `init.el`      | Evaluated during init       |
+| `lib.el`       | Autoloaded functions        |
+| `lib/*.el`     | Alternative: multiple libs  |
+| `tests.el`     | ERT tests                   |
+
+### Active Specs Workflow
+
+Active specs are symlinks in `specs/` pointing to `modules/{slug}/spec.md`.
+
+**Promote** a spec (mark as active):
+
+```bash
+ln -s ../modules/{slug}/spec.md specs/NNN-{slug}.md
+```
+
+**Demote** a spec (mark as stable):
+
+```bash
+rm specs/NNN-{slug}.md
+```
+
+**Verify** active specs:
+
+```bash
+readlink specs/*.md  # Should show ../modules/{slug}/spec.md paths
+```
+
+Spec numbers (NNN) indicate priority order during development.
 
 ## Code Style
 

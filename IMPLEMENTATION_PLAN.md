@@ -116,7 +116,7 @@ Order: packages.eld (all) → autoloads (all) → init.el (all)
 
 ### 2.6 Document active specs workflow
 
-**Status:** Not started
+**Status:** Complete
 
 Document in CLAUDE.md how to promote/demote specs via symlinks.
 
