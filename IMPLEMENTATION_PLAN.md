@@ -130,12 +130,12 @@ Reverse-engineer existing config into feature specs.
 
 ### 3.1 Inventory files and identify feature groupings
 
-**Status:** Not started
+**Status:** Complete
 
 Analyze all files in config/, init/, lisp/, root.
 Group by coupling indicators (shared deps, cross-calls, require).
 
-**Output:** Feature list for user confirmation
+**Output:** FEATURE_INVENTORY.md with 47 feature groupings for user confirmation
 
 ### 3.2 Analyze features and write specs
 
@@ -156,4 +156,4 @@ For each confirmed feature:
 Execute in order listed. Each task should be completed and committed
 before starting the next.
 
-Current task: **2.6 Document active specs workflow**
+Current task: **3.2 Analyze features and write specs** (pending user confirmation of FEATURE_INVENTORY.md)
