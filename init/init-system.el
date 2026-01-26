@@ -6,11 +6,6 @@
 
 (require '+corelib)
 
-(use-package tramp
-  :config
-  (pushnew! tramp-remote-path 'tramp-own-remote-path))
-
-
 ;; Run a hook at midnight; cleans up old buffers by default. Useful for
 ;; preventing an Emacs server instance from drowning in open buffers
 ;; throughout the work week.
