@@ -7,7 +7,7 @@ repos:
     hooks:
       - id: ert-tests
         name: ERT Tests
-        entry: ./scripts/run-tests.sh
+        entry: ./scripts/run-tests.sh --affected
         language: script
         pass_filenames: false
         always_run: true
