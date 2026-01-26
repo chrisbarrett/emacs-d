@@ -257,23 +257,112 @@ init-readonly.el) - these must load before the module system.
 
 ---
 
-## Phase 5: Cleanup (Future Work)
+## Phase 5: Cleanup
 
-### 5.1 Remove deprecated init files
+Complete module migration by deprecating and removing legacy files.
+
+### 5.1 Remove explicit deprecated init loads from init.el
+
+**Status:** Complete
+
+Remove explicit `(use-package init-leader :demand t)` and
+`(use-package init-input :demand t)` from init.el. These files are:
+- Already deprecated (emit warnings)
+- Already loaded via the directory scan (lines 99-103)
+- Causing duplicate loading and redundant warnings
+
+**Acceptance:** `make test` passes; no duplicate deprecation warnings
+
+### 5.2 Deprecate config/*.el files
 
 **Status:** Not started
 
-After a stabilization period:
-1. Verify no users depend on deprecated init files
-2. Remove deprecated files entirely
-3. Update init.el to stop requiring them
+17 config files have been migrated to modules but not deprecated:
 
-### 5.2 Migrate bootstrap files to core module
+| File                    | Module                    |
+| ----------------------- | ------------------------- |
+| mod-beframe.el          | modules/nav/              |
+| mod-browse-at-remote.el | modules/vcs/              |
+| mod-bufler.el           | modules/nav/              |
+| mod-compilation.el      | modules/compile/          |
+| mod-eshell.el           | modules/shells/           |
+| mod-evil.el             | modules/evil/             |
+| mod-input-methods.el    | modules/input-methods/    |
+| mod-magit.el            | modules/vcs/              |
+| mod-ocaml.el            | modules/lang-ocaml/       |
+| mod-org-agenda.el       | modules/org-agenda/       |
+| mod-org-capture.el      | modules/org-capture/      |
+| mod-org-link.el         | modules/org/              |
+| mod-org.el              | modules/org/              |
+| mod-pulsar.el           | modules/ui/               |
+| mod-tabs.el             | modules/nav/              |
+| mod-tty-frames.el       | modules/nav/              |
+| mod-worktrees.el        | modules/vcs/              |
+
+Add DEPRECATED comments and deprecation warnings to each file.
+
+**Acceptance:** Each file has deprecation warning; `make test` passes
+
+### 5.3 Deprecate lisp/*.el files superseded by modules
 
 **Status:** Not started
 
-Evaluate whether init-hooks.el, init-system.el, and init-readonly.el can
-be loaded earlier in the module system rather than separately.
+Lisp files with module equivalents that can be deprecated:
+
+| File                    | Module lib.el             |
+| ----------------------- | ------------------------- |
+| +agenda.el              | modules/org-agenda/lib.el |
+| +anthropic.el           | modules/anthropic/lib.el  |
+| +capture.el             | modules/org-capture/lib.el|
+| +clockreport.el         | modules/org-agenda/lib.el |
+| +compile.el             | modules/compile/lib.el    |
+| +consult-imenu-elisp.el | modules/lang-lisp/lib.el  |
+| +edit-cmds.el           | modules/editing/lib.el    |
+| +evil-collection.el     | modules/evil/lib.el       |
+| +file-templates.el      | modules/templates/lib.el  |
+| +git.el                 | modules/vcs/lib.el        |
+| +theme.el               | modules/theme/lib.el      |
+| +window.el              | modules/nav/lib.el        |
+
+Core infrastructure files to KEEP (not deprecate):
+- +corelib.el (foundational macros used everywhere)
+- +modules.el (module system itself)
+- +load-incrementally.el (deferred loading system)
+- +files.el (file utilities used by multiple modules)
+- evil-tty-cursor.el (standalone utility)
+
+**Acceptance:** Deprecated files have warnings; `make test` passes
+
+### 5.4 Remove deprecated files entirely
+
+**Status:** Not started
+
+After 5.1-5.3 complete and tested:
+1. Remove deprecated init/*.el files (47 files)
+2. Remove deprecated config/*.el files (17 files)
+3. Remove deprecated lisp/*.el files (12 files)
+4. Update init.el to remove directory scan of init/ if empty
+
+**Acceptance:** `make test` passes; Emacs starts cleanly
+
+### 5.5 Evaluate bootstrap file migration
+
+**Status:** Not started
+
+Evaluate whether init-elpaca.el, init-hooks.el, init-system.el, and
+init-readonly.el can be moved into modules/core/ or loaded via the
+module system.
+
+Constraints:
+- These files must load BEFORE the module system initializes
+- init-elpaca.el bootstraps the package manager
+- init-hooks.el defines lifecycle hooks used by modules
+- init-system.el sets up exec-path-from-shell, envrc
+- init-readonly.el protects read-only files
+
+May require module system changes to support "pre-init" modules.
+
+**Acceptance:** Document decision in AGENTS.md; implement if feasible
 
 ---
 
@@ -282,4 +371,4 @@ be loaded earlier in the module system rather than separately.
 Execute in order listed. Each task should be completed and committed
 before starting the next.
 
-Current task: **All phases complete - Phase 5 deferred for stabilization period**
+Current task: **5.2 Deprecate config/*.el files**

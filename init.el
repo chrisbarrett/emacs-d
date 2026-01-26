@@ -82,10 +82,6 @@
     (when-let* ((loaded (seq-filter #'featurep +expensive-packages)))
       (warn "The following package(s) were loaded eagerly, rather than deferred: %S" loaded))))
 
-(use-package init-leader :demand t)
-
-(use-package init-input :demand t)
-
 (use-package +load-incrementally
   :demand t
   :hook (elpaca-after-init-hook . +load-packages-incrementally-h)
