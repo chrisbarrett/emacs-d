@@ -143,6 +143,104 @@
           (should (+modules--valid-module-p temp-dir)))
       (delete-directory temp-dir t))))
 
+;;; Tests for +modules-read-packages
+
+(ert-deftest modules--read-packages--returns-nil-when-no-file ()
+  "Reading packages returns nil when packages.eld doesn't exist."
+  (let ((temp-dir (make-temp-file "module-" t)))
+    (unwind-protect
+        (should (null (+modules-read-packages temp-dir)))
+      (delete-directory temp-dir t))))
+
+(ert-deftest modules--read-packages--reads-single-package ()
+  "Reading packages returns spec for single package."
+  (let ((temp-dir (make-temp-file "module-" t)))
+    (unwind-protect
+        (let ((packages-file (expand-file-name "packages.eld" temp-dir)))
+          (write-region "((evil-collection))" nil packages-file)
+          (let ((result (+modules-read-packages temp-dir)))
+            (should (equal '((evil-collection)) result))))
+      (delete-directory temp-dir t))))
+
+(ert-deftest modules--read-packages--reads-multiple-packages ()
+  "Reading packages returns list of multiple package specs."
+  (let ((temp-dir (make-temp-file "module-" t)))
+    (unwind-protect
+        (let ((packages-file (expand-file-name "packages.eld" temp-dir)))
+          (write-region "((evil :host github :repo \"emacs-evil/evil\")\n (evil-collection))"
+                        nil packages-file)
+          (let ((result (+modules-read-packages temp-dir)))
+            (should (= 2 (length result)))
+            (should (equal '(evil :host github :repo "emacs-evil/evil") (car result)))
+            (should (equal '(evil-collection) (cadr result)))))
+      (delete-directory temp-dir t))))
+
+(ert-deftest modules--read-packages--handles-lisp-data-comment ()
+  "Reading packages ignores mode line comment."
+  (let ((temp-dir (make-temp-file "module-" t)))
+    (unwind-protect
+        (let ((packages-file (expand-file-name "packages.eld" temp-dir)))
+          (write-region ";; -*- lisp-data -*-\n((consult))" nil packages-file)
+          (let ((result (+modules-read-packages temp-dir)))
+            (should (equal '((consult)) result))))
+      (delete-directory temp-dir t))))
+
+(ert-deftest modules--read-packages--returns-nil-for-empty-file ()
+  "Reading packages returns nil for empty file."
+  (let ((temp-dir (make-temp-file "module-" t)))
+    (unwind-protect
+        (let ((packages-file (expand-file-name "packages.eld" temp-dir)))
+          (write-region "" nil packages-file)
+          (should (null (+modules-read-packages temp-dir))))
+      (delete-directory temp-dir t))))
+
+(ert-deftest modules--read-packages--returns-nil-for-comment-only ()
+  "Reading packages returns nil when file contains only comments."
+  (let ((temp-dir (make-temp-file "module-" t)))
+    (unwind-protect
+        (let ((packages-file (expand-file-name "packages.eld" temp-dir)))
+          (write-region ";; -*- lisp-data -*-\n;; No packages yet" nil packages-file)
+          (should (null (+modules-read-packages temp-dir))))
+      (delete-directory temp-dir t))))
+
+;;; Tests for +modules-collect-packages
+
+(ert-deftest modules--collect-packages--returns-empty-when-no-modules ()
+  "Collecting packages returns nil when no modules exist."
+  (let ((+modules-directory (make-temp-name "/tmp/nonexistent-")))
+    (should (null (+modules-collect-packages)))))
+
+(ert-deftest modules--collect-packages--aggregates-from-multiple-modules ()
+  "Collecting packages aggregates specs from all modules."
+  (let ((+modules-directory (make-temp-file "modules-" t)))
+    (unwind-protect
+        (let ((module-a (expand-file-name "module-a" +modules-directory))
+              (module-b (expand-file-name "module-b" +modules-directory)))
+          (make-directory module-a)
+          (make-directory module-b)
+          (write-region "((evil))" nil (expand-file-name "packages.eld" module-a))
+          (write-region "((consult) (vertico))" nil (expand-file-name "packages.eld" module-b))
+          (let ((result (+modules-collect-packages)))
+            (should (= 3 (length result)))
+            (should (member '(evil) result))
+            (should (member '(consult) result))
+            (should (member '(vertico) result))))
+      (delete-directory +modules-directory t))))
+
+(ert-deftest modules--collect-packages--skips-modules-without-packages ()
+  "Collecting packages skips modules without packages.eld."
+  (let ((+modules-directory (make-temp-file "modules-" t)))
+    (unwind-protect
+        (let ((with-packages (expand-file-name "with-packages" +modules-directory))
+              (without-packages (expand-file-name "without-packages" +modules-directory)))
+          (make-directory with-packages)
+          (make-directory without-packages)
+          (write-region "((evil))" nil (expand-file-name "packages.eld" with-packages))
+          (write-region "" nil (expand-file-name "init.el" without-packages))
+          (let ((result (+modules-collect-packages)))
+            (should (equal '((evil)) result))))
+      (delete-directory +modules-directory t))))
+
 (provide '+modules-tests)
 
 ;;; +modules-tests.el ends here

@@ -43,6 +43,36 @@ recognized module file."
                                  "spec.md" "tests.el")))
                    files))))
 
+(defun +modules-read-packages (module-dir)
+  "Read packages.eld from MODULE-DIR and return package specs.
+
+The file should contain a list of elpaca package specifications,
+for example:
+
+  ;; -*- lisp-data -*-
+  ((evil :host github :repo \"emacs-evil/evil\")
+   (evil-collection))
+
+Returns the list of package specs, or nil if the file doesn't
+exist or is empty."
+  (let ((packages-file (expand-file-name "packages.eld" module-dir)))
+    (when (file-exists-p packages-file)
+      (with-temp-buffer
+        (insert-file-contents packages-file)
+        (goto-char (point-min))
+        (condition-case nil
+            (read (current-buffer))
+          (end-of-file nil))))))
+
+(defun +modules-collect-packages ()
+  "Collect all package specs from discovered modules.
+
+Returns a flat list of all package specifications from all
+modules' packages.eld files."
+  (let ((modules (+modules-discover)))
+    (apply #'append
+           (mapcar #'+modules-read-packages modules))))
+
 (provide '+modules)
 
 ;;; +modules.el ends here

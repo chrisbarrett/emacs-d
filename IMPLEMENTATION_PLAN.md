@@ -75,7 +75,7 @@ Create `+modules-discover` that finds all directories under `modules/`.
 
 ### 2.2 Implement packages.eld reader
 
-**Status:** Not started
+**Status:** Complete
 
 Create `+modules-read-packages` that reads packages.eld as data (not eval'd).
 
@@ -156,4 +156,4 @@ For each confirmed feature:
 Execute in order listed. Each task should be completed and committed
 before starting the next.
 
-Current task: **2.2 Implement packages.eld reader**
+Current task: **2.3 Integrate packages with elpaca**
