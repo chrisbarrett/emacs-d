@@ -1,10 +1,11 @@
-.PHONY: test test-quick setup-hooks help build-affected
+.PHONY: test test-quick setup-hooks help build-affected test-affected
 
 help:
 	@echo "Targets:"
 	@echo "  test           - Run all quality gates (tests, byte-compile, checkdoc)"
 	@echo "  test-quick     - Run ERT tests for affected files only"
 	@echo "  build-affected - Byte-compile transitively affected files"
+	@echo "  test-affected  - Run ERT tests for transitively affected files"
 	@echo "  setup-hooks    - Install pre-commit hooks"
 
 test: setup-hooks
@@ -28,6 +29,27 @@ build-affected:
 		./scripts/byte-compile.sh; \
 	else \
 		./scripts/byte-compile.sh $$affected; \
+	fi
+
+test-affected:
+	@affected=$$(./scripts/affected.sh); \
+	if [ "$$affected" = "none" ]; then \
+		echo "No affected test files"; \
+	elif [ "$$affected" = "all" ]; then \
+		./scripts/run-tests.sh; \
+	else \
+		test_files=""; \
+		for src in $$affected; do \
+			test_file=$${src%.el}-tests.el; \
+			if [ -f "$$test_file" ]; then \
+				test_files="$$test_files $$test_file"; \
+			fi; \
+		done; \
+		if [ -n "$$test_files" ]; then \
+			./scripts/run-tests.sh $$test_files; \
+		else \
+			echo "No test files for affected sources"; \
+		fi; \
 	fi
 
 setup-hooks:
