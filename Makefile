@@ -1,4 +1,4 @@
-.PHONY: test test-quick setup-hooks help build-affected test-affected
+.PHONY: test test-quick setup-hooks help build-affected test-affected lint-affected
 
 help:
 	@echo "Targets:"
@@ -6,6 +6,7 @@ help:
 	@echo "  test-quick     - Run ERT tests for affected files only"
 	@echo "  build-affected - Byte-compile transitively affected files"
 	@echo "  test-affected  - Run ERT tests for transitively affected files"
+	@echo "  lint-affected  - Run checkdoc on directly affected files"
 	@echo "  setup-hooks    - Install pre-commit hooks"
 
 test: setup-hooks
@@ -50,6 +51,16 @@ test-affected:
 		else \
 			echo "No test files for affected sources"; \
 		fi; \
+	fi
+
+lint-affected:
+	@files=$$({ git diff --cached --name-only --diff-filter=ACMR 2>/dev/null; \
+		git diff --name-only --diff-filter=ACMR 2>/dev/null; } | \
+		sort -u | grep -E '^(lisp|lib)/.*\.el$$' | grep -v -- '-tests\.el$$' || true); \
+	if [ -z "$$files" ]; then \
+		echo "No affected files to lint"; \
+	else \
+		./scripts/checkdoc.sh $$files; \
 	fi
 
 setup-hooks:
