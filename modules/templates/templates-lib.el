@@ -1,4 +1,4 @@
-;;; lib.el --- Templates module library.  -*- lexical-binding: t; -*-
+;;; templates-lib.el --- Templates module library.  -*- lexical-binding: t; -*-
 
 ;;; Commentary:
 
@@ -45,4 +45,4 @@ each clause is taken as the name of a template."
 
 (provide 'templates-lib)
 
-;;; lib.el ends here
+;;; templates-lib.el ends here

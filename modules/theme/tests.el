@@ -10,7 +10,7 @@
 (require 'cl-lib)
 
 ;; Load the lib.el from this module
-(let ((lib-file (expand-file-name "lib.el"
+(let ((lib-file (expand-file-name "theme-lib.el"
                                   (file-name-directory
                                    (or load-file-name buffer-file-name)))))
   (load lib-file nil 'nomessage))

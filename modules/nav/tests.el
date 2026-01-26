@@ -17,7 +17,7 @@
 
 (defun nav-module--load-lib ()
   "Load nav module lib.el."
-  (load (expand-file-name "lib.el" nav-module--dir) nil t))
+  (load (expand-file-name "nav-lib.el" nav-module--dir) nil t))
 
 (defun nav-module--load-init ()
   "Load nav module init.el."

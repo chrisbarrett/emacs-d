@@ -1,4 +1,4 @@
-;;; lib.el --- Theme detection and switching.  -*- lexical-binding: t; -*-
+;;; theme-lib.el --- Theme detection and switching.  -*- lexical-binding: t; -*-
 
 ;;; Commentary:
 
@@ -81,4 +81,4 @@ Uses the theme specified in `+theme-light'."
 
 (provide 'theme-lib)
 
-;;; lib.el ends here
+;;; theme-lib.el ends here

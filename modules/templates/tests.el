@@ -70,13 +70,13 @@
 ;; P7: File template macros exist - +define-file-template is bound
 (ert-deftest templates-module-test-p7-define-file-template-macro ()
   "P7: +define-file-template macro should exist."
-  (load (expand-file-name "modules/templates/lib.el" user-emacs-directory) nil t)
+  (load (expand-file-name "modules/templates/templates-lib.el" user-emacs-directory) nil t)
   (should (fboundp '+define-file-template)))
 
 ;; P8: Dispatcher macro exists - +define-file-template-dispatcher is bound
 (ert-deftest templates-module-test-p8-define-file-template-dispatcher-macro ()
   "P8: +define-file-template-dispatcher macro should exist."
-  (load (expand-file-name "modules/templates/lib.el" user-emacs-directory) nil t)
+  (load (expand-file-name "modules/templates/templates-lib.el" user-emacs-directory) nil t)
   (should (fboundp '+define-file-template-dispatcher)))
 
 ;; P9: string-inflection available - required for dynamic template names

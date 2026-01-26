@@ -28,7 +28,7 @@
 
 (ert-deftest lang-shscript-test-sh-file-template ()
   "Shell script file template should match .sh files."
-  (skip-unless (featurep '+file-templates))
+  (skip-unless (featurep 'templates-lib))
   (require 'autoinsert)
   (should (cl-some (lambda (entry)
                      (let ((pattern (if (consp (car entry)) (caar entry) (car entry))))
@@ -40,7 +40,7 @@
 
 (ert-deftest lang-shscript-test-zsh-file-template ()
   "Shell script template should match .zsh files."
-  (skip-unless (featurep '+file-templates))
+  (skip-unless (featurep 'templates-lib))
   (require 'autoinsert)
   (should (cl-some (lambda (entry)
                      (let ((pattern (if (consp (car entry)) (caar entry) (car entry))))

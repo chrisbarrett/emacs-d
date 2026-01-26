@@ -357,7 +357,7 @@
 (use-package display-buffer-alist-setup
   :no-require t
   :init
-  (require '+window)
+  (require 'nav-lib)
 
   (setq display-buffer-alist
         (cl-labels ((mode-active-p (mode)

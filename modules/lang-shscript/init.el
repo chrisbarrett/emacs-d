@@ -6,7 +6,7 @@
 
 ;;; Code:
 
-(require '+file-templates)
+(require 'templates-lib)
 
 (use-package sh-script
   :init

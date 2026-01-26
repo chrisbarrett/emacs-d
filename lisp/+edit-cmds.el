@@ -1,39 +1,15 @@
-;;; +edit-cmds.el --- General editing commands -*- lexical-binding: t; -*-
+;;; +edit-cmds.el --- DEPRECATED: General editing commands -*- lexical-binding: t; -*-
 
 ;;; Commentary:
 
+;; DEPRECATED: This file is deprecated. Editing commands are now in modules/editing/lib.el
+;; and modules/evil/lib.el.
+;; This file exists only for backward compatibility and will be removed in a
+;; future version.
+
 ;;; Code:
 
-(autoload 'thing-at-point-looking-at "thingatpt")
-(autoload 'puni-kill-line "puni")
-
-(defun +format-after-kill ()
-  (cond
-   ((thing-at-point-looking-at (rx bol (* space) eol))
-    (kill-line))
-   ((thing-at-point-looking-at (rx bol (* space))))
-   (t
-    (just-one-space)))
-  (indent-for-tab-command))
-
-(defun +forward-kill-sexp ()
-  (interactive)
-  (kill-sexp)
-  (+format-after-kill))
-
-(defun +backward-kill-sexp ()
-  (interactive)
-  (backward-kill-sexp)
-  (+format-after-kill))
-
-(defun +kill-line ()
-  (interactive)
-  (puni-kill-line)
-  (+format-after-kill))
-
-(defun +insert-uuid ()
-  (interactive)
-  (insert (string-trim (shell-command-to-string "uuidgen"))))
+(display-warning 'lisp "+edit-cmds.el is deprecated. Editing commands are now in modules/editing/lib.el and modules/evil/lib.el." :warning)
 
 (provide '+edit-cmds)
 

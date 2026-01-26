@@ -305,7 +305,7 @@ Add DEPRECATED comments and deprecation warnings to each file.
 
 ### 5.3 Deprecate lisp/*.el files superseded by modules
 
-**Status:** Not started
+**Status:** Complete
 
 Lisp files with module equivalents that can be deprecated:
 
@@ -371,4 +371,4 @@ May require module system changes to support "pre-init" modules.
 Execute in order listed. Each task should be completed and committed
 before starting the next.
 
-Current task: **5.2 Deprecate config/*.el files**
+Current task: **5.4 Remove deprecated files entirely**
