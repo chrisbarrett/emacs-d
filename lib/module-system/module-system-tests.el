@@ -173,6 +173,39 @@ Binds `temp-features-dir' to the temporary directory path."
            (packages (module-system-collect-packages modules)))
       (should (= 3 (length packages))))))
 
+(ert-deftest module-system--collect-packages--deduplicates ()
+  "Collect packages de-duplicates by package name."
+  (module-system-test-with-temp-features
+      '(("feature-a" .
+         (("packages.eld" . "((shared-pkg) (pkg-a))")))
+        ("feature-b" .
+         (("packages.eld" . "((shared-pkg) (pkg-b))"))))
+    (let* ((modules (module-system-discover-all temp-features-dir))
+           (packages (module-system-collect-packages modules)))
+      ;; shared-pkg should only appear once, so total is 3 not 4
+      (should (= 3 (length packages)))
+      (should (= 1 (cl-count 'shared-pkg packages
+                             :key #'module-system--package-name))))))
+
+(ert-deftest module-system--collect-packages--keeps-one-spec ()
+  "De-duplication keeps exactly one occurrence with its full spec."
+  (module-system-test-with-temp-features
+      '(("feature-a" .
+         (("packages.eld" . "((pkg :host github :repo \"first/repo\"))")))
+        ("feature-b" .
+         (("packages.eld" . "((pkg :host gitlab :repo \"second/repo\"))"))))
+    (let* ((modules (module-system-discover-all temp-features-dir))
+           (packages (module-system-collect-packages modules))
+           (pkg-specs (cl-remove-if-not
+                       (lambda (spec)
+                         (eq 'pkg (module-system--package-name spec)))
+                       packages)))
+      ;; Should have exactly one spec for 'pkg
+      (should (= 1 (length pkg-specs)))
+      ;; The kept spec should have its full properties
+      (should (plist-get (cdr (car pkg-specs)) :host))
+      (should (plist-get (cdr (car pkg-specs)) :repo)))))
+
 
 ;;; Autoload Extraction Tests
 

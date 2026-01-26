@@ -40,10 +40,9 @@ else
     echo "No valid test files found"
     exit 0
   fi
+  # Set up load paths via test-setup.el, then load specific test files and run tests.
   exec emacs -Q --batch \
-    --eval "(require 'ert)" \
-    -l tests.el \
-    --eval "(setq command-line-args-left nil)" \
+    -l scripts/test-setup.el \
     "${args[@]}" \
     --eval "(ert-run-tests-batch-and-exit t)"
 fi

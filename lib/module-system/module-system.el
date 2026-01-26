@@ -126,16 +126,26 @@ Returns nil if PACKAGES-FILE is nil or doesn't exist."
       (insert-file-contents-literally packages-file)
       (read (current-buffer)))))
 
+(defun module-system--package-name (spec)
+  "Extract the package name from SPEC.
+SPEC can be a symbol or a list with the package name as the first element."
+  (if (consp spec) (car spec) spec))
+
 (defun module-system-collect-packages (modules)
   "Collect all package specs from MODULES.
 MODULES is a list of `module-system-module' structs.
-Returns a flat list of elpaca package specs."
-  (cl-mapcan
-   (lambda (mod)
-     (copy-sequence
-      (module-system--read-packages-file
-       (module-system-module-packages-file mod))))
-   modules))
+Returns a flat list of elpaca package specs, de-duplicated by package name.
+When duplicate package names are encountered, the first occurrence is kept."
+  (let ((seen (make-hash-table :test 'eq))
+        (result nil))
+    (dolist (mod modules)
+      (dolist (spec (module-system--read-packages-file
+                     (module-system-module-packages-file mod)))
+        (let ((name (module-system--package-name spec)))
+          (unless (gethash name seen)
+            (puthash name t seen)
+            (push spec result)))))
+    (nreverse result)))
 
 
 ;;; Autoload Generation
