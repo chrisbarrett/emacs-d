@@ -8,7 +8,7 @@ Foundation for quality gates. Enables faster feedback on staged changes.
 
 ### 1.1 Create `scripts/affected.sh`
 
-**Status:** Not started
+**Status:** Complete
 
 Create the dependency analysis script that computes transitive dependents.
 Current `affected-tests.sh` only finds test files; `affected.sh` returns
@@ -23,7 +23,7 @@ Must handle:
 
 ### 1.2 Add `build-affected` Makefile target
 
-**Status:** Not started
+**Status:** Complete
 
 Byte-compile only transitively affected files from staged changes.
 
@@ -36,7 +36,7 @@ build-affected:
 
 ### 1.3 Add `test-affected` Makefile target
 
-**Status:** Not started
+**Status:** Complete
 
 Run ERT tests only for transitively affected files.
 
@@ -44,7 +44,7 @@ Run ERT tests only for transitively affected files.
 
 ### 1.4 Add `lint-affected` Makefile target
 
-**Status:** Not started
+**Status:** Complete
 
 Run checkdoc on directly affected files (not transitive).
 
@@ -52,7 +52,7 @@ Run checkdoc on directly affected files (not transitive).
 
 ### 1.5 Add `pre-commit` Makefile target
 
-**Status:** Not started
+**Status:** Complete
 
 Compose all checks: lint-affected, build-affected, test-affected.
 Fail fast on first error.
@@ -156,4 +156,4 @@ For each confirmed feature:
 Execute in order listed. Each task should be completed and committed
 before starting the next.
 
-Current task: **1.1 Create `scripts/affected.sh`**
+Current task: **2.1 Implement module discovery function**
