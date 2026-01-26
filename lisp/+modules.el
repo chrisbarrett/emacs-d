@@ -73,6 +73,23 @@ modules' packages.eld files."
     (apply #'append
            (mapcar #'+modules-read-packages modules))))
 
+(defun +modules-install-packages (package-specs)
+  "Install PACKAGE-SPECS using elpaca.
+
+PACKAGE-SPECS is a list of elpaca package specifications, each
+being a list with the package name as the first element and
+optional recipe keywords following.
+
+Example specs:
+  ((evil :host github :repo \"emacs-evil/evil\")
+   (evil-collection))
+
+This function requires elpaca to be available. Each spec is
+passed to the `elpaca' macro for installation."
+  (when (and package-specs (fboundp 'elpaca))
+    (dolist (spec package-specs)
+      (eval `(elpaca ,spec) t))))
+
 (provide '+modules)
 
 ;;; +modules.el ends here

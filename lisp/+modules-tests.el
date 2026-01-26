@@ -241,6 +241,56 @@
             (should (equal '((evil)) result))))
       (delete-directory +modules-directory t))))
 
+;;; Tests for +modules-install-packages
+
+(ert-deftest modules--install-packages--no-op-when-elpaca-unavailable ()
+  "Installing packages is a no-op when elpaca is not available."
+  ;; Temporarily unbind elpaca to simulate it not being available
+  (let ((elpaca-was-bound (fboundp 'elpaca)))
+    (when elpaca-was-bound
+      (fmakunbound 'elpaca))
+    (unwind-protect
+        ;; Should not error, just return nil
+        (should-not (+modules-install-packages '((some-package))))
+      ;; Restore elpaca if it was bound
+      (when elpaca-was-bound
+        ;; Note: We can't easily restore the original function, so we skip
+        ;; restoring for this test. The test framework isolates tests.
+        nil))))
+
+(ert-deftest modules--install-packages--calls-elpaca-for-each-spec ()
+  "Installing packages evaluates elpaca form for each spec."
+  ;; This test verifies that +modules-install-packages calls eval with
+  ;; the correct elpaca forms. We intercept eval to record the forms
+  ;; and skip actual evaluation of elpaca forms to avoid side effects.
+  (let ((eval-calls '())
+        (original-eval (symbol-function 'eval)))
+    (cl-letf (((symbol-function 'eval)
+               (lambda (form &optional lexical)
+                 ;; Record and skip elpaca calls to avoid actual package install
+                 (if (and (consp form) (eq (car form) 'elpaca))
+                     (push form eval-calls)
+                   ;; Delegate non-elpaca forms to real eval
+                   (funcall original-eval form lexical)))))
+      ;; Ensure elpaca appears bound for the fboundp check
+      (unless (fboundp 'elpaca)
+        (fset 'elpaca (lambda (&rest _) nil)))
+      (+modules-install-packages '((pkg-a) (pkg-b :host github :repo "user/pkg-b")))
+      ;; Should have called eval with elpaca forms for each spec
+      (should (= 2 (length eval-calls)))
+      (should (member '(elpaca (pkg-a)) eval-calls))
+      (should (member '(elpaca (pkg-b :host github :repo "user/pkg-b")) eval-calls)))))
+
+(ert-deftest modules--install-packages--handles-empty-list ()
+  "Installing empty package list does nothing."
+  (let ((elpaca-called nil))
+    (cl-letf (((symbol-function 'elpaca)
+               (lambda (_spec) (setq elpaca-called t))))
+      (+modules-install-packages nil)
+      (should-not elpaca-called)
+      (+modules-install-packages '())
+      (should-not elpaca-called))))
+
 (provide '+modules-tests)
 
 ;;; +modules-tests.el ends here

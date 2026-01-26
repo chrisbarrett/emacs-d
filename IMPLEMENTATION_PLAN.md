@@ -90,7 +90,7 @@ Format:
 
 ### 2.3 Integrate packages with elpaca
 
-**Status:** Not started
+**Status:** Complete
 
 Wire package specs into elpaca installation.
 
@@ -156,4 +156,4 @@ For each confirmed feature:
 Execute in order listed. Each task should be completed and committed
 before starting the next.
 
-Current task: **2.3 Integrate packages with elpaca**
+Current task: **2.4 Implement autoload registration**
