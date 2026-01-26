@@ -8,12 +8,15 @@
 
 (require 'ert)
 
+;; Load module init from same directory as this test file
+(defvar lang-rust-tests--dir (file-name-directory (or load-file-name buffer-file-name)))
+(load (expand-file-name "init.el" lang-rust-tests--dir) nil t)
+
 ;;; P1: rust-ts-mode-local-vars-hook contains eglot-ensure
 
 (ert-deftest lang-rust/eglot-hook ()
   "P1: rust-ts-mode-local-vars-hook should contain eglot-ensure."
   (require 'rust-ts-mode)
-  (require 'lang-rust-init)
   (should (memq 'eglot-ensure rust-ts-mode-local-vars-hook)))
 
 ;;; P2: Opening .rs file activates rust-ts-mode
@@ -28,14 +31,12 @@
 
 (ert-deftest lang-rust/cargo-term-color ()
   "P3: CARGO_TERM_COLOR should be set to always."
-  (require 'lang-rust-init)
   (should (equal (getenv "CARGO_TERM_COLOR") "always")))
 
 ;;; P4: separedit-default-mode is markdown-mode in rust buffers
 
 (ert-deftest lang-rust/separedit-default-mode ()
   "P4: separedit should use markdown-mode for Rust buffers."
-  (require 'lang-rust-init)
   ;; Check the hook is set up to configure separedit
   (should (memq 'setq-hook!--rust-ts-mode-hook--separedit-default-mode
                 rust-ts-mode-hook)))

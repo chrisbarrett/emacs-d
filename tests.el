@@ -24,9 +24,10 @@
 
 (defun +test-runner-load-paths ()
   "Set up load paths for test execution.
-Adds lisp/ and all elpaca/builds/*/ directories to `load-path'."
+Adds lisp/, modules/*/, and all elpaca/builds/*/ directories to `load-path'."
   (let ((lisp-dir (expand-file-name "lisp" +test-runner-root-dir))
         (lib-dir (expand-file-name "lib" +test-runner-root-dir))
+        (modules-dir (expand-file-name "modules" +test-runner-root-dir))
         (elpaca-builds-dir (expand-file-name "elpaca/builds" +test-runner-root-dir)))
     ;; Add lisp/ directory
     (when (file-directory-p lisp-dir)
@@ -34,6 +35,11 @@ Adds lisp/ and all elpaca/builds/*/ directories to `load-path'."
     ;; Add lib/ subdirectories (each package in lib/ is its own directory)
     (when (file-directory-p lib-dir)
       (dolist (dir (directory-files lib-dir t "\\`[^.]"))
+        (when (file-directory-p dir)
+          (add-to-list 'load-path dir))))
+    ;; Add modules/ subdirectories (each module is its own directory)
+    (when (file-directory-p modules-dir)
+      (dolist (dir (directory-files modules-dir t "\\`[^.]"))
         (when (file-directory-p dir)
           (add-to-list 'load-path dir))))
     ;; Add all elpaca/builds/*/ directories
@@ -45,7 +51,7 @@ Adds lisp/ and all elpaca/builds/*/ directories to `load-path'."
 ;;; Test Discovery
 
 (defun +test-runner--discover-all-tests ()
-  "Find all test files matching **/*-tests.el.
+  "Find all test files matching **/*-tests.el or **/tests.el.
 Returns list of absolute file paths."
   (let ((test-files '()))
     ;; Search in lisp/
@@ -66,6 +72,14 @@ Returns list of absolute file paths."
         (setq test-files
               (append test-files
                       (directory-files-recursively features-dir "-tests\\.el\\'")))))
+    ;; Search in modules/ (both tests.el and *-tests.el)
+    (let ((modules-dir (expand-file-name "modules" +test-runner-root-dir)))
+      (when (file-directory-p modules-dir)
+        (setq test-files
+              (append test-files
+                      (directory-files-recursively
+                       modules-dir
+                       "\\(?:^tests\\.el\\|-tests\\.el\\)\\'")))))
     test-files))
 
 (defun +test-runner--find-test-file (source-path)

@@ -8,11 +8,14 @@
 
 (require 'ert)
 
+;; Load module init from same directory as this test file
+(defvar lang-elixir-tests--dir (file-name-directory (or load-file-name buffer-file-name)))
+(load (expand-file-name "init.el" lang-elixir-tests--dir) nil t)
+
 ;;; P1: Opening .ex file activates elixir-ts-mode
 
 (ert-deftest lang-elixir/auto-mode-ex ()
   "P1: .ex files should be associated with elixir-ts-mode."
-  (require 'lang-elixir-init)
   (let ((entry (assoc "\\.ex\\'" auto-mode-alist)))
     (should entry)
     (should (eq (cdr entry) 'elixir-ts-mode))))
@@ -21,7 +24,6 @@
 
 (ert-deftest lang-elixir/auto-mode-exs ()
   "P2: .exs files should be associated with elixir-ts-mode."
-  (require 'lang-elixir-init)
   (let ((entry (assoc "\\.exs\\'" auto-mode-alist)))
     (should entry)
     (should (eq (cdr entry) 'elixir-ts-mode))))
@@ -31,7 +33,6 @@
 (ert-deftest lang-elixir/eglot-server-program ()
   "P3: elixir-ts-mode should have elixir-ls as server."
   (require 'eglot)
-  (require 'lang-elixir-init)
   (let ((entry (assoc 'elixir-ts-mode eglot-server-programs)))
     (should entry)
     (should (equal (cadr entry) "elixir-ls"))))
@@ -41,14 +42,12 @@
 (ert-deftest lang-elixir/project-root-marker ()
   "P4: mix.exs should be in project-vc-extra-root-markers."
   (require 'project)
-  (require 'lang-elixir-init)
   (should (member "mix.exs" project-vc-extra-root-markers)))
 
 ;;; P5: find-sibling-rules contains lib↔test patterns
 
 (ert-deftest lang-elixir/sibling-rules-lib-to-test ()
   "P5: find-sibling-rules should contain lib -> test pattern."
-  (require 'lang-elixir-init)
   (let ((found nil))
     (dolist (rule find-sibling-rules)
       (when (and (listp rule)
@@ -61,7 +60,6 @@
 
 (ert-deftest lang-elixir/sibling-rules-test-to-lib ()
   "P5: find-sibling-rules should contain test -> lib pattern."
-  (require 'lang-elixir-init)
   (let ((found nil))
     (dolist (rule find-sibling-rules)
       (when (and (listp rule)
@@ -134,7 +132,6 @@
 (ert-deftest lang-elixir/eglot-hook ()
   "eglot-ensure should be on elixir-ts-mode-local-vars-hook."
   (require 'elixir-ts-mode)
-  (require 'lang-elixir-init)
   (should (memq 'eglot-ensure elixir-ts-mode-local-vars-hook)))
 
 (provide 'lang-elixir-tests)

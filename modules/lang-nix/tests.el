@@ -8,11 +8,14 @@
 
 (require 'ert)
 
+;; Load module init from same directory as this test file
+(defvar lang-nix-tests--dir (file-name-directory (or load-file-name buffer-file-name)))
+(load (expand-file-name "init.el" lang-nix-tests--dir) nil t)
+
 ;;; P1: Opening *.nix file activates nix-ts-mode
 
 (ert-deftest lang-nix/auto-mode-nix ()
   "P1: .nix files should be associated with nix-ts-mode."
-  (require 'lang-nix-init)
   (let ((entry (assoc "\\.nix\\'" auto-mode-alist)))
     (should entry)
     (should (eq (cdr entry) 'nix-ts-mode))))
@@ -21,7 +24,6 @@
 
 (ert-deftest lang-nix/auto-mode-flake-lock ()
   "P2: flake.lock files should be associated with json-ts-mode."
-  (require 'lang-nix-init)
   (let ((matches nil))
     (dolist (entry auto-mode-alist)
       (when (and (stringp (car entry))
@@ -35,7 +37,6 @@
 
 (ert-deftest lang-nix/nix-store-read-only ()
   "P3: /nix/store/ should have read-only dirlocals."
-  (require 'lang-nix-init)
   (require '+corelib)
   ;; Check that dirlocals are set for /nix/store/
   (let ((dirlocals (dir-locals-find-file "/nix/store/some-hash/file.nix")))
@@ -50,7 +51,6 @@
 (ert-deftest lang-nix/eglot-hook ()
   "P4: nix-ts-mode-local-vars-hook should contain eglot-ensure."
   (require 'nix-ts-mode)
-  (require 'lang-nix-init)
   (should (memq 'eglot-ensure nix-ts-mode-local-vars-hook)))
 
 ;;; P5: apheleia-formatter is set to nixpkgs-fmt in nix-ts-mode
@@ -58,12 +58,10 @@
 (ert-deftest lang-nix/apheleia-formatter-registered ()
   "P5: nixpkgs-fmt should be in apheleia-formatters."
   (require 'apheleia)
-  (require 'lang-nix-init)
   (should (assoc 'nixpkgs-fmt apheleia-formatters)))
 
 (ert-deftest lang-nix/apheleia-formatter-hook ()
   "P5: nix-ts-mode-hook should set apheleia-formatter."
-  (require 'lang-nix-init)
   ;; Check the hook is set up to configure apheleia-formatter
   (should (memq 'setq-hook!--nix-ts-mode-hook--apheleia-formatter
                 nix-ts-mode-hook)))
@@ -73,7 +71,6 @@
 (ert-deftest lang-nix/project-root-marker ()
   "P6: flake.nix should be in project-vc-extra-root-markers."
   (require 'project)
-  (require 'lang-nix-init)
   (should (member "flake.nix" project-vc-extra-root-markers)))
 
 ;;; P7: Creating flake.nix inserts template with directory name
