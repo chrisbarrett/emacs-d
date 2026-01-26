@@ -247,14 +247,33 @@ All 47 features from FEATURE_INVENTORY.md migrated to modules/:
 
 ### 4.4 Deprecate old file structure
 
-**Status:** Not started
+**Status:** Complete
 
-Once modules are stable:
-1. Add deprecation warnings to old init/*.el files
-2. Remove duplication (old files just load modules)
-3. Eventually delete old files
+47 init files deprecated with warnings pointing to their module locations.
+4 bootstrap files remain (init-elpaca.el, init-hooks.el, init-system.el,
+init-readonly.el) - these must load before the module system.
 
 **Acceptance:** No functional duplication between modules/ and init/config/
+
+---
+
+## Phase 5: Cleanup (Future Work)
+
+### 5.1 Remove deprecated init files
+
+**Status:** Not started
+
+After a stabilization period:
+1. Verify no users depend on deprecated init files
+2. Remove deprecated files entirely
+3. Update init.el to stop requiring them
+
+### 5.2 Migrate bootstrap files to core module
+
+**Status:** Not started
+
+Evaluate whether init-hooks.el, init-system.el, and init-readonly.el can
+be loaded earlier in the module system rather than separately.
 
 ---
 
@@ -263,4 +282,4 @@ Once modules are stable:
 Execute in order listed. Each task should be completed and committed
 before starting the next.
 
-Current task: **4.4 Deprecate old file structure**
+Current task: **Phase 4 complete - searching specs for next version work**
