@@ -51,18 +51,6 @@
   (misery-show-summary-in-minibuffer nil))
 
 
-;; Copy to and paste from GUI clipboard in terminal.
-(use-package clipetty :ensure t
-  :after-call +first-input-hook +first-file-hook
-  :config (global-clipetty-mode +1))
-
-
-(use-package xt-mouse
-  :demand t
-  :config
-  (xterm-mouse-mode +1))
-
-
 (use-package tramp
   :config
   (pushnew! tramp-remote-path 'tramp-own-remote-path))
