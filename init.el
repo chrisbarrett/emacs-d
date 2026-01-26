@@ -24,7 +24,7 @@
 (add-to-list 'trusted-content +modules-directory)
 
 
-;;; Bootstrap Elpaca & critical packages
+;;; Bootstrap Elpaca & Package Installation
 
 ;; Suppress warning when loading Elpaca with latest Emacs.
 (add-to-list 'warning-suppress-types '(elpaca core \30.2))
@@ -36,19 +36,40 @@
 (elpaca elpaca-use-package
   (elpaca-use-package-mode))
 
+;; Load module system to collect packages for installation.
+(require '+modules)
+
+;; Install all packages before elpaca-wait:
+;; 1. Extra packages (bootstrap packages not in any module)
+;; 2. Module packages (from modules/*/packages.eld)
+(let ((extra-packages-file (file-name-concat user-emacs-directory "extra-packages.eld")))
+  (+modules-install-packages
+   (append (when (file-exists-p extra-packages-file)
+             (+modules-read-extra-packages extra-packages-file))
+           (+modules-collect-packages))))
+
+;; Block until all packages are installed.
+(elpaca-wait)
+
+;; Register autoloads so module functions are available before loading.
+(+modules-register-autoloads (+modules-collect-autoloads))
+
+
+;;; Configure Bootstrap Packages
+
 ;; General provides a featureful key binding system. It makes defining leader
 ;; key bindings much easier, and must be loaded immediately for its use-package
 ;; integration.
-(use-package general :ensure t :demand t)
+(use-package general :demand t)
 
 ;; Configure Emacs features & packages to follow a structured approach to
 ;; writing cache files, temp data, etc.
-(use-package no-littering :ensure t :demand t
+(use-package no-littering :demand t
   :config
   (no-littering-theme-backups))
 
 ;; Ensure we never attempt to load outdated ELC files.
-(use-package auto-compile :ensure t :demand t
+(use-package auto-compile :demand t
   :config
   (auto-compile-on-load-mode)
   (auto-compile-on-save-mode))
@@ -57,7 +78,7 @@
 ;; system runs Emacs under a very different process environment.
 ;;
 ;; Also, turns out we need this for direnv to work right in compilation buffers.
-(use-package exec-path-from-shell :ensure t
+(use-package exec-path-from-shell
   :after-call +first-buffer-hook +first-file-hook
   :if (memq system-type '(darwin x))
   :demand t
@@ -102,9 +123,6 @@
                         elpaca-builds-directory)
     '((nil . ((mode . read-only))))))
 
-;; Block until these packages are activated.
-(elpaca-wait)
-
 ;; Use existing Emacs instances to edit files as $EDITOR.
 (use-package server
   :if (display-graphic-p)
@@ -113,17 +131,6 @@
   :config
   (unless (server-running-p)
     (server-start)))
-
-
-;;; Module System Integration
-
-(require '+modules)
-
-;; Install packages from modules early in the queue.
-(+modules-install-packages (+modules-collect-packages))
-
-;; Register autoloads so module functions are available before loading.
-(+modules-register-autoloads (+modules-collect-autoloads))
 
 
 ;; Key init files that must be loaded early in the sequence.
