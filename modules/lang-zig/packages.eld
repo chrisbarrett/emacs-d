@@ -1,0 +1,2 @@
+;; -*- lisp-data -*-
+((zig-mode))
