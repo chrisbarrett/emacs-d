@@ -1,22 +1,14 @@
-;;; init-inf.el --- DESC -*- lexical-binding: t; -*-
+;;; init-inf.el --- DEPRECATED: Inferior process configuration -*- lexical-binding: t; -*-
 
 ;;; Commentary:
 
+;; DEPRECATED: This file is deprecated. Comint and compile configuration is now
+;; in modules/compile/. This file exists only for backward compatibility and
+;; will be removed in a future version.
+
 ;;; Code:
 
-
-(use-package comint
-  ;; Emacs' basic system for hosting interactive command interpreters.
-  :custom
-  (comint-prompt-read-only t)
-  (comint-buffer-maximum-size 2048) ; double the default.
-  )
-
-(use-package compile
-  ;; Integration for running compilers and other processes from inside Emacs.
-  :config
-  (use-package mod-compilation :demand t))
-
+(display-warning 'init "init-inf.el is deprecated. Comint/compile configuration is now in modules/compile/." :warning)
 
 (provide 'init-inf)
 
