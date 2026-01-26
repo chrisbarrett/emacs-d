@@ -207,6 +207,53 @@ Binds `temp-features-dir' to the temporary directory path."
       (should (plist-get (cdr (car pkg-specs)) :repo)))))
 
 
+;;; Extra Package Sources Tests
+
+(ert-deftest module-system--read-extra-package-sources--single-file ()
+  "Reads packages from a single extra source file."
+  (let ((temp-dir (make-temp-file "module-system-extra-test" t)))
+    (unwind-protect
+        (let ((extra-file (expand-file-name "extra-packages.eld" temp-dir)))
+          (with-temp-file extra-file
+            (insert "((extra-pkg-a) (extra-pkg-b :host github))"))
+          (let ((packages (module-system--read-extra-package-sources
+                           (list extra-file))))
+            (should (= 2 (length packages)))
+            (should (equal '(extra-pkg-a) (car packages)))
+            (should (equal '(extra-pkg-b :host github) (cadr packages)))))
+      (delete-directory temp-dir t))))
+
+(ert-deftest module-system--read-extra-package-sources--multiple-files ()
+  "Reads packages from multiple extra source files."
+  (let ((temp-dir (make-temp-file "module-system-extra-test" t)))
+    (unwind-protect
+        (let ((file-a (expand-file-name "extra-a.eld" temp-dir))
+              (file-b (expand-file-name "extra-b.eld" temp-dir)))
+          (with-temp-file file-a
+            (insert "((pkg-from-a))"))
+          (with-temp-file file-b
+            (insert "((pkg-from-b))"))
+          (let ((packages (module-system--read-extra-package-sources
+                           (list file-a file-b))))
+            (should (= 2 (length packages)))))
+      (delete-directory temp-dir t))))
+
+(ert-deftest module-system--read-extra-package-sources--missing-file ()
+  "Handles missing extra source files gracefully."
+  (let ((packages (module-system--read-extra-package-sources
+                   (list "/nonexistent/path/packages.eld"))))
+    (should (null packages))))
+
+(ert-deftest module-system--deduplicate-packages--removes-duplicates ()
+  "Removes duplicate packages from a list."
+  (let ((packages '((pkg-a) (pkg-b) (pkg-a :host github) (pkg-c))))
+    (let ((result (module-system--deduplicate-packages packages)))
+      (should (= 3 (length result)))
+      ;; First occurrence of pkg-a should be kept (without :host)
+      (should (equal '(pkg-a) (cl-find 'pkg-a result
+                                       :key #'module-system--package-name))))))
+
+
 ;;; Autoload Extraction Tests
 
 (ert-deftest module-system--extract-autoloads--defun ()

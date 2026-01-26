@@ -147,6 +147,25 @@ When duplicate package names are encountered, the first occurrence is kept."
             (push spec result)))))
     (nreverse result)))
 
+(defun module-system--read-extra-package-sources (sources)
+  "Read package specs from SOURCES files.
+SOURCES is a list of paths to packages.eld files.
+Returns a flat list of package specs from all source files."
+  (cl-mapcan #'module-system--read-packages-file sources))
+
+(defun module-system--deduplicate-packages (packages)
+  "Remove duplicate package specs from PACKAGES.
+PACKAGES is a list of package specs.
+Returns a de-duplicated list, keeping the first occurrence of each package."
+  (let ((seen (make-hash-table :test 'eq))
+        (result nil))
+    (dolist (spec packages)
+      (let ((name (module-system--package-name spec)))
+        (unless (gethash name seen)
+          (puthash name t seen)
+          (push spec result))))
+    (nreverse result)))
+
 
 ;;; Autoload Generation
 
@@ -242,19 +261,25 @@ AUTOLOAD-ENTRIES is an alist of (FORM . SOURCE-FILE) pairs."
                   (module-system-module-lib-files mod))
       (add-to-list 'load-path (module-system-module-directory mod)))))
 
-(defun module-system-load (modules)
+(cl-defun module-system-load (modules &key extra-package-sources)
   "Load MODULES in the correct order.
 MODULES is a list of `module-system-module' structs.
+EXTRA-PACKAGE-SOURCES is an optional list of paths to additional packages.eld
+files to load (e.g., for bootstrap packages not associated with any module).
 
 Load order:
-1. Install all packages (packages.eld)
+1. Install all packages (packages.eld + extra sources)
 2. Add lib directories to load-path
 3. Register all autoloads (lib.el, lib/*.el)
 4. Evaluate all init files (init.el)
 
 Returns the list of loaded module slugs."
-  ;; Phase 1: Collect and install all packages
-  (let ((all-packages (module-system-collect-packages modules)))
+  ;; Phase 1: Collect and install all packages (modules + extra sources)
+  (let* ((module-packages (module-system-collect-packages modules))
+         (extra-packages (module-system--read-extra-package-sources
+                          extra-package-sources))
+         (all-packages (module-system--deduplicate-packages
+                        (append extra-packages module-packages))))
     (module-system--install-packages all-packages))
 
   ;; Phase 2: Add lib directories to load-path
