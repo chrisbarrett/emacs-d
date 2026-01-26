@@ -112,6 +112,12 @@
   :config
   (recentf-mode +1))
 
+;;; Readonly protection for vendor directories
+
+(add-hook! 'find-file-hook
+  (when (+file-should-be-opened-read-only-p (buffer-file-name))
+    (read-only-mode +1)))
+
 (provide 'editing-init)
 
 ;;; init.el ends here

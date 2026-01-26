@@ -28,6 +28,18 @@ Skips non-file buffers, internal buffers, and buffers already in
     (with-current-buffer buf
       (+auto-revert-current-buffer-h))))
 
+;;;###autoload
+(defun +file-should-be-opened-read-only-p (file)
+  "Return non-nil if FILE should be opened in read-only mode.
+Matches vendor directories, elpaca builds, and node_modules,
+but excludes .git directories to allow git operations."
+  (let ((file (file-truename file)))
+    (and (string-match-p (rx (or "/vendor/"
+                                 "/elpaca/"
+                                 "/node_modules/"))
+                         file)
+         (not (string-match-p (rx "/.git/") file)))))
+
 (provide 'editing-lib)
 
 ;;; lib.el ends here
