@@ -6,16 +6,6 @@
 
 (require '+corelib)
 
-;; Adds support for mise - https://mise.jdx.dev.
-(use-package misery
-  :ensure-unless-local ("~/src/chrisbarrett/emacs-misery"
-                        (nursery :host github
-                                 :repo "chrisbarrett/emacs-misery"))
-  :hook (+first-file-hook . misery-global-mode)
-  :custom
-  (misery-show-summary-in-minibuffer nil))
-
-
 (use-package tramp
   :config
   (pushnew! tramp-remote-path 'tramp-own-remote-path))
