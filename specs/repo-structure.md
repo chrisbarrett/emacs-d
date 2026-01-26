@@ -42,6 +42,7 @@ specs/
 **When** packages are loaded
 **Then** each `packages.eld` is read as data (not eval'd)
 **And** elpaca specs are collected and processed
+**And** duplicate packages (by name) are de-duplicated
 
 `packages.eld` format:
 ```elisp
@@ -51,6 +52,22 @@ specs/
 ```
 
 **Verify:** Unit test parses sample eld; integration test installs package
+
+## R2.1: Extra Package Sources
+
+**Given** extra-packages.eld exists in user-emacs-directory
+**When** packages are loaded
+**Then** extra packages are installed alongside module packages
+**And** bootstrap packages (general, no-littering, etc.) are included
+
+`extra-packages.eld` format:
+```elisp
+;; -*- lisp-data -*-
+(general)
+(no-littering)
+```
+
+**Verify:** Extra packages file read and merged with module packages
 
 ## R3: Autoload Registration
 
@@ -104,6 +121,9 @@ Order: packages.eld (all) → autoloads (all) → init.el (all)
 - [x] [R1] Implement module discovery function
 - [x] [R2] Implement packages.eld reader
 - [x] [R2] Integrate with elpaca
+- [x] [R2] Add package de-duplication
+- [x] [R2.1] Implement extra-package-sources support
+- [x] [R2.1] Migrate all :ensure packages to packages.eld
 - [x] [R3] Implement autoload registration
 - [x] [R4] Implement init.el loader
 - [x] [R5] Document active specs workflow
