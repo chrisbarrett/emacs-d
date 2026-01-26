@@ -139,13 +139,13 @@
 
 ;;; Flymake Eldev
 
-(use-package flymake-eldev :ensure t
+(use-package flymake-eldev
   :init
   (require 'flymake-eldev-autoloads))
 
 ;;; Buttercup
 
-(use-package buttercup :ensure t
+(use-package buttercup
   :demand t
   :after elisp-mode)
 

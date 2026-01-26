@@ -10,7 +10,7 @@
 
 (require '+corelib)
 
-(use-package envrc :ensure t
+(use-package envrc
   :hook (+first-file-hook . envrc-global-mode)
   :custom
   (envrc-show-summary-in-minibuffer nil) ; very noisy.

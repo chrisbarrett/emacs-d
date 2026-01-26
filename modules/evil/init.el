@@ -13,9 +13,7 @@
 
 ;;;; Core Evil setup
 
-(use-package evil
-  :ensure t
-  :demand t
+(use-package evil  :demand t
   :general-config
   (:states 'emacs
            "ESC ESC" #'evil-normal-state)
@@ -155,16 +153,13 @@
 ;;;; Visual undo tree
 
 (use-package vundo
-  :ensure (vundo :host github :repo "casouri/vundo")
   :general ("C-x u" #'vundo)
   :config
   (setq vundo-glyph-alist vundo-unicode-symbols))
 
 ;;;; Evil-collection: community-managed keybindings
 
-(use-package evil-collection
-  :ensure t
-  :custom
+(use-package evil-collection  :custom
   (evil-collection-key-blacklist '("SPC" "S-SPC"))
   (evil-collection-outline-enable-in-minor-mode-p nil)
   (forge-add-default-bindings nil)
@@ -184,9 +179,7 @@
 
 ;;;; Evil-surround: surround text objects
 
-(use-package evil-surround
-  :ensure t
-  :hook ((text-mode-hook prog-mode-hook conf-mode-hook) . evil-surround-mode)
+(use-package evil-surround  :hook ((text-mode-hook prog-mode-hook conf-mode-hook) . evil-surround-mode)
   :general-config (:states '(visual) :keymaps 'evil-surround-mode-map "s" #'evil-surround-region)
   :custom
   (evil-surround-pairs-alist '((?\( . ("(" . ")"))
@@ -219,9 +212,7 @@
 
 ;;;; Evil-multiedit: multiple cursors
 
-(use-package evil-multiedit
-  :ensure t
-  :after evil
+(use-package evil-multiedit  :after evil
   :demand t
   :config
   (evil-multiedit-default-keybinds)
@@ -249,9 +240,7 @@
 
 ;;;; Evil-anzu: search hit count in modeline
 
-(use-package evil-anzu
-  :ensure t
-  :after-call evil-ex-start-search evil-ex-start-word-search evil-ex-search-activate-highlight
+(use-package evil-anzu  :after-call evil-ex-start-search evil-ex-start-word-search evil-ex-search-activate-highlight
   :config (global-anzu-mode +1))
 
 ;;;; Input handling
@@ -285,8 +274,7 @@
 
 ;;;; String inflection
 
-(use-package string-inflection :ensure t
-  :general (:states '(normal insert) "M--" #'string-inflection-all-cycle))
+(use-package string-inflection  :general (:states '(normal insert) "M--" #'string-inflection-all-cycle))
 
 ;;;; Comment handling
 
@@ -307,8 +295,7 @@
 
 ;;;; Structured editing with puni
 
-(use-package puni :ensure t
-  :after-call +first-file-hook +first-buffer-hook
+(use-package puni  :after-call +first-file-hook +first-buffer-hook
   :hook (text-mode-hook prog-mode-hook conf-mode-hook)
   :general-config
   (:keymaps 'puni-mode-map :states 'insert "C-w" #'puni-backward-kill-word)

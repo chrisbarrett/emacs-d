@@ -29,7 +29,7 @@
   :config
   (add-to-list 'eglot-server-programs '(elixir-ts-mode "elixir-ls")))
 
-(use-package inf-elixir :ensure t)
+(use-package inf-elixir)
 
 (use-package project
   :config

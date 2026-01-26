@@ -1,3 +1,13 @@
 ;; -*- lisp-data -*-
-;; Packages installed via use-package :ensure
-()
+;; Completion framework packages
+(
+ (vertico)
+ (marginalia)
+ (orderless)
+ (corfu)
+ (nerd-icons-corfu)
+ (cape)
+ (consult)
+ (embark)
+ (embark-consult)
+ )

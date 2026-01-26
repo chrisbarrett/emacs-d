@@ -53,7 +53,6 @@
 
 ;; Teach eglot to use lsp-booster for better performance.
 (use-package eglot-booster
-  :ensure (eglot-booster :host github :repo "jdtsmith/eglot-booster")
   :after eglot
   :demand t
   :config (eglot-booster-mode +1))

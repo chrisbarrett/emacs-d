@@ -74,7 +74,7 @@
 
 ;;; Rotate - window layout rotation
 
-(use-package rotate :ensure t
+(use-package rotate
   :commands (rotate-layout)
   :defines rotate-functions
   :config
@@ -82,7 +82,7 @@
 
 ;;; Better-jumper - unified jump list
 
-(use-package better-jumper :ensure t
+(use-package better-jumper
   :after-call +first-file-hook +first-buffer-hook
   :init
   (better-jumper-mode +1)
@@ -108,7 +108,7 @@
 
 ;;; Avy - jump to visible text
 
-(use-package avy :ensure t
+(use-package avy
   :general ("M-g" #'avy-goto-char-timer)
 
   :custom

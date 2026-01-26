@@ -95,7 +95,7 @@ creating a new one."
        (raise-frame existing)
        (select-frame existing)))))
 
-(use-package beframe :ensure t
+(use-package beframe
   :demand t
   :config
   (define-advice project--read-file-name (:around (fn project &rest args) switch-frame)

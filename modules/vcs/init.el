@@ -10,13 +10,13 @@
 
 ;;; Transient - pop-up command menus
 
-(use-package transient :ensure t
+(use-package transient
   :general-config
   (:keymaps 'transient-map [escape] #'transient-quit-one))
 
 ;;; Magit - git porcelain
 
-(use-package magit :ensure t
+(use-package magit
   :custom
   (magit-display-buffer-function #'+magit-display-buffer-same-frame)
   (magit-bury-buffer-function #'magit-restore-window-configuration)
@@ -87,7 +87,7 @@
 
 ;;; Beads - issue tracker integration
 
-(use-package beads :ensure (emacs-beads :host github :repo "chrisbarrett/emacs-beads" :main "beads.el")
+(use-package beads
   :commands (beads-issue-create
              beads-process-call
              beads-process-show-log)
@@ -96,7 +96,7 @@
 
 ;;; Git Timemachine - browse file history
 
-(use-package git-timemachine :ensure t
+(use-package git-timemachine
   :general-config
   (:states 'normal
    :keymaps 'git-timemachine-mode-map
@@ -129,7 +129,7 @@
 
 ;;; Browse at Remote
 
-(use-package browse-at-remote :ensure t
+(use-package browse-at-remote
   :custom
   (browse-at-remote-add-line-number-if-no-region-selected nil)
   :config
@@ -177,7 +177,7 @@
 
 ;;; Forge - GitHub/GitLab PR integration
 
-(use-package forge :ensure t
+(use-package forge
   :after-call magit-status
   :general
   (:keymaps 'magit-mode-map [remap magit-browse-thing] #'forge-browse)
@@ -201,7 +201,7 @@
 
 ;;; Git Auto Commit Mode
 
-(use-package git-auto-commit-mode :ensure t
+(use-package git-auto-commit-mode
   :custom
   (gac-silent-message-p t)
   :init

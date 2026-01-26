@@ -25,7 +25,7 @@
 
 ;;; Core org-mode package
 
-(use-package org :ensure t
+(use-package org
   :hook ((org-mode-hook . abbrev-mode)
          (org-mode-hook . auto-fill-mode))
 
@@ -364,7 +364,7 @@
 
 ;;; Evil keybindings for org-mode
 
-(use-package evil-org :ensure t
+(use-package evil-org
   :hook (org-mode-hook . evil-org-mode)
   :custom
   (evil-org-key-theme '(todo navigation insert textobjects additional calendar))
@@ -382,7 +382,7 @@
 
 ;;; Group items in the agenda
 
-(use-package org-super-agenda :ensure t
+(use-package org-super-agenda
   :after org-agenda
   :demand t
   :custom
@@ -395,7 +395,7 @@
 
 ;;; Edit comments or strings in dedicated buffer
 
-(use-package separedit :ensure t
+(use-package separedit
   :commands (separedit-commit)
   :custom
   (separedit-default-mode 'gfm-mode))
@@ -403,7 +403,7 @@
 
 ;;; Visual enhancements
 
-(use-package org-modern :ensure t
+(use-package org-modern
   :after org
   :demand t
   :custom
@@ -440,7 +440,7 @@
 
 ;;; Create org-mode links from clipboard URLs
 
-(use-package org-cliplink :ensure t
+(use-package org-cliplink
   :general (:keymaps 'org-mode-map "C-c l" #'org-cliplink))
 
 
@@ -456,7 +456,7 @@
 
 ;;; GitHub-flavored markdown exporter
 
-(use-package ox-gfm :ensure t
+(use-package ox-gfm
   :after ox
   :demand t)
 

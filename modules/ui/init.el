@@ -102,7 +102,7 @@
 
 ;;; Ligatures
 
-(use-package ligature :ensure t
+(use-package ligature
   :after-call +first-buffer-hook +first-file-hook
   :config
   (ligature-set-ligatures 't '("www"))
@@ -120,7 +120,7 @@
 
 ;;; Page breaks
 
-(use-package page-break-lines :ensure t
+(use-package page-break-lines
   :after-call +first-file-hook +first-buffer-hook
   :config
   (global-page-break-lines-mode +1)
@@ -129,9 +129,7 @@
 
 ;;; Hide mode line
 
-(use-package hide-mode-line :ensure (hide-mode-line
-                                     :host github
-                                     :repo "hlissner/emacs-hide-mode-line")
+(use-package hide-mode-line
   :hook ((completion-list-mode-hook
           Man-mode-hook
           ielm-mode-hook
@@ -159,9 +157,7 @@
 
 ;;; Number highlighting
 
-(use-package highlight-numbers :ensure (highlight-numbers
-                                        :host github
-                                        :repo "Fanael/highlight-numbers")
+(use-package highlight-numbers
   :hook (prog-mode-hook conf-mode-hook)
   :custom (highlight-numbers-generic-regexp
            (rx symbol-start (+ digit) (? "." (* digit)) symbol-end)))
@@ -177,7 +173,7 @@
 
 ;;; TODO highlighting
 
-(use-package hl-todo :ensure t
+(use-package hl-todo
   :hook (prog-mode-hook yaml-ts-mode-hook conf-mode-hook)
   :custom
   (hl-todo-highlight-punctuation ":")
@@ -192,7 +188,7 @@
 
 ;;; Indentation guides
 
-(use-package indent-bars :ensure t
+(use-package indent-bars
   :hook (yaml-ts-mode-hook python-ts-mode-hook)
   :custom
   (indent-bars-starting-column 0)
@@ -204,7 +200,7 @@
 
 ;;; Pulsar (visual feedback)
 
-(use-package pulsar :ensure t
+(use-package pulsar
   :hook (+first-input-hook . pulsar-global-mode)
   :custom
   (pulsar-iterations 5)
@@ -215,7 +211,7 @@
 
 ;;; Dimmer
 
-(use-package dimmer :ensure t
+(use-package dimmer
   :hook (+first-input-hook . dimmer-mode)
   :custom
   (dimmer-adjustment-mode :both)
@@ -268,7 +264,7 @@
 
 ;;; Paren face
 
-(use-package paren-face :ensure t
+(use-package paren-face
   :hook (lisp-data-mode-hook c-ts-base-mode-hook elixir-ts-mode-hook)
   :config
   (setq-hook! 'elixir-ts-mode-hook
@@ -279,14 +275,14 @@
 
 ;;; Breadcrumb
 
-(use-package breadcrumb :ensure t
+(use-package breadcrumb
   :custom
   (breadcrumb-idle-time 0.3))
 
 
 ;;; Bufler
 
-(use-package bufler :ensure t
+(use-package bufler
   :config
   (require 'ui-bufler))
 
@@ -320,7 +316,7 @@
 
 ;;; Modeline (doom-modeline)
 
-(use-package doom-modeline :ensure t
+(use-package doom-modeline
   :hook elpaca-after-init-hook
   :custom
   (doom-modeline-bar-width 3)
@@ -344,7 +340,7 @@
 
 ;;; Search count (anzu)
 
-(use-package anzu :ensure t
+(use-package anzu
   :after-call isearch-mode)
 
 (use-package evil-anzu

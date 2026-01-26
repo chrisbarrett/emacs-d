@@ -9,8 +9,7 @@
 (require '+corelib)
 
 ;; Vertico provides a better completion UI than the built-in default.
-(use-package vertico :ensure t
-  :hook +first-input-hook
+(use-package vertico  :hook +first-input-hook
   :custom
   (vertico-preselect 'no-prompt)
   (vertico-cycle t)
@@ -43,8 +42,7 @@
 
 ;; Marginalia shows extra information alongside minibuffer items
 ;; during completion.
-(use-package marginalia :ensure t
-  :hook +first-input-hook
+(use-package marginalia  :hook +first-input-hook
   :general
   (:keymaps 'minibuffer-local-map "M-A" #'marginalia-cycle))
 
@@ -91,8 +89,7 @@
 
 ;; Filter completion candidates by typing
 ;; space-separated terms in any order.
-(use-package orderless :ensure t
-  :after-call +first-input-hook)
+(use-package orderless  :after-call +first-input-hook)
 
 
 ;; Persists Emacs completion history. Used by vertico.
@@ -143,8 +140,7 @@
 
 
 ;; Corfu provides in-buffer completions as you type.
-(use-package corfu :ensure t
-  :hook (+first-input-hook . global-corfu-mode)
+(use-package corfu  :hook (+first-input-hook . global-corfu-mode)
   :general-config (:keymaps 'corfu-map
                             "RET" #'corfu-send
                             "<escape>" #'corfu-reset
@@ -174,15 +170,13 @@
 
 
 ;; Adds icons to corfu popups.
-(use-package nerd-icons-corfu :ensure t
-  :after corfu
+(use-package nerd-icons-corfu  :after corfu
   :init
   (add-to-list 'corfu-margin-formatters #'nerd-icons-corfu-formatter))
 
 
 ;; Adds useful functionality for `completion-at-point-functions'.
-(use-package cape :ensure t
-  :init
+(use-package cape  :init
   (add-hook! 'prog-mode-hook
     (add-hook 'completion-at-point-functions #'cape-file -10 t))
   (add-hook! 'org-mode-hook
@@ -213,8 +207,7 @@
 
 ;; Consult provides commands for common tasks that leverage the Emacs
 ;; completion system. It composes well with the above packages.
-(use-package consult :ensure t
-  :general
+(use-package consult  :general
   ([remap bookmark-jump]                 #'consult-bookmark
    [remap evil-show-marks]               #'consult-mark
    [remap evil-show-registers]           #'consult-register
@@ -263,8 +256,7 @@
 
 ;; Embark provides a UI for performing contextual actions on selected items
 ;; within completing-read.
-(use-package embark :ensure t
-  :general
+(use-package embark  :general
   (:states '(normal emacs motion)
            "C-@" #'embark-act
            "C-t" #'embark-dwim)
@@ -275,8 +267,7 @@
 
 
 ;; Integrate embark with consult
-(use-package embark-consult :ensure t
-  :after (:any consult embark)
+(use-package embark-consult  :after (:any consult embark)
   :demand t
   :hook (embark-collect-mode-hook . consult-preview-at-point-mode))
 
