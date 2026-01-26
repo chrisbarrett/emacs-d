@@ -51,9 +51,9 @@ check "Evil mode in scratch" \
 check "Theme loaded" \
   '(not (null custom-enabled-themes))'
 
-# IC-5: Leader keys bound
+# IC-5: Leader keys bound (in evil-normal-state-map)
 check "Leader keys bound" \
-  '(keymapp (key-binding (kbd "SPC") nil t))'
+  '(keymapp (lookup-key evil-normal-state-map " "))'
 
 # IC-6: Core packages installed
 check "Core packages installed" \
