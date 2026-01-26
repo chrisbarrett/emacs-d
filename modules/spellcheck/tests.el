@@ -9,21 +9,20 @@
 (require 'ert)
 (require 'cl-lib)
 
-;; Load the lib.el from this module
-(let ((lib-file (expand-file-name "lib.el"
-                                  (file-name-directory
-                                   (or load-file-name buffer-file-name)))))
-  (load lib-file nil 'nomessage))
+;; Load the module files from this directory
+(let* ((module-dir (file-name-directory (or load-file-name buffer-file-name)))
+       (lib-file (expand-file-name "lib.el" module-dir))
+       (init-file (expand-file-name "init.el" module-dir)))
+  ;; org-directory is used by init.el for personal dictionary path
+  (unless (boundp 'org-directory)
+    (defvar org-directory "/tmp/org-test"))
+  (load lib-file nil 'nomessage)
+  (load init-file nil 'nomessage))
 
 ;;; P1: ispell-dictionary equals "en_AU"
 
 (ert-deftest spellcheck-test-ispell-dictionary-set ()
   "ispell-dictionary should be set to en_AU after loading."
-  ;; Load init.el to trigger configuration
-  (let ((init-file (expand-file-name "init.el"
-                                     (file-name-directory
-                                      (or load-file-name buffer-file-name)))))
-    (load init-file nil 'nomessage))
   ;; Trigger ispell loading
   (require 'ispell)
   (should (equal ispell-dictionary "en_AU")))

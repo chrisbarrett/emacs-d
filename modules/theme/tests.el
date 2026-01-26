@@ -129,11 +129,17 @@
 
 (ert-deftest theme-test-dark-detection-with-light-theme ()
   "Dark detection returns nil for light themes."
-  (let ((custom-enabled-themes nil))
-    (load-theme 'modus-operandi t)
-    (unwind-protect
-        (should-not (+theme-dark-p))
-      (disable-theme 'modus-operandi))))
+  ;; Skip in batch mode - face colors behave differently without a display
+  (skip-unless (not noninteractive))
+  ;; Skip if modus-operandi not available
+  (skip-unless (locate-file "modus-operandi-theme.el" (custom-theme--load-path)))
+  ;; Disable any previously enabled themes first
+  (dolist (theme custom-enabled-themes)
+    (disable-theme theme))
+  (load-theme 'modus-operandi t)
+  (unwind-protect
+      (should-not (+theme-dark-p))
+    (disable-theme 'modus-operandi)))
 
 ;;; Theme switching tests
 

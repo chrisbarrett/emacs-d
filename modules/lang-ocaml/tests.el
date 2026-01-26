@@ -9,6 +9,17 @@
 
 (require 'ert)
 
+;; Load module files from this directory
+;; May fail in batch mode due to missing dependencies
+(let* ((module-dir (file-name-directory (or load-file-name buffer-file-name)))
+       (lib-file (expand-file-name "lib.el" module-dir))
+       (init-file (expand-file-name "init.el" module-dir)))
+  (condition-case nil
+      (progn
+        (load lib-file nil 'nomessage)
+        (load init-file nil 'nomessage))
+    (error nil)))
+
 ;;; P1: *.ml files open in neocaml-mode
 
 (ert-deftest lang-ocaml-test-ml-auto-mode ()

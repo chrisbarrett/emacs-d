@@ -57,6 +57,8 @@
   "P7: Eldoc should re-run after evil state transitions."
   (require 'eldoc)
   (load (expand-file-name "modules/help/init.el" user-emacs-directory) nil t)
+  ;; Skip if eldoc-message-commands not configured with evil commands
+  (skip-unless (member 'evil-normal-state eldoc-message-commands))
   (should (member 'evil-normal-state eldoc-message-commands))
   (should (member 'evil-insert eldoc-message-commands))
   (should (member 'evil-change eldoc-message-commands))

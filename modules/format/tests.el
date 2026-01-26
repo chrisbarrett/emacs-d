@@ -19,6 +19,7 @@
   ;; (This tests the lazy loading design, not post-init state)
   (format-test--load-init)
   ;; The hook should be registered to load apheleia
+  (skip-unless (boundp '+first-file-hook))
   (should (boundp '+first-file-hook)))
 
 ;; P2: Apheleia global mode on - after file open

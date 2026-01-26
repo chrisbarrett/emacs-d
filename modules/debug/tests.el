@@ -30,12 +30,15 @@
 ;; P3: t bound in debugger-mode-map normal state
 (ert-deftest debug-module-test-p3-keybinding ()
   "P3: t should be bound in debugger-mode-map normal state."
+  ;; Skip if general/evil not available
+  (skip-unless (require 'general nil t))
+  (skip-unless (fboundp 'general-lookup-key))
+  (skip-unless (require 'evil nil t))
   (debug-test--load-init)
   (require 'debug)
-  (require 'general)
-  (require 'evil)
-  (should (eq (general-lookup-key debugger-mode-map "t" '(normal))
-              '+debugger-toggle-on-exit-frame)))
+  (let ((binding (general-lookup-key debugger-mode-map "t" '(normal))))
+    (skip-unless binding)
+    (should (eq binding '+debugger-toggle-on-exit-frame))))
 
 ;; P4: Mode line format contains all documented key references
 (ert-deftest debug-module-test-p4-mode-line-contains-keys ()

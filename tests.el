@@ -24,7 +24,10 @@
 
 (defun +test-runner-load-paths ()
   "Set up load paths for test execution.
-Adds lisp/, modules/*/, and all elpaca/builds/*/ directories to `load-path'."
+Adds lisp/, modules/*/, and all elpaca/builds/*/ directories to `load-path'.
+Also sets `user-emacs-directory' to the test root for module tests."
+  ;; Set user-emacs-directory so module tests can find their init files
+  (setq user-emacs-directory (file-name-as-directory +test-runner-root-dir))
   (let ((lisp-dir (expand-file-name "lisp" +test-runner-root-dir))
         (lib-dir (expand-file-name "lib" +test-runner-root-dir))
         (modules-dir (expand-file-name "modules" +test-runner-root-dir))
