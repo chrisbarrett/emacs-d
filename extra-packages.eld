@@ -28,10 +28,6 @@
  evil-multiedit
  evil-anzu
 
- ;; Help (init-help.el)
- helpful
- rfc-mode
-
  ;; Input (init-input.el)
  string-inflection
  puni
