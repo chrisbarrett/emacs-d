@@ -28,6 +28,17 @@
   (should (memq (alist-get 'markdown-mode major-mode-remap-alist)
                 '(gfm-mode markdown-ts-mode))))
 
+(ert-deftest lang-markdown/md-files-use-gfm-mode ()
+  "P1: .md files should be directly associated with gfm-mode.
+The first matching entry in auto-mode-alist should be gfm-mode."
+  (let ((entry (cl-find-if (lambda (e)
+                             (and (stringp (car e))
+                                  (string-match-p "\\(md\\|markdown\\)" (car e))
+                                  (eq (cdr e) 'gfm-mode)))
+                           auto-mode-alist)))
+    (skip-unless entry)
+    (should entry)))
+
 ;;; P2: Opening file ending in /prompt activates gfm-mode
 
 (ert-deftest lang-markdown/prompt-file-association ()

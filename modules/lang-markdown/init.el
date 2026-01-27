@@ -46,9 +46,12 @@
 (use-package markdown-mode
   :commands (gfm-mode)
   :init
+  ;; Directly associate markdown files with gfm-mode for GitHub compatibility
+  ;; Use add-to-list to prepend, overriding built-in markdown-ts-mode-maybe
+  (add-to-list 'auto-mode-alist `(,(rx "." (or "md" "markdown" "mkd" "mdown" "mkdn") eos) . gfm-mode))
   ;; Associate /prompt files with gfm-mode (Claude prompt files)
-  (alist-set! auto-mode-alist (rx "/prompt" eos) 'gfm-mode)
-  ;; Prefer gfm-mode over markdown-mode for GitHub compatibility
+  (add-to-list 'auto-mode-alist `(,(rx "/prompt" eos) . gfm-mode))
+  ;; Remap any remaining markdown-mode calls to gfm-mode
   (alist-set! major-mode-remap-alist 'markdown-mode 'gfm-mode)
 
   :general-config
