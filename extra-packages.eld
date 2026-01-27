@@ -69,9 +69,6 @@
  envrc
  clipetty
 
- ;; Theme (init-theme.el)
- catppuccin-theme
-
  ;; Treesit (init-treesit.el)
  expreg
 
