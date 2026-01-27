@@ -69,9 +69,6 @@
  envrc
  clipetty
 
- ;; Treesit (init-treesit.el)
- expreg
-
  ;; UI (init-ui.el)
  ligature
  page-break-lines
