@@ -87,7 +87,4 @@
  browse-at-remote
  forge
  git-auto-commit-mode
-
- ;; Zig (init-zig.el)
- zig-mode
  )

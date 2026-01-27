@@ -1,3 +1,2 @@
 ;; -*- lisp-data -*-
-;; Packages installed via use-package :ensure
-()
+(zig-mode)
