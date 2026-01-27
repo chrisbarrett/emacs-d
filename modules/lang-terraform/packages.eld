@@ -1,3 +1,3 @@
 ;; -*- lisp-data -*-
-;; Packages installed via use-package or init files
-()
+(hcl-mode
+ terraform-mode)

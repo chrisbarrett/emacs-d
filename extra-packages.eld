@@ -69,10 +69,6 @@
  envrc
  clipetty
 
- ;; Terraform (init-terraform.el)
- hcl-mode
- terraform-mode
-
  ;; Theme (init-theme.el)
  catppuccin-theme
 
