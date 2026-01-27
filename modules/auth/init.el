@@ -6,6 +6,9 @@
 
 ;;; Code:
 
+;; Prefer local copy of auth-source-op.
+(add-to-list 'load-path "~/src/chrisbarrett/emacs-auth-source-op")
+
 (with-eval-after-load 'auth-source
   (require 'auth-source-op nil t)
   (when (fboundp 'auth-source-op-enable)
