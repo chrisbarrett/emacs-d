@@ -45,9 +45,6 @@
  better-jumper
  avy
 
- ;; Nix (init-nix.el)
- nix-ts-mode
-
  ;; OCaml (init-ocaml.el)
  ocaml-eglot
 
