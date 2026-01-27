@@ -1,7 +1,5 @@
 # AGENTS.md
 
-Emacs 30+ configuration with Elpaca, Evil mode, and modular architecture.
-
 ## Commands
 
 | Task             | Command                 |
@@ -38,10 +36,6 @@ The init sequence loads files in this order:
 7. Module `init.el` files via `+modules-load-inits`
 8. `site/*.el` local customizations
 
-**Module load-path** is set up in early-init.el before requiring module files.
-Only directories containing canonical module files (init.el, lib.el, packages.eld)
-are added, so `theme-lib.el` from `modules/theme/` is available for early-init.
-
 ## Module System
 
 Modules are self-contained units under `modules/{slug}/`:
@@ -55,52 +49,9 @@ Modules are self-contained units under `modules/{slug}/`:
 | `lib/*.el`     | Alternative: multiple libs  |
 | `tests.el`     | ERT tests                   |
 
-### Active Specs Workflow
-
-Active specs are symlinks in `specs/` pointing to `modules/{slug}/spec.md`.
-
-**Promote** a spec (mark as active):
-
-```bash
-ln -s ../modules/{slug}/spec.md specs/NNN-{slug}.md
-```
-
-**Demote** a spec (mark as stable):
-
-```bash
-rm specs/NNN-{slug}.md
-```
-
-**Verify** active specs:
-
-```bash
-readlink specs/*.md  # Should show ../modules/{slug}/spec.md paths
-```
-
-Spec numbers (NNN) indicate priority order during development.
-
 ## Code Style
 
 - Avoid excessive comments in generated code
 - Use full hook symbols in `use-package` `:hook` forms
 - Use `general-def` or `:general` for keybindings
 - Tests use `-tests.el` suffix; use `find-sibling-rules` to navigate
-
-## Key Patterns
-
-- Packages deferred by default (`use-package-always-defer t`)
-- Custom hooks: `+first-input-hook`, `+first-file-hook`, `+switch-buffer-hook`
-- Themes: `catppuccin` (dark), `modus-operandi-tinted` (light)
-
-## Session Completion
-
-> [!CRITICAL]
-> Work is NOT complete until `git push` succeeds.
-
-1. File issues for remaining work
-2. Run `make test` if code changed
-3. Push to remote:
-   ```bash
-   git pull --rebase && bd sync && git push
-   ```
-4. Verify: `git status` shows "up to date with origin"
