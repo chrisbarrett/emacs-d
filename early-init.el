@@ -146,6 +146,10 @@
   (setq native-comp-async-report-warnings-errors ncomp-warn-level)
   (setq native-comp-warning-on-missing-source ncomp-warn-level))
 
+;; Suppress obsolete macro warnings (when-let → when-let*) from third-party packages.
+(unless init-file-debug
+  (setq byte-compile-warnings '(not obsolete)))
+
 
 
 ;; Always prompt for "y" or "n", rather than "yes" or "no".

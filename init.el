@@ -30,6 +30,13 @@
 (add-to-list 'warning-suppress-types '(elpaca core \30.2))
 (add-to-list 'warning-suppress-types '(elpaca core \31.0.50))
 
+;; Suppress obsolete macro warnings (e.g., when-let → when-let*) in Elpaca builds.
+(setq elpaca-with-emacs-env-form
+      '(setq gc-cons-percentage 1.0
+             print-level nil
+             print-circle nil
+             byte-compile-warnings '(not obsolete)))
+
 (unless (featurep 'elpaca)
   (load-file (file-name-concat user-emacs-directory "elpaca-bootstrap.el")))
 
