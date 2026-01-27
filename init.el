@@ -135,7 +135,7 @@
 
 ;; Key init files that must be loaded early in the sequence.
 
-(use-package init-hooks
+(use-package +hooks
   :demand t
   :init
   (defconst +expensive-packages '(org org-roam org-agenda forge))

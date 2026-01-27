@@ -114,7 +114,7 @@
 
   ;; Avoid running possibly expensive ${major-mode}-local-vars-hook while building
   ;; the agenda.
-  (autoload '+inhibit-local-var-hooks-a "init-hooks")
+  (autoload '+inhibit-local-var-hooks-a "+hooks")
   (advice-add 'org-get-agenda-file-buffer :around #'+inhibit-local-var-hooks-a)
 
   ;; Page-break separator for sections

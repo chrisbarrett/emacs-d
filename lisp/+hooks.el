@@ -1,4 +1,4 @@
-;;; init-hooks.el --- Core hooks -*- lexical-binding: t; -*-
+;;; +hooks.el --- Core hooks -*- lexical-binding: t; -*-
 
 ;;; Commentary:
 
@@ -118,6 +118,6 @@ settings."
 
 (add-hook 'hack-local-variables-hook #'+run-local-var-hooks-h)
 
-(provide 'init-hooks)
+(provide '+hooks)
 
-;;; init-hooks.el ends here
+;;; +hooks.el ends here

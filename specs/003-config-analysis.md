@@ -132,7 +132,7 @@ Initial hypothesis (agent should refine based on actual analysis):
 | templates          | init-templates, +file-templates                        |
 | compile            | mod-compilation, +compile                              |
 | lang-*             | init-{lang} for each language                          |
-| core               | init.el, early-init.el, init-elpaca, init-hooks, init-system, +corelib, +files, +window, +load-incrementally |
+| core               | init.el, early-init.el, init-elpaca, +hooks, init-system, +corelib, +files, +window, +load-incrementally |
 
 ## Execution Plan
 

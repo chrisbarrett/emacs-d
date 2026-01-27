@@ -271,7 +271,7 @@ The following custom keywords are available:
 | :-------------------------- | :------------------------------- |
 | init.el                     | Main entry point                 |
 | early-init.el               | Early UI and path configuration  |
-| init/init-hooks.el          | Lifecycle hooks                  |
+| lisp/+hooks.el              | Lifecycle hooks                  |
 | lisp/+corelib.el            | Foundation utilities             |
 | lisp/+use-package-keywords.el | Deferred loading keywords      |
 | lisp/+modules.el            | Module system                    |

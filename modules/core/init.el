@@ -7,8 +7,8 @@
 ;; load before the module system itself initializes:
 ;;
 ;; - lisp/+corelib.el: Foundation utilities (loaded in early-init.el)
+;; - lisp/+hooks.el: Lifecycle hooks (loaded via init.el)
 ;; - lisp/+modules.el: Module system (loaded before modules)
-;; - init/init-hooks.el: Lifecycle hooks (loaded via init.el)
 ;; - init/init-system.el: System integration (loaded via init.el)
 ;; - init/init-readonly.el: Read-only protection (loaded via init.el)
 ;;

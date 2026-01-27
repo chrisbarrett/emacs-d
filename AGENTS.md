@@ -33,16 +33,10 @@ The init sequence loads files in this order:
 2. `init.el` → Elpaca bootstrap, `+modules.el`
 3. Module packages queued via `+modules-install-packages`
 4. Module autoloads registered via `+modules-register-autoloads`
-5. `init/*.el` bootstrap files (hooks)
-6. Module `init.el` files via `+modules-load-inits`
-7. `site/*.el` local customizations
-
-**Bootstrap files cannot be migrated to modules** because they define
-infrastructure that modules depend on:
-
-| File            | Why It's Pre-Module                          |
-| :-------------- | :------------------------------------------- |
-| `init-hooks.el` | Defines `+first-*-hook` used by `:after-call`|
+5. `lisp/+hooks.el` → lifecycle hooks
+6. `init/*.el` bootstrap files
+7. Module `init.el` files via `+modules-load-inits`
+8. `site/*.el` local customizations
 
 **Module load-path** is set up in early-init.el before requiring module files.
 Only directories containing canonical module files (init.el, lib.el, packages.eld)
