@@ -16,6 +16,16 @@
   "Root directory of the Emacs configuration.
 This is the parent of the scripts/ directory where test-setup.el lives.")
 
+(defun +test-setup-configure-paths ()
+  "Configure data/cache paths to match no-littering defaults.
+This prevents tests from creating files in `user-emacs-directory'."
+  (let ((var-dir (expand-file-name "var/" +test-setup-root-dir)))
+    ;; Prevent tests from polluting the emacs config directory.
+    ;; These mirror the settings from no-littering.
+    (setq savehist-file (expand-file-name "savehist.el" var-dir))
+    (setq project-list-file (expand-file-name "project-list.el" var-dir))
+    (setq spell-fu-directory (expand-file-name "spell-fu/" var-dir))))
+
 (defun +test-setup-load-paths ()
   "Set up load paths for test execution."
   (setq user-emacs-directory (file-name-as-directory +test-setup-root-dir))
@@ -38,6 +48,7 @@ This is the parent of the scripts/ directory where test-setup.el lives.")
         (when (file-directory-p dir)
           (add-to-list 'load-path dir))))))
 
+(+test-setup-configure-paths)
 (+test-setup-load-paths)
 
 (provide 'test-setup)
