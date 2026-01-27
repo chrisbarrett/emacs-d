@@ -69,9 +69,6 @@
  envrc
  clipetty
 
- ;; Templates (init-templates.el)
- tempel
-
  ;; Terraform (init-terraform.el)
  hcl-mode
  terraform-mode
