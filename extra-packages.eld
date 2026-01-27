@@ -45,9 +45,6 @@
  better-jumper
  avy
 
- ;; OCaml (init-ocaml.el)
- ocaml-eglot
-
  ;; Org (init-org.el, init-org-roam.el)
  org
  evil-org
