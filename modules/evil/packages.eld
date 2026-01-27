@@ -1,12 +1,10 @@
 ;; -*- lisp-data -*-
 ;; Evil mode packages
-(
- (evil)
+(evil
  (vundo :host github :repo "casouri/vundo")
- (evil-collection)
- (evil-surround)
- (evil-multiedit)
- (evil-anzu)
- (string-inflection)
- (puni)
- )
+ evil-collection
+ evil-surround
+ evil-multiedit
+ evil-anzu
+ string-inflection
+ puni)

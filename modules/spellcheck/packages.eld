@@ -1,3 +1,3 @@
 ;; -*- lisp-data -*-
-((spell-fu)
- (flyspell-correct))
+(spell-fu
+ flyspell-correct)

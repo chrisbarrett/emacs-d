@@ -1,2 +1,2 @@
 ;; -*- lisp-data -*-
-((envrc))
+(envrc)
