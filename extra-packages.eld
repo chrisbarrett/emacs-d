@@ -58,9 +58,6 @@
  ;; Project (init-project.el)
  beframe
 
- ;; Search (init-search.el)
- wgrep
-
  ;; Shells (init-shells.el)
  eat
 
