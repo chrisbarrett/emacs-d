@@ -52,8 +52,7 @@
     "Minor mode for Emacs Lisp files forming part of my configuration.")
 
   (+dirlocals-set (list (file-name-concat user-emacs-directory "lisp")
-                        (file-name-concat user-emacs-directory "init")
-                        (file-name-concat user-emacs-directory "config"))
+                        (file-name-concat user-emacs-directory "modules"))
     `((emacs-lisp-mode . ((mode . emacs-config)))))
 
   ;; Add lisp/ dir to load path in init files.
