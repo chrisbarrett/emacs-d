@@ -6,10 +6,14 @@
 
 ;;; Code:
 
+(require '+corelib)
 (require 'cl-lib)
+
+(require 'evil-lib)
 
 (cl-eval-when (compile)
   (require 'eshell)
+  (require 'evil)
   (require 'general))
 
 (defvar +eshell-suppress-zoxide-updates-p)
@@ -28,7 +32,7 @@
 (with-eval-after-load 'eat
   ;; Disable evil-mode entirely in eat-mode buffers
   (with-eval-after-load 'evil
-    (pushnew! `(,(rx bol "*eat")) evil-buffer-regexps :test #'equal))
+    (pushnew! evil-buffer-regexps `(,(rx bol "*eat"))))
 
   ;; Prevent over-scrolling beyond buffer content in eat buffers
   (add-hook 'eat-mode-hook
@@ -58,7 +62,7 @@
 
 ;; Add eat to evil-collection disabled list
 (with-eval-after-load '+evil-collection
-  (pushnew! 'eat +evil-collection-disabled-list))
+  (pushnew! +evil-collection-disabled-list 'eat))
 
 ;; Eat custom settings
 (with-eval-after-load 'eat
