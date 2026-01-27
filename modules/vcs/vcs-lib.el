@@ -280,6 +280,373 @@ Returns a list of closed tab names."
         (unless (get-buffer-process buf)
           (kill-buffer buf))))))
 
+;;; Worktrees menu and commands
+
+(autoload 'magit-anything-modified-p "magit-git")
+(autoload 'magit-call-git "magit-process")
+(autoload 'magit-run-git "magit-process")
+(autoload 'magit-refresh "magit-mode")
+(autoload 'magit-status-setup-buffer "magit-status")
+(autoload 'magit-worktree-branch "magit-worktree")
+(autoload 'magit-worktree-delete "magit-worktree")
+(autoload 'magit-merge-absorb "magit-merge")
+(autoload 'magit-read-branch-or-commit "magit-refs")
+(autoload 'magit--expand-worktree "magit-worktree")
+(autoload 'transient-define-prefix "transient")
+
+(autoload 'beads-issue-create "beads")
+(autoload 'beads-process-show-log "beads")
+(autoload 'beads-workon-issue "beads")
+
+(autoload 'claude-code-ide "claude-code-ide")
+(defvar claude-code-ide-cli-extra-flags nil)
+
+(defun +worktrees--repo-root-for-selected-frame ()
+  "Get the repo root for the selected frame's project."
+  (let ((default-directory (or (frame-parameter (selected-frame) 'project-root)
+                               default-directory)))
+    (+worktrees--repo-root)))
+
+(defun +worktrees-in-repo-root-p (&optional dir)
+  "Return non-nil if DIR (or `default-directory') is the repo root."
+  (when-let* ((repo-root (+worktrees--repo-root)))
+    (file-equal-p (or dir default-directory) repo-root)))
+
+(defun +worktrees--default-branch ()
+  "Get the default branch name for the current repository."
+  (let* ((remote (magit-primary-remote))
+         (branch (and remote
+                      (magit-git-string "symbolic-ref" "--short"
+                                        (format "refs/remotes/%s/HEAD" remote)))))
+    (or (and branch (cdr (magit-split-branch-name branch)))
+        "main")))
+
+(autoload 'magit-split-branch-name "magit-git")
+
+(defun +worktrees--project-root ()
+  "Get the project root via `project-current'."
+  (when-let* ((project (project-current)))
+    (project-root project)))
+
+(defun +worktrees--worktree-branch (worktree-path)
+  "Get the branch name for WORKTREE-PATH."
+  (or
+   (car (seq-keep (pcase-lambda (`(,path ,_commit ,branch . ,_))
+                    (when (file-equal-p path worktree-path)
+                      branch))
+                  (magit-list-worktrees)))
+   (file-name-nondirectory (directory-file-name worktree-path))))
+
+(defun +worktrees--worktree-clean-p (worktree-path)
+  "Return non-nil if WORKTREE-PATH has no uncommitted changes."
+  (let ((default-directory worktree-path))
+    (not (magit-anything-modified-p))))
+
+(defun +worktrees--detect-child-worktree-path ()
+  "Detect the worktree path for the current directory, if in a worktree.
+Return nil if the current worktree is the root worktree for the repo."
+  (when-let* ((project-root (+worktrees--project-root))
+              (repo-root (+worktrees--repo-root))
+              (worktrees (nreverse (magit-list-worktrees)))
+              (current-dir (expand-file-name default-directory)))
+    (car (seq-keep (lambda (worktree-info)
+                     (when-let* ((worktree-path (car worktree-info)))
+                       (unless (+worktrees-in-repo-root-p worktree-path)
+                         (when (string-prefix-p worktree-path current-dir)
+                           worktree-path))))
+                   worktrees))))
+
+;;;###autoload
+(defun +worktrees-adopt-initial-tab ()
+  "Set up the initial tab to represent the repo root."
+  (when (bound-and-true-p tab-bar-mode)
+    (let* ((repo-root (file-truename (or (+worktrees--repo-root)
+                                         (funcall project-prompter))))
+           (project-name (or (+git-repo-display-name)
+                             (and (frame-parameter nil 'project-root)
+                                  (file-name-nondirectory
+                                   (directory-file-name (frame-parameter nil 'project-root))))
+                             (file-name-nondirectory
+                              (directory-file-name repo-root))))
+           (current-tab (tab-bar--current-tab-find)))
+      (setf (alist-get 'worktree-path (cdr current-tab)) repo-root)
+      (setf (alist-get 'worktree-type (cdr current-tab)) 'root)
+      (tab-bar-rename-tab project-name)
+      repo-root)))
+
+(defvar project-prompter)
+
+;;;###autoload
+(defun +worktrees-open-tab (worktree-path &optional type)
+  "Open a tab for WORKTREE-PATH, creating it if needed.
+If TYPE is set, this will be used to determine the type of tab that will
+be created. See generic function `+worktrees-new-tab-layout'."
+  (interactive (list (completing-read "Worktree: " (magit-list-worktrees) nil t)))
+  (if-let* ((existing-tab (+worktrees--tab-for-worktree worktree-path)))
+      (tab-bar-select-tab (1+ (tab-bar--tab-index existing-tab)))
+    (let ((tab-name (+worktrees--worktree-branch worktree-path))
+          (type (cond
+                 ((null type) 'branch)
+                 ((symbolp type) type)
+                 ((stringp type) (intern type))
+                 (t 'branch))))
+      (tab-bar-new-tab)
+      (tab-bar-rename-tab tab-name)
+      (let* ((tabs (frame-parameter nil 'tabs))
+             (tab-index (tab-bar--current-tab-index tabs))
+             (current-tab (nth tab-index tabs))
+             (tab-type (car current-tab))
+             (tab-rest (cdr current-tab)))
+        (setf (alist-get 'worktree-type tab-rest) type)
+        (setf (alist-get 'worktree-path tab-rest) worktree-path)
+        (setf (nth tab-index tabs) (cons tab-type tab-rest))
+        (set-frame-parameter nil 'tabs tabs)))
+    (+worktrees-new-tab-layout type worktree-path)))
+
+(cl-defgeneric +worktrees-new-tab-layout (_type worktree-path)
+  "Set up the layout for a new worktree tab.
+TYPE is a symbol indicating the worktree type.
+WORKTREE-PATH is the path to the worktree."
+  (magit-status-setup-buffer worktree-path))
+
+;;;###autoload
+(defun +worktrees-create-switch ()
+  "Read a worktree from the user and create a tab for it.
+The worktrees are for the repo associated with the selected tab. If no
+such worktree exists, create it."
+  (interactive)
+  (let* ((default-directory (or (+worktrees-path-for-selected-tab)
+                                (+worktrees--repo-root)
+                                default-directory))
+         (worktree-paths (seq-keep (pcase-lambda (`(,path ,_rev ,branch . ,_rest))
+                                     (unless (equal branch "beads-sync")
+                                       path))
+                                   (magit-list-worktrees)))
+         (input (completing-read "Existing worktree, or name for new branch: "
+                                 (remove (+worktrees-path-for-selected-tab) worktree-paths) nil
+                                 (lambda (input)
+                                   (or (member input worktree-paths)
+                                       (not (string-match-p (rx space) input)))))))
+    (if (member input worktree-paths)
+        (+worktrees-open-tab input)
+      (let* ((branch input)
+             (start-point (magit-read-branch-or-commit "Start worktree at"))
+             (path (file-name-concat (+worktrees--repo-root) +worktrees-worktree-base-dir branch)))
+        (make-directory (file-name-directory path) t)
+        (save-window-excursion
+          (magit-worktree-branch path branch start-point))
+        (+worktrees-open-tab path)))))
+
+;;;###autoload
+(defun +worktrees-magit-status ()
+  "Display magit status buffer for the current worktree."
+  (interactive)
+  (with-no-warnings
+    (magit-status (+worktrees-path-for-selected-tab))))
+
+;;;###autoload
+(defun +worktrees-claude-code (worktree-path &optional initial-command)
+  "Run claude-code for the worktree at WORKTREE-PATH.
+When INITIAL-COMMAND is provided, run that."
+  (interactive (list (or (+worktrees-path-for-selected-tab)
+                         (user-error "Selected tab not associated with a worktree"))))
+  (let ((default-directory worktree-path)
+        (project-find-functions nil)
+        (claude-code-ide-cli-extra-flags (concat claude-code-ide-cli-extra-flags
+                                                 (if initial-command
+                                                     (shell-quote-argument initial-command)
+                                                   ""))))
+    (ignore-errors
+      (claude-code-ide))))
+
+(defun +worktrees--branch-name-from-issue (issue)
+  "Generate a git branch name from ISSUE."
+  (let* ((id (alist-get 'id issue))
+         (title (alist-get 'title issue))
+         (sanitized (downcase
+                     (replace-regexp-in-string
+                      "[^a-z0-9-]+" "-"
+                      (replace-regexp-in-string "^[^a-z0-9]+\\|[^a-z0-9]+$" "" title)))))
+    (format "%s-%s" id sanitized)))
+
+;;;###autoload
+(defun +worktrees-work-on-issue ()
+  "Pick an issue from beads and create/switch to a worktree for it."
+  (interactive)
+  (unless (+worktrees--project-root)
+    (user-error "Not in a git project"))
+  (when-let* ((issue (beads-workon-issue))
+              (branch-name (+worktrees--branch-name-from-issue issue))
+              (worktrees (magit-list-worktrees))
+              (default-directory (+worktrees--repo-root)))
+    (if-let* ((existing-worktree
+               (seq-find (pcase-lambda (`(,_path ,_commit ,branch . ,_))
+                           (equal branch branch-name))
+                         worktrees)))
+        (progn
+          (message "Switching to existing worktree for %s" branch-name)
+          (+worktrees-open-tab (car existing-worktree)))
+      (let* ((worktree-path (file-name-concat (+worktrees--repo-root)
+                                              +worktrees-worktree-base-dir
+                                              branch-name)))
+        (message "Creating worktree for issue %s..." (alist-get 'id issue))
+        (make-directory (file-name-directory worktree-path) t)
+        (magit-run-git "worktree" "add" "-b" branch-name
+                       (magit--expand-worktree worktree-path)
+                       "HEAD")
+        (+worktrees-open-tab worktree-path)
+        (let ((issue-id (alist-get 'id issue)))
+          (unless (zerop (call-process "bd" nil nil nil
+                                       "update" issue-id
+                                       "--status" "in_progress"
+                                       "--no-daemon"))
+            (message "Warning: Failed to update issue %s status" issue-id))
+          (message "Issue %s marked as in_progress" issue-id))))))
+
+;;;###autoload
+(defun +worktrees-destroy-current ()
+  "Delete the current tab, worktree, and associated branch.
+Requires a clean working tree (no uncommitted changes)."
+  (interactive)
+  (let ((worktree-path (+worktrees-path-for-selected-tab)))
+    (when (+worktrees-in-repo-root-p worktree-path)
+      (user-error "Refusing to act on repo root worktree"))
+    (unless worktree-path
+      (user-error "Current tab is not associated with a worktree"))
+    (unless (+worktrees--worktree-clean-p worktree-path)
+      (user-error "Worktree has uncommitted changes"))
+    (let ((branch-name (+worktrees--worktree-branch worktree-path)))
+      (unless (yes-or-no-p (format "Delete worktree and branch '%s'?" branch-name))
+        (user-error "Aborted without changes"))
+      (+worktrees-close-tabs worktree-path)
+      (let ((magit-no-confirm '(trash))
+            (default-directory (+worktrees--repo-root)))
+        (magit-worktree-delete worktree-path)
+        (magit-run-git "worktree" "prune")
+        (magit-run-git "branch" "-D" branch-name))
+      (message "Deleted worktree and branch: %s" branch-name))))
+
+(defvar magit-no-confirm)
+
+;;;###autoload
+(defun +worktrees-absorb-into-main ()
+  "Merge current worktree branch to main, then delete worktree and branch."
+  (interactive)
+  (let* ((default-directory (+worktrees--repo-root))
+         (worktree-path (+worktrees-path-for-selected-tab))
+         (worktree-branch (+worktrees--worktree-branch worktree-path))
+         (default-branch (+worktrees--default-branch)))
+    (unless worktree-path
+      (user-error "Current tab is not associated with a worktree"))
+    (when (+worktrees-in-repo-root-p worktree-path)
+      (user-error "Refusing to act on repo root worktree"))
+    (unless (+worktrees--worktree-clean-p worktree-path)
+      (user-error "Worktree has uncommitted changes"))
+    (unless (yes-or-no-p (format "Merge branch `%s' into `%s' and delete worktree? "
+                                 worktree-branch
+                                 default-branch))
+      (user-error "Aborted without changes"))
+    (+worktree--kill-worktree-buffers worktree-path)
+    (magit-worktree-delete worktree-path)
+    (magit-run-git "worktree" "prune")
+    (magit-run-git "switch" default-branch)
+    (magit-merge-absorb worktree-branch)
+    (when (bound-and-true-p tab-bar-mode)
+      (tab-bar-close-tab))))
+
+;;;###autoload
+(defun +worktrees-rebase-on-local-main ()
+  "Rebase the current worktree branch on local main branch."
+  (interactive)
+  (let ((worktree-path (+worktrees-path-for-selected-tab)))
+    (unless worktree-path
+      (user-error "Current tab is not associated with a worktree"))
+    (when (+worktrees-in-repo-root-p worktree-path)
+      (user-error "Refusing to act on root worktree"))
+    (unless (+worktrees--worktree-clean-p worktree-path)
+      (user-error "Worktree has uncommitted changes. Please commit or stash changes before rebase"))
+    (let* ((branch-name (+worktrees--worktree-branch worktree-path))
+           (default-directory worktree-path)
+           (default-branch (+worktrees--default-branch)))
+      (message "Rebasing %s on local %s..." branch-name default-branch)
+      (unless (zerop (magit-call-git "rebase" default-branch))
+        (user-error "Rebase failed - resolve conflicts and run 'git rebase --continue'"))
+      (magit-refresh)
+      (message "Rebase successful: %s rebased on local %s"
+               branch-name default-branch))))
+
+;;;###autoload
+(defun +worktrees-rebase-on-origin-main ()
+  "Rebase the current worktree branch on main."
+  (interactive)
+  (let ((worktree-path (+worktrees-path-for-selected-tab)))
+    (unless worktree-path
+      (user-error "Current tab is not associated with a worktree"))
+    (when (+worktrees-in-repo-root-p worktree-path)
+      (user-error "Refusing to act on root worktree"))
+    (unless (+worktrees--worktree-clean-p worktree-path)
+      (user-error "Worktree has uncommitted changes. Please commit or stash changes before rebase"))
+    (let* ((branch-name (+worktrees--worktree-branch worktree-path))
+           (default-directory worktree-path)
+           (default-branch (+worktrees--default-branch)))
+      (let ((remote (magit-primary-remote)))
+        (unless remote
+          (user-error "Cannot determine primary remote"))
+        (message "Fetching latest changes from %s..." remote)
+        (unless (zerop (magit-call-git "fetch" remote))
+          (user-error "Fetch failed"))
+        (message "Rebasing %s on %s/%s..." branch-name remote default-branch)
+        (unless (zerop (magit-call-git "rebase" (format "%s/%s" remote default-branch)))
+          (user-error "Rebase failed - resolve conflicts and run 'git rebase --continue'"))
+        (magit-refresh)
+        (message "Rebase successful: %s rebased on %s/%s"
+                 branch-name remote default-branch)))))
+
+;;; Tab cleanup hook
+
+(defun +worktrees--cleanup-worktree-tab (tab _sole-tab)
+  "Clean up resources when a worktree TAB is closed."
+  (when-let* ((worktree-path (alist-get 'worktree-path tab)))
+    (when (fboundp 'claude-code-ide-stop)
+      (let ((default-directory worktree-path)
+            (project-find-functions nil)
+            (kill-buffer-query-functions nil))
+        (ignore-errors
+          (claude-code-ide-stop))))
+    (+worktree--kill-worktree-buffers worktree-path)))
+
+;;; Transient menu
+
+(require 'transient)
+
+;;;###autoload (autoload '+worktrees-menu "vcs-lib" nil t)
+(transient-define-prefix +worktrees-menu ()
+  "Transient menu for git worktree operations."
+  [["Change"
+    :if +worktrees--repo-root-for-selected-frame
+    ("r" "Ready (work on issue)" +worktrees-work-on-issue)
+    ("o" "Switch or new..." +worktrees-create-switch)]
+
+   ["Update"
+    :if +worktrees-tab-dedicated-to-child-p
+    ("u" "Rebase on main" +worktrees-rebase-on-local-main)
+    ("U" "Rebase on origin/main" +worktrees-rebase-on-origin-main)]
+
+   ["Complete"
+    :if +worktrees-tab-dedicated-to-child-p
+    ("m" "Merge to main" +worktrees-absorb-into-main)
+    ("x" "Destroy" +worktrees-destroy-current)]]
+
+  ["Beads Issues"
+   :if +worktrees--repo-root-for-selected-frame
+   ("n" "Create..." beads-issue-create)
+   ("`" "Show log..." beads-process-show-log)]
+
+  ["Show"
+   :inapt-if-not +worktrees--repo-root-for-selected-frame
+   ("g" "git status" +worktrees-magit-status)
+   ("c" "claude-code" +worktrees-claude-code)])
+
 (provide 'vcs-lib)
 
 ;;; vcs-lib.el ends here

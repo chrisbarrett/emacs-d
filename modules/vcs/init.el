@@ -208,6 +208,16 @@
   (put 'gac-debounce-interval 'safe-local-variable 'integerp)
   (put 'gac-automatically-add-new-files-p 'safe-local-variable 'booleanp))
 
+;;; Worktrees - tab-per-worktree workflow
+
+(use-package vcs-lib
+  :commands (+worktrees-menu +worktrees-create-switch +worktrees-adopt-initial-tab)
+  :general
+  ("M-G" #'+worktrees-menu
+   "M-O" #'+worktrees-create-switch)
+  :config
+  (add-hook 'tab-bar-tab-pre-close-functions #'+worktrees--cleanup-worktree-tab))
+
 (provide 'vcs-init)
 
 ;;; vcs-init.el ends here
