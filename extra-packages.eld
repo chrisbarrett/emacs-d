@@ -28,9 +28,6 @@
  evil-multiedit
  evil-anzu
 
- ;; Format (init-format.el)
- apheleia
-
  ;; Help (init-help.el)
  helpful
  rfc-mode
