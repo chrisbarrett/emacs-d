@@ -1,13 +1,7 @@
 ;; -*- lisp-data -*-
-;; Third-party packages identified from init/*.el at commit 8a8e519
+;; Third-party packages not yet assigned to a module
 ;; These were originally installed via use-package :ensure t
 (
- ;; Bootstrap (configured in init.el)
- general
- no-littering
- auto-compile
- exec-path-from-shell
-
  ;; Completion (init-completion.el)
  vertico
  marginalia

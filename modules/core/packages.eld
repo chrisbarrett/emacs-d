@@ -1,3 +1,6 @@
 ;; -*- lisp-data -*-
-;; Packages installed via use-package or init files
-()
+;; Core bootstrap packages
+(general
+ no-littering
+ auto-compile
+ exec-path-from-shell)
