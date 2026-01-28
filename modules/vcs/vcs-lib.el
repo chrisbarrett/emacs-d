@@ -148,6 +148,17 @@ constrained to the current frame when using per-project frames."
     (magit-diff-visit-file t)
     (select-window orig-window)))
 
+;;; Magit worktree-delete advice
+
+(defun +magit-worktree-delete--cleanup (worktree &rest _)
+  "Cleanup before deleting WORKTREE via `magit-worktree-delete'.
+Aborts if WORKTREE is the root worktree. Otherwise closes any
+associated tabs and buffers."
+  (let ((worktree-path (magit--expand-worktree worktree)))
+    (when (+worktrees-in-repo-root-p worktree-path)
+      (user-error "Cannot delete the root worktree"))
+    (+worktrees-close-tabs worktree-path)))
+
 ;;; Worktree prune
 
 ;;;###autoload
@@ -508,7 +519,8 @@ When INITIAL-COMMAND is provided, run that."
 ;;;###autoload
 (defun +worktrees-destroy-current ()
   "Delete the current tab, worktree, and associated branch.
-Requires a clean working tree (no uncommitted changes)."
+Requires a clean working tree (no uncommitted changes).
+Tab and buffer cleanup handled by `+magit-worktree-delete--cleanup' advice."
   (interactive)
   (let ((worktree-path (+worktrees-path-for-selected-tab)))
     (when (+worktrees-in-repo-root-p worktree-path)
@@ -520,7 +532,6 @@ Requires a clean working tree (no uncommitted changes)."
     (let ((branch-name (+worktrees--worktree-branch worktree-path)))
       (unless (yes-or-no-p (format "Delete worktree and branch '%s'?" branch-name))
         (user-error "Aborted without changes"))
-      (+worktrees-close-tabs worktree-path)
       (let ((magit-no-confirm '(trash))
             (default-directory (+worktrees--repo-root)))
         (magit-worktree-delete worktree-path)
@@ -530,7 +541,8 @@ Requires a clean working tree (no uncommitted changes)."
 
 ;;;###autoload
 (defun +worktrees-absorb-into-main ()
-  "Merge current worktree branch to main, then delete worktree and branch."
+  "Merge current worktree branch to main, then delete worktree and branch.
+Tab and buffer cleanup handled by `+magit-worktree-delete--cleanup' advice."
   (interactive)
   (let* ((default-directory (+worktrees--repo-root))
          (worktree-path (+worktrees-path-for-selected-tab))
@@ -546,13 +558,10 @@ Requires a clean working tree (no uncommitted changes)."
                                  worktree-branch
                                  default-branch))
       (user-error "Aborted without changes"))
-    (+worktree--kill-worktree-buffers worktree-path)
     (magit-worktree-delete worktree-path)
     (magit-run-git "worktree" "prune")
     (magit-run-git "switch" default-branch)
-    (magit-merge-absorb worktree-branch)
-    (when (bound-and-true-p tab-bar-mode)
-      (tab-bar-close-tab))))
+    (magit-merge-absorb worktree-branch)))
 
 ;;;###autoload
 (defun +worktrees-rebase-on-local-main ()

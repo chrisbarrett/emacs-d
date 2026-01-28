@@ -27,6 +27,8 @@
   (magit-format-file-function #'magit-format-file-nerd-icons)
   (magit-read-worktree-directory-function #'+magit-read-worktree-directory)
   :config
+  ;; Clean up tabs/buffers when deleting worktrees via magit
+  (advice-add 'magit-worktree-delete :before #'+magit-worktree-delete--cleanup)
   ;; Set emoji cache file path after no-littering is available
   (when (boundp 'no-littering-var-directory)
     (setq +git-commit-emoji-cache-file

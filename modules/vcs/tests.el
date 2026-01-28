@@ -127,6 +127,15 @@
   "P8: +worktrees-close-tabs is defined."
   (should (fboundp '+worktrees-close-tabs)))
 
+(ert-deftest vcs-p8-magit-worktree-delete-cleanup-defined ()
+  "P8: +magit-worktree-delete--cleanup is defined."
+  (should (fboundp '+magit-worktree-delete--cleanup)))
+
+(ert-deftest vcs-p8-magit-worktree-delete-advised ()
+  "P8: magit-worktree-delete has cleanup advice."
+  (skip-unless (featurep 'magit))
+  (should (advice-member-p '+magit-worktree-delete--cleanup 'magit-worktree-delete)))
+
 ;;; P9: +git-repo-display-name returns owner/repo for GitHub URLs
 
 (ert-deftest vcs-p9-git-repo-display-name-defined ()
