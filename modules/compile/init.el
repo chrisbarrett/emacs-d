@@ -40,7 +40,11 @@
               (general-def :keymaps 'compilation-mode-map :states 'normal
                 "RET"
                 (general-predicate-dispatch #'compile-goto-error
-                  (thing-at-point 'url) #'goto-address-at-point)))))
+                  (thing-at-point 'url) #'goto-address-at-point)
+                "{" #'compilation-next-file
+                "C-n" #'compilation-next-file
+                "}" #'compilation-previous-file
+                "C-p" #'compilation-previous-file))))
 
 (autoload 'goto-address-fontify "goto-addr")
 
