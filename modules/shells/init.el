@@ -6,26 +6,28 @@
 
 ;;; Code:
 
-(require '+corelib)
 (require 'cl-lib)
+(require 'general)
 
+(require '+corelib)
 (require 'evil-lib)
 
 (cl-eval-when (compile)
+  (require 'eat)
   (require 'eshell)
-  (require 'evil)
-  (require 'general))
+  (require 'evil))
 
 (defvar +eshell-suppress-zoxide-updates-p)
 (declare-function +zoxide-add "shells-lib")
 
 ;; Eshell configuration - wire zoxide advice when eshell/cd is loaded
 (with-eval-after-load 'em-dirs
-  (define-advice eshell/cd (:after (&rest args) update-zoxide)
-    "Teach eshell to update Zoxide's index."
-    (unless +eshell-suppress-zoxide-updates-p
-      (when args
-        (+zoxide-add default-directory)))))
+  (eval-and-compile
+    (define-advice eshell/cd (:after (&rest args) update-zoxide)
+      "Teach eshell to update Zoxide's index."
+      (unless +eshell-suppress-zoxide-updates-p
+        (when args
+          (+zoxide-add default-directory))))))
 
 
 ;; Eat terminal emulator configuration
@@ -41,27 +43,25 @@
               (setq-local scroll-conservatively 101)
               (setq-local maximum-scroll-margin 0.5))))
 
-;; Eat keybindings via general
-(with-eval-after-load 'general
-  (with-eval-after-load 'eat
-    (general-def
-      :keymaps 'eat-semi-char-mode-map
-      "s-v" 'eat-yank
-      ;; Commands that should be intercepted rather than be passed to eat
-      "M-B" nil
-      "M-P" nil
-      "M-m" nil
-      "M-o" nil
-      "M-<" nil
-      "M->" nil
-      "M-_" nil
-      ;; Commands that should be passed through
-      "C-u" 'eat-self-input
-      "C-o" 'eat-self-input
-      [escape] 'eat-self-input)))
+(with-eval-after-load 'eat
+  (general-def
+    :keymaps 'eat-semi-char-mode-map
+    "s-v" 'eat-yank
+    ;; Commands that should be intercepted rather than be passed to eat
+    "M-B" nil
+    "M-P" nil
+    "M-m" nil
+    "M-o" nil
+    "M-<" nil
+    "M->" nil
+    "M-_" nil
+    ;; Commands that should be passed through
+    "C-u" 'eat-self-input
+    "C-o" 'eat-self-input
+    [escape] 'eat-self-input))
 
 ;; Add eat to evil-collection disabled list
-(with-eval-after-load '+evil-collection
+(with-eval-after-load 'evil-lib
   (pushnew! +evil-collection-disabled-list 'eat))
 
 ;; Eat custom settings
