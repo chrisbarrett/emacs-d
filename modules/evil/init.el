@@ -43,17 +43,6 @@
   (setq evil-insert-state-cursor 'bar)
   (setq evil-visual-state-cursor 'hollow)
 
-  ;; Initial states for modes
-  (evil-set-initial-state 'beads-issue-mode 'insert)
-
-  ;; Keybindings for beads-issue-mode
-  (general-def :states '(insert normal) :keymaps 'beads-issue-mode-map
-    "M-p" #'beads-issue-prev-message
-    "M-n" #'beads-issue-next-message)
-
-  (general-def :states '(normal) :keymaps 'beads-process-log-mode-map
-    "q" #'bury-buffer)
-
   ;; Keep shift-width in sync if mode changes
   (setq-hook! 'after-change-major-mode
     evil-shift-width tab-width)

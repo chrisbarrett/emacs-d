@@ -429,8 +429,7 @@
                        ,(rx bos "*eldoc*" eos)
                        ,(rx bos "*org-roam*" eos)
                        ,(rx bos "*org-roam-links*" eos)
-                       ,(rx bos "magit-process: ")
-                       ,(rx bos "*beads-process*" eos))
+                       ,(rx bos "magit-process: "))
                      '(window-width . 80))))
 
            ;; Bottom

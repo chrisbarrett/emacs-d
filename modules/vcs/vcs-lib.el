@@ -332,10 +332,6 @@ Returns a list of closed tab names."
 (autoload 'magit--expand-worktree "magit-worktree")
 (autoload 'transient-define-prefix "transient")
 
-(autoload 'beads-issue-create "beads")
-(autoload 'beads-process-show-log "beads")
-(autoload 'beads-workon-issue "beads")
-
 (autoload 'claude-code-ide "claude-code-ide")
 (defvar claude-code-ide-cli-extra-flags nil)
 
@@ -455,10 +451,7 @@ such worktree exists, create it."
   (interactive)
   (let* ((root (+worktrees--root-worktree-path))
          (default-directory (or (+worktrees-path-for-selected-tab) root default-directory))
-         (worktree-paths (seq-keep (pcase-lambda (`(,path ,_rev ,branch . ,_rest))
-                                     (unless (equal branch "beads-sync")
-                                       path))
-                                   (magit-list-worktrees)))
+         (worktree-paths (magit-list-worktrees))
          (input (completing-read "Existing worktree, or name for new branch: "
                                  (remove (+worktrees-path-for-selected-tab) worktree-paths) nil
                                  (lambda (input)
@@ -506,42 +499,6 @@ When INITIAL-COMMAND is provided, run that."
                       "[^a-z0-9-]+" "-"
                       (replace-regexp-in-string "^[^a-z0-9]+\\|[^a-z0-9]+$" "" title)))))
     (format "%s-%s" id sanitized)))
-
-;;;###autoload
-(defun +worktrees-work-on-issue ()
-  "Pick an issue from beads and create/switch to a worktree for it."
-  (interactive)
-  (unless (+worktrees--project-root)
-    (user-error "Not in a git project"))
-  (when-let* ((issue (beads-workon-issue))
-              (branch-name (+worktrees--branch-name-from-issue issue))
-              (worktrees (magit-list-worktrees))
-              (root (+worktrees--root-worktree-path))
-              (default-directory root))
-    (if-let* ((existing-worktree
-               (seq-find (pcase-lambda (`(,_path ,_commit ,branch . ,_))
-                           (equal branch branch-name))
-                         worktrees)))
-        (progn
-          (message "Switching to existing worktree for %s" branch-name)
-          (+worktrees-open-tab (car existing-worktree)))
-      (let* ((worktree-path (file-name-concat root
-                                              +worktrees-worktree-base-dir
-                                              branch-name)))
-        (message "Creating worktree for issue %s..." (alist-get 'id issue))
-        (make-directory (file-name-directory worktree-path) t)
-        (magit-run-git "worktree" "add" "-b" branch-name
-                       (magit--expand-worktree worktree-path)
-                       "HEAD")
-        (when (file-exists-p (expand-file-name ".git" worktree-path))
-          (+worktrees-open-tab worktree-path)
-          (let ((issue-id (alist-get 'id issue)))
-            (unless (zerop (call-process "bd" nil nil nil
-                                         "update" issue-id
-                                         "--status" "in_progress"
-                                         "--no-daemon"))
-              (message "Warning: Failed to update issue %s status" issue-id))
-            (message "Issue %s marked as in_progress" issue-id)))))))
 
 ;;;###autoload
 (defun +worktrees-destroy-current ()
@@ -664,7 +621,6 @@ Requires a clean working tree (no uncommitted changes)."
   "Transient menu for git worktree operations."
   [["Change"
     :if +worktrees--repo-root-for-selected-frame
-    ("r" "Ready (work on issue)" +worktrees-work-on-issue)
     ("o" "Switch or new..." +worktrees-create-switch)]
 
    ["Update"
@@ -676,11 +632,6 @@ Requires a clean working tree (no uncommitted changes)."
     :if +worktrees-tab-dedicated-to-child-p
     ("m" "Merge to main" +worktrees-absorb-into-main)
     ("x" "Destroy" +worktrees-destroy-current)]]
-
-  ["Beads Issues"
-   :if +worktrees--repo-root-for-selected-frame
-   ("n" "Create..." beads-issue-create)
-   ("`" "Show log..." beads-process-show-log)]
 
   ["Show"
    :inapt-if-not +worktrees--repo-root-for-selected-frame

@@ -86,15 +86,6 @@
                             cnt unit)))
                 'magit-log-date))))))
 
-;;; Beads - issue tracker integration
-
-(use-package beads
-  :commands (beads-issue-create
-             beads-process-call
-             beads-process-show-log)
-  :custom
-  (beads-worktree-root-function #'+worktrees-path-for-selected-tab))
-
 ;;; Git Timemachine - browse file history
 
 (use-package git-timemachine
