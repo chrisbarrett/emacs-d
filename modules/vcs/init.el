@@ -216,6 +216,13 @@
   :config
   (add-hook 'tab-bar-tab-pre-close-functions #'+worktrees--cleanup-worktree-tab))
 
+(use-package eat
+  :general-config
+  (:keymaps 'eat-semi-char-mode-map
+            ;; Commands that should be intercepted rather than be passed to eat
+            "M-G" nil
+            "M-O" nil))
+
 (provide 'vcs-init)
 
 ;;; vcs-init.el ends here
