@@ -7,13 +7,21 @@
 ;;; Code:
 
 (require 'json)
+(require 'url)
+(require 'url-vars)
 
-(autoload 'magit-primary-remote "magit-git")
+(cl-eval-when (compile)
+  (require 'forge-pullreq)
+  (require 'no-littering)
+  (require 'project))
+
 (autoload 'magit-git-string "magit-git")
-(autoload 'magit-gitdir "magit-git")
 (autoload 'magit-list-worktrees "magit-git")
+(autoload 'magit-primary-remote "magit-git")
 
-(defvar no-littering-var-directory)
+
+(defvar +worktrees-worktree-base-dir ".worktrees"
+  "Base directory name for creating new worktrees.")
 
 ;;; Git repo display name
 
@@ -188,9 +196,6 @@ Only opens a tab if the worktree was actually created."
     (+worktrees-open-tab path 'pullreq)))
 
 ;;; Worktrees workflow
-
-(defvar +worktrees-worktree-base-dir ".worktrees"
-  "Base directory name for creating new worktrees.")
 
 (defun +worktrees--repo-root ()
   "Get the repository root directory (the root worktree path)."
@@ -522,8 +527,6 @@ Requires a clean working tree (no uncommitted changes)."
         (magit-run-git "worktree" "prune")
         (magit-run-git "branch" "-D" branch-name))
       (message "Deleted worktree and branch: %s" branch-name))))
-
-(defvar magit-no-confirm)
 
 ;;;###autoload
 (defun +worktrees-absorb-into-main ()

@@ -6,6 +6,8 @@
 
 ;;; Code:
 
+(require 'general)
+
 (require 'compile-lib)
 
 ;;; Comint settings
