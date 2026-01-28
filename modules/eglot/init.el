@@ -47,6 +47,9 @@
     (with-current-buffer eldoc--doc-buffer
       (general-define-key :keymaps 'local :states 'motion "RET" #'+eglot-open-link)))
 
+  ;; Decode HTML entities in LSP markup (e.g., from JSON language server)
+  (advice-add 'eglot--format-markup :filter-return #'+eglot-decode-html-entities)
+
   ;; Prevent display of inlay hints
   (add-hook 'eglot-managed-mode-hook #'+eglot-inlay-hints-off))
 

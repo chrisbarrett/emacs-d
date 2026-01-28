@@ -7,6 +7,18 @@
 ;;; Code:
 
 ;;;###autoload
+(defun +eglot-decode-html-entities (string)
+  "Decode common HTML entities in STRING."
+  (when string
+    (thread-last string
+      (string-replace "&amp;" "&")
+      (string-replace "&lt;" "<")
+      (string-replace "&gt;" ">")
+      (string-replace "&quot;" "\"")
+      (string-replace "&#39;" "'")
+      (string-replace "&apos;" "'"))))
+
+;;;###autoload
 (defun +eglot-open-link ()
   "Open URL at point in eldoc buffer.
 Looks for `help-echo' text property to find URL."
