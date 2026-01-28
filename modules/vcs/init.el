@@ -25,6 +25,7 @@
   (magit-save-repository-buffers 'dontask)
   (magit-revision-insert-related-refs nil)
   (magit-format-file-function #'magit-format-file-nerd-icons)
+  (magit-read-worktree-directory-function #'+magit-read-worktree-directory)
   :config
   ;; Set emoji cache file path after no-littering is available
   (when (boundp 'no-littering-var-directory)
@@ -179,11 +180,15 @@
 
 (use-package forge
   :after-call magit-status
+  :custom
+  (forge-checkout-worktree-read-directory-function #'+forge-read-worktree-directory)
   :general
   (:keymaps 'magit-mode-map [remap magit-browse-thing] #'forge-browse)
   (:keymaps 'magit-remote-section-map [remap magit-browse-thing] #'forge-browse-remote)
   (:keymaps 'magit-branch-section-map [remap magit-browse-thing] #'forge-browse-branch)
-  (:keymaps 'forge-topic-list-mode-map :states 'normal "q" #'kill-current-buffer))
+  (:keymaps 'forge-topic-list-mode-map :states 'normal "q" #'kill-current-buffer)
+  :config
+  (advice-add 'forge-checkout-worktree :after #'+forge-checkout-worktree-open-tab))
 
 ;;; VC settings
 

@@ -148,15 +148,53 @@ constrained to the current frame when using per-project frames."
   (interactive)
   (magit-run-git "worktree" "prune"))
 
+;;; Worktree directory functions
+
+(defun +worktrees--root-worktree-path ()
+  "Get the path of the root worktree for the current repository."
+  (car (car (magit-list-worktrees))))
+
+;;;###autoload
+(defun +magit-read-worktree-directory (prompt branch)
+  "Read worktree directory, defaulting to `.worktrees/' in repo root.
+PROMPT is the prompt to display.  BRANCH is the branch name being checked out."
+  (let* ((root (+worktrees--root-worktree-path))
+         (base-dir (file-name-as-directory
+                    (file-name-concat root +worktrees-worktree-base-dir)))
+         (suggested (and branch (string-replace "/" "-" branch))))
+    (read-directory-name prompt base-dir nil nil suggested)))
+
+;;;###autoload
+(defun +forge-read-worktree-directory (pullreq)
+  "Read worktree directory for PULLREQ, defaulting to `.worktrees/' in repo root."
+  (pcase-let* (((eieio number head-ref) pullreq)
+               (root (+worktrees--root-worktree-path))
+               (base-dir (file-name-as-directory
+                          (file-name-concat root +worktrees-worktree-base-dir)))
+               (suggested (format "%s-%s" number (string-replace "/" "-" head-ref)))
+               (path (read-directory-name
+                      (format "Checkout #%s in new worktree: " number)
+                      base-dir nil nil suggested)))
+    (when (equal path "")
+      (user-error "The empty string isn't a valid path"))
+    path))
+
+;;;###autoload
+(defun +forge-checkout-worktree-open-tab (path _pullreq)
+  "Open a tab for the worktree at PATH after forge checkout.
+Intended as :after advice for `forge-checkout-worktree'.
+Only opens a tab if the worktree was actually created."
+  (when (file-exists-p (expand-file-name ".git" path))
+    (+worktrees-open-tab path 'pullreq)))
+
 ;;; Worktrees workflow
 
 (defvar +worktrees-worktree-base-dir ".worktrees"
   "Base directory name for creating new worktrees.")
 
 (defun +worktrees--repo-root ()
-  "Get the repository root directory (not the .git directory)."
-  (when-let* ((gitdir (magit-gitdir)))
-    (file-name-directory (directory-file-name gitdir))))
+  "Get the repository root directory (the root worktree path)."
+  (+worktrees--root-worktree-path))
 
 (defun +worktrees--repo-root-for-file (file-path)
   "Get the git repository root for FILE-PATH."
@@ -415,9 +453,8 @@ WORKTREE-PATH is the path to the worktree."
 The worktrees are for the repo associated with the selected tab. If no
 such worktree exists, create it."
   (interactive)
-  (let* ((default-directory (or (+worktrees-path-for-selected-tab)
-                                (+worktrees--repo-root)
-                                default-directory))
+  (let* ((root (+worktrees--root-worktree-path))
+         (default-directory (or (+worktrees-path-for-selected-tab) root default-directory))
          (worktree-paths (seq-keep (pcase-lambda (`(,path ,_rev ,branch . ,_rest))
                                      (unless (equal branch "beads-sync")
                                        path))
@@ -431,11 +468,12 @@ such worktree exists, create it."
         (+worktrees-open-tab input)
       (let* ((branch input)
              (start-point (magit-read-branch-or-commit "Start worktree at"))
-             (path (file-name-concat (+worktrees--repo-root) +worktrees-worktree-base-dir branch)))
+             (path (file-name-concat root +worktrees-worktree-base-dir branch)))
         (make-directory (file-name-directory path) t)
         (save-window-excursion
           (magit-worktree-branch path branch start-point))
-        (+worktrees-open-tab path)))))
+        (when (file-exists-p (expand-file-name ".git" path))
+          (+worktrees-open-tab path))))))
 
 ;;;###autoload
 (defun +worktrees-magit-status ()
@@ -478,7 +516,8 @@ When INITIAL-COMMAND is provided, run that."
   (when-let* ((issue (beads-workon-issue))
               (branch-name (+worktrees--branch-name-from-issue issue))
               (worktrees (magit-list-worktrees))
-              (default-directory (+worktrees--repo-root)))
+              (root (+worktrees--root-worktree-path))
+              (default-directory root))
     (if-let* ((existing-worktree
                (seq-find (pcase-lambda (`(,_path ,_commit ,branch . ,_))
                            (equal branch branch-name))
@@ -486,7 +525,7 @@ When INITIAL-COMMAND is provided, run that."
         (progn
           (message "Switching to existing worktree for %s" branch-name)
           (+worktrees-open-tab (car existing-worktree)))
-      (let* ((worktree-path (file-name-concat (+worktrees--repo-root)
+      (let* ((worktree-path (file-name-concat root
                                               +worktrees-worktree-base-dir
                                               branch-name)))
         (message "Creating worktree for issue %s..." (alist-get 'id issue))
@@ -494,14 +533,15 @@ When INITIAL-COMMAND is provided, run that."
         (magit-run-git "worktree" "add" "-b" branch-name
                        (magit--expand-worktree worktree-path)
                        "HEAD")
-        (+worktrees-open-tab worktree-path)
-        (let ((issue-id (alist-get 'id issue)))
-          (unless (zerop (call-process "bd" nil nil nil
-                                       "update" issue-id
-                                       "--status" "in_progress"
-                                       "--no-daemon"))
-            (message "Warning: Failed to update issue %s status" issue-id))
-          (message "Issue %s marked as in_progress" issue-id))))))
+        (when (file-exists-p (expand-file-name ".git" worktree-path))
+          (+worktrees-open-tab worktree-path)
+          (let ((issue-id (alist-get 'id issue)))
+            (unless (zerop (call-process "bd" nil nil nil
+                                         "update" issue-id
+                                         "--status" "in_progress"
+                                         "--no-daemon"))
+              (message "Warning: Failed to update issue %s status" issue-id))
+            (message "Issue %s marked as in_progress" issue-id)))))))
 
 ;;;###autoload
 (defun +worktrees-destroy-current ()
