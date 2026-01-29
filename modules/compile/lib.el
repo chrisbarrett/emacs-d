@@ -248,7 +248,7 @@ The result is a plist containing the following keys:
                      ('()
                       default)
                      (it
-                      (+compile--subst-group-numbers it group-numbers)))))
+                         (+compile--subst-group-numbers it group-numbers)))))
                 )
       (list
        :rx-form rx-form
@@ -275,7 +275,7 @@ The result is a plist containing the following keys:
                           (_
                            (error ":highlights[%S]: must provide a 'face or (face props...) spec" match))))
                        (it
-                        (error ":highlights must be an alist, but value was not a cons: %S" it))))
+                           (error ":highlights must be an alist, but value was not a cons: %S" it))))
                    value))
          (_
           (error ":highlights must be an alist")))
@@ -302,7 +302,7 @@ The result is a plist containing the following keys:
 NAME, a symbol, is used as the key for the parsed regular expression in
 `compilation-error-regexp-alist-alist'.
 
-Subsequent arguments are interpreted as forms for the `rx' macro, until
+Subsequent arguments FORMS are interpreted as forms for the `rx' macro, until
 a keyword is encountered. The remaining arguments are interpreted as
 optional keyword arguments.
 
@@ -335,7 +335,7 @@ The optional keyword arguments are:
     `compilation-error-regexp-alist'.
 
 
-\(fn NAME RX-FORMS... [:where SYMBOL = RX-FORM]* [:highlights number|var-symbol])"
+\(fn NAME FORMS... [:where SYMBOL = RX-FORM]* [:highlights number|var-symbol])"
   (declare (indent 1))
   (cl-assert (symbolp name))
 
@@ -360,8 +360,8 @@ The optional keyword arguments are:
        ',name)))
 
 ;;;###autoload
-(defun +compile-pp-parser (form)
-  "Pretty-print a compilation parser definition with group number annotations."
+(defun +compile-pp-parser (parser)
+  "Pretty-print PARSER definition with group number annotations."
   (interactive
    (list
     (let* ((cands
@@ -380,14 +380,14 @@ The optional keyword arguments are:
     (with-current-buffer buf
 
       (let ((inhibit-read-only t)
-            (group-numbers (plist-get form :group-numbers)))
+            (group-numbers (plist-get parser :group-numbers)))
 
         (cl-labels ((group-name-for-number (group-num)
                       (car (ht-find (pcase-lambda (_key value)
                                       (equal value group-num))
                                     group-numbers))))
           (erase-buffer)
-          (insert (pp-to-string (+plist-delete :group-numbers form)))
+          (insert (pp-to-string (+plist-delete :group-numbers parser)))
           (goto-char (point-min))
           (save-excursion
             ;; Repair question-marks, which are actually read by the Lisp reader as
@@ -415,22 +415,5 @@ The optional keyword arguments are:
       (read-only-mode +1))
     (display-buffer buf)))
 
-
-;;; Add imenu support
-
-(with-eval-after-load 'lisp-mode
-  (alist-set! lisp-imenu-generic-expression "Parsers"
-              (list
-               (rx bol (* (syntax whitespace)) "(define-compilation-error-rx" symbol-end (+ (syntax whitespace)) (group lisp-mode-symbol))
-               1)))
-
-(with-eval-after-load 'consult-imenu
-  (defvar consult-imenu-config)
-  (alist-set! (plist-get (alist-get 'emacs-lisp-mode consult-imenu-config)
-                         :types)
-              ?P
-              '("Parsers" font-lock-variable-name-face)))
-
-(provide 'compile-lib)
 
 ;;; lib.el ends here

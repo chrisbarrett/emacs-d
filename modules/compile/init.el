@@ -7,49 +7,58 @@
 ;;; Code:
 
 (require 'general)
+(require '+autoloads)
+(require '+corelib)
 
-(require 'compile-lib)
 
-;;; Comint settings
+(use-package compile
+  :custom
+  (compilation-always-kill t)
+  (compilation-ask-about-save nil) ; automatically save before compiling
+  (compilation-scroll-output 'first-error)
+  (compilation-message-face 'default)
+  :general
+  (:keymaps '(compilation-mode-map grep-mode-map) :states 'normal
+            "{" #'compilation-previous-file
+            "}" #'compilation-next-file
+            "C-n" #'compilation-next-file
+            "C-p" #'compilation-previous-file))
 
-(setq comint-prompt-read-only t)
-(setq comint-buffer-maximum-size 2048) ; double the default
 
-;;; Compilation settings
+(use-package ansi-color
+  :hook (compilation-filter-hook . ansi-color-compilation-filter))
 
-(setq compilation-always-kill t)
-(setq compilation-ask-about-save nil) ; automatically save before compiling
-(setq compilation-scroll-output 'first-error)
-(setq compilation-message-face 'default)
 
-(add-hook 'compilation-filter-hook #'ansi-color-compilation-filter)
+(use-package comint
+  :hook
+  (compilation-filter-hook comint-truncate-buffer) ; Automatically truncate long compilation buffers.
+
+  :custom
+  (comint-prompt-read-only t)
+  (comint-buffer-maximum-size 2048)) ; double the default
+
 
 ;; Change to look like a highlighted-line, rather than a visual selection.
 (custom-theme-set-faces 'user
                         '(next-error-message ((t (:inherit hl-line)))))
 
-;; Automatically truncate long compilation buffers.
-(autoload 'comint-truncate-buffer "comint" nil t)
-(remove-hook 'compilation-filter-hook #'comint-truncate-buffer)
 
+;; Highlight URLs in compilation output & make them navigable.
 
-(general-def :keymaps 'compilation-mode-map :states 'normal
-  ;; Highlight URLs in compilation output & make them navigable.
-  "RET" (general-predicate-dispatch #'compile-goto-error
-          (thing-at-point 'url) #'goto-address-at-point))
+(use-package compile
+  :preface
+  (autoload 'goto-address-fontify "goto-addr")
+  (defun +compilation-fontify-urls ()
+    (goto-address-fontify compilation-filter-start (point)))
 
-(autoload 'goto-address-fontify "goto-addr")
+  :hook (compilation-filter-hook . +compilation-fontify-urls)
 
-(add-hook 'compilation-filter-hook
-          (defun +compilation-fontify-urls ()
-            (goto-address-fontify compilation-filter-start (point))))
+  :general-config
+  (:keymaps 'compilation-mode-map
+   :states 'normal
+   "RET" (general-predicate-dispatch #'compile-goto-error
+           (thing-at-point 'url) #'goto-address-at-point)))
 
-
-(general-def :keymaps '(compilation-mode-map grep-mode-map) :states 'normal
-  "{" #'compilation-previous-file
-  "}" #'compilation-next-file
-  "C-n" #'compilation-next-file
-  "C-p" #'compilation-previous-file)
 
 ;;; Parsers
 
@@ -73,6 +82,23 @@
 ;; I define in this file.
 
 (setq compilation-error-regexp-alist nil)
+
+;;; Add imenu support
+
+(use-package lisp-mode
+  :config
+  (alist-set! lisp-imenu-generic-expression "Parsers"
+              (list
+               (rx bol (* (syntax whitespace)) "(define-compilation-error-rx" symbol-end (+ (syntax whitespace)) (group lisp-mode-symbol))
+               1)))
+
+(use-package consult-imenu
+  :config
+  (alist-set! (plist-get (alist-get 'emacs-lisp-mode consult-imenu-config)
+                         :types)
+              ?P
+              '("Parsers" font-lock-variable-name-face)))
+
 
 ;;; Generic compilation errors
 
@@ -266,6 +292,7 @@
   :where prefix = bol "│ "
   :highlights ((err 'error))
   :hyperlink err)
+
 
 ;;; Terragrunt
 
@@ -493,19 +520,5 @@
   :type (warn . note)
   :highlights ((checker 'italic))
   :hyperlink message)
-
-
-;;; Trivy
-
-;; Unfortunately, Trivy's output is super-verbose; the file+col ref is *after*
-;; an extended description of the error. Since multi-line parsers are likely to
-;; break across `read-process-output-max' boundaries, I can't reliably associate
-;; files with error messages.
-
-(define-compilation-error-rx trivy-file
-  ;; live/bootstrap/cloudtrail/main.tf (terraform)
-  bol file " (terraform)" eol)
-
-(provide 'compile-init)
 
 ;;; init.el ends here
