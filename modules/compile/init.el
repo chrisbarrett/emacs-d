@@ -32,19 +32,11 @@
 (autoload 'comint-truncate-buffer "comint" nil t)
 (remove-hook 'compilation-filter-hook #'comint-truncate-buffer)
 
-;; Highlight URLs in compilation output & make them navigable.
 
-(with-eval-after-load 'general
-  (add-hook 'compilation-mode-hook
-            (defun +compilation-ensure-keybindings ()
-              (general-def :keymaps 'compilation-mode-map :states 'normal
-                "RET"
-                (general-predicate-dispatch #'compile-goto-error
-                  (thing-at-point 'url) #'goto-address-at-point)
-                "{" #'compilation-next-file
-                "C-n" #'compilation-next-file
-                "}" #'compilation-previous-file
-                "C-p" #'compilation-previous-file))))
+(general-def :keymaps 'compilation-mode-map :states 'normal
+  ;; Highlight URLs in compilation output & make them navigable.
+  "RET" (general-predicate-dispatch #'compile-goto-error
+          (thing-at-point 'url) #'goto-address-at-point))
 
 (autoload 'goto-address-fontify "goto-addr")
 
@@ -52,6 +44,12 @@
           (defun +compilation-fontify-urls ()
             (goto-address-fontify compilation-filter-start (point))))
 
+
+(general-def :keymaps '(compilation-mode-map grep-mode-map) :states 'normal
+  "{" #'compilation-previous-file
+  "}" #'compilation-next-file
+  "C-n" #'compilation-next-file
+  "C-p" #'compilation-previous-file)
 
 ;;; Parsers
 
