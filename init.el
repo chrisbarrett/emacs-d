@@ -178,6 +178,13 @@ files in each module."
                                   org-list org-pcomplete org-src org-footnote org-macro ob org org-modern
                                   org-habit org-agenda org-capture)))
 
+
+;; Icon set used by various packages.
+(use-package nerd-icons
+  :autoload nerd-icons-codicon nerd-icons-faicon nerd-icons-set-font
+  :init
+  (add-hook 'elpaca-after-init-hook #'nerd-icons-set-font))
+
 ;; Load init/**.el
 
 (dolist (file (directory-files-recursively +init-dir (rx ".el" eos)))

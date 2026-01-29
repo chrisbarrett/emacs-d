@@ -49,12 +49,6 @@
   (+local-leader-set-key 'dired-mode-map
     "h" '(dired-omit-mode :wk "toggle hidden files")))
 
-;; Icon set used by various packages.
-(use-package nerd-icons
-  :autoload nerd-icons-codicon nerd-icons-faicon nerd-icons-set-font
-  :init
-  (add-hook 'elpaca-after-init-hook #'nerd-icons-set-font))
-
 ;; Show icons in dired.
 (use-package nerd-icons-dired
   :hook dired-mode-hook)
@@ -68,7 +62,5 @@
 ;; Add extra font-lock to dired file listings.
 (use-package diredfl
   :hook (dired-mode-hook))
-
-(provide 'dired-init)
 
 ;;; init.el ends here

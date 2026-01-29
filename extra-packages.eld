@@ -6,4 +6,5 @@
  no-littering
  auto-compile
  exec-path-from-shell
+ nerd-icons
  )
