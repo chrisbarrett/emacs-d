@@ -142,8 +142,9 @@
           eat-mode-hook
           org-roam-mode-hook)
          . hide-mode-line-mode)
-  :init
+  :preface
   (defvar-local +hide-modeline-was-enabled-p nil)
+  :init
 
   (add-hook '+side-window-raised-hook
             (defun +side-window--show-modeline-when-raised ()
