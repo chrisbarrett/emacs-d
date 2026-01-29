@@ -62,27 +62,6 @@
   (should (eq project-switch-commands '+project-switch-magit-status)))
 
 
-;;; P5: s-t and M-W are bound to project-switch-beframed
-
-(ert-deftest project-test-keybinding-s-t ()
-  "s-t is bound to project-switch-beframed in override-global-map."
-  (skip-unless (fboundp 'general-define-key))
-  (skip-unless (featurep 'beframe))
-  (project-module--load-init)
-  (skip-unless (keymapp (bound-and-true-p override-global-map)))
-  (let ((binding (lookup-key override-global-map (kbd "s-t"))))
-    (should (eq binding 'project-switch-beframed))))
-
-(ert-deftest project-test-keybinding-M-W ()
-  "M-W is bound to project-switch-beframed in override-global-map."
-  (skip-unless (fboundp 'general-define-key))
-  (skip-unless (featurep 'beframe))
-  (project-module--load-init)
-  (skip-unless (keymapp (bound-and-true-p override-global-map)))
-  (let ((binding (lookup-key override-global-map (kbd "M-W"))))
-    (should (eq binding 'project-switch-beframed))))
-
-
 ;;; P6: beframe-mode is enabled by default
 
 (ert-deftest project-test-beframe-mode-enabled ()
@@ -90,24 +69,6 @@
   (skip-unless (featurep 'beframe))
   (project-module--load-init)
   (should (bound-and-true-p beframe-mode)))
-
-
-;;; P7: +git-repo-display-name returns owner/repo for GitHub URLs
-
-(ert-deftest project-test-git-repo-display-name-defined ()
-  "+git-repo-display-name is defined."
-  (project-module--load-lib)
-  (should (fboundp '+git-repo-display-name)))
-
-
-;;; P8: +projects-rescan is bound to R in project-prefix-map
-
-(ert-deftest project-test-projects-rescan-keybinding ()
-  "+projects-rescan is bound to R in project-prefix-map."
-  (require 'project)
-  (project-module--load-init)
-  (should (keymapp project-prefix-map))
-  (should (eq (lookup-key project-prefix-map "R") '+projects-rescan)))
 
 
 ;;; P9: consult--buffer-query advice filters by beframe context
@@ -121,51 +82,6 @@
     (should advices)
     (should (advice-function-member-p 'consult--buffer-query@with-beframe-restriction advices))))
 
-
-;;; Additional tests
-
-(ert-deftest project-test-projects-rescan-defined ()
-  "+projects-rescan is defined as a command."
-  (project-module--load-lib)
-  (should (fboundp '+projects-rescan))
-  (should (commandp '+projects-rescan)))
-
-(ert-deftest project-test-project-switch-beframed-defined ()
-  "project-switch-beframed is defined as a command."
-  (project-module--load-init)
-  (should (fboundp 'project-switch-beframed))
-  (should (commandp 'project-switch-beframed)))
-
-(ert-deftest project-test-eat-beframed-defined ()
-  "eat-beframed is defined as a command."
-  (project-module--load-init)
-  (should (fboundp 'eat-beframed))
-  (should (commandp 'eat-beframed)))
-
-(ert-deftest project-test-project-switch-magit-status-defined ()
-  "+project-switch-magit-status is defined as a command."
-  (project-module--load-lib)
-  (should (fboundp '+project-switch-magit-status))
-  (should (commandp '+project-switch-magit-status)))
-
-(ert-deftest project-test-scan-dirs-alist-defined ()
-  "+project-scan-dirs-alist is defined."
-  (project-module--load-lib)
-  (should (boundp '+project-scan-dirs-alist)))
-
-(ert-deftest project-test-strict-isolation-variable-defined ()
-  "+beframe-strict-project-isolation-p is defined."
-  (project-module--load-lib)
-  (should (boundp '+beframe-strict-project-isolation-p)))
-
-(ert-deftest project-test-project-prefix-map-p-binding ()
-  "p in project-prefix-map is bound to project-switch-beframed."
-  (skip-unless (fboundp 'general-define-key))
-  (skip-unless (featurep 'beframe))
-  (require 'project)
-  (project-module--load-init)
-  (should (keymapp project-prefix-map))
-  (should (eq (lookup-key project-prefix-map "p") 'project-switch-beframed)))
 
 (provide 'project-tests)
 

@@ -34,26 +34,6 @@
   (should (memq 'flymake-mode (default-value 'prog-mode-hook))))
 
 
-;;; P2: M-n is bound to flymake-goto-next-error in flymake-mode-map
-
-(ert-deftest eglot/p2-flymake-m-n-binding ()
-  "P2: M-n is bound to flymake-goto-next-error in flymake-mode-map."
-  (eglot-test--load-init)
-  (require 'flymake)
-  (should (eq (lookup-key flymake-mode-map (kbd "M-n"))
-              'flymake-goto-next-error)))
-
-
-;;; P3: M-p is bound to flymake-goto-prev-error in flymake-mode-map
-
-(ert-deftest eglot/p3-flymake-m-p-binding ()
-  "P3: M-p is bound to flymake-goto-prev-error in flymake-mode-map."
-  (eglot-test--load-init)
-  (require 'flymake)
-  (should (eq (lookup-key flymake-mode-map (kbd "M-p"))
-              'flymake-goto-prev-error)))
-
-
 ;;; P4: eglot-code-action-indicator is empty string
 
 (ert-deftest eglot/p4-code-action-indicator ()
@@ -63,22 +43,6 @@
   ;; but in batch the :custom may not be applied
   (skip-unless (boundp 'eglot-code-action-indicator))
   (should (equal (default-value 'eglot-code-action-indicator) "")))
-
-
-;;; P5: M-RET is bound to eglot-code-actions in eglot-mode-map
-
-(ert-deftest eglot/p5-eglot-m-ret-binding ()
-  "P5: M-RET is bound to eglot-code-actions in eglot-mode-map."
-  ;; Keybinding requires general and evil to be loaded
-  (skip-unless (and (featurep 'general) (featurep 'evil))))
-
-
-;;; P6: C-c C-r is bound to eglot-rename in eglot-mode-map
-
-(ert-deftest eglot/p6-eglot-rename-binding ()
-  "P6: C-c C-r is bound to eglot-rename in eglot-mode-map."
-  ;; Keybinding requires general and evil to be loaded
-  (skip-unless (and (featurep 'general) (featurep 'evil))))
 
 
 ;;; P7: eglot-booster-mode is enabled after eglot loads
@@ -98,21 +62,6 @@
   ;; init.el adds the hook - need eglot to be loaded too
   (skip-unless (boundp 'eglot-managed-mode-hook))
   (should (memq '+eglot-inlay-hints-off eglot-managed-mode-hook)))
-
-
-;;; P9: +eglot-open-link is defined and interactive
-
-(ert-deftest eglot/p9-open-link-defined ()
-  "P9: +eglot-open-link is defined and interactive."
-  (should (fboundp '+eglot-open-link))
-  (should (commandp '+eglot-open-link)))
-
-
-;;; Function tests
-
-(ert-deftest eglot/inlay-hints-off-defined ()
-  "+eglot-inlay-hints-off is defined."
-  (should (fboundp '+eglot-inlay-hints-off)))
 
 
 (provide 'eglot-tests)

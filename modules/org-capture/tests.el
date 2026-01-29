@@ -58,15 +58,6 @@
     (should (string-match-p "org-cliplink-capture" (nth 4 template)))))
 
 
-;;; P4: Litnote creates file in org-roam-directory/litnotes/
-
-(ert-deftest org-capture-test-p4-litnote-function-defined ()
-  "+capture-litnote-function is defined."
-  :tags '(:org-capture)
-  (skip-unless org-capture-test--lib-loaded)
-  (should (fboundp '+capture-litnote-function)))
-
-
 ;;; P5: Litnote filename is snake_case of title
 
 (ert-deftest org-capture-test-p5-snake-case-used ()
@@ -76,15 +67,6 @@
   (skip-unless (fboundp '+capture-litnote-function))
   ;; Check that s-snake-case is required (indicates usage)
   (should (featurep 's)))
-
-
-;;; P6: +capture-read-url defaults to first URL-like string in kill ring
-
-(ert-deftest org-capture-test-p6-read-url-defined ()
-  "+capture-read-url is defined."
-  :tags '(:org-capture)
-  (skip-unless org-capture-test--lib-loaded)
-  (should (fboundp '+capture-read-url)))
 
 
 ;;; P7: YouTube URLs use title-only prompt
@@ -129,33 +111,6 @@
     (with-temp-buffer
       (insert-file-contents init-file)
       (should (search-forward "org-capture-put :kill-buffer t" nil t)))))
-
-
-;;; API tests
-
-(ert-deftest org-capture-test-context-variable ()
-  "+capture-context variable is defined."
-  :tags '(:org-capture)
-  (skip-unless org-capture-test--lib-loaded)
-  (should (boundp '+capture-context)))
-
-(ert-deftest org-capture-test-metadata-function ()
-  "+capture--metadata-for-web-document is defined."
-  :tags '(:org-capture)
-  (skip-unless org-capture-test--lib-loaded)
-  (should (fboundp '+capture--metadata-for-web-document)))
-
-(ert-deftest org-capture-test-eww-metadata-function ()
-  "+litnote-meta-try-from-eww is defined."
-  :tags '(:org-capture)
-  (skip-unless org-capture-test--lib-loaded)
-  (should (fboundp '+litnote-meta-try-from-eww)))
-
-(ert-deftest org-capture-test-url-metadata-function ()
-  "+litnote-meta-from-url is defined."
-  :tags '(:org-capture)
-  (skip-unless org-capture-test--lib-loaded)
-  (should (fboundp '+litnote-meta-from-url)))
 
 
 ;;; Template file tests

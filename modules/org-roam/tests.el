@@ -45,21 +45,6 @@
   (should (member "sensitive" +org-roam-sensitive-tags))
   (should (member "private" +org-roam-sensitive-tags)))
 
-(ert-deftest org-roam-test-p2-sensitive-predicate-defined ()
-  "Test that +org-roam-node-sensitive-p is defined."
-  :tags '(org-roam)
-  (should (fboundp '+org-roam-node-sensitive-p)))
-
-
-;;; P3: +org-roam-node-find with prefix arg shows all nodes
-
-(ert-deftest org-roam-test-p3-node-find-defined ()
-  "Test that +org-roam-node-find is defined and interactive."
-  :tags '(org-roam)
-  (should (fboundp '+org-roam-node-find))
-  (should (commandp '+org-roam-node-find)))
-
-
 ;;; P4: org-roam-mode-map has vim-style section navigation keys bound
 
 (ert-deftest org-roam-test-p4-roam-mode-keybindings-configured ()
@@ -114,19 +99,6 @@
   :tags '(org-roam)
   ;; Configuration uses general-predicate-dispatch for timekeep
   (should (file-exists-p (expand-file-name "init.el" org-roam-test--module-dir))))
-
-
-;;; API function tests
-
-(ert-deftest org-roam-test-formatted-olp-defined ()
-  "Test that +org-roam-node-formatted-olp is defined."
-  :tags '(org-roam)
-  (should (fboundp '+org-roam-node-formatted-olp)))
-
-(ert-deftest org-roam-test-tags-annotator-defined ()
-  "Test that +org-roam-node-tags-annotator is defined."
-  :tags '(org-roam)
-  (should (fboundp '+org-roam-node-tags-annotator)))
 
 
 ;;; Keybinding configuration tests

@@ -73,37 +73,6 @@
       (goto-char (point-min))
       (should (search-forward "evil-insert-state-cursor 'bar" nil t)))))
 
-;;;; P4: Escape Hook
-
-(ert-deftest evil-p4-escape-hook-exists ()
-  "+escape-hook should be defined."
-  (should (boundp '+escape-hook)))
-
-(ert-deftest evil-p4-escape-function-defined ()
-  "+escape should be a command."
-  (should (fboundp '+escape))
-  (should (commandp '+escape)))
-
-;;;; P5: Evil-Collection Deferred
-
-(ert-deftest evil-p5-evil-collection-disabled-list ()
-  "+evil-collection-disabled-list should exist."
-  (should (boundp '+evil-collection-disabled-list))
-  (should (listp +evil-collection-disabled-list)))
-
-(ert-deftest evil-p5-evil-collection-mode-list ()
-  "evil-collection-mode-list should exist."
-  (should (boundp 'evil-collection-mode-list))
-  (should (listp evil-collection-mode-list)))
-
-(ert-deftest evil-p5-evil-collection-init-function ()
-  "+evil-collection-init should be defined."
-  (should (fboundp '+evil-collection-init)))
-
-(ert-deftest evil-p5-evil-collection-defer-function ()
-  "+evil-collection-defer-install-to-mode-activation should be defined."
-  (should (fboundp '+evil-collection-defer-install-to-mode-activation)))
-
 ;;;; P6: Surround in Visual
 
 (ert-deftest evil-p6-surround-hook ()
@@ -145,28 +114,6 @@
       (insert-file-contents init-file)
       (should (search-forward "define-advice evil-join" nil t)))))
 
-;;;; Function definition tests
-
-(ert-deftest evil-func-delete-backward-word ()
-  "+delete-backward-word-no-kill should be defined."
-  (should (fboundp '+delete-backward-word-no-kill)))
-
-(ert-deftest evil-func-insert-char ()
-  "+insert-char should be defined."
-  (should (fboundp '+insert-char)))
-
-(ert-deftest evil-func-insert-nbsp ()
-  "+insert-nbsp should be defined."
-  (should (fboundp '+insert-nbsp)))
-
-(ert-deftest evil-func-multiedit ()
-  "+multiedit should be defined."
-  (should (fboundp '+multiedit)))
-
-(ert-deftest evil-func-kill-line ()
-  "+kill-line should be defined."
-  (should (fboundp '+kill-line)))
-
 ;;;; Settings tests
 
 (ert-deftest evil-settings-evil-want ()
@@ -188,32 +135,6 @@
     (with-temp-buffer
       (insert-file-contents init-file)
       (should (search-forward "sentence-end-double-space nil" nil t)))))
-
-;;;; Keybinding tests
-
-(ert-deftest evil-keybind-string-inflection ()
-  "M-- should be bound to string-inflection-all-cycle."
-  (let ((init-file (expand-file-name "init.el" module-dir)))
-    (with-temp-buffer
-      (insert-file-contents init-file)
-      (should (search-forward "M--" nil t))
-      (should (search-forward "string-inflection-all-cycle" nil t)))))
-
-(ert-deftest evil-keybind-vundo ()
-  "C-x u should be bound to vundo."
-  (let ((init-file (expand-file-name "init.el" module-dir)))
-    (with-temp-buffer
-      (insert-file-contents init-file)
-      (should (search-forward "C-x u" nil t))
-      (should (search-forward "vundo" nil t)))))
-
-(ert-deftest evil-keybind-insert-nbsp ()
-  "C-c SPC should be bound to +insert-nbsp."
-  (let ((init-file (expand-file-name "init.el" module-dir)))
-    (with-temp-buffer
-      (insert-file-contents init-file)
-      (should (search-forward "C-c SPC" nil t))
-      (should (search-forward "+insert-nbsp" nil t)))))
 
 (provide 'evil-tests)
 

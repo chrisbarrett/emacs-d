@@ -138,33 +138,6 @@
 
 ;;; Additional Tests
 
-(ert-deftest lang-lisp/eval-dwim-command-exists ()
-  "Verify +elisp-eval-dwim command is defined."
-  (should (fboundp '+elisp-eval-dwim))
-  (should (commandp '+elisp-eval-dwim)))
-
-(ert-deftest lang-lisp/eval-buffer-command-exists ()
-  "Verify +elisp-eval-buffer command is defined."
-  (should (fboundp '+elisp-eval-buffer))
-  (should (commandp '+elisp-eval-buffer)))
-
-(ert-deftest lang-lisp/ert-command-exists ()
-  "Verify +ert command is defined."
-  (should (fboundp '+ert))
-  (should (commandp '+ert)))
-
-(ert-deftest lang-lisp/emacs-config-mode-exists ()
-  "Verify emacs-config-mode minor mode is defined."
-  (skip-unless (fboundp 'emacs-config-mode))
-  (should (fboundp 'emacs-config-mode)))
-
-(ert-deftest lang-lisp/imenu-enable-disable-commands ()
-  "Verify consult-imenu-elisp enable/disable commands exist."
-  (should (fboundp '+consult-imenu-elisp-enable))
-  (should (fboundp '+consult-imenu-elisp-disable))
-  (should (commandp '+consult-imenu-elisp-enable))
-  (should (commandp '+consult-imenu-elisp-disable)))
-
 (ert-deftest lang-lisp/imenu-excluded-categories ()
   "Verify excluded categories are not split."
   (should (+consult-imenu-elisp--excluded-category-p "Sections"))

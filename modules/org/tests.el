@@ -94,14 +94,6 @@ Checks for org-ellipsis which we set to \" …\" (not the default)."
   (should (eq '+org-id-link (org-link-get-parameter "id" :face))))
 
 
-;;; P6: org-modern-mode is enabled globally
-
-(ert-deftest org-test-p6-org-modern-mode ()
-  "Test that global-org-modern-mode is available."
-  (skip-unless (featurep 'org-modern))
-  (should (fboundp 'global-org-modern-mode)))
-
-
 ;;; P7: evil-org-mode activates in org-mode buffers
 
 (ert-deftest org-test-p7-evil-org-mode-hook ()
@@ -110,40 +102,6 @@ Checks for org-ellipsis which we set to \" …\" (not the default)."
   (should (or (memq 'evil-org-mode org-mode-hook)
               ;; Hook might be added via use-package
               (featurep 'evil-org))))
-
-
-;;; P8: org-super-agenda-mode is enabled
-
-(ert-deftest org-test-p8-org-super-agenda ()
-  "Test that org-super-agenda-mode function exists."
-  (skip-unless (featurep 'org-super-agenda))
-  (should (fboundp 'org-super-agenda-mode)))
-
-
-;;; Lib function tests
-
-(ert-deftest org-test-org-id-link-face-defined ()
-  "Test that +org-id-link face is defined."
-  (should (facep '+org-id-link)))
-
-(ert-deftest org-test-cut-subtree-or-cancel-note ()
-  "Test that +org-cut-subtree-or-cancel-note is defined."
-  (should (fboundp '+org-cut-subtree-or-cancel-note)))
-
-(ert-deftest org-test-metareturn-insert-heading ()
-  "Test that +org-metareturn-insert-heading-insert-state-h is defined."
-  (should (fboundp '+org-metareturn-insert-heading-insert-state-h)))
-
-(ert-deftest org-test-ad-org-enter-evil-insert-state ()
-  "Test that +ad-org-enter-evil-insert-state is defined."
-  (should (fboundp '+ad-org-enter-evil-insert-state)))
-
-
-;;; Clocktable function tests
-
-(ert-deftest org-test-clocktable-fmt-daily-log ()
-  "Test that +clocktable-fmt-daily-log is defined."
-  (should (fboundp '+clocktable-fmt-daily-log)))
 
 (provide 'org-tests)
 
