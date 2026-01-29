@@ -36,7 +36,8 @@
   (use-package vertico-repeat
     :hook (minibuffer-setup-hook . vertico-repeat-save)
     :config
-    (with-eval-after-load 'savehist
+    (use-package safehist
+      :config
       (add-to-list 'savehist-additional-variables 'vertico-repeat-history))))
 
 
@@ -127,12 +128,12 @@
 ;; Provides a variant of completing-read that allows users to enter multiple
 ;; values, separated by a delimiter.
 (use-package crm
-  :config
+  :preface
   (define-advice completing-read-multiple (:filter-args (args) crm-indicator)
     "Display the separator during `completing-read-multiple'."
     (let ((sans-brackets
            (replace-regexp-in-string (rx (or (and bos "[" (*? any) "]*")
-                                              (and "[" (*? any) "]*" eos)))
+                                             (and "[" (*? any) "]*" eos)))
                                      ""
                                      crm-separator)))
       (cons (format "[CRM %s] %s" (propertize sans-brackets 'face 'error) (car args))
@@ -140,7 +141,8 @@
 
 
 ;; Corfu provides in-buffer completions as you type.
-(use-package corfu  :hook (+first-input-hook . global-corfu-mode)
+(use-package corfu
+  :hook (+first-input-hook . global-corfu-mode)
   :general-config (:keymaps 'corfu-map
                             "RET" #'corfu-send
                             "<escape>" #'corfu-reset
@@ -170,21 +172,27 @@
 
 
 ;; Adds icons to corfu popups.
-(use-package nerd-icons-corfu  :after corfu
+(use-package nerd-icons-corfu
+  :after corfu
+  :autoload nerd-icons-corfu-formatter
   :init
-  (add-to-list 'corfu-margin-formatters #'nerd-icons-corfu-formatter))
+  (use-package corfu
+    :config
+    (add-to-list 'corfu-margin-formatters #'nerd-icons-corfu-formatter)))
 
 
 ;; Adds useful functionality for `completion-at-point-functions'.
-(use-package cape  :init
+(use-package cape
+  :autoload (cape-file cape-elisp-block cape-wrap-nonexclusive)
+  :init
   (add-hook! 'prog-mode-hook
     (add-hook 'completion-at-point-functions #'cape-file -10 t))
   (add-hook! 'org-mode-hook
     (add-hook 'completion-at-point-functions #'cape-elisp-block 0 t))
 
-  (advice-add #'comint-completion-at-point :around #'cape-wrap-nonexclusive)
-  (advice-add #'eglot-completion-at-point :around #'cape-wrap-nonexclusive)
-  (advice-add #'pcomplete-completions-at-point :around #'cape-wrap-nonexclusive))
+  (advice-add 'comint-completion-at-point :around #'cape-wrap-nonexclusive)
+  (advice-add 'eglot-completion-at-point :around #'cape-wrap-nonexclusive)
+  (advice-add 'pcomplete-completions-at-point :around #'cape-wrap-nonexclusive))
 
 
 ;; which-key displays a UI popup of available key commands as you type.
@@ -207,7 +215,8 @@
 
 ;; Consult provides commands for common tasks that leverage the Emacs
 ;; completion system. It composes well with the above packages.
-(use-package consult  :general
+(use-package consult
+  :general
   ([remap bookmark-jump]                 #'consult-bookmark
    [remap evil-show-marks]               #'consult-mark
    [remap evil-show-registers]           #'consult-register
@@ -242,9 +251,7 @@
      "--hidden --exclude .git"))
 
   :config
-  (consult-customize
-   consult-theme
-   :preview-key (list "C-SPC" :debounce 0.5 'any))
+  (consult-customize consult-theme :preview-key (list "C-SPC" :debounce 0.5 'any))
 
   ;; Tweak the register preview for `consult-register-load',
   ;; `consult-register-store' and the built-in commands.  This improves the
@@ -256,7 +263,8 @@
 
 ;; Embark provides a UI for performing contextual actions on selected items
 ;; within completing-read.
-(use-package embark  :general
+(use-package embark
+  :general
   (:states '(normal emacs motion)
            "C-@" #'embark-act
            "C-t" #'embark-dwim)
@@ -282,7 +290,7 @@
 
 ;; Set how the default option for empty input is displayed in the minibuffer.
 (use-package minibuf-eldef
-  :hook (after-init . minibuffer-electric-default-mode)
+  :hook (after-init-hook . minibuffer-electric-default-mode)
   :custom
   (minibuffer-default-prompt-format " [%s]"))
 
@@ -301,7 +309,5 @@
 (use-package find-func
   :custom
   (find-library-include-other-files nil))
-
-(provide 'completion-init)
 
 ;;; init.el ends here
