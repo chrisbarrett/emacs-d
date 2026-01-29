@@ -124,7 +124,7 @@
   :after-call +first-file-hook +first-buffer-hook
   :config
   (global-page-break-lines-mode +1)
-  (pushnew! page-break-lines-modes 'rfc-mode 'prog-mode 'text-mode))
+  (pushnew! page-break-lines-modes 'rfc-mode 'prog-mode 'text-mode 'compilation-mode))
 
 
 ;;; Hide mode line
