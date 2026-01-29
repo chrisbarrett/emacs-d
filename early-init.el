@@ -72,7 +72,6 @@
 (setq modus-themes-italic-constructs t)
 (setq modus-themes-bold-constructs nil)
 
-(require 'theme-lib)
 (setq +theme-light 'modus-operandi-tinted)
 (setq +theme-dark 'modus-vivendi)
 
