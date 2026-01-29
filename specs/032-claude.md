@@ -10,8 +10,8 @@ Claude Code runs inside Emacs with MCP bridge for editor integration.
 
 ## External Packages
 
-| Package        | Purpose                        |
-| :------------- | :----------------------------- |
+| Package         | Purpose                           |
+| :-------------- | :-------------------------------- |
 | claude-code-ide | Emacs integration for Claude Code |
 
 ## Dependencies
@@ -31,11 +31,11 @@ Claude Code runs inside Emacs with MCP bridge for editor integration.
 
 ### MCP Server
 
-| Aspect              | Behavior                          |
-| :------------------ | :-------------------------------- |
-| MCP server enabled  | t (claude-code-ide-enable-mcp-server) |
-| IDE diff            | Disabled (too interruptive)       |
-| Emacs tools         | Registered via claude-code-ide-emacs-tools-setup |
+| Aspect             | Behavior                                         |
+| :----------------- | :----------------------------------------------- |
+| MCP server enabled | t (claude-code-ide-enable-mcp-server)            |
+| IDE diff           | Disabled (too interruptive)                      |
+| Emacs tools        | Registered via claude-code-ide-emacs-tools-setup |
 
 ### Evil Mode Integration
 
@@ -50,10 +50,12 @@ Buffer name pattern: `*claude-code*`
 ### Auto-Scroll
 
 Claude-code-ide buffers auto-scroll to bottom on:
+
 - Window switch (+switch-window-hook)
 - Buffer switch (+switch-buffer-hook)
 
 Implementation:
+
 1. Iterate visible windows
 2. If buffer matches `*claude-code*` pattern
 3. Move point to end
@@ -62,6 +64,7 @@ Implementation:
 ### Non-Breaking Space Display
 
 Non-breaking space characters in Claude Code prompts are hidden:
+
 - Hook: eat-exec-hook
 - Face remap: nobreak-space inherits default face
 - Only applies to claude-code-ide buffers
@@ -69,6 +72,7 @@ Non-breaking space characters in Claude Code prompts are hidden:
 ### Mise Environment Integration
 
 When `.mise.toml` exists in project:
+
 1. Check for mise executable
 2. Run `mise env` to get environment variables
 3. Prepend to `process-environment` for terminal session
@@ -79,11 +83,11 @@ This ensures Claude Code sessions inherit project-specific tool versions.
 
 ### Functions
 
-| Function                            | Purpose                              |
-| :---------------------------------- | :----------------------------------- |
-| +claude-code-ide-active-buffer-p    | Predicate for claude-code buffers    |
-| +claude-code-ide-scroll-to-bottom-h | Scroll visible claude buffers        |
-| +eat-remap-nbsp                     | Hide non-breaking space in eat       |
+| Function                            | Purpose                           |
+| :---------------------------------- | :-------------------------------- |
+| +claude-code-ide-active-buffer-p    | Predicate for claude-code buffers |
+| +claude-code-ide-scroll-to-bottom-h | Scroll visible claude buffers     |
+| +claude-code-eat-remap-nbsp         | Hide non-breaking space in eat    |
 
 ### Buffer Pattern
 
@@ -99,4 +103,4 @@ This ensures Claude Code sessions inherit project-specific tool versions.
 4. evil-buffer-regexps includes `*claude-code*` pattern
 5. +switch-window-hook includes +claude-code-ide-scroll-to-bottom-h
 6. +switch-buffer-hook includes +claude-code-ide-scroll-to-bottom-h
-7. eat-exec-hook includes +eat-remap-nbsp
+7. eat-exec-hook includes +claude-code-eat-remap-nbsp

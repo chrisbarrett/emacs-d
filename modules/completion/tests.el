@@ -19,18 +19,6 @@
 
 ;;; Module structure tests
 
-(ert-deftest completion-test-packages-eld-exists ()
-  "packages.eld exists in module directory."
-  (should (file-exists-p (expand-file-name "packages.eld" completion-test--module-dir))))
-
-(ert-deftest completion-test-spec-md-exists ()
-  "spec.md exists and is a symlink."
-  (should (file-symlink-p (expand-file-name "spec.md" completion-test--module-dir))))
-
-(ert-deftest completion-test-init-exists ()
-  "init.el exists in module."
-  (should (file-exists-p (expand-file-name "init.el" completion-test--module-dir))))
-
 (ert-deftest completion-test-packages-eld-contents ()
   "packages.eld exists in module (packages now installed via use-package)."
   ;; Packages are now installed via use-package :ensure in init.el

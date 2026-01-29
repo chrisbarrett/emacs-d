@@ -7,7 +7,7 @@
 ;;; Code:
 
 ;;;###autoload
-(defsubst +claude-code-ide-active-buffer-p (buf)
+(defun +claude-code-ide-active-buffer-p (buf)
   "Return non-nil if BUF is a `claude-code-ide' buffer."
   (and (buffer-live-p buf)
        (string-match-p (rx bol "*claude-code") (buffer-name buf))))
@@ -23,7 +23,7 @@ This ensures consistent positioning when switching tabs, frames, or windows."
         (recenter -1)))))
 
 ;;;###autoload
-(defun +eat-remap-nbsp (proc)
+(defun +claude-code-eat-remap-nbsp (proc)
   "Remap nobreak-space face in PROC's buffer for `claude-code-ide'.
 Prevents non-breaking space characters in prompts from being visible."
   (when-let* ((buf (process-buffer proc)))

@@ -6,8 +6,8 @@
 
 ;;; Code:
 
-(require '+corelib)
 (require '+autoloads)
+(require '+corelib)
 
 ;; Run claude-code inside Emacs; creates an MCP bridge between the processes
 ;; to provide editor integration.
@@ -35,7 +35,7 @@
 
 ;; Prevent non-breaking-space in prompt from being visible.
 
-(add-hook 'eat-exec-hook #'+eat-remap-nbsp)
+(add-hook 'eat-exec-hook #'+claude-code-eat-remap-nbsp)
 
 ;; Integrate with mise
 
