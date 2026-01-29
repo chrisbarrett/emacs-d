@@ -17,6 +17,4 @@
   :config
   (auth-source-op-enable))
 
-(provide 'auth-init)
-
 ;;; init.el ends here
