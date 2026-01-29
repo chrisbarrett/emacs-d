@@ -212,16 +212,17 @@ the symbol `fboundp' without loading its source file."
 
 
 (defun +modules-write-autoloads (autoload-entries)
-  (with-current-buffer (find-file-noselect +modules-autoloads-file)
-    (erase-buffer)
-    (insert ";; -*- lexical-binding: t; -*-\n")
+  (let ((backup-inhibited t))
+    (with-current-buffer (find-file-noselect +modules-autoloads-file)
+      (erase-buffer)
+      (insert ";; -*- lexical-binding: t; -*-\n")
 
-    (pcase-dolist (`(,form . ,source-file) autoload-entries)
-      (when-let* ((form (+modules--autoload-form form source-file)))
-        (insert (format "%S\n" form))))
+      (pcase-dolist (`(,form . ,source-file) autoload-entries)
+        (when-let* ((form (+modules--autoload-form form source-file)))
+          (insert (format "%S\n" form))))
 
-    (insert "(provide '+autoloads)\n")
-    (save-buffer)))
+      (insert "(provide '+autoloads)\n")
+      (save-buffer))))
 
 
 ;;; Init Loading
