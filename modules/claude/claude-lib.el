@@ -8,13 +8,13 @@
 
 ;;;###autoload
 (defsubst +claude-code-ide-active-buffer-p (buf)
-  "Return non-nil if BUF is a claude-code-ide buffer."
+  "Return non-nil if BUF is a `claude-code-ide' buffer."
   (and (buffer-live-p buf)
        (string-match-p (rx bol "*claude-code") (buffer-name buf))))
 
 ;;;###autoload
 (defun +claude-code-ide-scroll-to-bottom-h ()
-  "Scroll all visible claude-code-ide buffers to bottom.
+  "Scroll all visible `claude-code-ide' buffers to bottom.
 This ensures consistent positioning when switching tabs, frames, or windows."
   (dolist (window (window-list nil 'no-minibuffer))
     (with-selected-window window
@@ -24,7 +24,7 @@ This ensures consistent positioning when switching tabs, frames, or windows."
 
 ;;;###autoload
 (defun +eat-remap-nbsp (proc)
-  "Remap nobreak-space face in PROC's buffer for claude-code-ide.
+  "Remap nobreak-space face in PROC's buffer for `claude-code-ide'.
 Prevents non-breaking space characters in prompts from being visible."
   (when-let* ((buf (process-buffer proc)))
     (when (+claude-code-ide-active-buffer-p buf)
@@ -32,4 +32,4 @@ Prevents non-breaking space characters in prompts from being visible."
         (face-remap-add-relative 'nobreak-space :inherit 'default)))))
 
 (provide 'claude-lib)
-;;; lib.el ends here
+;;; claude-lib.el ends here
