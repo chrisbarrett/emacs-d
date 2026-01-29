@@ -23,9 +23,6 @@
 
 (defconst +modules-autoloads-file (file-name-concat +lisp-dir "+autoloads.el"))
 
-(defvar +extra-packages-file (file-name-concat user-emacs-directory "extra-packages.eld")
-  "Lisp data file containing extra packages not associated with any module.")
-
 
 (defun +modules-discover ()
   "Discover all module directories under `+modules-directory'.
@@ -251,17 +248,6 @@ Each file is loaded using `load', which evaluates its contents."
   (dolist (init-file init-files)
     (load init-file nil 'nomessage)))
 
-
-(defun +install-packages ()
-  "Install all packages declared in the module system.
-
-Packages are sourced from `+extra-packages-file' and the `packages.eld'
-files in each module."
-  (interactive)
-  (+modules-install-packages
-   (append (when (file-exists-p +extra-packages-file)
-             (+modules-read-extra-packages +extra-packages-file))
-           (+modules-collect-packages))))
 
 (provide '+modules)
 
