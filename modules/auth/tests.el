@@ -8,6 +8,10 @@
 
 (require 'ert)
 
+(cl-eval-when (compile)
+  (require 'auth-source)
+  (require 'auth-source-op))
+
 ;; Load init.el from this module
 (let ((init-file (expand-file-name "modules/auth/init.el" user-emacs-directory)))
   (condition-case nil
@@ -17,14 +21,14 @@
 ;;; P1: auth-sources contains 1password symbol
 
 (ert-deftest auth/p1-auth-sources-contains-1password ()
-  "P1: auth-sources should contain the 1password symbol."
+  "P1: `auth-sources' should contain the 1password symbol."
   (skip-unless (featurep 'auth-source-op))
   (should (memq '1password auth-sources)))
 
 ;;; P2: auth-source-op-vaults set to '("Emacs")
 
 (ert-deftest auth/p2-auth-source-op-vaults-set ()
-  "P2: auth-source-op-vaults should be set to Emacs vault only."
+  "P2: `auth-source-op-vaults' should be set to Emacs vault only."
   (skip-unless (featurep 'auth-source-op))
   (should (equal '("Emacs") auth-source-op-vaults)))
 
@@ -51,7 +55,7 @@
 ;;; Additional: Module structure
 
 (ert-deftest auth/module-has-packages ()
-  "Module has packages.eld (packages now via use-package :ensure)."
+  "Module has packages.eld (packages now via `use-package' :ensure)."
   (let ((packages-file (expand-file-name "modules/auth/packages.eld" user-emacs-directory)))
     (should (file-exists-p packages-file))))
 

@@ -6,15 +6,16 @@
 
 ;;; Code:
 
-;; Prefer local copy of auth-source-op.
-(add-to-list 'load-path "~/src/chrisbarrett/emacs-auth-source-op")
-
-(with-eval-after-load 'auth-source
-  (require 'auth-source-op nil t)
-  (when (fboundp 'auth-source-op-enable)
-    (setq auth-sources '(1password))
-    (setq auth-source-op-vaults '("Emacs"))
-    (auth-source-op-enable)))
+(use-package auth-source-op
+  :load-path "~/src/chrisbarrett/emacs-auth-source-op"
+  :after auth-source
+  :functions auth-source-op-enable
+  :demand t
+  :custom
+  (auth-sources '(1password))
+  (auth-source-op-vaults '("Emacs"))
+  :config
+  (auth-source-op-enable))
 
 (provide 'auth-init)
 
