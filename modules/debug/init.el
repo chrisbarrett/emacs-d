@@ -9,21 +9,6 @@
 
 (require '+corelib)
 
-;; Toggle debug-on-exit for current frame (combined set/clear).
-(defun +debugger-toggle-on-exit-frame ()
-  "Toggle whether to reactivate on exit frame."
-  (interactive)
-  (let ((enabled-for-line (save-excursion
-                            (goto-char (line-beginning-position))
-                            (looking-at (rx (* space) "*" (+ space))))))
-    (cond
-     (enabled-for-line
-      (debugger-frame-clear)
-      (message "debug on exit for frame disabled"))
-     (t
-      (debugger-frame)
-      (message "debug on exit for frame enabled")))))
-
 ;; Custom mode line showing key reference.
 (defconst +debugger-mode-line-format
   (cl-labels ((low-emphasis (str)
@@ -49,7 +34,8 @@
       (key "R" "eval & record")))))
 
 ;; Debug: Emacs Lisp debugger.
-(with-eval-after-load 'debug
+(use-package debug
+  :preface
   (declare-function debugger-frame-clear "debug")
   (declare-function debugger-frame "debug")
   (declare-function debugger-record-buffer "debug")
@@ -58,17 +44,14 @@
   (define-advice debugger-record-expression (:after (&rest _) display-buffer)
     (display-buffer debugger-record-buffer))
 
+  :config
   ;; Set mode line in debugger buffers.
   (setq-hook! 'debugger-mode-hook
     mode-line-format +debugger-mode-line-format)
 
-  ;; Keybinding for toggle (requires general and evil).
-  (with-eval-after-load 'general
-    (with-eval-after-load 'evil
-      (general-def :keymaps 'debugger-mode-map
-        :states 'normal
-        "t" #'+debugger-toggle-on-exit-frame))))
-
-(provide 'debug-init)
+  :general-config
+  (:keymaps 'debugger-mode-map
+   :states 'normal
+   "t" #'+debugger-toggle-on-exit-frame))
 
 ;;; init.el ends here
