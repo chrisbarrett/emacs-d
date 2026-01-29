@@ -7,6 +7,11 @@
 ;;; Code:
 
 (require 'ert)
+(require '+autoloads)
+
+(cl-eval-when (compile)
+  (require 'evil)
+  (require 'claude-code-ide))
 
 ;; Define hooks that init.el expects
 (defvar +switch-window-hook nil)
@@ -49,7 +54,7 @@
 ;; P4: evil-buffer-regexps includes `*claude-code*` pattern
 
 (ert-deftest claude/evil-buffer-exclusion ()
-  "Evil should be disabled in claude-code buffers via evil-buffer-regexps."
+  "Evil should be disabled in claude-code buffers via `evil-buffer-regexps'."
   (skip-unless (boundp 'evil-buffer-regexps))
   (should (cl-some (lambda (pattern)
                      (let ((re (if (consp pattern) (car pattern) pattern)))
@@ -75,7 +80,7 @@
 ;; P7: eat-exec-hook includes +eat-remap-nbsp
 
 (ert-deftest claude/eat-exec-hook ()
-  "eat-exec-hook should include nbsp remapping function."
+  "`eat-exec-hook' should include nbsp remapping function."
   (should (memq '+eat-remap-nbsp eat-exec-hook)))
 
 ;; Function tests
@@ -115,9 +120,8 @@
     (should (file-exists-p (expand-file-name "spec.md" module-dir)))))
 
 (ert-deftest claude/packages-eld-content ()
-  "packages.eld exists (packages now via use-package :ensure)."
+  "Check packages.eld exists."
   (let ((packages-file (expand-file-name "modules/claude/packages.eld" user-emacs-directory)))
     (should (file-exists-p packages-file))))
 
-(provide 'claude-tests)
 ;;; tests.el ends here

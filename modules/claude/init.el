@@ -53,5 +53,4 @@
          (process-environment (append mise-vars process-environment)))
     (apply fn args)))
 
-(provide 'claude-init)
 ;;; init.el ends here
