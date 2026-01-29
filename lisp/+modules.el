@@ -209,12 +209,22 @@ autoload-annotated definitions in module lib files."
 AUTOLOAD-ENTRIES is an alist of (FORM . SOURCE-FILE) pairs.
 Each FORM is converted to an autoload and evaluated, making
 the symbol `fboundp' without loading its source file."
-  (dolist (entry autoload-entries)
-    (let* ((form (car entry))
-           (source-file (cdr entry))
-           (autoload-form (+modules--autoload-form form source-file)))
-      (when autoload-form
-        (eval autoload-form t)))))
+  (pcase-dolist (`(,form . ,source-file) autoload-entries)
+    (when-let* ((form (+modules--autoload-form form source-file)))
+      (eval form t))))
+
+
+(defun +modules-write-autoloads (autoload-entries)
+  (with-current-buffer (find-file-noselect +modules-autoloads-file)
+    (erase-buffer)
+    (insert ";; -*- lexical-binding: t; -*-\n")
+
+    (pcase-dolist (`(,form . ,source-file) autoload-entries)
+      (when-let* ((form (+modules--autoload-form form source-file)))
+        (insert (format "%S\n" form))))
+
+    (insert "(provide '+modules-autoloads)\n")
+    (save-buffer)))
 
 
 ;;; Init Loading

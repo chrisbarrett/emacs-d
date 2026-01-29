@@ -49,18 +49,17 @@
 ;; Install all packages before elpaca-wait:
 ;; 1. Extra packages (bootstrap packages not in any module)
 ;; 2. Module packages (from modules/*/packages.eld)
-(let ((extra-packages-file (file-name-concat user-emacs-directory "extra-packages.eld")))
-  (+modules-install-packages
-   (append (when (file-exists-p extra-packages-file)
-             (+modules-read-extra-packages extra-packages-file))
-           (+modules-collect-packages))))
+
+(+install-packages)
 
 ;; Block until all packages are installed.
 (elpaca-wait)
 
 ;; Register autoloads so module functions are available before loading.
-(+modules-register-autoloads (+modules-collect-autoloads))
 
+(let ((autoloads (+modules-collect-autoloads)))
+  (+modules-register-autoloads autoloads)
+  (+modules-write-autoloads autoloads))
 
 ;;; Configure Bootstrap Packages
 
