@@ -387,3 +387,5 @@ ARG is the number of words to delete."
     (funcall cmd)))
 
 
+
+;;; lib.el ends here

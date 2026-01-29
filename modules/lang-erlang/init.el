@@ -19,3 +19,5 @@
   (pushnew! dired-omit-extensions ".jam" ".vee" ".beam"))
 
 
+
+;;; init.el ends here

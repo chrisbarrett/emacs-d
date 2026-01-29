@@ -71,3 +71,5 @@
     (evil-set-initial-state 'rfc-mode 'motion)))
 
 
+
+;;; init.el ends here

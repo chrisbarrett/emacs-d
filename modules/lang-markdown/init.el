@@ -94,3 +94,5 @@
                   'prettier-markdown))))
 
 
+
+;;; init.el ends here

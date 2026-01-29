@@ -353,3 +353,5 @@ Copied from doom, which itself adapts from:
               (desired-indent)
               (normal-indent))))))
 
+
+;;; init.el ends here

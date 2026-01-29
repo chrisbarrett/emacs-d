@@ -21,3 +21,5 @@
 (xterm-mouse-mode +1)
 
 
+
+;;; init.el ends here

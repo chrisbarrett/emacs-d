@@ -46,3 +46,5 @@
 (org-capture-put :kill-buffer t)
 
 
+
+;;; init.el ends here

@@ -41,3 +41,4 @@ but excludes .git directories to allow git operations."
                          file)
          (not (string-match-p (rx "/.git/") file)))))
 
+;;; lib.el ends here

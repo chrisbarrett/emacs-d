@@ -25,3 +25,5 @@
                         '(font-lock-delimiter-face ((t (:inherit shadow)))))
 
 
+
+;;; init.el ends here

@@ -44,3 +44,5 @@
       (insert left-pad ": "))))
 
 
+
+;;; init.el ends here

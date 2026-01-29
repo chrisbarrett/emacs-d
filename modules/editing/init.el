@@ -119,4 +119,4 @@
   (when (+file-should-be-opened-read-only-p (buffer-file-name))
     (read-only-mode +1)))
 
-
+;;; init.el ends here

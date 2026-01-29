@@ -57,3 +57,5 @@
         (user-error "Not in a project or git repo")))))
 
 
+
+;;; lib.el ends here

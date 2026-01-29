@@ -49,3 +49,5 @@ Returns empty string for template insertion but sets buffer-local state."
   (if +ocaml--tempel-in-expr-p " in" ""))
 
 
+
+;;; lib.el ends here

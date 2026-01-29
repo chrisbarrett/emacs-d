@@ -30,3 +30,5 @@
     tab-width 2))
 
 
+
+;;; init.el ends here

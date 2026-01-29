@@ -128,3 +128,5 @@
                         (? . avy-action-zap-to-char))))
 
 
+
+;;; init.el ends here

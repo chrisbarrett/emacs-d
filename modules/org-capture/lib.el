@@ -203,3 +203,5 @@ Creates new file in org-roam-directory/litnotes/ with metadata from URL."
       (find-file (file-name-concat org-roam-directory "litnotes" filename)))))
 
 
+
+;;; lib.el ends here

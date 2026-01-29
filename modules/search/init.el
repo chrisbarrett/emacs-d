@@ -28,3 +28,5 @@
   (setq xref-search-program 'ripgrep))
 
 
+
+;;; init.el ends here

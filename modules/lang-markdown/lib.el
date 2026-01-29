@@ -33,3 +33,5 @@ expansion occurs, it falls back to the default `markdown-cycle' behavior."
                             (,(rx bol (* space) "<!--" (1+ space) "prettier-ignore-end" (1+ space) "-->") 0 '+markdown-prettier-ignore-comment-face prepend))))
 
 
+
+;;; lib.el ends here

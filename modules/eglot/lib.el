@@ -34,3 +34,5 @@ Intended for `eglot-managed-mode-hook'."
   (eglot-inlay-hints-mode -1))
 
 
+
+;;; lib.el ends here

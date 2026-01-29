@@ -343,3 +343,5 @@ If current window is a side window, move it to the right side."
   t)
 
 
+
+;;; lib.el ends here

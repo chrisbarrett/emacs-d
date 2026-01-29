@@ -44,3 +44,5 @@ each clause is taken as the name of a template."
                                              "")))))
 
 
+
+;;; lib.el ends here

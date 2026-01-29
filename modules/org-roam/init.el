@@ -163,3 +163,5 @@
     "rR" #'org-roam-slipbox-refile))
 
 
+
+;;; init.el ends here

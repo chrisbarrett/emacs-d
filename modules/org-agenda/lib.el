@@ -144,3 +144,5 @@ Based on `+org-habit-graph-window-ratio'."
     (setq-local org-habit-graph-column graph-column-adjusted)))
 
 
+
+;;; lib.el ends here

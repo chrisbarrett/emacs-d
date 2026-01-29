@@ -41,3 +41,5 @@
   (+define-file-template (rx "flake.nix" eos) "flake.eld"))
 
 
+
+;;; init.el ends here

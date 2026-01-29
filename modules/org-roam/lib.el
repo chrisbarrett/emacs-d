@@ -79,3 +79,5 @@ Shows @slipbox and #tags."
         (concat " @" slipbox " " (string-join all-tags " "))))))
 
 
+
+;;; lib.el ends here

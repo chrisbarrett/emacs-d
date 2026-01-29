@@ -144,3 +144,5 @@ With prefix ARG, run all tests; otherwise prompt for selector."
       (helpful-at-point)
     (describe-symbol (symbol-at-point))))
 
+
+;;; lib.el ends here

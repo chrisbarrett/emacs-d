@@ -46,3 +46,5 @@
   (add-hook 'envrc-global-mode-hook #'+direnv-mode-setup-h))
 
 
+
+;;; init.el ends here

@@ -45,3 +45,5 @@
   (advice-add 'ediff-next-difference :after #'+ad-ediff-reveal-org-content-around-hunk)
   (advice-add 'ediff-previous-difference :after #'+ad-ediff-reveal-org-content-around-hunk))
 
+
+;;; init.el ends here

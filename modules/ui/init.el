@@ -488,3 +488,5 @@
 (+tty-frame-setup (selected-frame))
 
 
+
+;;; init.el ends here

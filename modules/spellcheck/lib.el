@@ -31,3 +31,5 @@ Called from `spell-fu-mode-hook' to load dictionaries."
   (setq-local spell-fu-faces-exclude +spellcheck-org-excluded-faces))
 
 
+
+;;; lib.el ends here

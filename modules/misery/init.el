@@ -21,3 +21,5 @@
   (misery-show-summary-in-minibuffer nil))
 
 
+
+;;; init.el ends here

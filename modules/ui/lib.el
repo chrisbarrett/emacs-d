@@ -162,3 +162,5 @@ next-error, etc.  ALIST is display-buffer action alist."
     (goto-address)
     (goto-address-mode +1)))
 
+
+;;; lib.el ends here

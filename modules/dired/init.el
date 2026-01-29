@@ -65,3 +65,5 @@
 (use-package diredfl
   :hook (dired-mode-hook))
 
+
+;;; init.el ends here

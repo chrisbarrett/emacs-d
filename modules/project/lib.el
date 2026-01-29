@@ -53,3 +53,5 @@ Falls back to `dired' if not a git repository."
 (autoload 'magit-status-setup-buffer "magit-status")
 
 
+
+;;; lib.el ends here

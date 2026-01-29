@@ -45,3 +45,5 @@
   (+define-file-template (rx "region.hcl" eos) "terragrunt/region.eld"))
 
 
+
+;;; init.el ends here

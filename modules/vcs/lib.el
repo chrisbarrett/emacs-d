@@ -651,3 +651,5 @@ Tab and buffer cleanup handled by `+magit-worktree-delete--cleanup' advice."
    ("c" "claude-code" +worktrees-claude-code)])
 
 
+
+;;; lib.el ends here

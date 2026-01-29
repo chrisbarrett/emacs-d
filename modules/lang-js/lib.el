@@ -64,3 +64,5 @@ Search from DIR or `default-directory' upward."
   (locate-dominating-file (or dir default-directory) "cdk.json"))
 
 
+
+;;; lib.el ends here

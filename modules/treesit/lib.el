@@ -32,3 +32,5 @@ word.  Fall back to regular `expreg-expand'."
      (t (expreg-expand)))))
 
 
+
+;;; lib.el ends here

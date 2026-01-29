@@ -50,3 +50,5 @@ Normalizes spacing before the angle bracket on include lines."
 (alist-set! major-mode-remap-alist #'c-mode #'c-ts-mode)
 
 
+
+;;; init.el ends here
