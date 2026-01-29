@@ -7,6 +7,7 @@
 ;;; Code:
 
 (require '+corelib)
+(require '+autoloads)
 
 ;; Run claude-code inside Emacs; creates an MCP bridge between the processes
 ;; to provide editor integration.

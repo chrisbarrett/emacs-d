@@ -21,7 +21,7 @@
   (expand-file-name "modules" user-emacs-directory)
   "Directory containing module directories.")
 
-(defconst +modules-autoloads-file (file-name-concat +lisp-dir "module-system-autoloads.el"))
+(defconst +modules-autoloads-file (file-name-concat +lisp-dir "+autoloads.el"))
 
 (defvar +extra-packages-file (file-name-concat user-emacs-directory "extra-packages.eld")
   "Lisp data file containing extra packages not associated with any module.")
@@ -223,7 +223,7 @@ the symbol `fboundp' without loading its source file."
       (when-let* ((form (+modules--autoload-form form source-file)))
         (insert (format "%S\n" form))))
 
-    (insert "(provide '+modules-autoloads)\n")
+    (insert "(provide '+autoloads)\n")
     (save-buffer)))
 
 
