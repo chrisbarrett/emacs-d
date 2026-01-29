@@ -1,4 +1,4 @@
-;;; org-capture-lib.el --- Supporting functions for org capture templates -*- lexical-binding: t; -*-
+;;; lib.el --- Supporting functions for org capture templates -*- lexical-binding: t; -*-
 
 ;;; Commentary:
 
@@ -202,6 +202,4 @@ Creates new file in org-roam-directory/litnotes/ with metadata from URL."
     (let ((filename (format "%s.org" (s-snake-case (plist-get context :title)))))
       (find-file (file-name-concat org-roam-directory "litnotes" filename)))))
 
-(provide 'org-capture-lib)
 
-;;; org-capture-lib.el ends here

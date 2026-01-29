@@ -1,4 +1,4 @@
-;;; ui-lib.el --- UI module library functions -*- lexical-binding: t; -*-
+;;; lib.el --- UI module library functions -*- lexical-binding: t; -*-
 
 ;;; Commentary:
 
@@ -162,5 +162,3 @@ next-error, etc.  ALIST is display-buffer action alist."
     (goto-address)
     (goto-address-mode +1)))
 
-(provide 'ui-lib)
-;;; ui-lib.el ends here

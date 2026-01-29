@@ -8,6 +8,8 @@
 
 ;;; Code:
 
+(require '+autoloads)
+
 (require '+corelib)
 
 (use-package misery
@@ -18,6 +20,4 @@
   :custom
   (misery-show-summary-in-minibuffer nil))
 
-(provide 'misery-init)
 
-;;; init.el ends here

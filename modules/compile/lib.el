@@ -416,4 +416,3 @@ The optional keyword arguments are:
     (display-buffer buf)))
 
 
-;;; lib.el ends here

@@ -6,6 +6,8 @@
 
 ;;; Code:
 
+(require '+autoloads)
+
 (require 'org-capture)
 
 ;; org-capture-lib functions are autoloaded; no explicit require needed
@@ -43,6 +45,4 @@
 ;; Kill capture buffer after finalize
 (org-capture-put :kill-buffer t)
 
-(provide 'org-capture-init)
 
-;;; org-capture-init.el ends here

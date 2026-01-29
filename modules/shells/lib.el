@@ -56,6 +56,4 @@
             (eshell/cd dir))
         (user-error "Not in a project or git repo")))))
 
-(provide 'shells-lib)
 
-;;; lib.el ends here

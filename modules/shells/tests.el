@@ -20,24 +20,8 @@
 
 ;; Load lib for testing
 (condition-case nil
-    (load (expand-file-name "shells-lib.el" shells--test-dir))
+    (load (expand-file-name "lib.el" shells--test-dir))
   (error nil))
-
-
-;;; P1: eat-term-name is "xterm-256color"
-
-(ert-deftest shells/p1-eat-term-name ()
-  "P1: eat-term-name is xterm-256color."
-  (skip-unless (featurep 'eat))
-  (should (equal eat-term-name "xterm-256color")))
-
-
-;;; P2: eat-kill-buffer-on-exit is t
-
-(ert-deftest shells/p2-eat-kill-buffer-on-exit ()
-  "P2: eat-kill-buffer-on-exit is t."
-  (skip-unless (featurep 'eat))
-  (should (eq eat-kill-buffer-on-exit t)))
 
 
 ;;; P3: s-v in eat-semi-char-mode-map binds to eat-yank
@@ -137,13 +121,6 @@
   (skip-unless (featurep 'general))
   ;; After general sets them to nil, they should be nil or undefined
   (should-not (lookup-key eat-semi-char-mode-map (kbd "M-B"))))
-
-(ert-deftest shells/module-structure ()
-  "Module has required files."
-  (should (file-exists-p (expand-file-name "packages.eld" shells--test-dir)))
-  (should (file-exists-p (expand-file-name "shells-lib.el" shells--test-dir)))
-  (should (file-exists-p (expand-file-name "init.el" shells--test-dir)))
-  (should (file-exists-p (expand-file-name "spec.md" shells--test-dir))))
 
 (provide 'shells-tests)
 

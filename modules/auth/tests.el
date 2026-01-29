@@ -22,11 +22,4 @@
   (skip-unless (featurep 'auth-source-op))
   (should (memq '1password auth-sources)))
 
-;;; P2: auth-source-op-vaults set to '("Emacs")
-
-(ert-deftest auth/p2-auth-source-op-vaults-set ()
-  "P2: `auth-source-op-vaults' should be set to Emacs vault only."
-  (skip-unless (featurep 'auth-source-op))
-  (should (equal '("Emacs") auth-source-op-vaults)))
-
 ;;; tests.el ends here

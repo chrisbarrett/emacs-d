@@ -84,12 +84,6 @@
   (should yaml-ts-mode-hook))
 
 
-;;; Additional tests
-
-(ert-deftest lang-conf/provides-feature ()
-  "Module should provide lang-conf-init feature."
-  (should (featurep 'lang-conf-init)))
-
 (provide 'lang-conf-tests)
 
 ;;; lang-conf/tests.el ends here

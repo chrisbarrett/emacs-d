@@ -7,6 +7,8 @@
 
 ;;; Code:
 
+(require '+autoloads)
+
 ;; Help: main help functionality for Emacs & Emacs-Lisp.
 (with-eval-after-load 'help
   (setq help-window-select t)
@@ -68,6 +70,4 @@
   (with-eval-after-load 'evil
     (evil-set-initial-state 'rfc-mode 'motion)))
 
-(provide 'help-init)
 
-;;; init.el ends here

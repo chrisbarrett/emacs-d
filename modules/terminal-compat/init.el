@@ -8,6 +8,8 @@
 
 ;;; Code:
 
+(require '+autoloads)
+
 ;; Copy to and paste from system clipboard in terminal via OSC 52.
 (with-eval-after-load 'clipetty
   (global-clipetty-mode +1))
@@ -18,6 +20,4 @@
 ;; Enable mouse support in terminal.
 (xterm-mouse-mode +1)
 
-(provide 'terminal-compat-init)
 
-;;; init.el ends here

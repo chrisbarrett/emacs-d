@@ -7,6 +7,8 @@
 
 ;;; Code:
 
+(require '+autoloads)
+
 (require '+corelib)
 
 (cl-eval-when (compile)
@@ -460,6 +462,4 @@
   :after ox
   :demand t)
 
-(provide 'org-init)
 
-;;; org-init.el ends here

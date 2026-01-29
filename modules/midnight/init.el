@@ -11,11 +11,11 @@
 
 ;;; Code:
 
+(require '+autoloads)
+
 (use-package midnight
   :after-call +first-file-hook +first-buffer-hook
   :config
   (midnight-mode +1))
 
-(provide 'modules/midnight/init)
 
-;;; init.el ends here

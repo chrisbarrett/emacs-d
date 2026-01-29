@@ -7,6 +7,8 @@
 
 ;;; Code:
 
+(require '+autoloads)
+
 (require '+corelib)
 
 ;; Hide BEAM compilation artifacts from completion
@@ -16,6 +18,4 @@
 (with-eval-after-load 'dired-x
   (pushnew! dired-omit-extensions ".jam" ".vee" ".beam"))
 
-(provide 'lang-erlang-init)
 
-;;; init.el ends here

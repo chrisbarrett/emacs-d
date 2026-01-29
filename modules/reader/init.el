@@ -10,12 +10,12 @@
 
 ;;; Code:
 
+(require '+autoloads)
+
 ;; Load autoloads to register file associations and commands.
 ;; The package is native (compiled C/Rust) and injected via Nix.
 (condition-case nil
     (require 'reader-autoloads)
   (file-missing nil))
 
-(provide 'reader-init)
 
-;;; init.el ends here

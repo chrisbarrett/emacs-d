@@ -144,5 +144,3 @@ With prefix ARG, run all tests; otherwise prompt for selector."
       (helpful-at-point)
     (describe-symbol (symbol-at-point))))
 
-(provide 'lang-lisp-lib)
-;;; lib.el ends here

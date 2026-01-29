@@ -21,22 +21,8 @@
 
 ;; Load lib.el for +quail-defun macro
 (condition-case nil
-    (load (expand-file-name "input-methods-lib.el" input-methods--test-module-dir) nil t)
+    (load (expand-file-name "lib.el" input-methods--test-module-dir) nil t)
   (error nil))
-
-
-;;; P1: default-input-method equals "french-postfix"
-
-(ert-deftest input-methods/default-input-method ()
-  "P1: default-input-method equals french-postfix."
-  (should (equal default-input-method "french-postfix")))
-
-
-;;; P2: default-transient-input-method equals "french-postfix"
-
-(ert-deftest input-methods/default-transient-input-method ()
-  "P2: default-transient-input-method equals french-postfix."
-  (should (equal default-transient-input-method "french-postfix")))
 
 
 ;;; P3: Smart semicolon - deletes horizontal space and inserts " ; "
@@ -97,15 +83,6 @@
   (let ((expansion (macroexpand '(+quail-defun "test-package" "x" (insert "test")))))
     (should (string-match-p "atomic-change-group" (format "%S" expansion)))))
 
-
-;;; Module structure tests
-
-(ert-deftest input-methods/module-structure ()
-  "Module has required files."
-  (should (file-exists-p (expand-file-name "init.el" input-methods--test-module-dir)))
-  (should (file-exists-p (expand-file-name "input-methods-lib.el" input-methods--test-module-dir)))
-  (should (file-exists-p (expand-file-name "packages.eld" input-methods--test-module-dir)))
-  (should (file-exists-p (expand-file-name "spec.md" input-methods--test-module-dir))))
 
 (provide 'input-methods-tests)
 

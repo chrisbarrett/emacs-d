@@ -6,6 +6,8 @@
 
 ;;; Code:
 
+(require '+autoloads)
+
 (require '+corelib)
 
 (autoload '+leader-key "init-leader")
@@ -308,6 +310,4 @@
   :general
   (:keymaps 'prog-mode-map :states 'normal "(" 'backward-sexp ")" 'forward-sexp))
 
-(provide 'evil-init)
 
-;;; evil/init.el ends here

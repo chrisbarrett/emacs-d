@@ -11,6 +11,8 @@
 
 ;;; Code:
 
+(require '+autoloads)
+
 (require '+corelib)
 
 (use-package elixir-ts-mode
@@ -44,6 +46,4 @@
     ((string-match-p (rx "/test/" (+? nonl) ".exs" eos) (buffer-file-name))
      "elixir/test.eld")))
 
-(provide 'lang-elixir-init)
 
-;;; lang-elixir/init.el ends here

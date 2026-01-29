@@ -6,6 +6,8 @@
 
 ;;; Code:
 
+(require '+autoloads)
+
 (require '+corelib)
 
 ;; Vertico provides a better completion UI than the built-in default.
@@ -310,4 +312,3 @@
   :custom
   (find-library-include-other-files nil))
 
-;;; init.el ends here

@@ -7,6 +7,8 @@
 
 ;;; Code:
 
+(require '+autoloads)
+
 (require '+corelib)
 
 ;; Custom mode line showing key reference.
@@ -54,4 +56,3 @@
    :states 'normal
    "t" #'+debugger-toggle-on-exit-frame))
 
-;;; init.el ends here

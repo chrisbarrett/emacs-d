@@ -5,6 +5,8 @@
 
 ;;; Code:
 
+(require '+autoloads)
+
 (require 'treesit)
 
 (setopt treesit-enabled-modes t)
@@ -20,6 +22,4 @@
           (region-active-p) #'expreg-contract)
     "+" #'+expreg-expand-dwim))
 
-(provide 'treesit-init)
 
-;;; treesit/init.el ends here

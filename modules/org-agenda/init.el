@@ -6,6 +6,8 @@
 
 ;;; Code:
 
+(require '+autoloads)
+
 (require '+corelib)
 
 (with-eval-after-load 'org-agenda
@@ -148,6 +150,4 @@
   (define-advice org-agenda-redo (:after (&rest _) draw-separator)
     (page-break-lines--update-display-tables)))
 
-(provide 'org-agenda-init)
 
-;;; org-agenda-init.el ends here

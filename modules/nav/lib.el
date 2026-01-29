@@ -1,4 +1,4 @@
-;;; nav-lib.el --- Navigation library functions -*- lexical-binding: t; -*-
+;;; lib.el --- Navigation library functions -*- lexical-binding: t; -*-
 
 ;;; Commentary:
 
@@ -342,6 +342,4 @@ If current window is a side window, move it to the right side."
     (evil-lookup))
   t)
 
-(provide 'nav-lib)
 
-;;; nav-lib.el ends here

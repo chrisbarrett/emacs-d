@@ -6,6 +6,8 @@
 
 ;;; Code:
 
+(require '+autoloads)
+
 (require '+corelib)
 
 (use-package apheleia
@@ -19,6 +21,4 @@
                       "-y=defaultIndent:\"\\t\""
                     "-y=defaultIndent:\"  \"")))))
 
-(provide 'lang-latex-init)
 
-;;; init.el ends here

@@ -7,6 +7,8 @@
 
 ;;; Code:
 
+(require '+autoloads)
+
 ;; Occur: enable hl-line-mode in occur buffers.
 (with-eval-after-load 'replace
   (add-hook 'occur-mode-hook #'hl-line-mode))
@@ -25,6 +27,4 @@
 (with-eval-after-load 'xref
   (setq xref-search-program 'ripgrep))
 
-(provide 'search-init)
 
-;;; init.el ends here

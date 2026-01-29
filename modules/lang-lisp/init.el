@@ -6,6 +6,8 @@
 
 ;;; Code:
 
+(require '+autoloads)
+
 (require '+corelib)
 
 ;;; Profiler Mode
@@ -351,5 +353,3 @@ Copied from doom, which itself adapts from:
               (desired-indent)
               (normal-indent))))))
 
-(provide 'lang-lisp-init)
-;;; init.el ends here

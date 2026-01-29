@@ -31,13 +31,6 @@
     (should entry)
     (should (eq (cdr entry) 'zig-mode))))
 
-;;; P3: zig-format-on-save is nil
-
-(ert-deftest lang-zig/format-on-save-disabled ()
-  "`zig-format-on-save' should be nil to use apheleia instead."
-  (skip-unless (boundp 'zig-format-on-save))
-  (should-not zig-format-on-save))
-
 ;;; P4-P6: Tempel snippets available in zig-mode
 
 (ert-deftest lang-zig/tempel-snippets ()

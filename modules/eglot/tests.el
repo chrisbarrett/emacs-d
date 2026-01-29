@@ -19,8 +19,8 @@
     (error nil)))
 
 (defun eglot-test--load-lib ()
-  "Load the eglot module eglot-lib.el."
-  (load (expand-file-name "eglot-lib.el" eglot-test--module-dir) nil t))
+  "Load the eglot module lib.el."
+  (load (expand-file-name "lib.el" eglot-test--module-dir) nil t))
 
 ;; Load lib at compile time for function definitions
 (eglot-test--load-lib)
@@ -106,24 +106,6 @@
   "P9: +eglot-open-link is defined and interactive."
   (should (fboundp '+eglot-open-link))
   (should (commandp '+eglot-open-link)))
-
-
-;;; Module structure tests
-
-(ert-deftest eglot/module-has-packages-eld ()
-  "Module has packages.eld file."
-  (let ((packages-file (expand-file-name "packages.eld" eglot-test--module-dir)))
-    (should (file-exists-p packages-file))))
-
-(ert-deftest eglot/module-has-spec-symlink ()
-  "Module has spec.md symlink."
-  (let ((spec-file (expand-file-name "spec.md" eglot-test--module-dir)))
-    (should (file-symlink-p spec-file))))
-
-(ert-deftest eglot/module-has-lib-el ()
-  "Module has eglot-lib.el file."
-  (let ((lib-file (expand-file-name "eglot-lib.el" eglot-test--module-dir)))
-    (should (file-exists-p lib-file))))
 
 
 ;;; Function tests

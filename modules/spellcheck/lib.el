@@ -30,6 +30,4 @@ Called from `spell-fu-mode-hook' to load dictionaries."
   "Configure spell-fu face exclusions for org-mode."
   (setq-local spell-fu-faces-exclude +spellcheck-org-excluded-faces))
 
-(provide 'spellcheck-lib)
 
-;;; lib.el ends here

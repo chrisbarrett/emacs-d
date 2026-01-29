@@ -48,6 +48,4 @@ Returns empty string for template insertion but sets buffer-local state."
   "Return \" in\" if template started in expression context."
   (if +ocaml--tempel-in-expr-p " in" ""))
 
-(provide 'lang-ocaml-lib)
 
-;;; lib.el ends here

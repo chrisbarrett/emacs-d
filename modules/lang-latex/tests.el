@@ -80,12 +80,6 @@
     (when latex-entry
       (should (eq (cdr latex-entry) 'latexindent)))))
 
-;;; Module structure tests
-
-(ert-deftest lang-latex-test/provides-feature ()
-  "Module provides lang-latex-init feature."
-  (should (featurep 'lang-latex-init)))
-
 (provide 'lang-latex-tests)
 
 ;;; tests.el ends here

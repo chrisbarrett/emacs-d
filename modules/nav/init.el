@@ -6,6 +6,8 @@
 
 ;;; Code:
 
+(require '+autoloads)
+
 (require 'cl-lib)
 
 ;;; Windmove - directional window navigation
@@ -125,6 +127,4 @@
                         (?K . +avy-action-evil-lookup)
                         (? . avy-action-zap-to-char))))
 
-(provide 'nav-init)
 
-;;; nav-init.el ends here

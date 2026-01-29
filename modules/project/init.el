@@ -6,6 +6,8 @@
 
 ;;; Code:
 
+(require '+autoloads)
+
 (require '+corelib)
 
 ;; project-lib functions/variables are autoloaded
@@ -125,6 +127,4 @@ creating a new one."
   (:keymaps 'project-prefix-map
             "p" #'project-switch-beframed))
 
-(provide 'project-init)
 
-;;; project-init.el ends here

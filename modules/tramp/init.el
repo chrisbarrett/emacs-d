@@ -6,12 +6,12 @@
 
 ;;; Code:
 
+(require '+autoloads)
+
 (require '+corelib)
 
 (use-package tramp
   :config
   (pushnew! tramp-remote-path 'tramp-own-remote-path))
 
-(provide 'tramp-init)
 
-;;; init.el ends here

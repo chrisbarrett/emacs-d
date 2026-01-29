@@ -1,4 +1,4 @@
-;;; project-lib.el --- Project library functions -*- lexical-binding: t; -*-
+;;; lib.el --- Project library functions -*- lexical-binding: t; -*-
 
 ;;; Commentary:
 
@@ -52,6 +52,4 @@ Falls back to `dired' if not a git repository."
 
 (autoload 'magit-status-setup-buffer "magit-status")
 
-(provide 'project-lib)
 
-;;; project-lib.el ends here

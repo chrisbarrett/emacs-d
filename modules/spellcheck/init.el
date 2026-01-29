@@ -7,6 +7,8 @@
 
 ;;; Code:
 
+(require '+autoloads)
+
 (require 'exec-path-from-shell nil t)
 
 ;; Built-in ispell configuration
@@ -46,6 +48,4 @@
     (evil-define-key* 'normal 'global
       (kbd "z SPC") #'flyspell-correct-at-point)))
 
-(provide 'spellcheck-init)
 
-;;; init.el ends here

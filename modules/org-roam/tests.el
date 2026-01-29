@@ -13,7 +13,7 @@
   (file-name-directory (or load-file-name buffer-file-name)))
 
 ;; Load lib.el for autoloaded functions
-(let ((lib-file (expand-file-name "org-roam-lib.el" org-roam-test--module-dir)))
+(let ((lib-file (expand-file-name "lib.el" org-roam-test--module-dir)))
   (when (file-exists-p lib-file)
     (load lib-file nil t)))
 
@@ -127,39 +127,6 @@
   "Test that +org-roam-node-tags-annotator is defined."
   :tags '(org-roam)
   (should (fboundp '+org-roam-node-tags-annotator)))
-
-
-;;; Module structure tests
-
-(ert-deftest org-roam-test-packages-eld-exists ()
-  "Test that packages.eld exists and contains expected packages."
-  :tags '(org-roam module-structure)
-  (let ((packages-file (expand-file-name "packages.eld" org-roam-test--module-dir)))
-    (should (file-exists-p packages-file))
-    (with-temp-buffer
-      (insert-file-contents packages-file)
-      (should (search-forward "org-roam" nil t))
-      (goto-char (point-min))
-      (should (search-forward "nursery" nil t)))))
-
-(ert-deftest org-roam-test-spec-md-exists ()
-  "Test that spec.md exists and is a symlink."
-  :tags '(org-roam module-structure)
-  (let ((spec-file (expand-file-name "spec.md" org-roam-test--module-dir)))
-    (should (file-exists-p spec-file))
-    (should (file-symlink-p spec-file))))
-
-(ert-deftest org-roam-test-lib-el-exists ()
-  "Test that lib.el exists."
-  :tags '(org-roam module-structure)
-  (let ((lib-file (expand-file-name "org-roam-lib.el" org-roam-test--module-dir)))
-    (should (file-exists-p lib-file))))
-
-(ert-deftest org-roam-test-init-el-exists ()
-  "Test that init.el exists."
-  :tags '(org-roam module-structure)
-  (let ((init-file (expand-file-name "init.el" org-roam-test--module-dir)))
-    (should (file-exists-p init-file))))
 
 
 ;;; Keybinding configuration tests

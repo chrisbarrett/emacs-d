@@ -11,6 +11,8 @@
 
 ;;; Code:
 
+(require '+autoloads)
+
 (require '+corelib)
 
 (use-package hcl-mode
@@ -42,6 +44,4 @@
   (+define-file-template (rx "root.hcl" eos) "terragrunt/root.eld")
   (+define-file-template (rx "region.hcl" eos) "terragrunt/region.eld"))
 
-(provide 'lang-terraform-init)
 
-;;; lang-terraform/init.el ends here

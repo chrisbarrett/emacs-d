@@ -63,6 +63,4 @@ Search from DIR or `default-directory' upward."
   "Return non-nil if DIR (or `default-directory') is a CDK project."
   (locate-dominating-file (or dir default-directory) "cdk.json"))
 
-(provide 'lang-js-lib)
 
-;;; lib.el ends here

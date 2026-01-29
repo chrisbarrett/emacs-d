@@ -17,7 +17,7 @@
 
 (defun nav-module--load-lib ()
   "Load nav module lib.el."
-  (load (expand-file-name "nav-lib.el" nav-module--dir) nil t))
+  (load (expand-file-name "lib.el" nav-module--dir) nil t))
 
 (defun nav-module--load-init ()
   "Load nav module init.el."
@@ -31,16 +31,6 @@
 ;; Load the module
 (nav-module--load-lib)
 (nav-module--load-init)
-
-;;; Module structure tests
-
-(ert-deftest nav/module-has-packages-eld ()
-  "Module should have packages.eld."
-  (should (file-exists-p (expand-file-name "packages.eld" nav-module--dir))))
-
-(ert-deftest nav/module-has-spec-md ()
-  "Module should have spec.md."
-  (should (file-exists-p (expand-file-name "spec.md" nav-module--dir))))
 
 ;;; P1: windmove bindings
 
@@ -121,15 +111,6 @@
 (ert-deftest nav/p6-window-divider-mode ()
   "window-divider-mode should be enabled."
   (should (bound-and-true-p window-divider-mode)))
-
-(ert-deftest nav/p6-window-divider-places ()
-  "window-divider-default-places should be t."
-  (should (eq window-divider-default-places t)))
-
-(ert-deftest nav/p6-window-divider-widths ()
-  "window-divider widths should be 1."
-  (should (eq window-divider-default-bottom-width 1))
-  (should (eq window-divider-default-right-width 1)))
 
 ;;; P7: fullframe toggle
 

@@ -7,6 +7,8 @@
 
 ;;; Code:
 
+(require '+autoloads)
+
 (defvar +templates-dir (file-name-concat user-emacs-directory "templates/"))
 
 ;; Tempel: text snippets with field navigation.
@@ -44,6 +46,4 @@
 (with-eval-after-load 'autoinsert
   (require 'string-inflection nil t))
 
-(provide 'templates-init)
 
-;;; init.el ends here

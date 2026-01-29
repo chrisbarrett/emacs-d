@@ -8,6 +8,8 @@
 
 ;;; Code:
 
+(require '+autoloads)
+
 (require '+corelib)
 
 
@@ -160,6 +162,4 @@
   (+local-leader-set-key 'org-mode-map
     "rR" #'org-roam-slipbox-refile))
 
-(provide 'org-roam-init)
 
-;;; org-roam-init.el ends here

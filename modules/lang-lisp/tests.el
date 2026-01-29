@@ -11,7 +11,7 @@
 ;; Load module files from this directory
 ;; May fail in batch mode due to missing dependencies
 (let* ((module-dir (file-name-directory (or load-file-name buffer-file-name)))
-       (lib-file (expand-file-name "lang-lisp-lib.el" module-dir))
+       (lib-file (expand-file-name "lib.el" module-dir))
        (init-file (expand-file-name "init.el" module-dir)))
   (condition-case nil
       (progn

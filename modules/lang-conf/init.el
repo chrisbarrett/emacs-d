@@ -6,6 +6,8 @@
 
 ;;; Code:
 
+(require '+autoloads)
+
 (require '+corelib)
 
 ;; Unix configuration files
@@ -27,6 +29,4 @@
   (setq-hook! 'yaml-ts-mode-hook
     tab-width 2))
 
-(provide 'lang-conf-init)
 
-;;; lang-conf/init.el ends here

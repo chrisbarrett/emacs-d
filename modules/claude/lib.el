@@ -31,4 +31,3 @@ Prevents non-breaking space characters in prompts from being visible."
       (with-current-buffer buf
         (face-remap-add-relative 'nobreak-space :inherit 'default)))))
 
-;;; lib.el ends here

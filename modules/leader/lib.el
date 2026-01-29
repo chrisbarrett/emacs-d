@@ -1,4 +1,4 @@
-;;; leader-lib.el --- Leader key library functions -*- lexical-binding: t; -*-
+;;; lib.el --- Leader key library functions -*- lexical-binding: t; -*-
 
 ;;; Commentary:
 
@@ -117,6 +117,4 @@ FILE is the file to find siblings for, defaults to current buffer's file."
          (completing-read (format-prompt "Find file" (car relatives))
                           relatives nil t nil nil (car relatives))))))))
 
-(provide 'leader-lib)
 
-;;; leader-lib.el ends here

@@ -53,4 +53,3 @@
          (process-environment (append mise-vars process-environment)))
     (apply fn args)))
 
-;;; init.el ends here

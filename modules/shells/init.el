@@ -6,11 +6,13 @@
 
 ;;; Code:
 
+(require '+autoloads)
+
 (require 'cl-lib)
 (require 'general)
 
 (require '+corelib)
-(require 'evil-lib)
+(load (expand-file-name "../evil/lib" (file-name-directory load-file-name)) nil t)
 
 (cl-eval-when (compile)
   (require 'eat)
@@ -69,6 +71,4 @@
   (setq eat-term-name "xterm-256color")
   (setq eat-kill-buffer-on-exit t))
 
-(provide 'shells-init)
 
-;;; init.el ends here

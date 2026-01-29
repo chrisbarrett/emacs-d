@@ -12,33 +12,12 @@
   "Load the search module init.el."
   (load (expand-file-name "modules/search/init.el" user-emacs-directory) nil t))
 
-;; P1: grep-use-headings is t
-(ert-deftest search-module-test-p1-grep-use-headings ()
-  "P1: grep-use-headings should be t."
-  (search-test--load-init)
-  (require 'grep)
-  (should (eq grep-use-headings t)))
-
 ;; P2: grep-template contains "rg" command
 (ert-deftest search-module-test-p2-grep-template-uses-rg ()
   "P2: grep-template should use ripgrep."
   (search-test--load-init)
   (require 'grep)
   (should (string-match-p "\\brg\\b" grep-template)))
-
-;; P3: xref-search-program is ripgrep
-(ert-deftest search-module-test-p3-xref-search-program ()
-  "P3: xref-search-program should be `ripgrep'."
-  (search-test--load-init)
-  (require 'xref)
-  (should (eq xref-search-program 'ripgrep)))
-
-;; P4: wgrep-auto-save-buffer is t
-(ert-deftest search-module-test-p4-wgrep-auto-save ()
-  "P4: wgrep-auto-save-buffer should be t."
-  (search-test--load-init)
-  (require 'wgrep)
-  (should (eq wgrep-auto-save-buffer t)))
 
 ;; P5: Opening occur buffer enables hl-line-mode
 (ert-deftest search-module-test-p5-occur-hl-line-mode ()

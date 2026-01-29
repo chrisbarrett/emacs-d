@@ -6,6 +6,8 @@
 
 ;;; Code:
 
+(require '+autoloads)
+
 (require '+corelib)
 
 ;; Frontend for in-buffer error checking & navigation.
@@ -61,6 +63,4 @@
   :config (eglot-booster-mode +1))
 
 
-(provide 'eglot-init)
 
-;;; init.el ends here

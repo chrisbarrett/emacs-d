@@ -521,4 +521,3 @@
   :highlights ((checker 'italic))
   :hyperlink message)
 
-;;; init.el ends here

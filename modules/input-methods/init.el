@@ -7,6 +7,8 @@
 
 ;;; Code:
 
+(require '+autoloads)
+
 (require 'quail)
 
 (cl-eval-when (compile)
@@ -41,6 +43,4 @@
                       " "))))
       (insert left-pad ": "))))
 
-(provide 'input-methods-init)
 
-;;; init.el ends here

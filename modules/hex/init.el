@@ -6,6 +6,8 @@
 
 ;;; Code:
 
+(require '+autoloads)
+
 (use-package hexl
   :general-config
   (:states 'normal
@@ -18,6 +20,4 @@
    "^" #'hexl-beginning-of-line
    "0" #'hexl-beginning-of-line))
 
-(provide 'hex-init)
 
-;;; hex/init.el ends here

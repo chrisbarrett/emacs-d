@@ -9,6 +9,8 @@
 
 ;;; Code:
 
+(require '+autoloads)
+
 (require '+corelib)
 
 (defun +c-auto-insert-semi-newline ()
@@ -47,6 +49,4 @@ Normalizes spacing before the angle bracket on include lines."
 
 (alist-set! major-mode-remap-alist #'c-mode #'c-ts-mode)
 
-(provide 'lang-c-init)
 
-;;; lang-c/init.el ends here

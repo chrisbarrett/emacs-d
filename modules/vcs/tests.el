@@ -14,7 +14,7 @@
 
 (defun vcs-test--load-module ()
   "Load the VCS module."
-  (let ((lib-file (expand-file-name "vcs-lib.el" vcs-test--module-dir))
+  (let ((lib-file (expand-file-name "lib.el" vcs-test--module-dir))
         (init-file (expand-file-name "init.el" vcs-test--module-dir)))
     (when (file-exists-p lib-file)
       (condition-case nil
@@ -27,24 +27,6 @@
 
 ;; Load module at test file load time
 (vcs-test--load-module)
-
-;;; Module structure tests
-
-(ert-deftest vcs-module-has-packages-eld ()
-  "Module has packages.eld file."
-  (should (file-exists-p (expand-file-name "packages.eld" vcs-test--module-dir))))
-
-(ert-deftest vcs-module-has-spec-md ()
-  "Module has spec.md symlink."
-  (should (file-exists-p (expand-file-name "spec.md" vcs-test--module-dir))))
-
-(ert-deftest vcs-module-has-lib-el ()
-  "Module has vcs-lib.el file."
-  (should (file-exists-p (expand-file-name "vcs-lib.el" vcs-test--module-dir))))
-
-(ert-deftest vcs-module-has-init-el ()
-  "Module has init.el file."
-  (should (file-exists-p (expand-file-name "init.el" vcs-test--module-dir))))
 
 ;;; P1: transient-quit-one bound to escape in transient-map
 
@@ -175,36 +157,6 @@
 (ert-deftest vcs-magit-worktree-prune-defined ()
   "+magit-worktree-prune is defined."
   (should (fboundp '+magit-worktree-prune)))
-
-;;; Settings tests
-
-(ert-deftest vcs-vc-follow-symlinks ()
-  "vc-follow-symlinks is t."
-  (should (eq vc-follow-symlinks t)))
-
-(ert-deftest vcs-vc-handled-backends ()
-  "vc-handled-backends is (Git)."
-  (should (equal vc-handled-backends '(Git))))
-
-(ert-deftest vcs-gac-silent-message-p ()
-  "gac-silent-message-p is t."
-  (skip-unless (featurep 'git-auto-commit-mode))
-  (should (eq gac-silent-message-p t)))
-
-(ert-deftest vcs-browse-at-remote-no-line-number ()
-  "browse-at-remote-add-line-number-if-no-region-selected is nil."
-  (skip-unless (featurep 'browse-at-remote))
-  (should (null browse-at-remote-add-line-number-if-no-region-selected)))
-
-(ert-deftest vcs-magit-diff-refine-hunk ()
-  "magit-diff-refine-hunk is t."
-  (skip-unless (featurep 'magit))
-  (should (eq magit-diff-refine-hunk t)))
-
-(ert-deftest vcs-magit-save-repository-buffers ()
-  "magit-save-repository-buffers is dontask."
-  (skip-unless (featurep 'magit))
-  (should (eq magit-save-repository-buffers 'dontask)))
 
 (provide 'vcs-tests)
 

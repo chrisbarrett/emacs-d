@@ -6,6 +6,8 @@
 
 ;;; Code:
 
+(require '+autoloads)
+
 (require '+corelib)
 
 ;; Read-only protection for build directories
@@ -72,6 +74,4 @@
                                         eos)
                                     #'dune-config-mode))
 
-(provide 'lang-ocaml-init)
 
-;;; init.el ends here

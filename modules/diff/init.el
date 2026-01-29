@@ -7,6 +7,8 @@
 
 ;;; Code:
 
+(require '+autoloads)
+
 ;; Diff: Unix diff file support.
 
 (use-package diff-mode
@@ -43,4 +45,3 @@
   (advice-add 'ediff-next-difference :after #'+ad-ediff-reveal-org-content-around-hunk)
   (advice-add 'ediff-previous-difference :after #'+ad-ediff-reveal-org-content-around-hunk))
 
-;;; init.el ends here

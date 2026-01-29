@@ -9,6 +9,8 @@
 
 ;;; Code:
 
+(require '+autoloads)
+
 (require '+corelib)
 
 (use-package rust-ts-mode
@@ -19,6 +21,4 @@
   ;; Enable colored Cargo output in compilation buffers
   (setenv "CARGO_TERM_COLOR" "always"))
 
-(provide 'lang-rust-init)
 
-;;; lang-rust/init.el ends here

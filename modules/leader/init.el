@@ -7,13 +7,15 @@
 
 ;;; Code:
 
+(require '+autoloads)
+
 (require 'general) ; SAFETY: init.el installs before loading this file.
 (require 'subr-x)
 
 (autoload 'parent-mode-list "parent-mode")
 (autoload 'project-find-file-in "project")
 
-;; From leader-lib.el (autoloaded)
+;; From lib.el (autoloaded)
 (autoload '+forward-kill-sexp "leader-lib")
 (autoload '+backward-kill-sexp "leader-lib")
 (autoload '+find-sibling-file "leader-lib")
@@ -381,6 +383,4 @@
 
 (general-def "M-m" '+leader-key)
 
-(provide 'leader-init)
 
-;;; leader-init.el ends here

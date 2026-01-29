@@ -6,6 +6,8 @@
 
 ;;; Code:
 
+(require '+autoloads)
+
 (require '+corelib)
 
 ;;; Transient - pop-up command menus
@@ -223,6 +225,4 @@
             "M-G" nil
             "M-O" nil))
 
-(provide 'vcs-init)
 
-;;; vcs-init.el ends here

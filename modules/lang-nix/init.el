@@ -10,6 +10,8 @@
 
 ;;; Code:
 
+(require '+autoloads)
+
 (require '+corelib)
 
 ;; Read-only protection for Nix store
@@ -38,6 +40,4 @@
   :config
   (+define-file-template (rx "flake.nix" eos) "flake.eld"))
 
-(provide 'lang-nix-init)
 
-;;; lang-nix/init.el ends here

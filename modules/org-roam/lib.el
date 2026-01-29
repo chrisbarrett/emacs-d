@@ -1,4 +1,4 @@
-;;; org-roam-lib.el --- Autoloads for org-roam module -*- lexical-binding: t; -*-
+;;; lib.el --- Autoloads for org-roam module -*- lexical-binding: t; -*-
 
 ;;; Commentary:
 
@@ -78,6 +78,4 @@ Shows @slipbox and #tags."
            ((string-join all-tags " ") :face 'org-tag))
         (concat " @" slipbox " " (string-join all-tags " "))))))
 
-(provide 'org-roam-lib)
 
-;;; org-roam-lib.el ends here

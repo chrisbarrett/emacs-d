@@ -1,4 +1,4 @@
-;;; org-agenda-lib.el --- Utility functions for agenda views  -*- lexical-binding: t; -*-
+;;; lib.el --- Utility functions for agenda views  -*- lexical-binding: t; -*-
 
 ;;; Commentary:
 
@@ -143,6 +143,4 @@ Based on `+org-habit-graph-window-ratio'."
     (setq-local org-habit-following-days following-days)
     (setq-local org-habit-graph-column graph-column-adjusted)))
 
-(provide 'org-agenda-lib)
 
-;;; org-agenda-lib.el ends here

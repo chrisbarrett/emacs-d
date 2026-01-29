@@ -8,6 +8,8 @@
 
 ;;; Code:
 
+(require '+autoloads)
+
 (require '+corelib)
 
 (use-package envrc
@@ -43,6 +45,4 @@
   :config
   (add-hook 'envrc-global-mode-hook #'+direnv-mode-setup-h))
 
-(provide 'envrc-init)
 
-;;; init.el ends here

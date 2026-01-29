@@ -386,6 +386,4 @@ ARG is the number of words to delete."
                         indent-line-function)))
     (funcall cmd)))
 
-(provide 'evil-lib)
 
-;;; evil/lib.el ends here

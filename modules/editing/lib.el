@@ -8,6 +8,7 @@
 ;;; Code:
 
 (require '+corelib)
+(require 'autorevert)
 
 ;;;###autoload
 (defun +auto-revert-current-buffer-h ()
@@ -40,6 +41,3 @@ but excludes .git directories to allow git operations."
                          file)
          (not (string-match-p (rx "/.git/") file)))))
 
-(provide 'editing-lib)
-
-;;; lib.el ends here

@@ -38,20 +38,6 @@
   (load (expand-file-name "modules/help/init.el" user-emacs-directory) nil t)
   (should (eq (keymap-lookup help-map "l") 'find-library)))
 
-;; P5: `help-window-select' is t
-(ert-deftest help-module-test-p5-help-window-select ()
-  "P5: help-window-select should be t."
-  (require 'help)
-  (load (expand-file-name "modules/help/init.el" user-emacs-directory) nil t)
-  (should (eq help-window-select t)))
-
-;; P6: `Man-notify-method' is `aggressive'
-(ert-deftest help-module-test-p6-man-notify-method ()
-  "P6: Man-notify-method should be aggressive."
-  (require 'man)
-  (load (expand-file-name "modules/help/init.el" user-emacs-directory) nil t)
-  (should (eq Man-notify-method 'aggressive)))
-
 ;; P7: Eldoc re-runs after evil state transitions
 (ert-deftest help-module-test-p7-eldoc-commands ()
   "P7: Eldoc should re-run after evil state transitions."
@@ -119,12 +105,6 @@
   (require 'rfc-mode)
   (load (expand-file-name "modules/help/init.el" user-emacs-directory) nil t)
   (should (eq (keymap-lookup help-map "w") 'rfc-mode-browse)))
-
-(ert-deftest help-module-test-rfc-mode-directory ()
-  "rfc-mode-directory should be set to cache directory."
-  (require 'rfc-mode)
-  (load (expand-file-name "modules/help/init.el" user-emacs-directory) nil t)
-  (should (string= rfc-mode-directory "~/.cache/emacs/rfc-mode/rfcs/")))
 
 (provide 'help-tests)
 

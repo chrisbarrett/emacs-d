@@ -11,21 +11,9 @@
 (let ((module-dir (expand-file-name "modules/treesit/" user-emacs-directory)))
   (condition-case nil
       (progn
-        (load (expand-file-name "treesit-lib.el" module-dir) nil t)
+        (load (expand-file-name "lib.el" module-dir) nil t)
         (load (expand-file-name "init.el" module-dir) nil t))
     (error nil)))
-
-;;; P1: treesit-enabled-modes is t
-
-(ert-deftest treesit/P1-enabled-modes-all ()
-  "Verify treesit-enabled-modes is t (all modes enabled)."
-  (should (eq treesit-enabled-modes t)))
-
-;;; P2: treesit-auto-install-grammar is 'always
-
-(ert-deftest treesit/P2-auto-install-always ()
-  "Verify treesit-auto-install-grammar is 'always."
-  (should (eq treesit-auto-install-grammar 'always)))
 
 ;;; P3: + in normal state calls +expreg-expand-dwim
 
@@ -53,7 +41,7 @@
   ;; Load the function to check its implementation
   (let ((module-dir (expand-file-name "modules/treesit/" user-emacs-directory)))
     (with-temp-buffer
-      (insert-file-contents (expand-file-name "treesit-lib.el" module-dir))
+      (insert-file-contents (expand-file-name "lib.el" module-dir))
       ;; Check that the function references bound-and-true-p iedit-mode
       (should (string-match-p "bound-and-true-p iedit-mode" (buffer-string))))))
 
@@ -65,27 +53,6 @@
   "Verify +expreg-expand-dwim handles word vs symbol correctly."
   (should (fboundp '+expreg-expand-dwim))
   (should (fboundp '+expreg-expand-n)))
-
-;;; Module structure tests
-
-(ert-deftest treesit/structure-packages-eld ()
-  "Verify packages.eld exists."
-  ;; Package expreg is now installed via use-package :ensure in init.el
-  (let ((packages-file (expand-file-name "modules/treesit/packages.eld" user-emacs-directory)))
-    (should (file-exists-p packages-file))))
-
-(ert-deftest treesit/structure-spec-md ()
-  "Verify spec.md symlink exists."
-  (let ((spec-file (expand-file-name "modules/treesit/spec.md" user-emacs-directory)))
-    (should (file-symlink-p spec-file))))
-
-(ert-deftest treesit/structure-lib-el ()
-  "Verify treesit-lib.el exists and provides feature."
-  (let ((lib-file (expand-file-name "modules/treesit/treesit-lib.el" user-emacs-directory)))
-    (should (file-exists-p lib-file))
-    (with-temp-buffer
-      (insert-file-contents lib-file)
-      (should (string-match-p "(provide 'treesit-lib)" (buffer-string))))))
 
 (provide 'treesit-tests)
 

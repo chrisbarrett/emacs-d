@@ -35,6 +35,4 @@ active and user enters KEY then BODY forms will be executed."
 
        (quail-defrule ,gkey fname ,gpackage-name t))))
 
-(provide 'input-methods-lib)
 
-;;; lib.el ends here

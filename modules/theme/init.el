@@ -6,7 +6,9 @@
 
 ;;; Code:
 
-(require 'theme-lib)
+(require '+autoloads)
+
+(load (expand-file-name "lib" (file-name-directory load-file-name)) nil t)
 
 (use-package catppuccin-theme
   :demand t
@@ -22,6 +24,4 @@
                         ;; Dim delimiters like commas, semicolons, etc.
                         '(font-lock-delimiter-face ((t (:inherit shadow)))))
 
-(provide 'theme-init)
 
-;;; init.el ends here

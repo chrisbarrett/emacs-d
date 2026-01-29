@@ -7,6 +7,7 @@
 
 ;;; Code:
 
+(require '+autoloads)
 (require '+corelib)
 
 ;;; Disabled commands re-enabled
@@ -118,6 +119,4 @@
   (when (+file-should-be-opened-read-only-p (buffer-file-name))
     (read-only-mode +1)))
 
-(provide 'editing-init)
 
-;;; init.el ends here

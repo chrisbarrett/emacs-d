@@ -6,6 +6,8 @@
 
 ;;; Code:
 
+(require '+autoloads)
+
 (use-package auth-source-op
   :load-path "~/src/chrisbarrett/emacs-auth-source-op"
   :after auth-source
@@ -17,4 +19,3 @@
   :config
   (auth-source-op-enable))
 
-;;; init.el ends here

@@ -7,6 +7,8 @@
 
 ;;; Code:
 
+(require '+autoloads)
+
 (require '+corelib)
 
 ;; JavaScript mode associations
@@ -72,6 +74,4 @@
           (not (+index-ts-p (buffer-file-name))))
      "cdk/stack.eld")))
 
-(provide 'lang-js-init)
 
-;;; init.el ends here

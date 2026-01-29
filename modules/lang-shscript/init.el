@@ -6,7 +6,9 @@
 
 ;;; Code:
 
-(require 'templates-lib)
+(require '+autoloads)
+
+(load (expand-file-name "../templates/lib" (file-name-directory load-file-name)) nil t)
 
 (use-package sh-script
   :init
@@ -20,6 +22,4 @@
 
 (add-hook 'after-save-hook #'executable-make-buffer-file-executable-if-script-p)
 
-(provide 'lang-shscript-init)
 
-;;; init.el ends here

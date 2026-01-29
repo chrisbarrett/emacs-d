@@ -7,6 +7,8 @@
 
 ;;; Code:
 
+(require '+autoloads)
+
 ;; Align: mode-specific alignment (C-x a a for align-regexp).
 (with-eval-after-load 'general
   (general-def "C-x a a" #'align-regexp))
@@ -39,6 +41,4 @@
 ;; Tabify: only convert spaces to tabs at line beginning.
 (setq tabify-regexp "^\t* [ \t]+")
 
-(provide 'format-init)
 
-;;; init.el ends here

@@ -1,4 +1,4 @@
-;;; org-lib.el --- Org-mode library functions -*- lexical-binding: t; -*-
+;;; lib.el --- Org-mode library functions -*- lexical-binding: t; -*-
 
 ;;; Commentary:
 
@@ -95,6 +95,4 @@ IPOS is insertion position, TABLES is clock data, PARAMS is user params."
     (+clocktable--realign-table ipos)
     total-time))
 
-(provide 'org-lib)
 
-;;; org-lib.el ends here

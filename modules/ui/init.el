@@ -7,6 +7,8 @@
 
 ;;; Code:
 
+(require '+autoloads)
+
 (require '+corelib)
 
 ;;; Scrolling behaviour
@@ -354,7 +356,7 @@
 (use-package display-buffer-alist-setup
   :no-require t
   :init
-  (require 'nav-lib)
+  (load (expand-file-name "../nav/lib" (file-name-directory load-file-name)) nil t)
 
   (setq display-buffer-alist
         (cl-labels ((mode-active-p (mode)
@@ -486,5 +488,3 @@
 (+tty-frame-setup (selected-frame))
 
 
-(provide 'ui-init)
-;;; init.el ends here

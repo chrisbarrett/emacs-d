@@ -11,7 +11,7 @@
 ;; Load module files from this directory
 (let* ((module-dir (file-name-directory (or load-file-name buffer-file-name)))
        (init-file (expand-file-name "init.el" module-dir))
-       (lib-file (expand-file-name "lang-markdown-lib.el" module-dir)))
+       (lib-file (expand-file-name "lib.el" module-dir)))
   (condition-case nil
       (progn
         (load lib-file nil 'nomessage)

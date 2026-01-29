@@ -11,36 +11,12 @@
 (defvar module-dir (file-name-directory (or load-file-name buffer-file-name)))
 
 (condition-case nil
-    (load (expand-file-name "evil-lib.el" module-dir))
+    (load (expand-file-name "lib.el" module-dir))
   (error nil))
 
 (condition-case nil
     (load (expand-file-name "init.el" module-dir))
   (error nil))
-
-;;;; Module structure tests
-
-(ert-deftest evil-module-structure-packages ()
-  "packages.eld exists (packages now installed via use-package)."
-  ;; Packages are now installed via use-package :ensure in init.el
-  (let ((packages-file (expand-file-name "packages.eld" module-dir)))
-    (should (file-exists-p packages-file))))
-
-(ert-deftest evil-module-structure-spec ()
-  "spec.md exists and is a symlink to specs/005-evil.md."
-  (let ((spec-file (expand-file-name "spec.md" module-dir)))
-    (should (file-exists-p spec-file))
-    (should (file-symlink-p spec-file))))
-
-(ert-deftest evil-module-structure-lib ()
-  "lib.el exists and provides expected functions."
-  (let ((lib-file (expand-file-name "evil-lib.el" module-dir)))
-    (should (file-exists-p lib-file))))
-
-(ert-deftest evil-module-structure-init ()
-  "init.el exists."
-  (let ((init-file (expand-file-name "init.el" module-dir)))
-    (should (file-exists-p init-file))))
 
 ;;;; P1: Evil Mode Active
 

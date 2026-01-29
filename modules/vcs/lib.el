@@ -1,4 +1,4 @@
-;;; vcs-lib.el --- VCS library functions -*- lexical-binding: t; -*-
+;;; lib.el --- VCS library functions -*- lexical-binding: t; -*-
 
 ;;; Commentary:
 
@@ -650,6 +650,4 @@ Tab and buffer cleanup handled by `+magit-worktree-delete--cleanup' advice."
    ("g" "git status" +worktrees-magit-status)
    ("c" "claude-code" +worktrees-claude-code)])
 
-(provide 'vcs-lib)
 
-;;; vcs-lib.el ends here

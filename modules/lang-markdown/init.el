@@ -7,6 +7,8 @@
 
 ;;; Code:
 
+(require '+autoloads)
+
 (require '+corelib)
 
 ;;; Faces for GitHub Flavored Markdown callouts
@@ -91,6 +93,4 @@
                     'deno-markdown
                   'prettier-markdown))))
 
-(provide 'lang-markdown-init)
 
-;;; lang-markdown/init.el ends here

@@ -33,6 +33,4 @@ Looks for `help-echo' text property to find URL."
 Intended for `eglot-managed-mode-hook'."
   (eglot-inlay-hints-mode -1))
 
-(provide 'eglot-lib)
 
-;;; lib.el ends here

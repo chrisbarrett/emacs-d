@@ -6,6 +6,8 @@
 
 ;;; Code:
 
+(require '+autoloads)
+
 (require '+corelib)
 
 ;; Emacs' built-in file management interface.
@@ -63,4 +65,3 @@
 (use-package diredfl
   :hook (dired-mode-hook))
 
-;;; init.el ends here

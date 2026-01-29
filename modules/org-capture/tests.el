@@ -13,9 +13,10 @@
   (file-name-directory (or load-file-name buffer-file-name)))
 
 ;; Load lib.el for autoloaded functions
-(let ((lib-file (expand-file-name "org-capture-lib.el" org-capture-test--module-dir)))
+(defvar org-capture-test--lib-loaded nil)
+(let ((lib-file (expand-file-name "lib.el" org-capture-test--module-dir)))
   (when (file-exists-p lib-file)
-    (load lib-file nil t)))
+    (setq org-capture-test--lib-loaded (load lib-file nil t))))
 
 ;; Try to load init.el (may fail in batch without elpaca)
 (condition-case nil
@@ -23,31 +24,12 @@
   (error nil))
 
 
-;;; Module structure tests
-
-(ert-deftest org-capture-test-packages-eld-exists ()
-  "packages.eld exists in module."
-  (should (file-exists-p (expand-file-name "packages.eld" org-capture-test--module-dir))))
-
-(ert-deftest org-capture-test-spec-symlink ()
-  "spec.md symlink exists."
-  (should (file-symlink-p (expand-file-name "spec.md" org-capture-test--module-dir))))
-
-(ert-deftest org-capture-test-lib-exists ()
-  "lib.el exists in module."
-  (should (file-exists-p (expand-file-name "org-capture-lib.el" org-capture-test--module-dir))))
-
-(ert-deftest org-capture-test-init-exists ()
-  "init.el exists in module."
-  (should (file-exists-p (expand-file-name "init.el" org-capture-test--module-dir))))
-
-
 ;;; P1: Capture template "t" creates TODO entry in datetree
 
 (ert-deftest org-capture-test-p1-template-t-exists ()
   "Template 't' is defined."
   :tags '(:org-capture)
-  (skip-unless (featurep 'org-capture-lib))
+  (skip-unless org-capture-test--lib-loaded)
   (skip-unless (boundp 'org-capture-templates))
   (let ((template (assoc "t" org-capture-templates)))
     (should template)
@@ -59,7 +41,7 @@
 (ert-deftest org-capture-test-p2-work-template-tags ()
   "Work templates include work tag."
   :tags '(:org-capture)
-  (skip-unless (featurep 'org-capture-lib))
+  (skip-unless org-capture-test--lib-loaded)
   (skip-unless (boundp 'org-capture-templates))
   (when-let* ((template (assoc "wt" org-capture-templates)))
     (should (string-match-p ":work:" (nth 4 template)))))
@@ -70,7 +52,7 @@
 (ert-deftest org-capture-test-p3-link-template-cliplink ()
   "Link template uses org-cliplink-capture."
   :tags '(:org-capture)
-  (skip-unless (featurep 'org-capture-lib))
+  (skip-unless org-capture-test--lib-loaded)
   (skip-unless (boundp 'org-capture-templates))
   (when-let* ((template (assoc "l" org-capture-templates)))
     (should (string-match-p "org-cliplink-capture" (nth 4 template)))))
@@ -81,7 +63,7 @@
 (ert-deftest org-capture-test-p4-litnote-function-defined ()
   "+capture-litnote-function is defined."
   :tags '(:org-capture)
-  (skip-unless (featurep 'org-capture-lib))
+  (skip-unless org-capture-test--lib-loaded)
   (should (fboundp '+capture-litnote-function)))
 
 
@@ -90,7 +72,7 @@
 (ert-deftest org-capture-test-p5-snake-case-used ()
   "s-snake-case is used in litnote function."
   :tags '(:org-capture)
-  (skip-unless (featurep 'org-capture-lib))
+  (skip-unless org-capture-test--lib-loaded)
   (skip-unless (fboundp '+capture-litnote-function))
   ;; Check that s-snake-case is required (indicates usage)
   (should (featurep 's)))
@@ -101,7 +83,7 @@
 (ert-deftest org-capture-test-p6-read-url-defined ()
   "+capture-read-url is defined."
   :tags '(:org-capture)
-  (skip-unless (featurep 'org-capture-lib))
+  (skip-unless org-capture-test--lib-loaded)
   (should (fboundp '+capture-read-url)))
 
 
@@ -110,7 +92,7 @@
 (ert-deftest org-capture-test-p7-youtube-prompt ()
   "+capture--prompt-for-youtube-video generates prompt."
   :tags '(:org-capture)
-  (skip-unless (featurep 'org-capture-lib))
+  (skip-unless org-capture-test--lib-loaded)
   (skip-unless (fboundp '+capture--prompt-for-youtube-video))
   (let ((prompt (+capture--prompt-for-youtube-video "Test Video Title")))
     (should (stringp prompt))
@@ -123,14 +105,14 @@
 (ert-deftest org-capture-test-p8-generic-prompt-excerpt-length ()
   "+capture-excerpt-length-chars is 1500."
   :tags '(:org-capture)
-  (skip-unless (featurep 'org-capture-lib))
+  (skip-unless org-capture-test--lib-loaded)
   (should (boundp '+capture-excerpt-length-chars))
   (should (= 1500 +capture-excerpt-length-chars)))
 
 (ert-deftest org-capture-test-p8-generic-prompt-function ()
   "+capture--prompt-for-generic-web-page generates prompt."
   :tags '(:org-capture)
-  (skip-unless (featurep 'org-capture-lib))
+  (skip-unless org-capture-test--lib-loaded)
   (skip-unless (fboundp '+capture--prompt-for-generic-web-page))
   (let ((prompt (+capture--prompt-for-generic-web-page "Title" "Some content here")))
     (should (stringp prompt))
@@ -154,25 +136,25 @@
 (ert-deftest org-capture-test-context-variable ()
   "+capture-context variable is defined."
   :tags '(:org-capture)
-  (skip-unless (featurep 'org-capture-lib))
+  (skip-unless org-capture-test--lib-loaded)
   (should (boundp '+capture-context)))
 
 (ert-deftest org-capture-test-metadata-function ()
   "+capture--metadata-for-web-document is defined."
   :tags '(:org-capture)
-  (skip-unless (featurep 'org-capture-lib))
+  (skip-unless org-capture-test--lib-loaded)
   (should (fboundp '+capture--metadata-for-web-document)))
 
 (ert-deftest org-capture-test-eww-metadata-function ()
   "+litnote-meta-try-from-eww is defined."
   :tags '(:org-capture)
-  (skip-unless (featurep 'org-capture-lib))
+  (skip-unless org-capture-test--lib-loaded)
   (should (fboundp '+litnote-meta-try-from-eww)))
 
 (ert-deftest org-capture-test-url-metadata-function ()
   "+litnote-meta-from-url is defined."
   :tags '(:org-capture)
-  (skip-unless (featurep 'org-capture-lib))
+  (skip-unless org-capture-test--lib-loaded)
   (should (fboundp '+litnote-meta-from-url)))
 
 

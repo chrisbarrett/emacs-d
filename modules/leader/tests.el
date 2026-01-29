@@ -19,32 +19,10 @@
     (error (message "Leader init.el load error: %s" err))))
 
 ;; Load lib for function tests
-(let ((lib-file (expand-file-name "leader-lib.el" leader-test--module-dir)))
+(let ((lib-file (expand-file-name "lib.el" leader-test--module-dir)))
   (condition-case nil
       (load lib-file nil t)
     (error nil)))
-
-;;; Module structure tests
-
-(ert-deftest leader-test-packages-eld-exists ()
-  "Module has packages.eld file."
-  (let ((file (expand-file-name "packages.eld" leader-test--module-dir)))
-    (should (file-exists-p file))))
-
-(ert-deftest leader-test-spec-md-exists ()
-  "Module has spec.md file."
-  (let ((file (expand-file-name "spec.md" leader-test--module-dir)))
-    (should (file-exists-p file))))
-
-(ert-deftest leader-test-init-el-exists ()
-  "Module has init.el file."
-  (let ((file (expand-file-name "init.el" leader-test--module-dir)))
-    (should (file-exists-p file))))
-
-(ert-deftest leader-test-lib-el-exists ()
-  "Module has leader-lib.el file."
-  (let ((file (expand-file-name "leader-lib.el" leader-test--module-dir)))
-    (should (file-exists-p file))))
 
 ;;; P1: SPC SPC opens consult-buffer
 
@@ -233,7 +211,7 @@
 
 (ert-deftest leader-test-lib-contains-autoloads ()
   "lib.el contains autoload cookies for public functions."
-  (let ((file (expand-file-name "leader-lib.el" leader-test--module-dir)))
+  (let ((file (expand-file-name "lib.el" leader-test--module-dir)))
     (with-temp-buffer
       (insert-file-contents file)
       (should (search-forward ";;;###autoload" nil t)))))

@@ -7,11 +7,11 @@
 
 ;;; Code:
 
+(require '+autoloads)
+
 (use-package zig-mode :ensure nil
   :mode "\\.\\(zig\\|zon\\)\\'"
   :custom
   (zig-format-on-save nil))
 
-(provide 'lang-zig-init)
 
-;;; init.el ends here

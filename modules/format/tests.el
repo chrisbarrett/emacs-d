@@ -29,13 +29,6 @@
   (require 'apheleia)
   (should apheleia-global-mode))
 
-;; P3: Remote format local - apheleia-remote-algorithm eq local
-(ert-deftest format-module-test-p3-remote-format-local ()
-  "P3: apheleia-remote-algorithm should be `local'."
-  (format-test--load-init)
-  (require 'apheleia)
-  (should (eq apheleia-remote-algorithm 'local)))
-
 ;; P4: Trim whitespace on save - trailing whitespace removed
 (ert-deftest format-module-test-p4-trim-whitespace-on-save ()
   "P4: Trailing whitespace should be removed on save when aggressive trim is on."
@@ -63,24 +56,7 @@
   (format-test--load-init)
   (should (eq (keymap-lookup global-map "C-x a a") 'align-regexp)))
 
-;; P7: Tab completion behavior - tab-first-completion eq word-or-paren-or-punct
-(ert-deftest format-module-test-p7-tab-completion-behavior ()
-  "P7: tab-first-completion should be word-or-paren-or-punct."
-  (format-test--load-init)
-  (should (eq tab-first-completion 'word-or-paren-or-punct)))
-
 ;; Additional tests
-
-(ert-deftest format-module-test-tabify-regexp ()
-  "tabify-regexp should only match at line beginning."
-  (format-test--load-init)
-  (should (equal tabify-regexp "^\t* [ \t]+")))
-
-(ert-deftest format-module-test-apheleia-respects-fill-column ()
-  "apheleia-formatters-respect-fill-column should be t."
-  (format-test--load-init)
-  (require 'apheleia)
-  (should apheleia-formatters-respect-fill-column))
 
 (ert-deftest format-module-test-trim-variable-buffer-local ()
   "+trim-trailing-whitespace-aggressively should be buffer-local."

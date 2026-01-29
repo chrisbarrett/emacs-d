@@ -31,6 +31,4 @@ word.  Fall back to regular `expreg-expand'."
      (symbol (+expreg-expand-n 2))
      (t (expreg-expand)))))
 
-(provide 'treesit-lib)
 
-;;; treesit/lib.el ends here
