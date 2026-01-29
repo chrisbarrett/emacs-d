@@ -137,6 +137,7 @@ With prefix ARG, run all tests; otherwise prompt for selector."
 
 ;;; Evil Lookup
 
+;;;###autoload
 (defun +emacs-lisp-lookup-func ()
   "Lookup symbol at point using helpful or describe-symbol."
   (if (require 'helpful nil t)
