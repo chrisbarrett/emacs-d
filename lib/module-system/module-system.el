@@ -200,9 +200,9 @@ Returns an alist of (FORM . SOURCE-FILE) for each autoload-annotated definition.
   "Generate an autoload form for FORM defined in SOURCE-FILE.
 FORM should be a `defun', `defmacro', `define-minor-mode', etc."
   (pcase form
-    (`(,(and (or 'defun 'defun* 'cl-defun) _) ,name ,_args ,docstring . ,_)
+    (`(,(and (or 'defun 'defun* 'cl-defun 'defsubst) _) ,name ,_args ,docstring . ,_)
      `(autoload ',name ,source-file ,(if (stringp docstring) docstring nil) t))
-    (`(,(and (or 'defun 'defun* 'cl-defun) _) ,name ,_args . ,_)
+    (`(,(and (or 'defun 'defun* 'cl-defun 'defsubst) _) ,name ,_args . ,_)
      `(autoload ',name ,source-file nil t))
     (`(,(and (or 'defmacro 'cl-defmacro) _) ,name ,_args ,docstring . ,_)
      `(autoload ',name ,source-file ,(if (stringp docstring) docstring nil) nil 'macro))
