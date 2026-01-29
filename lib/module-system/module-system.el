@@ -198,7 +198,7 @@ Returns an alist of (FORM . SOURCE-FILE) for each autoload-annotated definition.
 
 (defun module-system--autoload-form-for-defun (form source-file)
   "Generate an autoload form for FORM defined in SOURCE-FILE.
-FORM should be a defun, defmacro, define-minor-mode, etc."
+FORM should be a `defun', `defmacro', `define-minor-mode', etc."
   (pcase form
     (`(,(and (or 'defun 'defun* 'cl-defun) _) ,name ,_args ,docstring . ,_)
      `(autoload ',name ,source-file ,(if (stringp docstring) docstring nil) t))
@@ -269,7 +269,7 @@ files to load (e.g., for bootstrap packages not associated with any module).
 
 Load order:
 1. Install all packages (packages.eld + extra sources)
-2. Add lib directories to load-path
+2. Add lib directories to `load-path'
 3. Register all autoloads (lib.el, lib/*.el)
 4. Evaluate all init files (init.el)
 

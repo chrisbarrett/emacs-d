@@ -160,10 +160,10 @@ preceded by ;;;###autoload."
 (defun +modules--autoload-form (form source-file)
   "Generate an autoload form for FORM defined in SOURCE-FILE.
 
-FORM should be a definition form like defun, defmacro,
-define-minor-mode, defvar, or defconst. Returns an autoload
-form (for functions/macros) or the form itself (for variables),
-or nil if FORM is not a recognized definition type."
+FORM should be a definition form like `defun', `defmacro',
+`define-minor-mode', `defvar', or `defconst'. Returns an autoload
+form (for functions/macros) or the form itself (for variables), or nil
+if FORM is not a recognized definition type."
   (ignore source-file) ;; Used by autoload but not variable definitions
   (pcase form
     ;; defvar/defconst - return the form directly (variables are evaluated immediately)
