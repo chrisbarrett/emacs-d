@@ -21,14 +21,6 @@
 ;;   NAME is implicitly added if this property is present and non-nil. No need to
 ;;   specify it. A value of `t' implies NAME.
 ;;
-;; :ensure-unless-local (LOCAL-PATH ELPACA-RECIPE)
-;;   Checks for a local checkout before installing via Elpaca. If the local path
-;;   exists, it's added to load-path. Otherwise, Elpaca installs the package.
-;;
-;;   Example:
-;;     (use-package foo
-;;       :ensure-unless-local ("~/src/foo" (foo :host github :repo "user/foo"))
-;;       ...)
 
 ;;; Code:
 
@@ -119,7 +111,7 @@ If this is a daemon session, load them all immediately instead."
 ;;; Keyword setup
 
 (defun +use-package-keywords-setup ()
-  "Set up custom use-package keywords."
+  "Set up custom `use-package' keywords."
   (require 'use-package-core)
 
   ;; Register incremental loading keywords
@@ -127,11 +119,6 @@ If this is a daemon session, load them all immediately instead."
     (push keyword use-package-deferring-keywords)
     (setq use-package-keywords
           (use-package-list-insert keyword use-package-keywords :after)))
-
-  ;; Register :ensure-unless-local before :ensure
-  (unless (memq :ensure-unless-local use-package-keywords)
-    (let ((tail (memq :ensure use-package-keywords)))
-      (setcdr tail (cons :ensure-unless-local (cdr tail)))))
 
   ;;; :defer-incrementally
 
@@ -183,26 +170,7 @@ If this is a daemon session, load them all immediately instead."
                   '(,@hooks)))
          (use-package-process-keywords name rest state)))))
 
-  ;;; :ensure-unless-local
-
-  (defun use-package-normalize/:ensure-unless-local (_name _keyword args)
-    (let ((arg (car args)))
-      (unless (and (listp arg)
-                   (stringp (car arg))
-                   (listp (cadr arg)))
-        (use-package-error
-         ":ensure-unless-local expects (LOCAL-PATH ELPACA-RECIPE)"))
-      arg))
-
-  (defun use-package-handler/:ensure-unless-local (name _keyword arg rest state)
-    (let ((local-path (car arg))
-          (recipe (cadr arg)))
-      (use-package-concat
-       `((let ((local-path (expand-file-name ,local-path)))
-           (if (file-directory-p local-path)
-               (add-to-list 'load-path local-path)
-             (elpaca ,recipe))))
-       (use-package-process-keywords name rest state)))))
+  )
 
 (provide '+use-package-keywords)
 
