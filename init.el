@@ -86,7 +86,6 @@ files in each module."
 ;; General provides a featureful key binding system. It makes defining leader
 ;; key bindings much easier, and must be loaded immediately for its use-package
 ;; integration.
-(use-package general :demand t)
 
 ;; Configure Emacs features & packages to follow a structured approach to
 ;; writing cache files, temp data, etc.
@@ -202,9 +201,5 @@ files in each module."
       (unless (string-match-p (rx bol (any ".~#_")) basename)
         (load file t nil nil t)))))
 
-
-;;; No-op footer to silence byte-compiler warning.
-
-;; (provide 'init)
 
 ;;; init.el ends here
