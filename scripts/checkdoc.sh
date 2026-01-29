@@ -3,7 +3,7 @@ set -euo pipefail
 
 # Run checkdoc on Emacs Lisp files and report errors
 # Usage:
-#   ./checkdoc.sh              # Check all files in lisp/ and lib/
+#   ./checkdoc.sh              # Check all files in lisp/
 #   ./checkdoc.sh --affected   # Check affected files only
 #   ./checkdoc.sh file1 file2  # Check specific files
 
