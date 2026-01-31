@@ -21,9 +21,6 @@
   (expand-file-name "modules" user-emacs-directory)
   "Directory containing module directories.")
 
-(defvar +modules-extra-packages-file (file-name-concat user-emacs-directory "extra-packages.eld")
-  "Lisp data file containing extra packages not associated with any module.")
-
 (defconst +modules-autoloads-file (file-name-concat +lisp-dir "+autoloads.el"))
 
 
@@ -45,10 +42,7 @@ A valid module directory is a directory containing at least one
 recognized module file."
   (and (file-directory-p dir)
        (let ((files (directory-files dir nil "\\`[^.]" t)))
-         (seq-some (lambda (f)
-                     (member f '("init.el" "lib.el" "packages.eld"
-                                 "spec.md" "tests.el")))
-                   files))))
+	 (seq-intersection files '("init.el" "lib.el" "packages.eld" "spec.md" "tests.el")))))
 
 (defun +modules-read-packages (module-dir)
   "Read packages.eld from MODULE-DIR and return package specs.
@@ -82,8 +76,7 @@ SPEC can be a symbol or a list with the package name as the first element."
 Returns a flat list of all package specifications from all
 modules' packages.eld files, de-duplicated by package name.
 When duplicates are found, the first occurrence is kept."
-  (let ((modules (append (+modules-read-extra-packages +modules-extra-packages-file)
-                         (+modules-discover)))
+  (let ((modules (+modules-discover))
         (seen (make-hash-table :test 'equal))
         (result nil))
     (dolist (module modules)
@@ -93,19 +86,6 @@ When duplicates are found, the first occurrence is kept."
             (puthash name t seen)
             (push spec result)))))
     (nreverse result)))
-
-(defun +modules-read-extra-packages (path)
-  "Read extra package specs from PATH.
-PATH should be a lisp-data file containing a list of package specs.
-Returns nil if PATH doesn't exist."
-  (when (file-exists-p path)
-    (with-temp-buffer
-      (insert-file-contents path)
-      (condition-case nil
-          (read (current-buffer))
-        (end-of-file
-	 (warn "End of file reading %s" path)
-	 nil)))))
 
 (defun +modules-install-packages (package-specs)
   "Install PACKAGE-SPECS using elpaca.
