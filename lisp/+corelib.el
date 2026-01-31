@@ -22,6 +22,13 @@
     minibuffer-local-isearch-map
     read-expression-map))
 
+(defmacro +load (rel-path)
+  "Load a file relative to the caller.
+
+REL-PATH is joined with the directory that contains the caller."
+  `(let ((this-dir (or load-file-name default-directory)))
+     (load (file-name-concat this-dir ,rel-path))))
+
 
 ;;; Logging
 
