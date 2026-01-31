@@ -9,35 +9,39 @@
 (require 'ert)
 (require '+corelib)
 
+(defmacro help-test-setup (&rest body)
+  "Load help module and execute BODY."
+  (declare (indent 0))
+  `(progn
+     (require 'help)
+     (+load "init.el")
+     ,@body))
+
 ;; P1: `C-h f' calls `helpful-callable' (not `describe-function')
 (ert-deftest help-module-test-p1-help-f-binding ()
   "P1: C-h f should be bound to helpful-callable."
-  (require 'help)
-  (require 'helpful)
-  (+load "init.el")
-  (should (eq (keymap-lookup help-map "f") 'helpful-callable)))
+  (help-test-setup
+   (require 'helpful)
+   (should (eq (keymap-lookup help-map "f") 'helpful-callable))))
 
 ;; P2: `C-h v' calls `helpful-variable' (not `describe-variable')
 (ert-deftest help-module-test-p2-help-v-binding ()
   "P2: C-h v should be bound to helpful-variable."
-  (require 'help)
-  (require 'helpful)
-  (+load "init.el")
-  (should (eq (keymap-lookup help-map "v") 'helpful-variable)))
+  (help-test-setup
+   (require 'helpful)
+   (should (eq (keymap-lookup help-map "v") 'helpful-variable))))
 
 ;; P3: `C-h h' is unbound
 (ert-deftest help-module-test-p3-help-h-unbound ()
   "P3: C-h h should be unbound (nil)."
-  (require 'help)
-  (+load "init.el")
-  (should (null (keymap-lookup help-map "h"))))
+  (help-test-setup
+   (should (null (keymap-lookup help-map "h")))))
 
 ;; P4: `C-h l' calls `find-library'
 (ert-deftest help-module-test-p4-help-l-binding ()
   "P4: C-h l should be bound to find-library."
-  (require 'help)
-  (+load "init.el")
-  (should (eq (keymap-lookup help-map "l") 'find-library)))
+  (help-test-setup
+   (should (eq (keymap-lookup help-map "l") 'find-library))))
 
 ;; P7: Eldoc re-runs after evil state transitions
 (ert-deftest help-module-test-p7-eldoc-commands ()
@@ -76,36 +80,31 @@
 
 (ert-deftest help-module-test-help-k-binding ()
   "C-h k should be bound to helpful-key."
-  (require 'help)
-  (require 'helpful)
-  (+load "init.el")
-  (should (eq (keymap-lookup help-map "k") 'helpful-key)))
+  (help-test-setup
+   (require 'helpful)
+   (should (eq (keymap-lookup help-map "k") 'helpful-key))))
 
 (ert-deftest help-module-test-help-c-binding ()
   "C-h c should be bound to describe-face."
-  (require 'help)
-  (+load "init.el")
-  (should (eq (keymap-lookup help-map "c") 'describe-face)))
+  (help-test-setup
+   (should (eq (keymap-lookup help-map "c") 'describe-face))))
 
 (ert-deftest help-module-test-help-P-binding ()
   "C-h P should be bound to describe-text-properties."
-  (require 'help)
-  (+load "init.el")
-  (should (eq (keymap-lookup help-map "P") 'describe-text-properties)))
+  (help-test-setup
+   (should (eq (keymap-lookup help-map "P") 'describe-text-properties))))
 
 (ert-deftest help-module-test-help-s-binding ()
   "C-h s should be bound to info-apropos."
-  (require 'help)
-  (require 'info)
-  (+load "init.el")
-  (should (eq (keymap-lookup help-map "s") 'info-apropos)))
+  (help-test-setup
+   (require 'info)
+   (should (eq (keymap-lookup help-map "s") 'info-apropos))))
 
 (ert-deftest help-module-test-help-w-binding ()
   "C-h w should be bound to rfc-mode-browse."
-  (require 'help)
-  (require 'rfc-mode)
-  (+load "init.el")
-  (should (eq (keymap-lookup help-map "w") 'rfc-mode-browse)))
+  (help-test-setup
+   (require 'rfc-mode)
+   (should (eq (keymap-lookup help-map "w") 'rfc-mode-browse))))
 
 (provide 'help-tests)
 

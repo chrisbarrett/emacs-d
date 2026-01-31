@@ -13,14 +13,19 @@
   (require 'auth-source)
   (require 'auth-source-op))
 
-;; Load init.el from this module
-(+load "init.el")
+(defmacro auth-test-setup (&rest body)
+  "Load auth module and execute BODY."
+  (declare (indent 0))
+  `(progn
+     (+load "init.el")
+     ,@body))
 
 ;;; P1: auth-sources contains 1password symbol
 
 (ert-deftest auth/p1-auth-sources-contains-1password ()
   "P1: `auth-sources' should contain the 1password symbol."
-  (skip-unless (featurep 'auth-source-op))
-  (should (memq '1password auth-sources)))
+  (auth-test-setup
+   (skip-unless (featurep 'auth-source-op))
+   (should (memq '1password auth-sources))))
 
 ;;; tests.el ends here
