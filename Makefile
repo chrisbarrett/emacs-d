@@ -1,5 +1,10 @@
 .PHONY: test test-quick setup-hooks help build-affected test-affected lint-affected pre-commit
 
+# Module lib files that contribute to autoloads
+MODULE_LIB_FILES := $(wildcard modules/*/lib.el) \
+                    $(wildcard modules/*/*-lib.el) \
+                    $(wildcard modules/*/lib/*.el)
+
 help:
 	@echo "Targets:"
 	@echo "  test           - Run all quality gates (tests, byte-compile, checkdoc)"
@@ -10,12 +15,19 @@ help:
 	@echo "  pre-commit     - Run lint-affected, build-affected, test-affected in sequence"
 	@echo "  setup-hooks    - Install prek hooks"
 
-test: setup-hooks
+lisp/+autoloads.el: $(MODULE_LIB_FILES)
+	@echo "Generating $@..."
+	@emacs -Q --batch \
+		--eval "(add-to-list 'load-path \"$(CURDIR)/lisp\")" \
+		--eval "(require '+modules)" \
+		--eval "(+modules-write-autoloads (+modules-collect-autoloads))"
+
+test: setup-hooks lisp/+autoloads.el
 	./scripts/run-tests.sh
 	./scripts/byte-compile.sh
 	./scripts/checkdoc.sh
 
-test-quick:
+test-quick: lisp/+autoloads.el
 	@affected=$$(./scripts/affected-tests.sh); \
 	if [ "$$affected" = "none" ]; then \
 		echo "No affected test files"; \
@@ -25,7 +37,7 @@ test-quick:
 		./scripts/run-tests.sh $$affected; \
 	fi
 
-build-affected:
+build-affected: lisp/+autoloads.el
 	@affected=$$(./scripts/affected.sh); \
 	if [ "$$affected" = "none" ]; then \
 		echo "No affected files to compile"; \
@@ -35,7 +47,7 @@ build-affected:
 		./scripts/byte-compile.sh $$affected; \
 	fi
 
-test-affected:
+test-affected: lisp/+autoloads.el
 	@affected=$$(./scripts/affected.sh); \
 	if [ "$$affected" = "none" ]; then \
 		echo "No affected test files"; \
@@ -66,7 +78,7 @@ lint-affected:
 		./scripts/checkdoc.sh $$files; \
 	fi
 
-pre-commit: lint-affected build-affected test-affected
+pre-commit: lisp/+autoloads.el lint-affected build-affected test-affected
 
 setup-hooks:
 	@if [ ! -f .git/hooks/pre-commit ]; then \
