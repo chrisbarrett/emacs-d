@@ -79,6 +79,7 @@
 (set-face-attribute 'variable-pitch nil :family "Fira Sans")
 
 ;; Defer theme loading until after a frame exists
+(autoload '+theme-update (file-name-concat +modules-directory "theme" "lib.el"))
 (add-hook 'after-init-hook #'+theme-update)
 
 

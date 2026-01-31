@@ -21,6 +21,9 @@
   (expand-file-name "modules" user-emacs-directory)
   "Directory containing module directories.")
 
+(defvar +modules-extra-packages-file (file-name-concat user-emacs-directory "extra-packages.eld")
+  "Lisp data file containing extra packages not associated with any module.")
+
 (defconst +modules-autoloads-file (file-name-concat +lisp-dir "+autoloads.el"))
 
 
@@ -79,8 +82,10 @@ SPEC can be a symbol or a list with the package name as the first element."
 Returns a flat list of all package specifications from all
 modules' packages.eld files, de-duplicated by package name.
 When duplicates are found, the first occurrence is kept."
-  (let ((modules (+modules-discover))
-        (seen (make-hash-table :test 'eq))
+  (let ((modules (append (when (file-exists-p +modules-extra-packages-file)
+                           (+modules-read-extra-packages +modules-extra-packages-file))
+                         (+modules-discover)))
+        (seen (make-hash-table :test 'equal))
         (result nil))
     (dolist (module modules)
       (dolist (spec (+modules-read-packages module))
@@ -115,7 +120,7 @@ Example specs:
 This function requires elpaca to be available. Each spec is
 passed to the `elpaca' macro for installation."
   (when (and package-specs (fboundp 'elpaca))
-    (dolist (spec package-specs)
+    (dolist (spec (seq-uniq package-specs))
       (eval `(elpaca ,spec) t))))
 
 

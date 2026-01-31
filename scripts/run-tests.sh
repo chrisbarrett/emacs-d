@@ -45,4 +45,4 @@ else
     -l scripts/test-setup.el \
     "${args[@]}" \
     --eval "(ert-run-tests-batch-and-exit t)"
-fi
+fi 2>&1 | grep -v "is an obsolete macro"

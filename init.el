@@ -50,20 +50,13 @@
 ;; 1. Extra packages (bootstrap packages not in any module)
 ;; 2. Module packages (from modules/*/packages.eld)
 
-(defvar +extra-packages-file (file-name-concat user-emacs-directory "extra-packages.eld")
-  "Lisp data file containing extra packages not associated with any module.")
-
-
 (defun +install-packages ()
   "Install all packages declared in the module system.
 
 Packages are sourced from `+extra-packages-file' and the `packages.eld'
 files in each module."
   (interactive)
-  (+modules-install-packages
-   (append (when (file-exists-p +extra-packages-file)
-             (+modules-read-extra-packages +extra-packages-file))
-           (+modules-collect-packages))))
+  (+modules-install-packages (+modules-collect-packages)))
 
 (+install-packages)
 
