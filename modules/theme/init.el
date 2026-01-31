@@ -8,8 +8,6 @@
 
 (require '+autoloads)
 
-(load (expand-file-name "lib" (file-name-directory load-file-name)) nil t)
-
 (use-package catppuccin-theme
   :demand t
   :init

@@ -15,19 +15,6 @@
 (autoload 'parent-mode-list "parent-mode")
 (autoload 'project-find-file-in "project")
 
-;; From lib.el (autoloaded)
-(autoload '+forward-kill-sexp "leader-lib")
-(autoload '+backward-kill-sexp "leader-lib")
-(autoload '+find-sibling-file "leader-lib")
-
-;; From nav module
-(autoload '+split-window-horizontally-dwim "nav-lib")
-(autoload '+split-window-vertically-dwim "nav-lib")
-(autoload '+toggle-window-dedication "nav-lib")
-(autoload '+delete-nondedicated-windows "nav-lib")
-(autoload '+clone-indirect-buffer-of-region "nav-lib")
-(autoload '+worktrees-menu "vcs-lib")
-
 ;; External variables
 (defvar +site-files-directory)
 (defvar org-default-notes-file)

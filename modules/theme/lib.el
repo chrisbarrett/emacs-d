@@ -8,17 +8,20 @@
 ;;; Code:
 
 (require 'cl-lib)
-(require 'color)
 
+;;;###autoload
 (defvar +theme-light nil
   "Symbol of light theme to use.")
 
+;;;###autoload
 (defvar +theme-dark nil
   "Symbol of dark theme to use.")
 
+;;;###autoload
 (defvar +theme-changed-hook nil
   "Hook run after theme changes.")
 
+;;;###autoload
 (defvar +theme-override nil
   "If set, overrides system theme detection.")
 
@@ -33,6 +36,7 @@
   "Query GNU/Linux for dark mode preference."
   (shell-command-to-string "gsettings get org.gnome.desktop.interface gtk-theme"))
 
+;;;###autoload
 (defun +theme-dark-p ()
   "Return non-nil if current theme is dark.
 Detection is based on background luminance being less than 50%."

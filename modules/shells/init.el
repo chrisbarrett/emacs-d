@@ -12,15 +12,11 @@
 (require 'general)
 
 (require '+corelib)
-(load (expand-file-name "../evil/lib" (file-name-directory load-file-name)) nil t)
 
 (cl-eval-when (compile)
   (require 'eat)
   (require 'eshell)
   (require 'evil))
-
-(defvar +eshell-suppress-zoxide-updates-p)
-(declare-function +zoxide-add "shells-lib")
 
 ;; Eshell configuration - wire zoxide advice when eshell/cd is loaded
 (with-eval-after-load 'em-dirs
@@ -63,8 +59,7 @@
     [escape] 'eat-self-input))
 
 ;; Add eat to evil-collection disabled list
-(with-eval-after-load 'evil-lib
-  (pushnew! +evil-collection-disabled-list 'eat))
+(pushnew! +evil-collection-disabled-list 'eat)
 
 ;; Eat custom settings
 (with-eval-after-load 'eat

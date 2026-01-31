@@ -259,6 +259,7 @@ INTERACTIVE is set when called interactively."
 Elements are either target mode symbols or lists which `car' is the mode
 symbol and `cdr' the packages to register.")
 
+;;;###autoload
 (defvar +evil-collection-disabled-list
   '(anaconda-mode
     buff-menu

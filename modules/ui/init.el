@@ -356,8 +356,6 @@
 (use-package display-buffer-alist-setup
   :no-require t
   :init
-  (load (expand-file-name "../nav/lib" (file-name-directory load-file-name)) nil t)
-
   (setq display-buffer-alist
         (cl-labels ((mode-active-p (mode)
                       (cl-assert (symbolp mode))
