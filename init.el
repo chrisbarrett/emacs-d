@@ -79,6 +79,7 @@ files in each module."
 ;; General provides a featureful key binding system. It makes defining leader
 ;; key bindings much easier, and must be loaded immediately for its use-package
 ;; integration.
+(require 'general)
 
 ;; Configure Emacs features & packages to follow a structured approach to
 ;; writing cache files, temp data, etc.
@@ -180,11 +181,11 @@ files in each module."
 
 ;; Load init/**.el
 
-(dolist (file (directory-files-recursively +init-dir (rx ".el" eos)))
-  (let ((basename (file-name-base file)))
-    (unless (string-match-p (rx bol (any ".~#_")) basename)
-      (eval `(use-package ,(intern basename)
-               :demand t)))))
+(when (file-directory-p +init-dir)
+  (dolist (file (directory-files-recursively +init-dir (rx ".el" eos)))
+    (let ((basename (file-name-base file)))
+      (unless (string-match-p (rx bol (any ".~#_")) basename)
+	(eval `(use-package ,(intern basename) :demand t))))))
 
 
 ;;; Module init files

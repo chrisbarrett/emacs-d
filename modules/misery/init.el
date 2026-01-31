@@ -13,9 +13,7 @@
 (require '+corelib)
 
 (use-package misery
-  :ensure-unless-local ("~/src/chrisbarrett/emacs-misery"
-                        (nursery :host github
-                                 :repo "chrisbarrett/emacs-misery"))
+  :load-path "~/src/chrisbarrett/emacs-misery"
   :hook (+first-file-hook . misery-global-mode)
   :custom
   (misery-show-summary-in-minibuffer nil))

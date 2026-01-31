@@ -44,26 +44,30 @@ recognized module file."
        (let ((files (directory-files dir nil "\\`[^.]" t)))
 	 (seq-intersection files '("init.el" "lib.el" "packages.eld" "spec.md" "tests.el")))))
 
-(defun +modules-read-packages (module-dir)
-  "Read packages.eld from MODULE-DIR and return package specs.
+(defun +modules--read-packages-file (file)
+  "Read package specs from FILE.
 
-The file should contain a list of elpaca package specifications,
+FILE should contain a list of elpaca package specifications,
 for example:
 
   ;; -*- lisp-data -*-
   ((evil :host github :repo \"emacs-evil/evil\")
    (evil-collection))
 
-Returns the list of package specs, or nil if the file doesn't
-exist or is empty."
+Returns the list of package specs, or nil if empty."
+  (with-temp-buffer
+    (insert-file-contents file)
+    (goto-char (point-min))
+    (condition-case nil
+        (read (current-buffer))
+      (end-of-file nil))))
+
+(defun +modules-read-packages (module-dir)
+  "Read packages.eld from MODULE-DIR and return package specs.
+Returns nil if the file doesn't exist."
   (let ((packages-file (expand-file-name "packages.eld" module-dir)))
     (when (file-exists-p packages-file)
-      (with-temp-buffer
-        (insert-file-contents packages-file)
-        (goto-char (point-min))
-        (condition-case nil
-            (read (current-buffer))
-          (end-of-file nil))))))
+      (+modules--read-packages-file packages-file))))
 
 (defun +modules--package-name (spec)
   "Extract the package name from SPEC.
@@ -71,21 +75,24 @@ SPEC can be a symbol or a list with the package name as the first element."
   (if (consp spec) (car spec) spec))
 
 (defun +modules-collect-packages ()
-  "Collect all package specs from discovered modules.
+  "Collect all package specs from `+modules-directory'.
 
-Returns a flat list of all package specifications from all
-modules' packages.eld files, de-duplicated by package name.
-When duplicates are found, the first occurrence is kept."
-  (let ((modules (+modules-discover))
-        (seen (make-hash-table :test 'equal))
-        (result nil))
-    (dolist (module modules)
-      (dolist (spec (+modules-read-packages module))
-        (let ((name (+modules--package-name spec)))
-          (unless (gethash name seen)
-            (puthash name t seen)
-            (push spec result)))))
-    (nreverse result)))
+Finds all packages.eld files at any depth under `+modules-directory'
+and returns a flat list of package specifications, de-duplicated by
+package name. When duplicates are found, the first occurrence is kept."
+  (when (file-directory-p +modules-directory)
+    (let ((package-files (directory-files-recursively +modules-directory
+                                                      "\\`packages\\.eld\\'"
+                                                      nil))
+          (seen (make-hash-table :test 'equal))
+          (result nil))
+      (dolist (file package-files)
+        (dolist (spec (+modules--read-packages-file file))
+          (let ((name (+modules--package-name spec)))
+            (unless (gethash name seen)
+              (puthash name t seen)
+              (push spec result)))))
+      (nreverse result))))
 
 (defun +modules-install-packages (package-specs)
   "Install PACKAGE-SPECS using elpaca.
