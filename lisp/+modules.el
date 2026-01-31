@@ -82,8 +82,7 @@ SPEC can be a symbol or a list with the package name as the first element."
 Returns a flat list of all package specifications from all
 modules' packages.eld files, de-duplicated by package name.
 When duplicates are found, the first occurrence is kept."
-  (let ((modules (append (when (file-exists-p +modules-extra-packages-file)
-                           (+modules-read-extra-packages +modules-extra-packages-file))
+  (let ((modules (append (+modules-read-extra-packages +modules-extra-packages-file)
                          (+modules-discover)))
         (seen (make-hash-table :test 'equal))
         (result nil))
@@ -104,7 +103,9 @@ Returns nil if PATH doesn't exist."
       (insert-file-contents path)
       (condition-case nil
           (read (current-buffer))
-        (end-of-file nil)))))
+        (end-of-file
+	 (warn "End of file reading %s" path)
+	 nil)))))
 
 (defun +modules-install-packages (package-specs)
   "Install PACKAGE-SPECS using elpaca.
@@ -197,13 +198,9 @@ if FORM is not a recognized definition type."
 
 Returns an alist of (FORM . SOURCE-FILE) pairs for all
 autoload-annotated definitions in module lib files."
-  (let ((modules (+modules-discover)))
-    (apply #'append
-           (mapcar (lambda (module-dir)
-                     (let ((lib-files (+modules--discover-lib-files module-dir)))
-                       (apply #'append
-                              (mapcar #'+modules--extract-autoloads lib-files))))
-                   modules))))
+    (seq-mapcat (lambda (module-dir)
+                  (seq-mapcat #'+modules--extract-autoloads (+modules--discover-lib-files module-dir)))
+                (+modules-discover)))
 
 (defun +modules-register-autoloads (autoload-entries)
   "Register AUTOLOAD-ENTRIES with Emacs.
