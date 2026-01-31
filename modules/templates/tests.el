@@ -7,10 +7,11 @@
 ;;; Code:
 
 (require 'ert)
+(require '+corelib)
 
 (defun templates-test--load-init ()
   "Load the templates module init.el."
-  (load (expand-file-name "modules/templates/init.el" user-emacs-directory) nil t))
+  (+load "init.el"))
 
 ;; P1: Tempel path configured - tempel-path ends with templates/*.eld
 (ert-deftest templates-module-test-p1-tempel-path ()
@@ -70,13 +71,13 @@
 ;; P7: File template macros exist - +define-file-template is bound
 (ert-deftest templates-module-test-p7-define-file-template-macro ()
   "P7: +define-file-template macro should exist."
-  (load (expand-file-name "modules/templates/lib.el" user-emacs-directory) nil t)
+  (+load "lib.el")
   (should (fboundp '+define-file-template)))
 
 ;; P8: Dispatcher macro exists - +define-file-template-dispatcher is bound
 (ert-deftest templates-module-test-p8-define-file-template-dispatcher-macro ()
   "P8: +define-file-template-dispatcher macro should exist."
-  (load (expand-file-name "modules/templates/lib.el" user-emacs-directory) nil t)
+  (+load "lib.el")
   (should (fboundp '+define-file-template-dispatcher)))
 
 ;; P9: string-inflection available - required for dynamic template names

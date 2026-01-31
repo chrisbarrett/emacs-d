@@ -7,10 +7,11 @@
 ;;; Code:
 
 (require 'ert)
+(require '+corelib)
 
 (defun format-test--load-init ()
   "Load the format module init.el."
-  (load (expand-file-name "modules/format/init.el" user-emacs-directory) nil t))
+  (+load "init.el"))
 
 ;; P1: Apheleia loads lazily - not loaded until first file opened
 (ert-deftest format-module-test-p1-apheleia-loads-lazily ()

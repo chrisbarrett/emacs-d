@@ -7,13 +7,14 @@
 ;;; Code:
 
 (require 'ert)
+(require '+corelib)
 
 (cl-eval-when (compile)
   (require 'auth-source)
   (require 'auth-source-op))
 
 ;; Load init.el from this module
-(load (expand-file-name "modules/auth/init.el" user-emacs-directory) nil t)
+(+load "init.el")
 
 ;;; P1: auth-sources contains 1password symbol
 

@@ -25,9 +25,10 @@
 (defmacro +load (rel-path)
   "Load a file relative to the caller.
 
-REL-PATH is joined with the directory that contains the caller."
-  `(let ((this-dir (or load-file-name default-directory)))
-     (load (file-name-concat this-dir ,rel-path))))
+REL-PATH is joined with the directory that contains the caller.
+The directory is captured at macro-expansion time."
+  (let ((this-dir (file-name-directory (or load-file-name buffer-file-name default-directory))))
+    `(load ,(file-name-concat this-dir rel-path))))
 
 
 ;;; Logging

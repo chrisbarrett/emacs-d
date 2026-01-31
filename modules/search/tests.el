@@ -7,10 +7,11 @@
 ;;; Code:
 
 (require 'ert)
+(require '+corelib)
 
 (defun search-test--load-init ()
   "Load the search module init.el."
-  (load (expand-file-name "modules/search/init.el" user-emacs-directory) nil t))
+  (+load "init.el"))
 
 ;; P2: grep-template contains "rg" command
 (ert-deftest search-module-test-p2-grep-template-uses-rg ()

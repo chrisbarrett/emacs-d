@@ -7,11 +7,12 @@
 ;;; Code:
 
 (require 'ert)
+(require '+corelib)
 
 (defun editing-test--load-module ()
   "Load the editing module files."
-  (load (expand-file-name "modules/editing/lib.el" user-emacs-directory) nil t)
-  (load (expand-file-name "modules/editing/init.el" user-emacs-directory) nil t))
+  (+load "lib.el")
+  (+load "init.el"))
 
 ;; P1: erase-buffer is not disabled
 (ert-deftest editing-module-test-p1-erase-buffer-enabled ()
