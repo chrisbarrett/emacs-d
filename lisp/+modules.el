@@ -224,6 +224,14 @@ the symbol `fboundp' without loading its source file."
       (insert "(provide '+autoloads)\n")
       (save-buffer))))
 
+;;;###autoload
+(defun +modules-regenerate-autoloads ()
+  "Regenerate the +autoloads.el file from module lib files."
+  (interactive)
+  (+modules-write-autoloads (+modules-collect-autoloads))
+  (load +modules-autoloads-file nil t)
+  (message "Regenerated %s" +modules-autoloads-file))
+
 
 ;;; Init Loading
 
