@@ -467,7 +467,7 @@ such worktree exists, create it."
   (interactive)
   (let* ((root (+worktrees--root-worktree-path))
          (default-directory (or (+worktrees-path-for-selected-tab) root default-directory))
-         (worktree-paths (magit-list-worktrees))
+         (worktree-paths (mapcar #'car (magit-list-worktrees)))
          (input (completing-read "Existing worktree, or name for new branch: "
                                  (remove (+worktrees-path-for-selected-tab) worktree-paths) nil
                                  (lambda (input)
