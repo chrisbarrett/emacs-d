@@ -8,6 +8,10 @@
 
 (require 'cl-lib)
 
+;;;###autoload
+(define-minor-mode emacs-config-mode
+  "Minor mode for Emacs Lisp files forming part of my configuration.")
+
 ;;; consult-imenu Visibility Grouping
 
 (defgroup consult-imenu-elisp nil
@@ -134,15 +138,5 @@ With prefix ARG, run all tests; otherwise prompt for selector."
   (if arg
       (ert t)
     (call-interactively #'ert)))
-
-;;; Evil Lookup
-
-;;;###autoload
-(defun +emacs-lisp-lookup-func ()
-  "Lookup symbol at point using helpful or describe-symbol."
-  (if (require 'helpful nil t)
-      (helpful-at-point)
-    (describe-symbol (symbol-at-point))))
-
 
 ;;; lib.el ends here

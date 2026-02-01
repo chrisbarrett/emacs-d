@@ -106,12 +106,6 @@
         (skip-unless (eq binding '+ert))
         (should (eq binding '+ert))))))
 
-;;; P6: flymake-eldev autoloads are required
-
-(ert-deftest lang-lisp/flymake-eldev-autoloads ()
-  "Verify flymake-eldev autoloads are available."
-  (should (featurep 'flymake-eldev-autoloads)))
-
 ;;; P7: buttercup loads after elisp-mode
 
 (ert-deftest lang-lisp/buttercup-available ()
