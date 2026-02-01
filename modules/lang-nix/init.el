@@ -11,7 +11,6 @@
 ;;; Code:
 
 (require '+autoloads)
-
 (require '+corelib)
 
 ;; Read-only protection for Nix store
@@ -36,10 +35,7 @@
   (pushnew! project-vc-extra-root-markers "flake.nix"))
 
 ;; File template for flake.nix
-(use-package +file-templates
-  :config
-  (+define-file-template (rx "flake.nix" eos) "flake.eld"))
-
+(+define-file-template (rx "flake.nix" eos) "flake.eld")
 
 
 ;;; init.el ends here

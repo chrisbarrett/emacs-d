@@ -9,6 +9,7 @@
 
 (require '+autoloads)
 (require '+corelib)
+(require '+use-package-keywords)
 
 ;;; Disabled commands re-enabled
 

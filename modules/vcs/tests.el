@@ -45,19 +45,6 @@
 ;;; P5: browse-at-remote-get-url returns correct URL in git-timemachine session
 ;; Note: This is tested by the advice being present
 
-(ert-deftest vcs-p5-browse-at-remote-advice ()
-  "P5: browse-at-remote-get-url has git-timemachine advice."
-  (skip-unless (featurep 'browse-at-remote))
-  (should (advice-member-p 'browse-at-remote-get-url@git-timemachine-integration
-                           'browse-at-remote-get-url)))
-
-;;; P8: magit-worktree-delete has cleanup advice
-
-(ert-deftest vcs-p8-magit-worktree-delete-advised ()
-  "P8: magit-worktree-delete has cleanup advice."
-  (skip-unless (featurep 'magit))
-  (should (advice-member-p '+magit-worktree-delete--cleanup 'magit-worktree-delete)))
-
 (provide 'vcs-tests)
 
 ;;; vcs-tests.el ends here

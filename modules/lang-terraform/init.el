@@ -38,11 +38,9 @@
   (alist-set! apheleia-mode-alist 'hcl-mode '(terragrunt hclfmt)))
 
 ;; File templates for Terragrunt configurations
-(use-package +file-templates
-  :config
-  (+define-file-template (rx "terragrunt.hcl" eos) "terragrunt/terragrunt.eld")
-  (+define-file-template (rx "root.hcl" eos) "terragrunt/root.eld")
-  (+define-file-template (rx "region.hcl" eos) "terragrunt/region.eld"))
+(+define-file-template (rx "terragrunt.hcl" eos) "terragrunt/terragrunt.eld")
+(+define-file-template (rx "root.hcl" eos) "terragrunt/root.eld")
+(+define-file-template (rx "region.hcl" eos) "terragrunt/region.eld")
 
 
 

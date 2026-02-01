@@ -58,21 +58,19 @@
               '+ts-server-program))
 
 ;; Configure file templates
-(use-package +file-templates
-  :config
-  (defun +index-ts-p (_file)
-    "Return non-nil if current buffer is an index.ts file."
-    (equal "index.ts" (file-name-nondirectory (buffer-file-name))))
+(defun +index-ts-p (_file)
+  "Return non-nil if current buffer is an index.ts file."
+  (equal "index.ts" (file-name-nondirectory (buffer-file-name))))
 
-  (+define-file-template-dispatcher 'typescript-ts-mode
-    ((and (string-match-p "construct" (buffer-file-name))
-          (+cdk-project-p)
-          (not (+index-ts-p (buffer-file-name))))
-     "cdk/construct.eld")
-    ((and (string-match-p "/stacks/" (buffer-file-name))
-          (+cdk-project-p)
-          (not (+index-ts-p (buffer-file-name))))
-     "cdk/stack.eld")))
+(+define-file-template-dispatcher 'typescript-ts-mode
+  ((and (string-match-p "construct" (buffer-file-name))
+        (+cdk-project-p)
+        (not (+index-ts-p (buffer-file-name))))
+   "cdk/construct.eld")
+  ((and (string-match-p "/stacks/" (buffer-file-name))
+        (+cdk-project-p)
+        (not (+index-ts-p (buffer-file-name))))
+   "cdk/stack.eld"))
 
 
 

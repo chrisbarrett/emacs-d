@@ -11,6 +11,7 @@
 (require '+autoloads)
 
 (require '+corelib)
+(require '+use-package-keywords)
 
 
 ;;; org-roam core configuration

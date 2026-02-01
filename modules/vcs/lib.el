@@ -45,6 +45,7 @@ For GitHub repos, returns owner/name format. Returns nil otherwise."
   "https://raw.githubusercontent.com/github/gemoji/master/db/emoji.json"
   "URL to GitHub's official emoji data (gemoji project).")
 
+;;;###autoload
 (defvar +git-commit-emoji-cache-file nil
   "Path to cached emoji data file.
 Set during init after no-littering is loaded.")
@@ -147,17 +148,6 @@ constrained to the current frame when using per-project frames."
   (let ((orig-window (selected-window)))
     (magit-diff-visit-file t)
     (select-window orig-window)))
-
-;;; Magit worktree-delete advice
-
-(defun +magit-worktree-delete--cleanup (worktree &rest _)
-  "Cleanup before deleting WORKTREE via `magit-worktree-delete'.
-Aborts if WORKTREE is the root worktree. Otherwise closes any
-associated tabs and buffers."
-  (let ((worktree-path (magit--expand-worktree worktree)))
-    (when (+worktrees-in-repo-root-p worktree-path)
-      (user-error "Cannot delete the root worktree"))
-    (+worktrees-close-tabs worktree-path)))
 
 ;;; Worktree prune
 
@@ -314,7 +304,7 @@ Returns a list of closed tab names."
       (with-selected-frame frame
         (when-let* ((tab (+worktrees--tab-for-worktree worktree-path)))
           (let ((tab-name (alist-get 'name tab)))
-            (+worktree--kill-worktree-buffers worktree-path)
+            (+worktree-kill-buffers worktree-path)
             (let* ((tabs (funcall tab-bar-tabs-function))
                    (tab-index (seq-position tabs tab)))
               (when tab-index
@@ -326,7 +316,8 @@ Returns a list of closed tab names."
                        (propertize (abbreviate-file-name worktree-path) 'face 'dired-directory)))
       closed-tabs)))
 
-(defun +worktree--kill-worktree-buffers (worktree-path)
+;;;###autoload
+(defun +worktree-kill-buffers (worktree-path)
   "Kill buffers associated with WORKTREE-PATH."
   (dolist (buf (buffer-list))
     (with-current-buffer buf
@@ -357,6 +348,7 @@ Returns a list of closed tab names."
                                default-directory)))
     (+worktrees--repo-root)))
 
+;;;###autoload
 (defun +worktrees-in-repo-root-p (&optional dir)
   "Return non-nil if DIR (or `default-directory') is the repo root."
   (when-let* ((repo-root (+worktrees--repo-root)))
@@ -610,46 +602,5 @@ Tab and buffer cleanup handled by `+magit-worktree-delete--cleanup' advice."
         (magit-refresh)
         (message "Rebase successful: %s rebased on %s/%s"
                  branch-name remote default-branch)))))
-
-;;; Tab cleanup hook
-
-(defun +worktrees--cleanup-worktree-tab (tab _sole-tab)
-  "Clean up resources when a worktree TAB is closed."
-  (when-let* ((worktree-path (alist-get 'worktree-path tab)))
-    (when (fboundp 'claude-code-ide-stop)
-      (let ((default-directory worktree-path)
-            (project-find-functions nil)
-            (kill-buffer-query-functions nil))
-        (ignore-errors
-          (claude-code-ide-stop))))
-    (+worktree--kill-worktree-buffers worktree-path)))
-
-;;; Transient menu
-
-(require 'transient)
-
-;;;###autoload (autoload '+worktrees-menu "vcs-lib" nil t)
-(transient-define-prefix +worktrees-menu ()
-  "Transient menu for git worktree operations."
-  [["Change"
-    :if +worktrees--repo-root-for-selected-frame
-    ("o" "Switch or new..." +worktrees-create-switch)]
-
-   ["Update"
-    :if +worktrees-tab-dedicated-to-child-p
-    ("u" "Rebase on main" +worktrees-rebase-on-local-main)
-    ("U" "Rebase on origin/main" +worktrees-rebase-on-origin-main)]
-
-   ["Complete"
-    :if +worktrees-tab-dedicated-to-child-p
-    ("m" "Merge to main" +worktrees-absorb-into-main)
-    ("x" "Destroy" +worktrees-destroy-current)]]
-
-  ["Show"
-   :inapt-if-not +worktrees--repo-root-for-selected-frame
-   ("g" "git status" +worktrees-magit-status)
-   ("c" "claude-code" +worktrees-claude-code)])
-
-
 
 ;;; lib.el ends here

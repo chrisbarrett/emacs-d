@@ -98,10 +98,7 @@
 
 ;;; File Template
 
-(use-package +file-templates
-  :after elisp-mode
-  :config
-  (+define-file-template (rx ".el" eos) "emacs-lisp.eld"))
+(+define-file-template (rx ".el" eos) "emacs-lisp.eld")
 
 ;;; Evil Integration
 
