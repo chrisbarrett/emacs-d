@@ -85,7 +85,7 @@
   :custom
   (browse-at-remote-add-line-number-if-no-region-selected nil)
   :config
-  (+load "config/browse-at-remote.el"))
+  (+load "config/+browse-at-remote.el"))
 
 
 ;;; Forge - GitHub/GitLab PR integration
