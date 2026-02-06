@@ -52,7 +52,7 @@
   :hook (emacs-lisp-mode-hook . tart-eglot-ensure))
 
 (use-package elpaca
-  :after emacs-lisp
+  :after elisp-mode
   :config
   (+load "config/+elpaca.el"))
 
