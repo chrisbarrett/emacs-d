@@ -6,18 +6,19 @@
 
 ;;; Code:
 
+(require 'eieio)
 (require 'json)
+(require 'project)
 (require 'url)
 (require 'url-vars)
+(require 'forge)
 
-(cl-eval-when (compile)
-  (require 'forge-pullreq)
-  (require 'no-littering)
-  (require 'project))
-
+(autoload 'magit-diff-visit-file "magit-diff")
 (autoload 'magit-git-string "magit-git")
 (autoload 'magit-list-worktrees "magit-git")
 (autoload 'magit-primary-remote "magit-git")
+
+(defvar magit-no-confirm) ; magit-base.el
 
 
 (defvar +worktrees-worktree-base-dir ".worktrees"
