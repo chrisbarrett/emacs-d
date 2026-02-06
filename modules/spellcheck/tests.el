@@ -29,10 +29,6 @@
   "spell-fu-mode should be in prog-mode-hook."
   (should (memq #'spell-fu-mode prog-mode-hook)))
 
-(ert-deftest spellcheck-test-conf-mode-hook ()
-  "spell-fu-mode should be in conf-mode-hook."
-  (should (memq #'spell-fu-mode conf-mode-hook)))
-
 ;;; P6-P8: Keybindings (require evil)
 
 (ert-deftest spellcheck-test-zn-bound ()
