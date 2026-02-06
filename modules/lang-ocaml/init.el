@@ -7,7 +7,6 @@
 ;;; Code:
 
 (require '+autoloads)
-
 (require '+corelib)
 
 ;; Read-only protection for build directories
@@ -54,26 +53,9 @@
   (neocaml-mode-local-vars-hook . ocaml-eglot)
   (neocamli-mode-local-vars-hook . ocaml-eglot))
 
-;; OPAM files use conf-colon-mode for basic syntax highlighting
-(add-to-list 'auto-mode-alist (cons (rx ".opam" eos) 'conf-colon-mode))
-
 ;; Make generated opam files read-only
-(add-hook! 'conf-colon-mode-hook
-  (when (and buffer-file-name
-             (string-match-p "\\.opam\\'" buffer-file-name)
-             (string-match-p "# This file is generated"
-                             (buffer-substring (point-min) (min (point-max) 500))))
+(add-hook! 'opam-config-mode-hook
+  (when (string-match-p "# This file is generated" (buffer-substring (point-min) (min (point-max) 500)))
     (read-only-mode +1)))
-
-;; Dune build configuration files
-(define-derived-mode dune-config-mode lisp-data-mode "Dune Config"
-  "Major mode for Dune build configuration files."
-  (setq-local comment-add 0))
-
-(add-to-list 'auto-mode-alist (cons (rx "/dune" (? "-" (or "workspace" "project"))
-                                        eos)
-                                    #'dune-config-mode))
-
-
 
 ;;; init.el ends here

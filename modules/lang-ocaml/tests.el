@@ -74,7 +74,7 @@
                                   (string-match-p "\\.opam" (car e))))
                            auto-mode-alist)))
     (should entry)
-    (should (eq (cdr entry) 'conf-colon-mode))))
+    (should (eq (cdr entry) 'opam-config-mode))))
 
 ;;; P6: dune-project is recognized as project root marker
 
