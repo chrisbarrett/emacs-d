@@ -139,4 +139,9 @@ With prefix ARG, run all tests; otherwise prompt for selector."
       (ert t)
     (call-interactively #'ert)))
 
+;;;###autoload
+(defun +check-parens-before-save-h ()
+  (unless (derived-mode-p 'tart-signature-mode)
+    (add-hook 'before-save-hook #'check-parens nil t)))
+
 ;;; lib.el ends here

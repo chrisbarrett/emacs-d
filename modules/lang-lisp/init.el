@@ -24,11 +24,10 @@
 (+define-file-template (rx ".el" eos) "emacs-lisp.eld")
 
 (use-package lisp-mode
-  :config
-  (add-hook! '(lisp-data-mode-hook emacs-lisp-mode-hook)
-    (add-hook 'before-save-hook #'check-parens nil t)))
+  :hook (lisp-data-mode-hook . +check-parens-before-save-h))
 
 (use-package elisp-mode
+  :hook (emacs-lisp-mode-hook . +check-parens-before-save-h)
   :general
   (:keymaps 'emacs-lisp-mode-map
             "C-c RET" #'pp-macroexpand-last-sexp
