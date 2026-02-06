@@ -604,4 +604,51 @@ Tab and buffer cleanup handled by `+magit-worktree-delete--cleanup' advice."
         (message "Rebase successful: %s rebased on %s/%s"
                  branch-name remote default-branch)))))
 
+;;; External file opening
+
+;;;###autoload
+(defvar +worktrees-find-file-create-frame t
+  "Whether `+worktrees-find-file' creates a project frame if none exists.
+When non-nil, opens the file's project in a new dedicated frame.
+When nil, opens the file in the current frame without project isolation.")
+
+;;;###autoload
+(defun +worktrees-find-file (file &optional line)
+  "Open FILE at LINE in the correct project frame and worktree tab.
+Routes to the frame whose `project-root' matches the file's repository,
+then selects the tab whose `worktree-path' matches the file's worktree.
+When no frame exists, behavior depends on `+worktrees-find-file-create-frame'."
+  (let* ((file (expand-file-name file))
+         (dir (file-name-directory file))
+         (repo-root (ignore-errors (+worktrees--repo-root-for-file file)))
+         (target-frame
+          (and repo-root
+               (seq-find (lambda (frame)
+                           (when-let* ((pr (frame-parameter frame 'project-root)))
+                             (file-equal-p repo-root pr)))
+                         (frame-list)))))
+    (cond
+     (target-frame
+      (select-frame-set-input-focus target-frame))
+     ((and repo-root +worktrees-find-file-create-frame)
+      (project-switch-beframed repo-root)
+      (setq target-frame (selected-frame))))
+    (when target-frame
+      (when (bound-and-true-p tab-bar-mode)
+        (let* ((default-directory dir)
+               (worktrees (ignore-errors (magit-list-worktrees)))
+               ;; Match the most specific worktree (longest path prefix).
+               (matching-wt
+                (car (seq-sort-by (lambda (wt) (length (car wt)))
+                                  #'>
+                                  (seq-filter (lambda (wt)
+                                                (string-prefix-p (car wt) file))
+                                              worktrees)))))
+          (when matching-wt
+            (+worktrees-open-tab (car matching-wt))))))
+    (find-file file)
+    (when (and line (> line 0))
+      (goto-char (point-min))
+      (forward-line (1- line)))))
+
 ;;; lib.el ends here
