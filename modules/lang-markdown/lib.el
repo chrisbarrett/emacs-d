@@ -6,6 +6,41 @@
 
 ;;; Code:
 
+(require 'markdown-mode)
+
+;;; Faces for GitHub Flavored Markdown callouts
+
+(defface +markdown-gfm-callout-note-face
+  '((t :inherit font-lock-operator-face :weight semibold))
+  "Face for [!NOTE] callout markers."
+  :group 'markdown-faces)
+
+(defface +markdown-gfm-callout-tip-face
+  '((t :inherit font-lock-keyword-face :weight semibold))
+  "Face for [!TIP] callout markers."
+  :group 'markdown-faces)
+
+(defface +markdown-gfm-callout-important-face
+  '((t :inherit font-lock-warning-face :weight semibold))
+  "Face for [!IMPORTANT] callout markers."
+  :group 'markdown-faces)
+
+(defface +markdown-gfm-callout-warning-face
+  '((t :inherit warning :weight semibold))
+  "Face for [!WARNING] callout markers."
+  :group 'markdown-faces)
+
+(defface +markdown-gfm-callout-caution-face
+  '((t :inherit error :weight semibold))
+  "Face for [!CAUTION] callout markers."
+  :group 'markdown-faces)
+
+(defface +markdown-prettier-ignore-comment-face
+  '((t :inherit shadow :weight light))
+  "Face for prettier-ignore comments."
+  :group 'markdown-faces)
+
+
 ;;;###autoload
 (defun +markdown-tab-dwim ()
   "Try to expand a snippet, otherwise fall back to `markdown-cycle'.
