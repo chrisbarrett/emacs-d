@@ -65,7 +65,10 @@ expansion occurs, it falls back to the default `markdown-cycle' behavior."
                             (,(rx bol "> " "[!" (group "CAUTION") "]") 1 '+markdown-gfm-callout-caution-face prepend)
                             (,(rx bol "> " "[!" (group "CRITICAL") "]") 1 '+markdown-gfm-callout-caution-face prepend)
                             (,(rx bol (* space) "<!--" (1+ space) "prettier-ignore-start" (1+ space) "-->") 0 '+markdown-prettier-ignore-comment-face prepend)
-                            (,(rx bol (* space) "<!--" (1+ space) "prettier-ignore-end" (1+ space) "-->") 0 '+markdown-prettier-ignore-comment-face prepend))))
+                            (,(rx bol (* space) "<!--" (1+ space) "prettier-ignore-end" (1+ space) "-->") 0 '+markdown-prettier-ignore-comment-face prepend)
+                            (,(rx (group "$" (or (seq "{" (1+ (any alnum "_")) "}")
+                                                 (seq (any upper "_") (1+ (any upper digit "_"))))))
+                             1 'font-lock-constant-face prepend))))
 
 
 
