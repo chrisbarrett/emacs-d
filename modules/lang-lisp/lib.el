@@ -144,4 +144,13 @@ With prefix ARG, run all tests; otherwise prompt for selector."
   (unless (derived-mode-p 'tart-signature-mode)
     (add-hook 'before-save-hook #'check-parens nil t)))
 
+(autoload 'helpful-at-point "helpful")
+
+;;;###autoload
+(defun +emacs-lisp-lookup-func ()
+  "Lookup symbol at point using `helpful' or `describe-symbol'."
+  (if (require 'helpful nil t)
+      (helpful-at-point)
+    (describe-symbol (symbol-at-point))))
+
 ;;; lib.el ends here

@@ -49,7 +49,11 @@
 (use-package tart-mode
   :disabled t
   :load-path "~/src/chrisbarrett/emacs-tart/lisp"
-  :hook (emacs-lisp-mode-hook . tart-eglot-ensure))
+  :hook (emacs-lisp-mode-hook . tart-eglot-ensure)
+  :custom
+  (tart-executable "~/src/chrisbarrett/emacs-tart/tart")
+  :config
+  (+load "config/+tart.el"))
 
 (use-package elpaca
   :after elisp-mode
