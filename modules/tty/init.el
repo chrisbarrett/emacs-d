@@ -12,11 +12,11 @@
 (require '+corelib)
 
 ;; Copy to and paste from system clipboard in terminal via OSC 52.
+
 (use-package clipetty
-  :commands global-clipetty-mode
+  :commands (global-clipetty-mode clipetty-mode)
   :init
-  (add-transient-hook! '+after-make-tty-frame-functions
-    (global-clipetty-mode +1)))
+  (global-clipetty-mode +1))
 
 ;;; TTY frame setup
 
