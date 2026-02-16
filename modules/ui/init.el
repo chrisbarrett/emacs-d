@@ -479,12 +479,4 @@
   (setq window-combination-resize t)
   (setq switch-to-buffer-in-dedicated-window 'pop))
 
-
-;;; TTY frame setup
-
-(add-hook 'after-make-frame-functions #'+tty-frame-setup)
-(+tty-frame-setup (selected-frame))
-
-
-
 ;;; init.el ends here
