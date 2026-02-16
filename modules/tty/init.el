@@ -20,10 +20,18 @@
 
 ;;; TTY frame setup
 
+(add-hook '+after-make-tty-frame-functions
+          (defun +tty-clear-bg-h (frame)
+            (set-face-background 'default "unspecified-bg" frame)))
+
 (add-transient-hook! '+after-make-tty-frame-functions
   (xterm-mouse-mode +1))
 
 (add-hook '+after-make-tty-frame-functions #'+tty-frame-use-box-characters)
+
+(add-hook '+after-make-tty-frame-functions
+          (defun +tty-disable-tab-bar-h (frame)
+            (set-frame-parameter frame 'tab-bar-lines 0)))
 
 (add-hook! 'after-init-hook
   (+tty-frame-use-box-characters (selected-frame)))
