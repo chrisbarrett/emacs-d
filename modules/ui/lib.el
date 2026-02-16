@@ -133,6 +133,7 @@ next-error, etc.  ALIST is display-buffer action alist."
 (defun +tty-frame-setup (frame)
   "On TTY FRAME, use Unicode box-drawing for window separators."
   (unless (display-graphic-p frame)
+    (set-face-background 'default "unspecified-bg" frame)
     (with-selected-frame frame
       (let ((dt (or (frame-parameter frame '+vborder-dtable)
                     (let ((dt (make-display-table)))
