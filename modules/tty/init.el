@@ -29,9 +29,10 @@
 
 (add-hook '+after-make-tty-frame-functions #'+tty-frame-use-box-characters)
 
-(add-hook '+after-make-tty-frame-functions
-          (defun +tty-disable-tab-bar-h (frame)
-            (set-frame-parameter frame 'tab-bar-lines 0)))
+(define-advice tab-bar--update-tab-bar-lines (:after (&rest _) no-tty)
+  (dolist (frame (frame-list))
+    (unless (display-graphic-p frame)
+      (set-frame-parameter frame 'tab-bar-lines 0))))
 
 (add-hook! 'after-init-hook
   (+tty-frame-use-box-characters (selected-frame)))
