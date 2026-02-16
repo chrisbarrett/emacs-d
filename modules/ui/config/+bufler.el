@@ -1,4 +1,4 @@
-;;; ui-bufler.el --- Configure bufler -*- lexical-binding: t; -*-
+;;; +bufler.el --- Configure bufler -*- lexical-binding: t; -*-
 
 ;;; Commentary:
 
@@ -8,6 +8,8 @@
 ;;; Code:
 
 (require 'bufler)
+
+(defvar org-directory) ; org
 
 (bufler-defauto-group nix-store-path
   (when-let* ((filename (or (buffer-file-name buffer)
@@ -75,5 +77,4 @@
         (auto-directory)
         (auto-mode)))
 
-(provide 'ui-bufler)
-;;; ui-bufler.el ends here
+;;; +bufler.el ends here

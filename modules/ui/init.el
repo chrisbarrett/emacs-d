@@ -86,12 +86,10 @@
   (custom-theme-set-faces 'user
                           '(tab-bar-tab ((t (:bold t)))))
 
-  ;; Load tabs module for full functionality
   (with-eval-after-load 'transient
-    (require 'ui-tabs)
+    (+update-tab-bar-themes)
     (setq tab-bar-tab-name-format-function #'+tab-bar-tab-name-format)
-    (+update-tab-bar-themes--impl)
-    (add-hook '+theme-changed-hook #'+update-tab-bar-themes--impl)
+    (add-hook '+theme-changed-hook #'+update-tab-bar-themes)
     (define-advice tab-bar-select-tab (:after (&rest _) schedule-alert)
       (+tab-bar--pulse-tab-switch)
       (+tab-bar--schedule-alert-clear))
@@ -209,7 +207,9 @@
   (pulsar-iterations 5)
   (pulsar-pulse-on-window-change t)
   :config
-  (require 'ui-pulsar))
+  (+load "./config/+pulsar.el")
+  (with-eval-after-load 'avy
+    (+load "./config/+avy-pulsar.el")))
 
 
 ;;; Dimmer
@@ -287,7 +287,7 @@
 
 (use-package bufler
   :config
-  (require 'ui-bufler))
+  (+load "./config/+bufler.el"))
 
 
 ;;; Clickable URLs
