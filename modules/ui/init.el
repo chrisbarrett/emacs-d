@@ -86,6 +86,7 @@
   (custom-theme-set-faces 'user
                           '(tab-bar-tab ((t (:bold t)))))
 
+  ;; FIXME: This is LLM slop
   (with-eval-after-load 'transient
     (+update-tab-bar-themes)
     (setq tab-bar-tab-name-format-function #'+tab-bar-tab-name-format)

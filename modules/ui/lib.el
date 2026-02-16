@@ -179,14 +179,14 @@ COLOR is the pulse color (default pulsar-magenta).
 CYCLES is the number of pulses (default 3)."
   (interactive)
   (let* ((tabs (frame-parameter nil 'tabs))
-         (tab-index (if tab-name
-                        (seq-position tabs tab-name
-                                      (lambda (tab name)
-                                        (equal (alist-get 'name tab) name)))
+              (tab-index (if tab-name
+                             (seq-position tabs tab-name
+                                           (lambda (tab name)
+                                             (equal (alist-get 'name tab) name)))
                       (tab-bar--current-tab-index tabs)))
          (is-current (eq tab-index (tab-bar--current-tab-index tabs)))
-         (color (or color (face-background 'pulsar-magenta nil t) "#71206a"))
-         (cycles (or cycles 3)))
+           (color (or color (face-background 'pulsar-magenta nil t) "#71206a"))
+           (cycles (or cycles 3)))
     (when tab-index
       (if is-current
           (+tab-bar--dispatch-transient-alert color cycles)
@@ -205,23 +205,23 @@ This will cause the tab to display with a visually distinct background
 until the user dwells on it for `+tab-bar-alert-clear-delay' seconds."
   (interactive)
   (let* ((tabs (frame-parameter nil 'tabs))
-         (tab-index (if tab-name
-                        (seq-position tabs tab-name
-                                      (lambda (tab name)
-                                        (equal (alist-get 'name tab) name)))
-                      (tab-bar--current-tab-index tabs))))
+              (tab-index (if tab-name
+                             (seq-position tabs tab-name
+                                           (lambda (tab name)
+                                             (equal (alist-get 'name tab) name)))
+                           (tab-bar--current-tab-index tabs))))
     (when tab-index
-      (let* ((tab (nth tab-index tabs))
-             (tab-type (car tab))
-             (tab-rest (cdr tab))
-             (is-current (eq tab-type 'current-tab)))
-        (setf (alist-get 'alert tab-rest) t)
-        (setf (nth tab-index tabs) (cons tab-type tab-rest))
-        (set-frame-parameter nil 'tabs tabs)
-        (tab-bar--update-tab-bar-lines)
-        (+tab-bar--pulse-alert (or (bound-and-true-p +tab-bar-alert-pulse-iterations) 3))
-        (when is-current
-          (+tab-bar--schedule-alert-clear))
+    (let* ((tab (nth tab-index tabs))
+           (tab-type (car tab))
+           (tab-rest (cdr tab))
+           (is-current (eq tab-type 'current-tab)))
+      (setf (alist-get 'alert tab-rest) t)
+      (setf (nth tab-index tabs) (cons tab-type tab-rest))
+      (set-frame-parameter nil 'tabs tabs)
+      (tab-bar--update-tab-bar-lines)
+      (+tab-bar--pulse-alert (or (bound-and-true-p +tab-bar-alert-pulse-iterations) 3))
+      (when is-current
+        (+tab-bar--schedule-alert-clear))
         t))))
 
 (defun +tab-bar--fade-out-alert (callback)

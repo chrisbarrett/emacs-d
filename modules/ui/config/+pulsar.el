@@ -108,4 +108,55 @@
   (unless (region-active-p)
     (pulsar-pulse-line)))
 
+
+;;; TTY pulse support
+
+;; pulse.el uses (face-background 'default) to determine pulse capability and
+;; to compute fade gradients.  On TTY frames where the background is unspecified
+;; (for terminal transparency), this disables pulsing entirely.  These advices
+;; intercept the background lookup during pulse computation so fades work without
+;; changing the actual face attribute.
+
+(defvar +pulse-tty-fallback-bg nil
+  "Fallback background color for pulse effects on TTY frames.
+When nil, auto-detected from a GUI frame or defaults to black.")
+
+(defun +pulse--tty-fallback-bg ()
+  "Return a fallback background color for TTY pulse effects."
+  (or +pulse-tty-fallback-bg
+      (cl-loop for frame in (frame-list)
+               when (display-graphic-p frame)
+               return (face-background 'default frame))
+      "#000000"))
+
+(defun +pulse--tty-unspecified-bg-p ()
+  "Return non-nil if the current frame has an unspecified background."
+  (and (not (display-graphic-p))
+       (member (face-background 'default) '(nil "unspecified-bg"))))
+
+(define-advice pulse-available-p (:around (fn) tty-24bit)
+  "Consider TTY frames with sufficient color support as pulse-capable."
+  (or (funcall fn)
+      (and (+pulse--tty-unspecified-bg-p)
+           (>= (display-color-cells) 256))))
+
+(defvar +pulse--tty-bg-override nil
+  "Dynamically bound fallback color during pulse computation.")
+
+(define-advice face-background (:around (fn face &optional frame inherit) pulse-tty-fallback)
+  "Return a fallback color for the default face during pulse computation."
+  (let ((bg (funcall fn face frame inherit)))
+    (if (and +pulse--tty-bg-override
+             (eq face 'default)
+             (member bg '(nil "unspecified-bg")))
+        +pulse--tty-bg-override
+      bg)))
+
+(define-advice pulse-momentary-highlight-overlay (:around (fn o &optional face) tty-fallback-bg)
+  "Use a fallback background for fade gradient on TTY frames."
+  (let ((+pulse--tty-bg-override
+         (when (+pulse--tty-unspecified-bg-p)
+           (+pulse--tty-fallback-bg))))
+    (funcall fn o face)))
+
 ;;; +pulsar.el ends here
