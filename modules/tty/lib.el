@@ -7,7 +7,13 @@
 ;;;###autoload
 (defvar +after-make-tty-frame-functions nil)
 
-;;; TTY frame setup
+;;;###autoload
+(defun +tty-run-frame-hook-h (frame)
+  (unless (display-graphic-p frame)
+    (run-hook-with-args '+after-make-tty-frame-functions frame)))
+;;;###autoload
+(add-hook 'after-make-frame-functions #'+tty-run-frame-hook-h)
+
 
 ;;;###autoload
 (defun +tty-frame-use-box-characters (frame)
