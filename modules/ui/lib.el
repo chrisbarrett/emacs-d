@@ -6,7 +6,9 @@
 
 ;;; Code:
 
+(require '+autoloads)
 (require 'cl-lib)
+(require 'color)
 
 
 ;;; Tab bar configuration
@@ -26,24 +28,23 @@
 (cl-eval-when (compile)
   (require 'transient))
 
-(with-eval-after-load 'transient
-  (transient-define-prefix +tabs-menu--prefix ()
-    "Transient menu for tab operations."
-    [["Navigation"
-      ("j" "Next tab" tab-bar-switch-to-next-tab)
-      ("l" "Next tab" tab-bar-switch-to-next-tab :if (lambda () nil))
-      ("k" "Previous tab" tab-bar-switch-to-prev-tab)
-      ("h" "Previous tab" tab-bar-switch-to-prev-tab :if (lambda () nil))
-      ("s" "Select tab by name" tab-bar-switch-to-tab)]
-     ["Management"
-      ("c" "Create new tab" tab-bar-new-tab)
-      ("d" "Close tab" tab-bar-close-tab)
-      ("x" "Close tab" tab-bar-close-tab :if (lambda () nil))
-      ("r" "Rename tab" tab-bar-rename-tab)
-      ("m" "Move tab" tab-bar-move-tab)]
-     ["Other"
-      ("u" "Undo close tab" tab-bar-undo-close-tab)
-      ("o" "Close other tabs" tab-bar-close-other-tabs)]]))
+(transient-define-prefix +tabs-menu--prefix ()
+  "Transient menu for tab operations."
+  [["Navigation"
+    ("j" "Next tab" tab-bar-switch-to-next-tab)
+    ("l" "Next tab" tab-bar-switch-to-next-tab :if (lambda () nil))
+    ("k" "Previous tab" tab-bar-switch-to-prev-tab)
+    ("h" "Previous tab" tab-bar-switch-to-prev-tab :if (lambda () nil))
+    ("s" "Select tab by name" tab-bar-switch-to-tab)]
+   ["Management"
+    ("c" "Create new tab" tab-bar-new-tab)
+    ("d" "Close tab" tab-bar-close-tab)
+    ("x" "Close tab" tab-bar-close-tab :if (lambda () nil))
+    ("r" "Rename tab" tab-bar-rename-tab)
+    ("m" "Move tab" tab-bar-move-tab)]
+   ["Other"
+    ("u" "Undo close tab" tab-bar-undo-close-tab)
+    ("o" "Close other tabs" tab-bar-close-other-tabs)]])
 
 ;;;###autoload
 (defun +tabs-menu ()
@@ -179,14 +180,14 @@ COLOR is the pulse color (default pulsar-magenta).
 CYCLES is the number of pulses (default 3)."
   (interactive)
   (let* ((tabs (frame-parameter nil 'tabs))
-              (tab-index (if tab-name
-                             (seq-position tabs tab-name
-                                           (lambda (tab name)
-                                             (equal (alist-get 'name tab) name)))
+         (tab-index (if tab-name
+                        (seq-position tabs tab-name
+                                      (lambda (tab name)
+                                        (equal (alist-get 'name tab) name)))
                       (tab-bar--current-tab-index tabs)))
          (is-current (eq tab-index (tab-bar--current-tab-index tabs)))
-           (color (or color (face-background 'pulsar-magenta nil t) "#71206a"))
-           (cycles (or cycles 3)))
+         (color (or color (face-background 'pulsar-magenta nil t) "#71206a"))
+         (cycles (or cycles 3)))
     (when tab-index
       (if is-current
           (+tab-bar--dispatch-transient-alert color cycles)
@@ -205,23 +206,23 @@ This will cause the tab to display with a visually distinct background
 until the user dwells on it for `+tab-bar-alert-clear-delay' seconds."
   (interactive)
   (let* ((tabs (frame-parameter nil 'tabs))
-              (tab-index (if tab-name
-                             (seq-position tabs tab-name
-                                           (lambda (tab name)
-                                             (equal (alist-get 'name tab) name)))
-                           (tab-bar--current-tab-index tabs))))
+         (tab-index (if tab-name
+                        (seq-position tabs tab-name
+                                      (lambda (tab name)
+                                        (equal (alist-get 'name tab) name)))
+                      (tab-bar--current-tab-index tabs))))
     (when tab-index
-    (let* ((tab (nth tab-index tabs))
-           (tab-type (car tab))
-           (tab-rest (cdr tab))
-           (is-current (eq tab-type 'current-tab)))
-      (setf (alist-get 'alert tab-rest) t)
-      (setf (nth tab-index tabs) (cons tab-type tab-rest))
-      (set-frame-parameter nil 'tabs tabs)
-      (tab-bar--update-tab-bar-lines)
-      (+tab-bar--pulse-alert (or (bound-and-true-p +tab-bar-alert-pulse-iterations) 3))
-      (when is-current
-        (+tab-bar--schedule-alert-clear))
+      (let* ((tab (nth tab-index tabs))
+             (tab-type (car tab))
+             (tab-rest (cdr tab))
+             (is-current (eq tab-type 'current-tab)))
+        (setf (alist-get 'alert tab-rest) t)
+        (setf (nth tab-index tabs) (cons tab-type tab-rest))
+        (set-frame-parameter nil 'tabs tabs)
+        (tab-bar--update-tab-bar-lines)
+        (+tab-bar--pulse-alert (or (bound-and-true-p +tab-bar-alert-pulse-iterations) 3))
+        (when is-current
+          (+tab-bar--schedule-alert-clear))
         t))))
 
 (defun +tab-bar--fade-out-alert (callback)
@@ -482,8 +483,8 @@ buffer modifications have happened."
 ;;;###autoload
 (defun +display-buffer-reuse-non-dedicated-window (buffer alist)
   "Reuse a non-dedicated window for BUFFER when navigating.
-Only works for specific navigation commands like dired-find-file,
-next-error, etc.  ALIST is display-buffer action alist."
+Only works for specific navigation commands like `dired-find-file',
+`next-error', etc.  ALIST is a `display-buffer' action alist."
   (when (member this-command '(dired-find-file
                                next-error
                                previous-error
@@ -513,7 +514,7 @@ next-error, etc.  ALIST is display-buffer action alist."
 
 ;;;###autoload
 (defun +goto-address-maybe-h ()
-  "Enable goto-address-mode unless in org-mode (which handles URLs natively)."
+  "Enable `goto-address-mode' unless in `org-mode' (which handles URLs natively)."
   (unless (derived-mode-p 'org-mode 'org-agenda-mode)
     (goto-address)
     (goto-address-mode +1)))
