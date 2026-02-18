@@ -33,6 +33,8 @@
 
   :general ("C-c a" #'org-agenda)
 
+  :general (:keymaps 'org-mode-map "TAB" 'org-cycle)
+
   :custom
   (abbrev-file-name (file-name-concat org-directory "abbrev.el"))
   (org-babel-load-languages '((emacs-lisp . t)
