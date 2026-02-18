@@ -20,9 +20,17 @@
 
 ;;; TTY frame setup
 
-(add-hook '+after-make-tty-frame-functions
-          (defun +tty-clear-bg-h (frame)
-            (set-face-background 'default "unspecified-bg" frame)))
+(defun +tty-clear-bg-h (&optional frame)
+  "Clear the background on FRAME so the terminal background is used.
+When called without FRAME, clear on all TTY frames."
+  (if frame
+      (set-face-background 'default "unspecified-bg" frame)
+    (dolist (f (frame-list))
+      (unless (display-graphic-p f)
+        (set-face-background 'default "unspecified-bg" f)))))
+
+(add-hook '+after-make-tty-frame-functions #'+tty-clear-bg-h)
+(add-hook '+theme-changed-hook #'+tty-clear-bg-h)
 
 (add-transient-hook! '+after-make-tty-frame-functions
   (xterm-mouse-mode +1))
