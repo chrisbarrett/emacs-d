@@ -240,22 +240,35 @@
 (keymap-global-set "C-c SPC" #'+insert-nbsp)
 
 ;; Teach Emacs that C-i and C-m do in fact exist.
-(pcase-dolist (`(,key ,fallback . ,events)
-               '(([C-i] [?\C-i] tab kp-tab)
-                 ([C-m] [?\C-m] return kp-return)))
-  (define-key
-   input-decode-map fallback
-   (lambda (&rest _args)
-     (interactive)
-     (if (when-let* ((keys (this-single-command-raw-keys)))
-           (and (display-graphic-p)
-                (not (cl-loop for event in events
-                              if (cl-position event keys)
-                              return t))
-                (key-binding (vconcat (if (= 0 (length keys)) [] (cl-subseq keys 0 -1))
-                                      key)
-                             nil t)))
-         key fallback))))
+;; input-decode-map is terminal-local, so this must run for each new terminal.
+(defun +evil-setup-C-i-C-m-decode (&optional _frame)
+  (pcase-dolist (`(,key ,fallback . ,events)
+                 '(([C-i] [?\C-i] tab kp-tab)
+                   ([C-m] [?\C-m] return kp-return)))
+    (define-key
+     input-decode-map fallback
+     (lambda (&rest _args)
+       (interactive)
+       (if (when-let* ((keys (this-single-command-raw-keys)))
+             (and (display-graphic-p)
+                  (not (cl-loop for event in events
+                                if (cl-position event keys)
+                                return t))
+                  (key-binding (vconcat (if (= 0 (length keys)) [] (cl-subseq keys 0 -1))
+                                        key)
+                               nil t)))
+           key fallback)))))
+
+(+evil-setup-C-i-C-m-decode)
+(add-hook '+after-make-tty-frame-functions #'+evil-setup-C-i-C-m-decode)
+
+;; On TTY frames, C-i and TAB are indistinguishable. Rebind evil-jump-forward
+;; from [?\C-i] (raw TAB byte) to [C-i] (decoded event from input-decode-map,
+;; only produced on GUI frames). This frees TAB for org-cycle etc. on TTY
+;; while preserving C-i as jump-forward on GUI.
+(with-eval-after-load 'evil
+  (evil-define-key* 'motion 'global [?\C-i] nil)
+  (evil-define-key* 'motion 'global [C-i] #'evil-jump-forward))
 
 ;;;; Paragraph parsing
 
