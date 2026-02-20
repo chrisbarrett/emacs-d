@@ -147,6 +147,8 @@ files in each module."
   :if (display-graphic-p)
   :demand t
   :functions server-running-p
+  :custom
+  (server-client-instructions nil)
   :config
   (unless (server-running-p)
     (server-start)))
