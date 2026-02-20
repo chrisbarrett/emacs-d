@@ -388,44 +388,46 @@ Fades out the alert before removing it."
   "Update tab-bar colors to be distinct and theme-aware."
   (when (facep 'tab-bar)
     (when (require 'pulsar nil t)
-      (let* ((default-bg (face-background 'default nil t))
-             (dark-theme (if (fboundp '+theme-dark-p) (+theme-dark-p) nil))
-             (selected-bg (if dark-theme
-                              (face-background 'mode-line nil t)
-                            default-bg))
-             (tab-bar-bg (if dark-theme
-                             (color-lighten-name default-bg +tab-bar-contrast)
-                           (color-darken-name default-bg +tab-bar-contrast)))
-             (inactive-bg (if dark-theme
-                              (color-lighten-name default-bg +inactive-tab-contrast)
-                            (color-darken-name default-bg +inactive-tab-contrast)))
-             (alert-bg (face-background 'pulsar-magenta nil t))
-             (alert-fg (face-foreground 'default nil t))
-             (alert-inactive-bg (if dark-theme
-                                    (color-darken-name alert-bg 10)
-                                  (color-lighten-name alert-bg 10))))
-        (set-face-attribute 'tab-bar nil
-                            :background tab-bar-bg
-                            :box `(:line-width ,(- +tab-internal-padding) :color ,tab-bar-bg))
-        (set-face-attribute 'tab-bar-tab nil
-                            :background selected-bg
-                            :box `(:line-width ,(- +tab-internal-padding) :color ,selected-bg))
-        (set-face-attribute 'tab-bar-tab-inactive nil
-                            :background inactive-bg
-                            :box `(:line-width ,(- +tab-internal-padding) :color ,inactive-bg)
-                            :inherit 'shadow)
-        (set-face-attribute 'tab-bar-tab-alert nil
-                            :background alert-bg
-                            :foreground alert-fg
-                            :box `(:line-width ,(- +tab-internal-padding) :color ,alert-bg)
-                            :weight 'bold
-                            :inherit 'tab-bar-tab)
-        (set-face-attribute 'tab-bar-tab-inactive-alert nil
-                            :background alert-inactive-bg
-                            :foreground alert-fg
-                            :box `(:line-width ,(- +tab-internal-padding) :color ,alert-inactive-bg)
-                            :weight 'bold
-                            :inherit 'shadow)))))
+      (let* ((default-bg (face-background 'default nil t)))
+        (when (color-name-to-rgb default-bg)
+          (let* ((dark-theme (if (fboundp '+theme-dark-p) (+theme-dark-p) nil))
+                 (selected-bg (if dark-theme
+                                  (face-background 'mode-line nil t)
+                                default-bg))
+                 (tab-bar-bg (if dark-theme
+                                 (color-lighten-name default-bg +tab-bar-contrast)
+                               (color-darken-name default-bg +tab-bar-contrast)))
+                 (inactive-bg (if dark-theme
+                                  (color-lighten-name default-bg +inactive-tab-contrast)
+                                (color-darken-name default-bg +inactive-tab-contrast)))
+                 (alert-bg (face-background 'pulsar-magenta nil t))
+                 (alert-fg (face-foreground 'default nil t))
+                 (alert-inactive-bg (if dark-theme
+                                        (color-darken-name alert-bg 10)
+                                      (color-lighten-name alert-bg 10))))
+            (set-face-attribute 'tab-bar nil
+                                :background tab-bar-bg
+                                :box `(:line-width ,(- +tab-internal-padding) :color ,tab-bar-bg))
+            (set-face-attribute 'tab-bar-tab nil
+                                :background selected-bg
+                                :box `(:line-width ,(- +tab-internal-padding) :color ,selected-bg))
+            (set-face-attribute 'tab-bar-tab-inactive nil
+                                :background inactive-bg
+                                :box `(:line-width ,(- +tab-internal-padding) :color ,inactive-bg)
+                                :inherit 'shadow)
+            (set-face-attribute 'tab-bar-tab-alert nil
+                                :background alert-bg
+                                :foreground alert-fg
+                                :box `(:line-width ,(- +tab-internal-padding) :color ,alert-bg)
+                                :weight 'bold
+                                :inherit 'tab-bar-tab)
+            (set-face-attribute 'tab-bar-tab-inactive-alert nil
+                                :background alert-inactive-bg
+                                :foreground alert-fg
+                                :box `(:line-width ,(- +tab-internal-padding) :color ,alert-inactive-bg)
+                                :weight 'bold
+                                :inherit 'shadow)))))))
+
 
 
 ;;; Tab bar hooks
