@@ -411,6 +411,7 @@
   :after org
   :demand t
   :custom
+  (org-modern-table nil) ; looks terrible in TTY
   (org-modern-hide-stars nil)
   (org-modern-fold-stars
    '(("▶" . "▼") ("▹" . "▿") ("▸" . "▾") ("⯈" . "⯆")))
