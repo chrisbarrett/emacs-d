@@ -43,29 +43,28 @@ Uses modern terminal standard escape sequences."
   "Update cursor shape based on current evil state."
   (when (and (bound-and-true-p evil-tty-cursor-mode)
              (not (display-graphic-p))
-             ;; Only update if current buffer is displayed in selected window
              (eq (current-buffer) (window-buffer))
-             ;; Only update if we're in the selected frame
-             (eq (selected-frame) (window-frame (selected-window)))
-             ;; Skip internal/temporary buffers
              (not (string-prefix-p " " (buffer-name))))
     (when-let* ((shape (alist-get evil-state evil-tty-cursor-states))
                 (sequence (evil-tty-cursor--make-sequence shape)))
       (send-string-to-terminal sequence))))
 
-(defun evil-tty-cursor--on-buffer-change (frame)
-  "Update cursor when buffer changes in FRAME."
-  (when (eq frame (selected-frame))
-    (evil-tty-cursor--update-cursor)))
+(defun evil-tty-cursor--update-for-selected-window (&optional flush)
+  "Update cursor shape for the selected window's buffer.
+Ensures the cursor reflects the evil state of the buffer the user
+is looking at, regardless of what `current-buffer' is.
+When FLUSH is non-nil, force a redisplay to flush the terminal output."
+  (with-current-buffer (window-buffer (selected-window))
+    (evil-tty-cursor--update-cursor)
+    (when flush (redisplay))))
 
-(defun evil-tty-cursor--on-window-change (frame)
-  "Update cursor when window selection changes in FRAME."
-  (when (eq frame (selected-frame))
-    (evil-tty-cursor--update-cursor)))
+(defun evil-tty-cursor--flush-cursor ()
+  "Update cursor shape and flush terminal output."
+  (evil-tty-cursor--update-for-selected-window t))
 
 (defun evil-tty-cursor--enable-hooks ()
   "Enable evil state change hooks."
-  ;; Evil state changes
+  ;; Evil state changes (immediate feedback)
   (add-hook 'evil-normal-state-entry-hook #'evil-tty-cursor--update-cursor)
   (add-hook 'evil-insert-state-entry-hook #'evil-tty-cursor--update-cursor)
   (add-hook 'evil-visual-state-entry-hook #'evil-tty-cursor--update-cursor)
@@ -73,14 +72,20 @@ Uses modern terminal standard escape sequences."
   (add-hook 'evil-operator-state-entry-hook #'evil-tty-cursor--update-cursor)
   (add-hook 'evil-emacs-state-entry-hook #'evil-tty-cursor--update-cursor)
 
-  ;; Buffer and window context changes
-  (add-hook 'window-buffer-change-functions #'evil-tty-cursor--on-buffer-change)
-  (add-hook 'window-selection-change-functions #'evil-tty-cursor--on-window-change)
+  ;; After commands complete (catches buffer/window switches)
+  (add-hook 'post-command-hook #'evil-tty-cursor--update-for-selected-window)
+
+  ;; After server-managed buffer display settles (commits, tags, rebases).
+  ;; Depth 90 ensures this runs after magit-commit-diff (depth 0) has
+  ;; finished rearranging windows.  server-execute runs from a timer,
+  ;; not a command, so post-command-hook does not cover this path.
+  (add-hook 'server-switch-hook #'evil-tty-cursor--flush-cursor 90)
+
+  ;; Focus changes (not triggered by commands)
   (add-hook 'after-focus-change-functions #'evil-tty-cursor--update-cursor))
 
 (defun evil-tty-cursor--disable-hooks ()
   "Disable evil state change hooks."
-  ;; Evil state changes
   (remove-hook 'evil-normal-state-entry-hook #'evil-tty-cursor--update-cursor)
   (remove-hook 'evil-insert-state-entry-hook #'evil-tty-cursor--update-cursor)
   (remove-hook 'evil-visual-state-entry-hook #'evil-tty-cursor--update-cursor)
@@ -88,9 +93,8 @@ Uses modern terminal standard escape sequences."
   (remove-hook 'evil-operator-state-entry-hook #'evil-tty-cursor--update-cursor)
   (remove-hook 'evil-emacs-state-entry-hook #'evil-tty-cursor--update-cursor)
 
-  ;; Buffer and window context changes
-  (remove-hook 'window-buffer-change-functions #'evil-tty-cursor--on-buffer-change)
-  (remove-hook 'window-selection-change-functions #'evil-tty-cursor--on-window-change)
+  (remove-hook 'post-command-hook #'evil-tty-cursor--update-for-selected-window)
+  (remove-hook 'server-switch-hook #'evil-tty-cursor--flush-cursor)
   (remove-hook 'after-focus-change-functions #'evil-tty-cursor--update-cursor))
 
 ;;;###autoload
