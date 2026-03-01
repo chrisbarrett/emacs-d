@@ -7,6 +7,8 @@
 ;;; Code:
 
 (require 'cl-lib)
+(require 'marginalia)
+(require 'project)
 
 ;; Silence byte-compiler for cl-letf locally-bound functions
 (declare-function expand-backrefs nil)
@@ -94,6 +96,13 @@ Each function is called with one argument; the current file name. It
 should return a (possibly empty) list of file paths.")
 
 ;;;###autoload
+(defun +find-sibling-file--annotator (cand)
+  "Marginalia annotator for sibling file candidates.
+Shows \"Create\" for non-existing files.  CAND is the candidate string."
+  (when (get-text-property 0 '+sibling-new-p cand)
+    (marginalia--fields ("New" :face 'warning))))
+
+;;;###autoload
 (defun +find-sibling-file (file)
   "Like `find-sibling-file', but guess paths to files that don't exist yet.
 FILE is the file to find siblings for, defaults to current buffer's file."
@@ -102,7 +111,7 @@ FILE is the file to find siblings for, defaults to current buffer's file."
          (guesses (append (+find-sibling-file-search-including-nonexisting file)
                           (seq-mapcat (lambda (fn)
                                         (when (functionp fn) ; can be `t' for local hooks
-                                          (funcall fn file)))
+                                          (seq-map #'expand-file-name (funcall fn file))))
                                       +find-sibling-functions)))
          (siblings (delete-dups (append existing guesses))))
     (find-file
@@ -122,12 +131,25 @@ FILE is the file to find siblings for, defaults to current buffer's file."
       ;; There are a mix of existing files and guesses to choose from. Prompt
       ;; the user.
       (t
-       (let ((relatives (seq-map (lambda (it)
-                                   (file-relative-name it (file-name-directory file)))
-                                 siblings)))
-         (completing-read (format-prompt "Find file" (car relatives))
-                          relatives nil t nil nil (car relatives))))))))
+       (let* ((relpath (if-let*  ((cwd (file-name-directory file))
+                                  (project (project-current nil cwd)))
+                           (project-root project)
+                         cwd))
+              (existing (seq-filter #'file-exists-p siblings))
+              (relatives (seq-map (lambda (it)
+                                    (let ((rel (file-relative-name it relpath)))
+                                      (cons (if (seq-contains-p existing it)
+                                                rel
+                                              (propertize rel 'face '(:slant italic :inherit shadow)
+                                                          '+sibling-new-p t))
+                                            it)))
+                                  siblings))
+              (table (lambda (string pred action)
+                       (if (eq action 'metadata)
+                           '(metadata (category . sibling-file))
+                         (complete-with-action action relatives string pred)))))
 
-
+         (alist-get (completing-read "Find sibling: " table nil t)
+                    relatives nil nil #'equal)))))))
 
 ;;; lib.el ends here

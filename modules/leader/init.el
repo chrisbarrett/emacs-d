@@ -370,6 +370,13 @@
 
 (general-def "M-m" '+leader-key)
 
+;; Register marginalia annotator for sibling file completion.
+
+(use-package marginalia
+  :config
+  (alist-set! marginalia-annotators 'sibling-file
+              '(+find-sibling-file--annotator none)))
+
 
 
 ;;; init.el ends here
