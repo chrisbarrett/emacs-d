@@ -87,12 +87,23 @@ FILE is the current file to find siblings for."
     (delete file (delete-dups (seq-mapcat 'expansions-for-file find-sibling-rules)))))
 
 ;;;###autoload
+(defvar +find-sibling-functions nil
+  "List of functions to call to generate extra sibling files.
+
+Each function is called with one argument; the current file name. It
+should return a (possibly empty) list of file paths.")
+
+;;;###autoload
 (defun +find-sibling-file (file)
   "Like `find-sibling-file', but guess paths to files that don't exist yet.
 FILE is the file to find siblings for, defaults to current buffer's file."
   (interactive (list (buffer-file-name)))
   (let* ((existing (find-sibling-file-search file ))
-         (guesses (+find-sibling-file-search-including-nonexisting file))
+         (guesses (append (+find-sibling-file-search-including-nonexisting file)
+                          (seq-mapcat (lambda (fn)
+                                        (when (functionp fn) ; can be `t' for local hooks
+                                          (funcall fn file)))
+                                      +find-sibling-functions)))
          (siblings (delete-dups (append existing guesses))))
     (find-file
      (cond
