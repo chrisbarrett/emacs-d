@@ -16,7 +16,12 @@
 (require '+corelib)
 
 (use-package hcl-mode
-  :mode "\\.hcl\\'")
+  :mode "\\.hcl\\'"
+  :preface
+  (defun +hcl-mode-setup ()
+    (add-hook '+find-sibling-functions #'+terragrunt-find-sibling-file-func nil t))
+  :init
+  (add-hook 'hcl-mode-hook #'+hcl-mode-setup))
 
 (use-package terraform-mode
   :mode "\\.tf\\'")
