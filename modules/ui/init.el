@@ -210,7 +210,7 @@
   :config
   (+load "./config/+pulsar.el")
   (with-eval-after-load 'avy
-    (+load "./config/+avy-pulsar.el")))
+    (+load "./config/+avy+pulsar.el")))
 
 
 ;;; Dimmer
