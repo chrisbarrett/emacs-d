@@ -212,25 +212,10 @@
   (with-eval-after-load 'avy
     (+load "./config/+avy+pulsar.el")))
 
+;;; Pulse selected window background when switching
 
-;;; Dimmer
-
-(use-package dimmer
-  :hook (+first-input-hook . dimmer-mode)
-  :custom
-  (dimmer-adjustment-mode :both)
-  (dimmer-fraction -0.05)
-  (dimmer-use-colorspace :cielab)
-  (dimmer-watch-frame-focus-events t)
-  :config
-  (with-no-warnings
-    (dimmer-configure-which-key)
-    (dimmer-configure-magit)
-    (dimmer-configure-org)
-    (dimmer-configure-hydra)
-    (dimmer-configure-posframe))
-  (dimmer-mode t))
-
+(use-package winpulse
+  :hook (+first-input-hook . winpulse-mode))
 
 ;;; Current line
 

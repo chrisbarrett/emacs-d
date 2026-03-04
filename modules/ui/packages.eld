@@ -7,9 +7,9 @@
  hl-todo
  indent-bars
  pulsar
- dimmer
  paren-face
  breadcrumb
  bufler
  doom-modeline
- anzu)
+ anzu
+ winpulse)
