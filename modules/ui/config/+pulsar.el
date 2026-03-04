@@ -111,5 +111,9 @@
 
 ;;; TTY pulse support
 
+(defun +pulsar--update-bg-h ()
+  (setq pulsar-tty-color (face-background 'pulsar-generic nil t)))
+
+(add-hook '+theme-changed-hook #'+pulsar--update-bg-h)
 
 ;;; +pulsar.el ends here
