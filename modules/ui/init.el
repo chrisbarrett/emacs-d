@@ -312,7 +312,7 @@
   (doom-modeline-buffer-encoding 'nondefault)
   (doom-modeline-buffer-state-icon nil)
   (doom-modeline-major-mode-icon nil)
-  (doom-modeline-check-simple-format t)
+  (doom-modeline-check 'simple)
   (doom-modeline-modal nil)
 
   :functions doom-modeline-set-modeline
