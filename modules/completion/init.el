@@ -170,8 +170,38 @@
   :config
   (corfu-popupinfo-mode +1)
 
+  ;; Ensure corfu quits when +escape is called
+  (add-hook '+escape-hook
+            (defun +corfu-escape-quit-h ()
+              (let ((corfu-frame-live (and (boundp 'corfu--frame)
+                                          (frame-live-p corfu--frame)))
+                    (popupinfo-frame-live (and (boundp 'corfu-popupinfo--frame)
+                                              (frame-live-p corfu-popupinfo--frame))))
+                (when (or corfu-frame-live popupinfo-frame-live)
+                  ;; Call corfu-quit if corfu-mode is active
+                  (when (bound-and-true-p corfu-mode)
+                    (corfu-quit))
+                  ;; Force delete main corfu frame if it persists
+                  (when (and (boundp 'corfu--frame)
+                            (frame-live-p corfu--frame))
+                    (delete-frame corfu--frame))
+                  ;; Force delete popupinfo frame if it persists
+                  (when (and (boundp 'corfu-popupinfo--frame)
+                            (frame-live-p corfu-popupinfo--frame))
+                  (delete-frame corfu-popupinfo--frame))))
+                ;; Return nil to allow other escape hooks to run
+                nil))
+
+  ;; Advice corfu-quit to also clean up popupinfo frame
+  ;; (corfu-quit is called directly from key bindings, bypassing +escape-hook)
+  (advice-add 'corfu-quit :after
+              (defun +corfu-quit-cleanup-popupinfo-a (&rest _)
+                (when (and (boundp 'corfu-popupinfo--frame)
+                          (frame-live-p corfu-popupinfo--frame))
+                  (delete-frame corfu-popupinfo--frame)))
+
   (with-eval-after-load 'savehist
-    (add-to-list 'savehist-additional-variables 'corfu-history)))
+    (add-to-list 'savehist-additional-variables 'corfu-history))))
 
 
 ;; Adds icons to corfu popups.
