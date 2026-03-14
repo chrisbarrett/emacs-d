@@ -26,7 +26,11 @@
 (use-package lisp-mode
   :hook (lisp-data-mode-hook . +check-parens-before-save-h)
   :config
-  (+load "config/+indent.el"))
+  (+load "config/+indent.el")
+
+  (put 'defcontext 'lisp-indent-function 1) ;; may-i config
+  (put 'with-facts 'lisp-indent-function 1) ;; may-i config
+  )
 
 (use-package elisp-mode
   :hook (emacs-lisp-mode-hook . +check-parens-before-save-h)
