@@ -147,7 +147,8 @@
   :hook (+first-input-hook . global-corfu-mode)
   :general-config (:keymaps 'corfu-map
                             "RET" #'corfu-send
-                            "<escape>" #'corfu-reset
+                            "<escape>" #'corfu-quit
+                            "ESC" #'corfu-quit
                             "C-n" #'corfu-next
                             "C-p" #'corfu-previous)
   :custom
