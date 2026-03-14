@@ -24,7 +24,9 @@
 (+define-file-template (rx ".el" eos) "emacs-lisp.eld")
 
 (use-package lisp-mode
-  :hook (lisp-data-mode-hook . +check-parens-before-save-h))
+  :hook (lisp-data-mode-hook . +check-parens-before-save-h)
+  :config
+  (+load "config/+indent.el"))
 
 (use-package elisp-mode
   :hook (emacs-lisp-mode-hook . +check-parens-before-save-h)
@@ -39,7 +41,6 @@
   (make-variable-buffer-local 'elisp-flymake-byte-compile-load-path)
 
   :config
-  (+load "config/+indent.el")
   (+load "config/+loads.el")
 
   (+local-leader-set-key '(emacs-lisp-mode-map lisp-interaction-mode-map)
