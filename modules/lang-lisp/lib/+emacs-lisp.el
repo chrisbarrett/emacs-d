@@ -1,4 +1,4 @@
-;;; lib.el --- Emacs Lisp development library -*- lexical-binding: t; -*-
+;;; +emacs-lisp.el --- Emacs Lisp development library -*- lexical-binding: t; -*-
 
 ;;; Commentary:
 
@@ -153,4 +153,4 @@ With prefix ARG, run all tests; otherwise prompt for selector."
       (helpful-at-point)
     (describe-symbol (symbol-at-point))))
 
-;;; lib.el ends here
+;;; +emacs-lisp.el ends here

@@ -11,11 +11,14 @@
 ;; Load module files from this directory
 ;; May fail in batch mode due to missing dependencies
 (let* ((module-dir (file-name-directory (or load-file-name buffer-file-name)))
-       (lib-file (expand-file-name "lib.el" module-dir))
+       (lib-dir (expand-file-name "lib" module-dir))
        (init-file (expand-file-name "init.el" module-dir)))
   (condition-case nil
       (progn
-        (load lib-file nil 'nomessage)
+        ;; Load all .el files from lib/ directory
+        (when (file-directory-p lib-dir)
+          (dolist (file (directory-files lib-dir t "\\.el\\'"))
+            (load file nil 'nomessage)))
         (load init-file nil 'nomessage))
     (error nil)))
 
