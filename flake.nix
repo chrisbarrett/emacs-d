@@ -1,20 +1,25 @@
 {
   inputs = {
+    flake-parts.url = "github:hercules-ci/flake-parts";
     nixpkgs.url = "github:nixos/nixpkgs/nixpkgs-unstable";
-    flake-utils.url = "github:numtide/flake-utils";
   };
 
-  outputs = { nixpkgs, flake-utils, ... }:
-    flake-utils.lib.eachDefaultSystem (system:
-      let
-        pkgs = import nixpkgs { inherit system; };
-      in
-      {
-        name = "emacs-config";
-        devShell = pkgs.mkShell {
-          buildInputs = with pkgs; [
-            prek
-          ];
+  outputs = inputs@{ flake-parts, ... }:
+    flake-parts.lib.mkFlake { inherit inputs; } {
+      systems = [
+        "x86_64-linux"
+        "aarch64-linux"
+        "aarch64-darwin"
+      ];
+
+      perSystem = { pkgs, ... }: {
+        devShells.default = pkgs.mkShell {
+          buildInputs = with pkgs; [ prek ];
+
+          shellHook = ''
+            prek install
+          '';
         };
-      });
+      };
+    };
 }
