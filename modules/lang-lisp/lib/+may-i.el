@@ -8,10 +8,12 @@
 (define-derived-mode may-i-config-mode lisp-data-mode "Lisp-Data [may-i]"
   "Major-mode for may-i configuration files."
   (setcar font-lock-defaults
-          '(lisp-el-font-lock-keywords
-            lisp-el-font-lock-keywords-1
-            lisp-el-font-lock-keywords-2
-            elisp-semantic-font-lock-keywords)))
+          (append '(lisp-el-font-lock-keywords
+                    lisp-el-font-lock-keywords-1
+                    lisp-el-font-lock-keywords-2)
+                  ;; Emacs 31
+                  (when (boundp 'elisp-semantic-font-lock-keywords)
+                    '(elisp-semantic-font-lock-keywords)))))
 
 ;;;###autoload
 (add-to-list 'auto-mode-alist (cons (rx "/may-i/config.lisp" eos)
