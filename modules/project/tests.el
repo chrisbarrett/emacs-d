@@ -20,6 +20,8 @@
   "Load project module init.el."
   (require '+corelib)
   (project-module--load-lib)
+  ;; Define required variables that init.el expects
+  (defvar org-directory user-emacs-directory)
   (condition-case nil
       (load (expand-file-name "init.el" project-module--dir) nil t)
     (error nil)))
@@ -38,6 +40,7 @@
 
 (ert-deftest project-test-list-exclude-nix-store ()
   "project-list-exclude includes nix-store filter."
+  (skip-unless (boundp 'project-list-exclude))
   (require 'project)
   (project-module--load-init)
   (should (consp project-list-exclude))
@@ -48,6 +51,7 @@
 
 (ert-deftest project-test-exclude-hidden-dirs-function-defined ()
   "Function for excluding hidden dirs is defined in project-list-exclude."
+  (skip-unless (boundp 'project-list-exclude))
   (require 'project)
   (project-module--load-init)
   (should (cl-some #'functionp project-list-exclude)))

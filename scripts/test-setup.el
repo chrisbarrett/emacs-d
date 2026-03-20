@@ -51,5 +51,12 @@ This prevents tests from creating files in `user-emacs-directory'."
 (+test-setup-configure-paths)
 (+test-setup-load-paths)
 
+;; Set up use-package keywords for tests
+(require 'use-package-core nil t)
+(require '+use-package-keywords nil t)
+(when (fboundp '+use-package-keywords-setup)
+  (+use-package-keywords-setup))
+(require 'general nil t)
+
 (provide 'test-setup)
 ;;; test-setup.el ends here

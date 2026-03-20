@@ -144,8 +144,20 @@ Parses command-line arguments and runs appropriate tests."
      (t
       (+test-runner--run-file arg)))))
 
+(defun +test-runner--setup-use-package ()
+  "Set up use-package and its custom keywords for tests."
+  ;; Load use-package core
+  (require 'use-package-core nil t)
+  ;; Load custom keywords
+  (require '+use-package-keywords nil t)
+  (when (fboundp '+use-package-keywords-setup)
+    (+use-package-keywords-setup))
+  ;; Load general package for :general-config keyword
+  (require 'general nil t))
+
 (defun +test-runner--run-all-tests ()
   "Discover and run all test files."
+  (+test-runner--setup-use-package)
   (let ((test-files (+test-runner--discover-all-tests)))
     (if (null test-files)
         (progn
@@ -160,6 +172,7 @@ Parses command-line arguments and runs appropriate tests."
 
 (defun +test-runner--run-file (source-path)
   "Run tests for SOURCE-PATH."
+  (+test-runner--setup-use-package)
   (let ((test-file (+test-runner--find-test-file source-path)))
     (if test-file
         (progn
@@ -173,6 +186,7 @@ Parses command-line arguments and runs appropriate tests."
 
 (defun +test-runner--run-pattern (pattern)
   "Run tests matching PATTERN."
+  (+test-runner--setup-use-package)
   ;; Remove surrounding quotes if present
   (let ((selector (string-trim pattern "\"")))
     (message "Running tests matching: %s" selector)

@@ -24,18 +24,22 @@
 (use-package project
   :custom
   (project-vc-ignores '(".cache/"))
-  (project-list-exclude (list
-                         (rx bol "/nix/store/")
-                         (defun +project-exclude-hidden-dirs (project)
-                           "Exclude projects in any hidden directory, except for ~/.config."
-                           (let ((root (project-root project)))
-                             (and (string-match-p (rx "/.") root)
-                                  (not (string-prefix-p "~/.config/" root)))))))
   (project-switch-commands '+project-switch-magit-status)
 
   :functions project-try-vc
 
   :config
+  ;; project-list-exclude is only available in Emacs 31+
+  (when (boundp 'project-list-exclude)
+    (setq project-list-exclude
+          (list
+           (rx bol "/nix/store/")
+           (defun +project-exclude-hidden-dirs (project)
+             "Exclude projects in any hidden directory, except for ~/.config."
+             (let ((root (project-root project)))
+               (and (string-match-p (rx "/.") root)
+                    (not (string-prefix-p "~/.config/" root))))))))
+
   (project-remember-project (project-try-vc user-emacs-directory))
   (project-remember-project (project-try-vc org-directory))
 
