@@ -22,8 +22,10 @@
                             "M-p" #'flymake-goto-prev-error)
 
   :config
-  ;; Display full diagnostic in echo area for fallthrough destination.
-  (alist-set! flymake-diagnostic-format-alist t '(origin code message)))
+  ;; flymake-diagnostic-format-alist is only available in Emacs 31+
+  (when (boundp 'flymake-diagnostic-format-alist)
+    ;; Display full diagnostic in echo area for fallthrough destination.
+    (alist-set! flymake-diagnostic-format-alist t '(origin code message))))
 
 
 ;; Emacs' built-in LSP integration.
