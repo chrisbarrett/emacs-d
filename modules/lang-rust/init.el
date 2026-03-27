@@ -21,6 +21,11 @@
   ;; Enable colored Cargo output in compilation buffers
   (setenv "CARGO_TERM_COLOR" "always"))
 
-
+(use-package toml-ts-mode
+  :mode ("/Cargo\\.lock\\'")
+  :config
+  (add-hook! 'toml-ts-mode-hook
+    (when (string-match-p (rx "/Cargo.lock" eos) (buffer-file-name))
+      (read-only-mode +1))))
 
 ;;; init.el ends here
