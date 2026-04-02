@@ -21,6 +21,7 @@
 
 ;; TypeScript mode with shebang detection
 (use-package typescript-ts-mode
+  :mode ("\\.[mc]?ts\\'" . typescript-ts-mode)
   :init
   ;; Activate on shebangs for node, deno, bun etc.
   (add-to-list 'magic-mode-alist (cons (rx bol "#!" (+? nonl) (or "/" " ") (or "deno" "node" "bun" "tsx")
