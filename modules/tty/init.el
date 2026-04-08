@@ -24,10 +24,10 @@
   "Clear the background on FRAME so the terminal background is used.
 When called without FRAME, clear on all TTY frames."
   (if frame
-      (set-face-background 'default "unspecified-bg" frame)
+      (set-face-background 'default nil frame)
     (dolist (f (frame-list))
       (unless (display-graphic-p f)
-        (set-face-background 'default "unspecified-bg" f)))))
+        (set-face-background 'default nil f)))))
 
 (add-hook '+after-make-tty-frame-functions #'+tty-clear-bg-h)
 (add-hook '+theme-changed-hook #'+tty-clear-bg-h)
