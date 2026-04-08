@@ -24,10 +24,10 @@
   "Clear the background on FRAME so the terminal background is used.
 When called without FRAME, clear on all TTY frames."
   (if frame
-      (set-face-background 'default nil frame)
+      (set-face-background 'default "unspecified-bg" frame)
     (dolist (f (frame-list))
       (unless (display-graphic-p f)
-        (set-face-background 'default nil f)))))
+        (set-face-background 'default "unspecified-bg" f)))))
 
 (add-hook '+after-make-tty-frame-functions #'+tty-clear-bg-h)
 (add-hook '+theme-changed-hook #'+tty-clear-bg-h)
@@ -36,11 +36,6 @@ When called without FRAME, clear on all TTY frames."
   (xterm-mouse-mode +1))
 
 (add-hook '+after-make-tty-frame-functions #'+tty-frame-use-box-characters)
-
-(define-advice tab-bar--update-tab-bar-lines (:after (&rest _) no-tty)
-  (dolist (frame (frame-list))
-    (unless (display-graphic-p frame)
-      (set-frame-parameter frame 'tab-bar-lines 0))))
 
 (add-hook! 'after-init-hook
   (+tty-frame-use-box-characters (selected-frame)))

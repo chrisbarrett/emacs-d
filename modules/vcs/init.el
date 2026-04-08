@@ -25,12 +25,12 @@
     ("o" "Switch or new..." +worktrees-create-switch)]
 
    ["Update"
-    :if +worktrees-tab-dedicated-to-child-p
+    :if +worktrees-in-child-worktree-p
     ("u" "Rebase on main" +worktrees-rebase-on-local-main)
     ("U" "Rebase on origin/main" +worktrees-rebase-on-origin-main)]
 
    ["Complete"
-    :if +worktrees-tab-dedicated-to-child-p
+    :if +worktrees-in-child-worktree-p
     ("m" "Merge to main" +worktrees-absorb-into-main)
     ("x" "Destroy" +worktrees-destroy-current)]]
 
@@ -99,8 +99,7 @@
   (:keymaps 'magit-remote-section-map [remap magit-browse-thing] #'forge-browse-remote)
   (:keymaps 'magit-branch-section-map [remap magit-browse-thing] #'forge-browse-branch)
   (:keymaps 'forge-topic-list-mode-map :states 'normal "q" #'kill-current-buffer)
-  :config
-  (advice-add 'forge-checkout-worktree :after #'+forge-checkout-worktree-open-tab))
+)
 
 
 ;;; VC settings
@@ -126,26 +125,11 @@
   (put 'gac-debounce-interval 'safe-local-variable 'integerp)
   (put 'gac-automatically-add-new-files-p 'safe-local-variable 'booleanp))
 
-;;; Worktrees - tab-per-worktree workflow
+;;; Worktrees
 
 (general-def
   "M-G" #'+worktrees-menu
   "M-O" #'+worktrees-create-switch)
-
-(defvar project-find-functions) ; project.el
-
-(defun +worktrees--cleanup-worktree-tab (tab _sole-tab)
-  "Clean up resources when a worktree TAB is closed."
-  (when-let* ((worktree-path (alist-get 'worktree-path tab)))
-    (when (fboundp 'claude-code-ide-stop)
-      (let ((default-directory worktree-path)
-            (project-find-functions nil)
-            (kill-buffer-query-functions nil))
-        (ignore-errors
-          (claude-code-ide-stop))))
-    (+worktree-kill-buffers worktree-path)))
-
-(add-hook 'tab-bar-tab-pre-close-functions #'+worktrees--cleanup-worktree-tab)
 
 ;; Ensure above key sequences are respected in eat.
 

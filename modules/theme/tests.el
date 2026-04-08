@@ -172,6 +172,30 @@
     ;; Cleanup
     (disable-theme 'modus-operandi)))
 
+;;; Unspecified background handling (TTY frames)
+
+(ert-deftest theme-test-dark-p-handles-unspecified-bg ()
+  "Dark detection handles \"unspecified-bg\" by falling back to background-mode."
+  (cl-letf (((symbol-function 'face-background)
+             (lambda (&rest _) "unspecified-bg")))
+    (let ((frame-params '((background-mode . dark))))
+      (cl-letf (((symbol-function 'frame-parameter)
+                 (lambda (_frame param) (alist-get param frame-params))))
+        (should (+theme-dark-p))))
+    (let ((frame-params '((background-mode . light))))
+      (cl-letf (((symbol-function 'frame-parameter)
+                 (lambda (_frame param) (alist-get param frame-params))))
+        (should-not (+theme-dark-p))))))
+
+(ert-deftest theme-test-dark-p-handles-nil-bg ()
+  "Dark detection handles nil background by falling back to background-mode."
+  (cl-letf (((symbol-function 'face-background)
+             (lambda (&rest _) nil)))
+    (let ((frame-params '((background-mode . dark))))
+      (cl-letf (((symbol-function 'frame-parameter)
+                 (lambda (_frame param) (alist-get param frame-params))))
+        (should (+theme-dark-p))))))
+
 ;;; Functions are interactive
 
 (ert-deftest theme-test-dark-is-interactive ()

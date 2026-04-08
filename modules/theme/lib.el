@@ -39,9 +39,14 @@
 ;;;###autoload
 (defun +theme-dark-p ()
   "Return non-nil if current theme is dark.
-Detection is based on background luminance being less than 50%."
+Detection is based on background luminance being less than 50%.
+Falls back to the frame's `background-mode' parameter when the
+background color is unspecified (e.g. on TTY frames)."
   (let ((default-bg (face-background 'default nil t)))
-    (< (apply #'+ (color-values default-bg)) (* 3 32768))))
+    (if (or (null default-bg)
+            (string-prefix-p "unspecified" default-bg))
+        (eq (frame-parameter nil 'background-mode) 'dark)
+      (< (apply #'+ (color-values default-bg)) (* 3 32768)))))
 
 ;;;###autoload
 (defun +theme-for-system-theme ()

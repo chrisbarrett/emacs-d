@@ -23,7 +23,7 @@ associated tabs and buffers."
   (let ((worktree-path (magit-convert-filename-for-git (expand-file-name worktree))))
     (when (+worktrees-in-repo-root-p worktree-path)
       (user-error "Cannot delete the root worktree"))
-    (+worktrees-close-tabs worktree-path)))
+    (+worktree-kill-buffers worktree-path)))
 
 ;; Set emoji cache file path after no-littering is available
 

@@ -25,15 +25,6 @@
     (error nil)))
 
 
-;;; P1: Tab bar mode is active after init
-
-(ert-deftest ui-tab-bar-mode-active ()
-  "P1: Tab bar mode should be active."
-  ;; Skip in batch mode - tab-bar-mode is only enabled in interactive sessions
-  (skip-unless (not noninteractive))
-  (skip-unless (boundp 'tab-bar-mode))
-  (should tab-bar-mode))
-
 
 ;;; hl-todo keywords
 

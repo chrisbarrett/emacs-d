@@ -189,14 +189,6 @@ PROMPT is the prompt to display.  BRANCH is the branch name being checked out."
       (user-error "The empty string isn't a valid path"))
     path))
 
-;;;###autoload
-(defun +forge-checkout-worktree-open-tab (path _pullreq)
-  "Open a tab for the worktree at PATH after forge checkout.
-Intended as :after advice for `forge-checkout-worktree'.
-Only opens a tab if the worktree was actually created."
-  (when (file-exists-p (expand-file-name ".git" path))
-    (+worktrees-open-tab path 'pullreq)))
-
 ;;; Worktrees workflow
 
 (defun +worktrees--repo-root ()
@@ -209,113 +201,34 @@ Only opens a tab if the worktree was actually created."
     (+worktrees--repo-root)))
 
 ;;;###autoload
-(defun +worktrees-path-for-selected-tab (&optional exclude-root)
-  "Get the worktree path for the current tab, if set.
-If not set but we're in a worktree, detect and set it.
-If EXCLUDE-ROOT is non-nil, return nil if the worktree is the repo root."
-  (when (bound-and-true-p tab-bar-mode)
-    (let ((current-tab (tab-bar--current-tab)))
-      (when-let* ((worktree-path (alist-get 'worktree-path current-tab)))
-        (if exclude-root
-            (let ((repo-root (+worktrees--repo-root)))
-              (unless (and repo-root (file-equal-p worktree-path repo-root))
-                worktree-path))
-          worktree-path)))))
+(defun +worktrees-current-worktree-path ()
+  "Get the worktree path for the current directory.
+Returns the matching worktree path from `magit-list-worktrees'."
+  (when-let* ((worktrees (ignore-errors (magit-list-worktrees)))
+              (current-dir (expand-file-name default-directory)))
+    (car (car (seq-sort-by (lambda (wt) (length (car wt)))
+                           #'>
+                           (seq-filter (lambda (wt)
+                                         (string-prefix-p (car wt) current-dir))
+                                       worktrees))))))
 
 ;;;###autoload
-(defun +worktrees-tab-dedicated-to-child-p ()
-  "Return non-nil if current tab is dedicated to a child worktree."
-  (+worktrees-path-for-selected-tab t))
-
-;;;###autoload
-(defun +worktrees-set-alert (worktree-path)
-  "Set a persistent alert on the tab associated with WORKTREE-PATH.
-The alert will remain until the user dwells on the tab.
-If no tab exists for the worktree, this function does nothing.
-Returns t if alert was set, nil otherwise."
-  (when-let* ((tab (+worktrees--tab-for-worktree worktree-path))
-              (tab-name (alist-get 'name tab)))
-    (when (fboundp '+tab-bar-set-alert)
-      (+tab-bar-set-alert tab-name))))
-
-;;;###autoload
-(defun +worktrees-set-transient-alert (worktree-path &optional color cycles)
-  "Set a transient alert on the tab associated with WORKTREE-PATH.
-COLOR is the pulse color (default pulsar-magenta).
-CYCLES is the number of pulses (default 3).
-Transient alerts play their animation and automatically clear.
-If no tab exists for the worktree, this function does nothing.
-Returns t if alert was dispatched, nil otherwise."
-  (when-let* ((tab (+worktrees--tab-for-worktree worktree-path))
-              (tab-name (alist-get 'name tab)))
-    (when (fboundp '+tab-bar-set-transient-alert)
-      (+tab-bar-set-transient-alert tab-name color cycles))))
-
-;;;###autoload
-(defun +worktrees-clear-alert (worktree-path)
-  "Clear the persistent alert on the tab associated with WORKTREE-PATH.
-If no tab exists for the worktree, this function does nothing.
-Returns t if alert was cleared, nil otherwise."
-  (when-let* ((tab (+worktrees--tab-for-worktree worktree-path))
-              (tab-name (alist-get 'name tab)))
-    (when (fboundp '+tab-bar-clear-alert)
-      (+tab-bar-clear-alert tab-name))))
-
-(defun +worktrees--tab-for-worktree (worktree-path)
-  "Find the tab associated with WORKTREE-PATH, if any.
-Normalizes paths to handle trailing slashes correctly."
-  (when (bound-and-true-p tab-bar-mode)
-    (seq-find (lambda (tab)
-                (when-let* ((tab-path (alist-get 'worktree-path tab)))
-                  (file-equal-p worktree-path tab-path)))
-              (funcall tab-bar-tabs-function))))
+(defun +worktrees-in-child-worktree-p ()
+  "Return non-nil if the current directory is in a child worktree."
+  (+worktrees--detect-child-worktree-path))
 
 ;;;###autoload
 (defun +worktrees-refresh-magit (worktree-path)
   "Refresh magit buffers for WORKTREE-PATH.
-Find the tab showing WORKTREE-PATH, and if it exists, look through
-the `magit-status' buffers in that frame and call `magit-refresh' with
-each buffer as current.
-
 Returns t if any refresh took place, otherwise nil."
-  (when-let* ((tab (+worktrees--tab-for-worktree worktree-path)))
-    (let ((refreshed nil)
-          (tab-index (seq-position (funcall tab-bar-tabs-function) tab)))
-      (when tab-index
-        (dolist (frame (frame-list))
-          (with-selected-frame frame
-            (when (seq-find (lambda (tab-in-frame)
-                              (equal (alist-get 'name tab-in-frame)
-                                     (alist-get 'name tab)))
-                            (funcall tab-bar-tabs-function))
-              (dolist (buf (buffer-list frame))
-                (with-current-buffer buf
-                  (when (and (derived-mode-p 'magit-status-mode)
-                             (string-prefix-p worktree-path default-directory))
-                    (magit-refresh)
-                    (setq refreshed t))))))))
-      refreshed)))
-
-;;;###autoload
-(defun +worktrees-close-tabs (worktree-path)
-  "Close any tabs in any frames that are dedicated to WORKTREE-PATH.
-Returns a list of closed tab names."
-  (let (closed-tabs)
-    (dolist (frame (frame-list))
-      (with-selected-frame frame
-        (when-let* ((tab (+worktrees--tab-for-worktree worktree-path)))
-          (let ((tab-name (alist-get 'name tab)))
-            (+worktree-kill-buffers worktree-path)
-            (let* ((tabs (funcall tab-bar-tabs-function))
-                   (tab-index (seq-position tabs tab)))
-              (when tab-index
-                (tab-bar-close-tab (1+ tab-index))))
-            (push tab-name closed-tabs)))
-        (force-mode-line-update t)))
-    (when closed-tabs
-      (message (concat "Closed worktree tab(s) for "
-                       (propertize (abbreviate-file-name worktree-path) 'face 'dired-directory)))
-      closed-tabs)))
+  (let ((refreshed nil))
+    (dolist (buf (buffer-list))
+      (with-current-buffer buf
+        (when (and (derived-mode-p 'magit-status-mode)
+                   (string-prefix-p worktree-path default-directory))
+          (magit-refresh)
+          (setq refreshed t))))
+    refreshed))
 
 ;;;###autoload
 (defun +worktree-kill-buffers (worktree-path)
@@ -400,74 +313,21 @@ Return nil if the current worktree is the root worktree for the repo."
                    worktrees))))
 
 ;;;###autoload
-(defun +worktrees-adopt-initial-tab ()
-  "Set up the initial tab to represent the repo root."
-  (when (bound-and-true-p tab-bar-mode)
-    (let* ((repo-root (file-truename (or (+worktrees--repo-root)
-                                         (funcall project-prompter))))
-           (project-name (or (+git-repo-display-name)
-                             (and (frame-parameter nil 'project-root)
-                                  (file-name-nondirectory
-                                   (directory-file-name (frame-parameter nil 'project-root))))
-                             (file-name-nondirectory
-                              (directory-file-name repo-root))))
-           (current-tab (tab-bar--current-tab-find)))
-      (setf (alist-get 'worktree-path (cdr current-tab)) repo-root)
-      (setf (alist-get 'worktree-type (cdr current-tab)) 'root)
-      (tab-bar-rename-tab project-name)
-      repo-root)))
-
-(defvar project-prompter)
-
-;;;###autoload
-(defun +worktrees-open-tab (worktree-path &optional type)
-  "Open a tab for WORKTREE-PATH, creating it if needed.
-If TYPE is set, this will be used to determine the type of tab that will
-be created. See generic function `+worktrees-new-tab-layout'."
-  (interactive (list (completing-read "Worktree: " (magit-list-worktrees) nil t)))
-  (if-let* ((existing-tab (+worktrees--tab-for-worktree worktree-path)))
-      (tab-bar-select-tab (1+ (tab-bar--tab-index existing-tab)))
-    (let ((tab-name (+worktrees--worktree-branch worktree-path))
-          (type (cond
-                 ((null type) 'branch)
-                 ((symbolp type) type)
-                 ((stringp type) (intern type))
-                 (t 'branch))))
-      (tab-bar-new-tab)
-      (tab-bar-rename-tab tab-name)
-      (let* ((tabs (frame-parameter nil 'tabs))
-             (tab-index (tab-bar--current-tab-index tabs))
-             (current-tab (nth tab-index tabs))
-             (tab-type (car current-tab))
-             (tab-rest (cdr current-tab)))
-        (setf (alist-get 'worktree-type tab-rest) type)
-        (setf (alist-get 'worktree-path tab-rest) worktree-path)
-        (setf (nth tab-index tabs) (cons tab-type tab-rest))
-        (set-frame-parameter nil 'tabs tabs)))
-    (+worktrees-new-tab-layout type worktree-path)))
-
-(cl-defgeneric +worktrees-new-tab-layout (_type worktree-path)
-  "Set up the layout for a new worktree tab.
-TYPE is a symbol indicating the worktree type.
-WORKTREE-PATH is the path to the worktree."
-  (magit-status-setup-buffer worktree-path))
-
-;;;###autoload
 (defun +worktrees-create-switch ()
-  "Read a worktree from the user and create a tab for it.
-The worktrees are for the repo associated with the selected tab. If no
-such worktree exists, create it."
+  "Switch to an existing worktree or create a new one.
+Opens magit-status in the selected worktree."
   (interactive)
   (let* ((root (+worktrees--root-worktree-path))
-         (default-directory (or (+worktrees-path-for-selected-tab) root default-directory))
+         (current-wt (+worktrees-current-worktree-path))
+         (default-directory (or current-wt root default-directory))
          (worktree-paths (mapcar #'car (magit-list-worktrees)))
          (input (completing-read "Existing worktree, or name for new branch: "
-                                 (remove (+worktrees-path-for-selected-tab) worktree-paths) nil
+                                 (remove current-wt worktree-paths) nil
                                  (lambda (input)
                                    (or (member input worktree-paths)
                                        (not (string-match-p (rx space) input)))))))
     (if (member input worktree-paths)
-        (+worktrees-open-tab input)
+        (magit-status-setup-buffer input)
       (let* ((branch input)
              (start-point (magit-read-branch-or-commit "Start worktree at"))
              (path (file-name-concat root +worktrees-worktree-base-dir branch)))
@@ -475,21 +335,20 @@ such worktree exists, create it."
         (save-window-excursion
           (magit-worktree-branch path branch start-point))
         (when (file-exists-p (expand-file-name ".git" path))
-          (+worktrees-open-tab path))))))
+          (magit-status-setup-buffer path))))))
 
 ;;;###autoload
 (defun +worktrees-magit-status ()
   "Display magit status buffer for the current worktree."
   (interactive)
-  (with-no-warnings
-    (magit-status (+worktrees-path-for-selected-tab))))
+  (magit-status-setup-buffer (+worktrees-current-worktree-path)))
 
 ;;;###autoload
 (defun +worktrees-claude-code (worktree-path &optional initial-command)
   "Run claude-code for the worktree at WORKTREE-PATH.
 When INITIAL-COMMAND is provided, run that."
-  (interactive (list (or (+worktrees-path-for-selected-tab)
-                         (user-error "Selected tab not associated with a worktree"))))
+  (interactive (list (or (+worktrees-current-worktree-path)
+                         (user-error "Not in a worktree"))))
   (let ((default-directory worktree-path)
         (project-find-functions nil)
         (claude-code-ide-cli-extra-flags (concat claude-code-ide-cli-extra-flags
@@ -515,7 +374,7 @@ When INITIAL-COMMAND is provided, run that."
 Requires a clean working tree (no uncommitted changes).
 Tab and buffer cleanup handled by `+magit-worktree-delete--cleanup' advice."
   (interactive)
-  (let ((worktree-path (+worktrees-path-for-selected-tab)))
+  (let ((worktree-path (+worktrees-current-worktree-path)))
     (when (+worktrees-in-repo-root-p worktree-path)
       (user-error "Refusing to act on repo root worktree"))
     (unless worktree-path
@@ -538,7 +397,7 @@ Tab and buffer cleanup handled by `+magit-worktree-delete--cleanup' advice."
 Tab and buffer cleanup handled by `+magit-worktree-delete--cleanup' advice."
   (interactive)
   (let* ((default-directory (+worktrees--repo-root))
-         (worktree-path (+worktrees-path-for-selected-tab))
+         (worktree-path (+worktrees-current-worktree-path))
          (worktree-branch (+worktrees--worktree-branch worktree-path))
          (default-branch (+worktrees--default-branch)))
     (unless worktree-path
@@ -560,7 +419,7 @@ Tab and buffer cleanup handled by `+magit-worktree-delete--cleanup' advice."
 (defun +worktrees-rebase-on-local-main ()
   "Rebase the current worktree branch on local main branch."
   (interactive)
-  (let ((worktree-path (+worktrees-path-for-selected-tab)))
+  (let ((worktree-path (+worktrees-current-worktree-path)))
     (unless worktree-path
       (user-error "Current tab is not associated with a worktree"))
     (when (+worktrees-in-repo-root-p worktree-path)
@@ -581,7 +440,7 @@ Tab and buffer cleanup handled by `+magit-worktree-delete--cleanup' advice."
 (defun +worktrees-rebase-on-origin-main ()
   "Rebase the current worktree branch on main."
   (interactive)
-  (let ((worktree-path (+worktrees-path-for-selected-tab)))
+  (let ((worktree-path (+worktrees-current-worktree-path)))
     (unless worktree-path
       (user-error "Current tab is not associated with a worktree"))
     (when (+worktrees-in-repo-root-p worktree-path)
@@ -633,19 +492,6 @@ When no frame exists, behavior depends on `+worktrees-find-file-create-frame'."
      ((and repo-root +worktrees-find-file-create-frame)
       (project-switch-beframed repo-root)
       (setq target-frame (selected-frame))))
-    (when target-frame
-      (when (bound-and-true-p tab-bar-mode)
-        (let* ((default-directory dir)
-               (worktrees (ignore-errors (magit-list-worktrees)))
-               ;; Match the most specific worktree (longest path prefix).
-               (matching-wt
-                (car (seq-sort-by (lambda (wt) (length (car wt)))
-                                  #'>
-                                  (seq-filter (lambda (wt)
-                                                (string-prefix-p (car wt) file))
-                                              worktrees)))))
-          (when matching-wt
-            (+worktrees-open-tab (car matching-wt))))))
     (find-file file)
     (when (and line (> line 0))
       (goto-char (point-min))

@@ -113,7 +113,7 @@ The following modes are disabled from evil-collection:
 | help         | Deferred to help-mode hook       |
 | elisp-mode   | Deferred to emacs-lisp-mode hook |
 | simple       | Too invasive                     |
-| tab-bar      | Custom tab-bar behavior          |
+| tab-bar      | Not used                         |
 
 ### B6: Evil-Surround
 

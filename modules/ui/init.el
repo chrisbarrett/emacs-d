@@ -2,7 +2,7 @@
 
 ;;; Commentary:
 
-;; General editor UI: scrolling, tab bar, ligatures, visual feedback,
+;; General editor UI: scrolling, ligatures, visual feedback,
 ;; modeline, display-buffer rules.
 
 ;;; Code:
@@ -64,41 +64,6 @@
 (advice-add #'display-startup-echo-area-message :override #'ignore)
 (advice-add #'execute-extended-command--describe-binding-msg :override #'ignore)
 
-
-;;; Tab bar
-
-(use-package tab-bar
-  :custom
-  (tab-bar-close-button-show 'selected)
-  (tab-bar-auto-width-max '((270) 25))
-  :general
-  ("M-S-."  #'tab-bar-switch-to-next-tab
-   "M->"    #'tab-bar-switch-to-next-tab
-   "M-S-,"  #'tab-bar-switch-to-prev-tab
-   "M-<"    #'tab-bar-switch-to-prev-tab
-   "M-C-," #'tab-bar-move-tab-backward
-   "M-C-." #'tab-bar-move-tab)
-  :init
-  (tab-bar-mode +1)
-  :config
-  (setq tab-bar-format (delq 'tab-bar-format-add-tab tab-bar-format))
-
-  (custom-theme-set-faces 'user
-                          '(tab-bar-tab ((t (:bold t)))))
-
-  ;; FIXME: This is LLM slop
-  (with-eval-after-load 'transient
-    (+update-tab-bar-themes)
-    (setq tab-bar-tab-name-format-function #'+tab-bar-tab-name-format)
-    (add-hook '+theme-changed-hook #'+update-tab-bar-themes)
-    (define-advice tab-bar-select-tab (:after (&rest _) schedule-alert)
-      (+tab-bar--pulse-tab-switch)
-      (+tab-bar--schedule-alert-clear))
-    (add-hook 'tab-bar-tab-post-open-functions #'+tab-bar--pulse-new-tab)
-    (add-hook 'tab-bar-tab-pre-close-functions #'+tab-bar--cleanup-timers-on-close)
-    (add-hook 'delete-frame-functions #'+tab-bar--cleanup-timers-on-delete-frame))
-
-  (general-def :keymaps 'override-global-map "M-B" #'+tabs-menu))
 
 
 ;;; Ligatures

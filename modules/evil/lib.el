@@ -218,7 +218,6 @@ INTERACTIVE is set when called interactively."
     snake
     so-long
     speedbar
-    ,@(when (>= emacs-major-version 27) '(tab-bar))
     tablist
     tabulated-list
     tar-mode
@@ -282,8 +281,7 @@ symbol and `cdr' the packages to register.")
     replace
     shortdoc
     simple
-    slime
-    tab-bar)
+    slime)
   "List of modes to exclude from evil-collection initialization.")
 
 ;; We handle loading evil-collection ourselves
@@ -318,7 +316,6 @@ DISABLED-LIST is used to conditionally disable specific modules."
   (add-transient-hook! 'process-menu-mode (+evil-collection-init '(process-menu simple)))
   (add-transient-hook! 'shortdoc-mode (+evil-collection-init 'shortdoc))
   (add-transient-hook! 'tabulated-list-mode (+evil-collection-init 'tabulated-list))
-  (add-transient-hook! 'tab-bar-mode (+evil-collection-init 'tab-bar))
 
   (dolist (mode evil-collection-mode-list)
     (dolist (req (or (cdr-safe mode) (list mode)))
