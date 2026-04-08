@@ -75,8 +75,9 @@
 (setq +theme-light 'modus-operandi-tinted)
 (setq +theme-dark 'modus-vivendi)
 
-(set-face-attribute 'default nil :family "FiraCode Nerd Font")
-(set-face-attribute 'variable-pitch nil :family "Fira Sans")
+(when initial-window-system
+  (set-face-attribute 'default nil :family "FiraCode Nerd Font")
+  (set-face-attribute 'variable-pitch nil :family "Fira Sans"))
 
 ;; Defer theme loading until after a frame exists
 (autoload '+theme-update (file-name-concat +modules-directory "theme" "lib.el"))
