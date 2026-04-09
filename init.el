@@ -174,6 +174,11 @@ files in each module."
                                   org-list org-pcomplete org-src org-footnote org-macro ob org org-modern
                                   org-habit org-agenda org-capture)))
 
+(setq initial-buffer-choice
+      (defun +initial-buffer ()
+        (+tty-clear-bg-h)
+        (dired default-directory)))
+
 
 ;; Icon set used by various packages.
 (use-package nerd-icons
