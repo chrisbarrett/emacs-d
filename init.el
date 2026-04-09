@@ -179,7 +179,8 @@ files in each module."
 (use-package nerd-icons
   :autoload nerd-icons-codicon nerd-icons-faicon nerd-icons-set-font
   :init
-  (add-hook 'elpaca-after-init-hook #'nerd-icons-set-font))
+  (when (display-graphic-p)
+    (add-hook 'elpaca-after-init-hook #'nerd-icons-set-font)))
 
 ;; Load init/**.el
 
