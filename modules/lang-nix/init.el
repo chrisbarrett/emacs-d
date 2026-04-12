@@ -24,12 +24,6 @@
   ;; flake.lock files are JSON
   (add-to-list 'auto-mode-alist (cons (rx "/flake.lock" eos) #'json-ts-mode)))
 
-(use-package apheleia
-  :defines apheleia-formatters
-  :config
-  (add-to-list 'apheleia-formatters '(nixpkgs-fmt "nixpkgs-fmt"))
-  (setq-hook! 'nix-ts-mode-hook apheleia-formatter 'nixpkgs-fmt))
-
 (use-package project
   :config
   (pushnew! project-vc-extra-root-markers "flake.nix"))

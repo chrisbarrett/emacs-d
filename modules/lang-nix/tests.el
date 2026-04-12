@@ -61,24 +61,6 @@
   (skip-unless (featurep 'nix-ts-mode))
   (should (memq 'eglot-ensure nix-ts-mode-local-vars-hook)))
 
-;;; P5: apheleia-formatter is set to nixpkgs-fmt in nix-ts-mode
-
-(ert-deftest lang-nix/apheleia-formatter-registered ()
-  "P5: nixpkgs-fmt should be in apheleia-formatters."
-  (require 'apheleia)
-  (should (assoc 'nixpkgs-fmt apheleia-formatters)))
-
-(ert-deftest lang-nix/apheleia-formatter-hook ()
-  "P5: nix-ts-mode-hook should set apheleia-formatter."
-  ;; Skip if nix-ts-mode not available
-  (skip-unless (boundp 'nix-ts-mode-hook))
-  ;; Check the hook is set up to configure apheleia-formatter
-  ;; Skip if not configured (depends on init.el loading)
-  (skip-unless (memq 'setq-hook!--nix-ts-mode-hook--apheleia-formatter
-                     nix-ts-mode-hook))
-  (should (memq 'setq-hook!--nix-ts-mode-hook--apheleia-formatter
-                nix-ts-mode-hook)))
-
 ;;; P6: project-vc-extra-root-markers contains "flake.nix"
 
 (ert-deftest lang-nix/project-root-marker ()
