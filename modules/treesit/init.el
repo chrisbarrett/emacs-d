@@ -6,11 +6,12 @@
 ;;; Code:
 
 (require '+autoloads)
+(require '+corelib)
 
 (require 'treesit)
 
-(setopt treesit-enabled-modes t)
-(setopt treesit-auto-install-grammar 'always)
+(cl-eval-when (compile)
+  (require 'general))
 
 ;; Keybindings for expreg
 ;; +/- to mark syntactic elements with tree-sitter.
