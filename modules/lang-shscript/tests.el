@@ -384,6 +384,19 @@
     (+argc-maybe-enable)
     (should (bound-and-true-p argc-mode))))
 
+;;; P35b: +argc-maybe-enable skips indirect buffers
+
+(ert-deftest argc-test-maybe-enable-skip-indirect ()
+  "Should not enable argc-mode in indirect buffers."
+  (with-temp-buffer
+    (insert "# @cmd Foo\nfoo() {\n}\n")
+    (let ((indirect (make-indirect-buffer (current-buffer) " *argc-test-indirect*" t)))
+      (unwind-protect
+          (with-current-buffer indirect
+            (+argc-maybe-enable)
+            (should-not (bound-and-true-p argc-mode)))
+        (kill-buffer indirect)))))
+
 ;;; P36: rebuild in indirect buffer is skipped
 
 (ert-deftest argc-test-indirect-buffer-skip ()

@@ -138,7 +138,8 @@ Handles <<, <<-, and quoting with single quotes, double quotes, or backslash."
 
 (defun +argc-maybe-enable ()
   "Enable `argc-mode' if an argc directive appears in the first 50 lines."
-  (unless (bound-and-true-p argc-mode)
+  (unless (or (bound-and-true-p argc-mode)
+              (buffer-base-buffer))
     (save-excursion
       (save-restriction
         (widen)
