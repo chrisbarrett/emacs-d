@@ -134,6 +134,27 @@ Handles <<, <<-, and quoting with single quotes, double quotes, or backslash."
 
   (add-hook 'poly-bash-ts-mode-hook #'+polymode-refontify-inner-spans))
 
+;;; argc-mode — fontify argc directives
+
+(defun +argc-maybe-enable ()
+  "Enable `argc-mode' if an argc directive appears in the first 50 lines."
+  (unless (bound-and-true-p argc-mode)
+    (save-excursion
+      (save-restriction
+        (widen)
+        (goto-char (point-min))
+        (let ((limit (save-excursion (forward-line 50) (point))))
+          (when (re-search-forward
+                 (rx bol (* space) "#" (+ space)
+                     "@" (or "describe" "cmd" "alias" "arg" "option"
+                             "flag" "env" "meta"))
+                 limit t)
+            (argc-mode 1)))))))
+
+(add-hook 'sh-mode-hook #'+argc-maybe-enable)
+(add-hook 'bash-ts-mode-hook #'+argc-maybe-enable)
+(add-hook 'poly-bash-ts-mode-hook #'+argc-maybe-enable)
+
 ;;; Separedit — heredoc language detection for bash-ts-mode
 
 (with-eval-after-load 'separedit
