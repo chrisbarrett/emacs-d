@@ -20,6 +20,8 @@
                                     'may-i-config-mode))
 
 (put 'defcontext 'lisp-indent-function 1)
+(put 'define 'lisp-indent-function 1)
+(put 'rule 'lisp-indent-function 1)
 (put 'with-facts 'lisp-indent-function 1)
 
 ;;; +may-i.el ends here
