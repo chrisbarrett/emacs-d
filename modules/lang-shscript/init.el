@@ -134,6 +134,72 @@ Handles <<, <<-, and quoting with single quotes, double quotes, or backslash."
 
   (add-hook 'poly-bash-ts-mode-hook #'+polymode-refontify-inner-spans))
 
+;;; Code fences — shell-specific dispatch callbacks
+
+(defun +bash--heredoc-unquoted-p (head-beg _head-end)
+  "Return non-nil if heredoc head at HEAD-BEG is unquoted.
+Unquoted heredocs (<<DELIM, <<-DELIM) get shell expansion.
+Quoted heredocs (<<'DELIM', <<\"DELIM\", <<\\DELIM) do not."
+  (save-excursion
+    (goto-char head-beg)
+    (and (looking-at "<<-?\\([^[:space:]]\\)")
+         (let ((ch (char-after (match-beginning 1))))
+           (not (memq ch '(?' ?\" ?\\)))))))
+
+(defun +bash--add-interpolation-overlays (beg end base)
+  "Add overlays for shell interpolation patterns between BEG and END.
+Patterns: $VAR, ${...}, $(...), $((...)), `...`.
+Skips escaped \\$ sequences.  Overlays are created in BASE buffer."
+  (with-current-buffer base
+    (save-excursion
+      (goto-char beg)
+      (while (re-search-forward
+              (rx (or
+                   (seq (group "$")
+                        (or (seq (any "A-Za-z_") (* (any "A-Za-z_0-9")))
+                            (seq "{" (*? anything) "}")
+                            (seq "((" (*? anything) "))")
+                            (seq "(" (*? anything) ")")))
+                   (group "`" (+? anything) "`")))
+              end t)
+        (let* ((mbeg (or (match-beginning 1) (match-beginning 2)))
+               (mend (match-end 0)))
+          (let ((bs 0))
+            (when (> mbeg beg)
+              (save-excursion
+                (goto-char mbeg)
+                (while (eq (char-before (- (point) bs)) ?\\)
+                  (cl-incf bs))))
+            (when (cl-evenp bs)
+              (let ((ov (make-overlay mbeg mend base)))
+                (overlay-put ov 'face '+polymode-interpolation-face)
+                (overlay-put ov '+polymode-fence t)))))))))
+
+(defconst +bash--heredoc-opener-re "<<-?[\\\\'\"]?[A-Za-z_]"
+  "Regexp matching a heredoc opener.")
+
+(defun +bash--count-heredoc-openers ()
+  "Count heredoc openers in the current buffer."
+  (save-excursion
+    (goto-char (point-min))
+    (let ((count 0))
+      (while (re-search-forward +bash--heredoc-opener-re nil t)
+        (cl-incf count))
+      count)))
+
+(defun +bash--heredoc-head-valid-p (beg)
+  "Return non-nil if overlay at BEG still points at a heredoc opener."
+  (save-excursion
+    (goto-char beg)
+    (looking-at +bash--heredoc-opener-re)))
+
+(with-eval-after-load '+code-fences
+  (+code-fences-register 'bash-ts-mode
+                         :head-valid-p #'+bash--heredoc-head-valid-p
+                         :count-openers #'+bash--count-heredoc-openers
+                         :unquoted-p #'+bash--heredoc-unquoted-p
+                         :interpolation-fn #'+bash--add-interpolation-overlays))
+
 ;;; argc-mode — fontify argc directives
 
 (defun +argc-maybe-enable ()

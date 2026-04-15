@@ -11,9 +11,39 @@
   '((t :inherit font-lock-keyword-face :slant italic :weight normal :underline nil :overline nil))
   "Face for polymode head/tail fence lines.")
 
-(defface +polymode-shell-interpolation-face
+(defface +polymode-interpolation-face
   '((t :inherit warning :weight bold))
-  "Face for shell interpolation in unquoted heredoc bodies.")
+  "Face for interpolation expressions in unquoted polymode bodies.")
+
+
+(defvar +code-fences-host-config nil
+  "Alist of (HOST-MODE . PLIST).
+Each entry maps a polymode host major-mode symbol to a plist with
+optional keys :head-valid-p, :unquoted-p, and :interpolation-fn.")
+
+(defun +code-fences-register (host-mode &rest plist)
+  "Register HOST-MODE with code-fences dispatch callbacks.
+PLIST may contain :head-valid-p, :unquoted-p, and :interpolation-fn."
+  (setf (alist-get host-mode +code-fences-host-config) plist))
+
+(defvar-local +code-fences--cached-config nil
+  "Cached host config plist for this buffer, set during span decoration.")
+(put '+code-fences--cached-config 'permanent-local t)
+
+(defun +code-fences--config ()
+  "Return the host config plist for the current polymode host, or nil.
+Uses a buffer-local cache set during `+polymode-refontify-inner-spans'.
+Falls back to resolving via `pm/polymode' if the cache is empty."
+  (let ((base (or (buffer-base-buffer) (current-buffer))))
+    (or (buffer-local-value '+code-fences--cached-config base)
+        (when (bound-and-true-p pm/polymode)
+          (let* ((hostmode-obj (eieio-oref pm/polymode '-hostmode))
+                 (host-mode (and hostmode-obj (eieio-oref hostmode-obj 'mode)))
+                 (config (and host-mode (alist-get host-mode +code-fences-host-config))))
+            (when config
+              (with-current-buffer base
+                (setq +code-fences--cached-config config)))
+            config)))))
 
 ;;; Separedit compatibility — detect polymode body spans as edit blocks.
 
@@ -69,59 +99,8 @@ Filters out checkdoc — fragments lack file structure it expects."
             (apply fn args))))
     (apply fn args)))
 
-(defun +polymode--heredoc-unquoted-p (head-beg _head-end)
-  "Return non-nil if heredoc head at HEAD-BEG is unquoted.
-Unquoted heredocs (<<DELIM, <<-DELIM) get shell expansion.
-Quoted heredocs (<<'DELIM', <<\"DELIM\", <<\\DELIM) do not."
-  (save-excursion
-    (goto-char head-beg)
-    (and (looking-at "<<-?\\([^[:space:]]\\)")
-         (let ((ch (char-after (match-beginning 1))))
-           (not (memq ch '(?' ?\" ?\\)))))))
-
-(defun +polymode--add-shell-interpolation-overlays (beg end base)
-  "Add overlays for shell interpolation patterns between BEG and END.
-Patterns: $VAR, ${...}, $(...), $((...)), `...`.
-Skips escaped \\$ sequences.  Overlays are created in BASE buffer."
-  (with-current-buffer base
-    (save-excursion
-      (goto-char beg)
-      (while (re-search-forward
-              (rx (or
-                   (seq (group "$")
-                        (or (seq (any "A-Za-z_") (* (any "A-Za-z_0-9")))
-                            (seq "{" (*? anything) "}")
-                            (seq "((" (*? anything) "))")
-                            (seq "(" (*? anything) ")")))
-                   (group "`" (+? anything) "`")))
-              end t)
-        (let* ((mbeg (or (match-beginning 1) (match-beginning 2)))
-               (mend (match-end 0)))
-          (let ((bs 0))
-            (when (> mbeg beg)
-              (save-excursion
-                (goto-char mbeg)
-                (while (eq (char-before (- (point) bs)) ?\\)
-                  (cl-incf bs))))
-            (when (cl-evenp bs)
-              (let ((ov (make-overlay mbeg mend base)))
-                (overlay-put ov 'face '+polymode-shell-interpolation-face)
-                (overlay-put ov '+polymode-fence t)))))))))
-
 (defvar-local +polymode--spans-decorated nil
   "Non-nil when polymode spans have been decorated.")
-
-(defconst +polymode--heredoc-opener-re "<<-?[\\\\'\"]?[A-Za-z_]"
-  "Regexp matching a heredoc opener.  Must agree with stale detection.")
-
-(defun +polymode--count-heredoc-openers ()
-  "Count heredoc openers in the current buffer."
-  (save-excursion
-    (goto-char (point-min))
-    (let ((count 0))
-      (while (re-search-forward +polymode--heredoc-opener-re nil t)
-        (cl-incf count))
-      count)))
 
 (defface +polymode-fence-dim-face
   '((t :foreground "gray30"))
@@ -179,9 +158,8 @@ When ACTIVE, use the bright header line; otherwise use the dim one."
          (col-h (with-current-buffer base
                   (save-excursion
                     (goto-char fbeg)
-                    (when (looking-at "<<-?[\\\\'\"]?")
-                      (goto-char (match-end 0))
-                      (current-column)))))
+                    (end-of-line)
+                    (current-column))))
          (connector (when (and col-h (>= col-h col-c))
                       (concat (propertize (make-string (- col-h col-c) ?─) 'face cface)
                               (propertize "╯" 'face cface))))
@@ -209,33 +187,36 @@ Cancels any pending timer first to avoid redundant work."
 
 (defun +polymode-update-head-connectors (&rest _)
   "Update head overlay connectors after buffer changes.
-If any head overlay no longer points at a heredoc opener, delete only
-that stale overlay and schedule redecoration.  Also triggers redecorate
-when the head overlay count diverges from the number of heredoc openers
-in the buffer (e.g. after a previously broken heredoc is fixed)."
+If a registered :head-valid-p callback returns nil for a head overlay,
+delete only that stale overlay and schedule redecoration.  Also triggers
+redecorate when :count-openers reports a count diverging from head
+overlay count (catches fixed-after-break scenarios)."
   (when-let* ((base (or (buffer-base-buffer) (current-buffer))))
     (with-current-buffer base
-      (let ((stale nil)
-            (head-count 0))
+      (let* ((config (+code-fences--config))
+             (head-valid-p (plist-get config :head-valid-p))
+             (count-openers (plist-get config :count-openers))
+             (stale nil)
+             (head-count 0))
         (dolist (ov (overlays-in (point-min) (point-max)))
           (when (overlay-get ov '+polymode-head-col-c)
-            (if (save-excursion
-                  (goto-char (overlay-start ov))
-                  (looking-at +polymode--heredoc-opener-re))
+            (if (or (not head-valid-p)
+                    (funcall head-valid-p (overlay-start ov)))
                 (progn
                   (+polymode--rebuild-head-connector ov)
                   (cl-incf head-count))
               (setq stale t)
               (delete-overlay ov))))
         (when (or stale
-                  (/= head-count (+polymode--count-heredoc-openers)))
+                  (and count-openers
+                       (/= head-count (funcall count-openers))))
           (setq +polymode--spans-decorated nil)
           (+polymode--schedule-redecorate base))))))
 
 (defun +polymode--after-change-refontify (beg end _len)
   "Re-clear stale syntax properties and refontify changed region.
 Undo can restore host syntax-table properties that break inner font-lock.
-Also recomputes shell interpolation overlays for unquoted heredoc bodies."
+Also recomputes interpolation overlays for unquoted bodies via host dispatch."
   (let ((base (or (buffer-base-buffer) (current-buffer))))
     (when (buffer-base-buffer)
       (let ((sbeg (line-beginning-position (- (count-lines beg end))))
@@ -245,14 +226,16 @@ Also recomputes shell interpolation overlays for unquoted heredoc bodies."
                                   '(syntax-table nil syntax-multiline nil)))
         (syntax-ppss-flush-cache sbeg)
         (font-lock-flush sbeg send)))
-    (dolist (ov (with-current-buffer base (overlays-in beg end)))
-      (when (overlay-get ov '+polymode-unquoted)
-        (let ((sbeg (overlay-start ov))
-              (send (overlay-end ov)))
-          (dolist (iov (with-current-buffer base (overlays-in sbeg send)))
-            (when (eq (overlay-get iov 'face) '+polymode-shell-interpolation-face)
-              (delete-overlay iov)))
-          (+polymode--add-shell-interpolation-overlays sbeg send base))))))
+    (let ((interp-fn (plist-get (+code-fences--config) :interpolation-fn)))
+      (when interp-fn
+        (dolist (ov (with-current-buffer base (overlays-in beg end)))
+          (when (overlay-get ov '+polymode-unquoted)
+            (let ((sbeg (overlay-start ov))
+                  (send (overlay-end ov)))
+              (dolist (iov (with-current-buffer base (overlays-in sbeg send)))
+                (when (eq (overlay-get iov 'face) '+polymode-interpolation-face)
+                  (delete-overlay iov)))
+              (funcall interp-fn sbeg send base))))))))
 
 (defun +polymode-update-header-active-state ()
   "Dim/brighten polymode headers based on whether point is in their span.
@@ -305,7 +288,15 @@ Must run in the polymode base buffer after mode init."
   (when (and (bound-and-true-p pm/polymode)
              (let ((base (or (buffer-base-buffer) (current-buffer))))
                (not (buffer-local-value '+polymode--spans-decorated base))))
+    ;; Cache host config in base buffer for use by after-change hooks
     (let ((base (or (buffer-base-buffer) (current-buffer))))
+      (when (bound-and-true-p pm/polymode)
+        (let* ((hostmode-obj (eieio-oref pm/polymode '-hostmode))
+               (host-mode (and hostmode-obj (eieio-oref hostmode-obj 'mode)))
+               (config (and host-mode (alist-get host-mode +code-fences-host-config))))
+          (when config
+            (with-current-buffer base
+              (setq +code-fences--cached-config config)))))
       (with-current-buffer base
         (setq +polymode--spans-decorated t)
         (remove-overlays (point-min) (point-max) '+polymode-fence t)))
@@ -316,9 +307,11 @@ Must run in the polymode base buffer after mode init."
            (pcase (nth 0 span)
              ('head
               (setq last-head t)
-              (setq last-head-unquoted
-                    (with-current-buffer (or (buffer-base-buffer) (current-buffer))
-                      (+polymode--heredoc-unquoted-p (nth 1 span) (nth 2 span))))
+              (let ((unquoted-fn (plist-get (+code-fences--config) :unquoted-p)))
+                (setq last-head-unquoted
+                      (when unquoted-fn
+                        (with-current-buffer (or (buffer-base-buffer) (current-buffer))
+                          (funcall unquoted-fn (nth 1 span) (nth 2 span))))))
               (push (list 'head (nth 1 span) (nth 2 span) nil) fence-spans))
              ('body
               (let ((mode (eieio-oref (nth 3 span) :mode)))
@@ -348,8 +341,9 @@ Must run in the polymode base buffer after mode init."
                 (font-lock-unfontify-region sbeg send)
                 (font-lock-fontify-region sbeg send))))
           (when unquoted
-            (+polymode--add-shell-interpolation-overlays
-             sbeg send (or (buffer-base-buffer) (current-buffer))))))
+            (let ((interp-fn (plist-get (+code-fences--config) :interpolation-fn)))
+              (when interp-fn
+                (funcall interp-fn sbeg send (or (buffer-base-buffer) (current-buffer))))))))
       ;; Build mappings: head-start → tail-end, tail-start → head-start
       (let ((span-ends (make-hash-table :test 'eql))
             (span-starts (make-hash-table :test 'eql))
@@ -450,5 +444,7 @@ Must run in the polymode base buffer after mode init."
         (+polymode-update-header-active-state)))))
 
 (add-hook '+theme-changed-hook #'+polymode--theme-changed-h)
+
+(provide '+code-fences)
 
 ;;; +code-fences.el ends here

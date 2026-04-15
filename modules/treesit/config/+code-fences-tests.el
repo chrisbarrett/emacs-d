@@ -30,6 +30,10 @@
 (let ((shscript-init (expand-file-name "../../lang-shscript/init.el" +code-fences-test-dir)))
   (load shscript-init nil t))
 
+;; Load lang-nix init for Nix interpolation functions
+(let ((nix-init (expand-file-name "../../lang-nix/init.el" +code-fences-test-dir)))
+  (load nix-init nil t))
+
 
 ;;; Test helpers
 
@@ -83,7 +87,7 @@ If VAL is non-nil, only return overlays where PROP equals VAL."
                  (buffer-substring-no-properties (overlay-start ov) (overlay-end ov)))
                (seq-sort-by #'overlay-start #'<
                             (+code-fences-test--overlays-with-prop
-                             base 'face '+polymode-shell-interpolation-face))))))
+                             base 'face '+polymode-interpolation-face))))))
 
 (defun +code-fences-test--fence-overlays (buf)
   "Return all fence overlays in BUF sorted by position."
@@ -118,7 +122,7 @@ If VAL is non-nil, only return overlays where PROP equals VAL."
   "Insert INPUT in temp buffer, run interpolation, return overlay texts."
   (with-temp-buffer
     (insert input)
-    (+polymode--add-shell-interpolation-overlays (point-min) (point-max) (current-buffer))
+    (+bash--add-interpolation-overlays (point-min) (point-max) (current-buffer))
     (seq-map (lambda (ov)
                (buffer-substring-no-properties (overlay-start ov) (overlay-end ov)))
              (seq-sort-by #'overlay-start #'<
@@ -206,8 +210,8 @@ FACE may be a symbol or a composite list from polymode."
     (with-temp-buffer
       (insert (car case))
       (if (cdr case)
-          (should (+polymode--heredoc-unquoted-p 1 (point-max)))
-        (should-not (+polymode--heredoc-unquoted-p 1 (point-max)))))))
+          (should (+bash--heredoc-unquoted-p 1 (point-max)))
+        (should-not (+bash--heredoc-unquoted-p 1 (point-max)))))))
 
 
 ;;; Shell interpolation pattern matching (unit tests)
@@ -1081,6 +1085,92 @@ lost.  Now: opener count vs head count mismatch triggers redecorate."
         ;; Opener count mismatch should clear spans-decorated.
         (+polymode-update-head-connectors (+ op-pos 2) (+ op-pos 2) 1)
         (should-not +polymode--spans-decorated)))))
+
+;;; Host registration API
+
+(ert-deftest +code-fences/config-resolves-host-mode ()
+  "After decoration, +code-fences--config returns the bash host config."
+  (with-fixture "heredoc-elisp-quoted.sh" base
+    (with-current-buffer base
+      (should +code-fences--cached-config)
+      (should (plist-get (+code-fences--config) :head-valid-p)))))
+
+(ert-deftest +code-fences/register-adds-to-host-config ()
+  "Registering a host mode adds an entry to `+code-fences-host-config'."
+  (let ((+code-fences-host-config nil))
+    (+code-fences-register 'test-mode :unquoted-p #'always)
+    (should (alist-get 'test-mode +code-fences-host-config))
+    (should (eq (plist-get (alist-get 'test-mode +code-fences-host-config)
+                           :unquoted-p)
+                #'always))))
+
+(ert-deftest +code-fences/unknown-host-no-interpolation ()
+  "Unknown host mode gets generic rendering but no interpolation overlays."
+  (let ((+code-fences-host-config nil))
+    (with-temp-buffer
+      (insert "hello $FOO world")
+      ;; With no host registered, dispatch should skip interpolation
+      (let ((config (alist-get 'nonexistent-mode +code-fences-host-config)))
+        (should-not config)
+        (should-not (plist-get config :interpolation-fn))))))
+
+;;; Nix interpolation
+
+(defun +code-fences-test--nix-interp-overlay-texts (input)
+  "Insert INPUT in temp buffer, run Nix interpolation, return overlay texts."
+  (with-temp-buffer
+    (insert input)
+    (+nix--add-interpolation-overlays (point-min) (point-max) (current-buffer))
+    (seq-map (lambda (ov)
+               (buffer-substring-no-properties (overlay-start ov) (overlay-end ov)))
+             (seq-sort-by #'overlay-start #'<
+                          (overlays-in (point-min) (point-max))))))
+
+(ert-deftest +code-fences/nix-simple-interpolation ()
+  "Nix `${...}' creates interpolation overlay."
+  (should (equal (+code-fences-test--nix-interp-overlay-texts
+                  "hello ${pkgs.hello} world")
+                 '("${pkgs.hello}"))))
+
+(ert-deftest +code-fences/nix-nested-braces ()
+  "Nix `${...}' with nested braces spans the full expression."
+  (should (equal (+code-fences-test--nix-interp-overlay-texts
+                  "hello ${if foo then \"bar\" else \"baz\"} world")
+                 '("${if foo then \"bar\" else \"baz\"}"))))
+
+(ert-deftest +code-fences/nix-escaped-interpolation ()
+  "Nix `''${...}' (2 quotes, even) is escaped — no overlay."
+  (should (null (+code-fences-test--nix-interp-overlay-texts
+                 "hello ''${notInterpolated} world"))))
+
+(ert-deftest +code-fences/nix-escaped-quote-then-real ()
+  "Nix `'''${...}' (3 quotes, odd) is real interpolation."
+  (should (equal (+code-fences-test--nix-interp-overlay-texts
+                  "hello '''${realInterp} world")
+                 '("${realInterp}"))))
+
+(ert-deftest +code-fences/nix-double-escaped-then-escaped ()
+  "Nix `''''${...}' (4 quotes, even) is escaped — no overlay."
+  (should (null (+code-fences-test--nix-interp-overlay-texts
+                 "hello ''''${escaped} world"))))
+
+(ert-deftest +code-fences/nix-no-preceding-quotes ()
+  "Nix `${...}' with no preceding quotes is real interpolation."
+  (should (equal (+code-fences-test--nix-interp-overlay-texts
+                  "${normalInterp}")
+                 '("${normalInterp}"))))
+
+(ert-deftest +code-fences/nix-multiple-interpolations ()
+  "Multiple Nix interpolations in one string."
+  (should (equal (+code-fences-test--nix-interp-overlay-texts
+                  "${a} text ${b}")
+                 '("${a}" "${b}"))))
+
+(ert-deftest +code-fences/nix-escape-detection-parity ()
+  "Single quote parity: 1 quote before $ is not an escape."
+  (should (equal (+code-fences-test--nix-interp-overlay-texts
+                  "x'${interp}y")
+                 '("${interp}"))))
 
 (provide '+code-fences-tests)
 
