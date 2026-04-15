@@ -37,15 +37,18 @@ Host mode resolved at runtime: `(oref (oref pm/polymode -hostmode) :mode)`.
 - Buffer-local variables: simpler but scattered — no single place to see all hosts
 - EIEIO mixin on hostmode objects: couples to polymode internals, harder to debug
 
-### 2. Three callback keys
+### 2. Four callback keys
 
-| Key                 | Signature                        | Purpose                          |
-|:--------------------|:---------------------------------|:---------------------------------|
-| `:head-valid-p`     | `(fn BEG) → bool`               | Stale overlay detection          |
-| `:unquoted-p`       | `(fn HEAD-BEG HEAD-END) → bool` | Body has interpolation?          |
-| `:interpolation-fn` | `(fn BEG END BASE-BUF)`         | Create interpolation overlays    |
+| Key                 | Signature                        | Purpose                                      |
+|:--------------------|:---------------------------------|:---------------------------------------------|
+| `:head-valid-p`     | `(fn BEG) → bool`               | Stale overlay detection                      |
+| `:count-openers`    | `(fn) → integer`                 | Count openers in buffer for divergence check |
+| `:unquoted-p`       | `(fn HEAD-BEG HEAD-END) → bool` | Body has interpolation?                      |
+| `:interpolation-fn` | `(fn BEG END BASE-BUF)`         | Create interpolation overlays                |
 
-All optional. Missing `:head-valid-p` → no stale detection (overlays persist until full redecorate). Missing `:unquoted-p` → no interpolation. Missing `:interpolation-fn` → no interpolation overlays.
+All optional. Missing `:head-valid-p` → no stale detection (overlays persist until full redecorate). Missing `:count-openers` → no count-based redecoration trigger. Missing `:unquoted-p` → no interpolation. Missing `:interpolation-fn` → no interpolation overlays.
+
+`:count-openers` complements `:head-valid-p` for "fixed-after-break" scenarios: when a broken opener is repaired, `:head-valid-p` alone cannot detect that a new valid opener exists (it only validates existing overlays). `:count-openers` compares the buffer's opener count against the head overlay count and triggers redecoration when they diverge.
 
 ### 3. Nix escape detection via single-quote parity
 

@@ -5,7 +5,7 @@
 ## What Changes
 
 - Extract shell-specific functions from `+code-fences.el` into `lang-shscript/`
-- Add a registration API (`+code-fences-register`) with an alist (`+code-fences-host-config`) keyed by host major-mode, carrying `:head-valid-p`, `:unquoted-p`, and `:interpolation-fn` callbacks
+- Add a registration API (`+code-fences-register`) with an alist (`+code-fences-host-config`) keyed by host major-mode, carrying `:head-valid-p`, `:count-openers`, `:unquoted-p`, and `:interpolation-fn` callbacks
 - Replace all inline shell-specific logic in `+code-fences.el` with dispatch through the host config alist
 - Add Nix interpolation highlighting (`${...}`) with `''$` escape handling (even/odd single-quote parity) in `lang-nix/`
 - Rename `+polymode-shell-interpolation-face` to `+polymode-interpolation-face`  **BREAKING**

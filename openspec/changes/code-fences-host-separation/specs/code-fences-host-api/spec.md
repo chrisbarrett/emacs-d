@@ -33,6 +33,17 @@ The system SHALL resolve the current host mode from `pm/polymode` via `(oref (or
 - **WHEN** host has no `:head-valid-p` callback
 - **THEN** head overlays are never removed by stale detection
 
+### Requirement: Opener count divergence detection
+`+polymode-update-head-connectors` SHALL call the registered `:count-openers` callback (if present) to count openers in the buffer. When the count differs from the number of head overlays, the system SHALL clear the decorated state and schedule redecoration. This catches "fixed-after-break" scenarios where a broken opener is repaired — `:head-valid-p` alone cannot detect new valid openers since it only validates existing overlays.
+
+#### Scenario: Repaired opener triggers redecoration
+- **WHEN** user fixes a broken heredoc opener so opener count now exceeds head overlay count
+- **THEN** `:count-openers` returns a count diverging from head overlay count, redecoration is scheduled
+
+#### Scenario: No count-openers registered
+- **WHEN** host has no `:count-openers` callback
+- **THEN** count-based redecoration is not performed; only `:head-valid-p` stale detection applies
+
 ### Requirement: Unquoted detection dispatch
 `+polymode-refontify-inner-spans` SHALL call the registered `:unquoted-p` callback for each head span to determine if the body supports interpolation.
 
