@@ -12,11 +12,15 @@
         "aarch64-darwin"
       ];
 
-      perSystem = { pkgs, ... }: {
+      perSystem = { pkgs, ... }:
+        let
+          treesit-grammars = pkgs.emacsPackages.treesit-grammars.with-all-grammars;
+        in {
         devShells.default = pkgs.mkShell {
           buildInputs = with pkgs; [ prek ];
 
           shellHook = ''
+            export TREESIT_EXTRA_LOAD_PATH="${treesit-grammars}/lib"
             prek install
           '';
         };

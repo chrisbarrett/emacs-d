@@ -29,6 +29,9 @@ This prevents tests from creating files in `user-emacs-directory'."
 (defun +test-setup-load-paths ()
   "Set up load paths for test execution."
   (setq user-emacs-directory (file-name-as-directory +test-setup-root-dir))
+  ;; Tree-sitter grammars provided by Nix devShell
+  (when-let* ((path (getenv "TREESIT_EXTRA_LOAD_PATH")))
+    (add-to-list 'treesit-extra-load-path path))
   (let ((lisp-dir (expand-file-name "lisp" +test-setup-root-dir))
         (lib-dir (expand-file-name "lib" +test-setup-root-dir))
         (modules-dir (expand-file-name "modules" +test-setup-root-dir))
