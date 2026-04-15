@@ -109,6 +109,20 @@
     (pulsar-pulse-line)))
 
 
+;;; Polymode — suppress pulse when switching between indirect buffers
+;;; sharing the same base (polymode span transitions).
+
+(define-advice pulsar--pulse-on-window-change (:before-until (window) polymode-guard)
+  "Skip pulse when polymode switches between indirect buffers of same base."
+  (let* ((buf (window-buffer window))
+         (prev (window-parameter window '+pulsar-prev-buffer))
+         (base-buf (or (buffer-base-buffer buf) buf))
+         (base-prev (and prev (buffer-live-p prev)
+                         (or (buffer-base-buffer prev) prev))))
+    (set-window-parameter window '+pulsar-prev-buffer buf)
+    (and base-prev (eq base-buf base-prev))))
+
+
 ;;; TTY pulse support
 
 (defun +pulsar--update-bg-h ()

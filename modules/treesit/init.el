@@ -22,6 +22,9 @@
           (region-active-p) #'expreg-contract)
     "+" #'+expreg-expand-dwim))
 
-
+(use-package polymode
+  :defer t
+  :config
+  (+load "config/+code-fences.el"))
 
 ;;; init.el ends here
