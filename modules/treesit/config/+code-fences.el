@@ -288,6 +288,10 @@ Must run in the polymode base buffer after mode init."
   (when (and (bound-and-true-p pm/polymode)
              (let ((base (or (buffer-base-buffer) (current-buffer))))
                (not (buffer-local-value '+polymode--spans-decorated base))))
+    ;; save-excursion: pm-map-over-spans moves point; preserve it so
+    ;; +polymode-update-header-active-state (called below) sees the
+    ;; original point for correct dim/active state.
+    (save-excursion
     ;; Cache host config in base buffer for use by after-change hooks
     (let ((base (or (buffer-base-buffer) (current-buffer))))
       (when (bound-and-true-p pm/polymode)
@@ -418,7 +422,7 @@ Must run in the polymode base buffer after mode init."
                   (overlay-put ov '+polymode-span-end (copy-marker (cdr range))))
                 (when unquoted
                   (overlay-put ov '+polymode-unquoted t)))))
-          ))))
+          )))))
   ;; Apply dim state to newly created overlays
   (+polymode-update-header-active-state)
   ;; Register hooks whenever fence overlays exist.  Runs unconditionally

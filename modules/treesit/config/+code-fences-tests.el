@@ -47,7 +47,7 @@ Caller must kill the buffer when done."
   (let ((buf (find-file-noselect
               (expand-file-name name +code-fences-test-fixture-dir))))
     (with-current-buffer buf
-      (poly-bash-ts-mode)
+      (poly-bash-ts-mode 1)
       (condition-case nil
           (poly-lock-fontify-now (point-min) (point-max))
         (error nil))
@@ -329,7 +329,6 @@ FACE may be a symbol or a composite list from polymode."
     (should (= (length (+code-fences-test--overlays-with-prop base '+polymode-unquoted t)) 1))))
 
 (ert-deftest +code-fences/python-inner-buffer-mode ()
-  :expected-result (if (treesit-language-available-p 'python) :passed :failed)
   "Python heredoc body span runs in python-ts-mode."
   (with-fixture "heredoc-python-quoted.sh" base
     (should (seq-some
