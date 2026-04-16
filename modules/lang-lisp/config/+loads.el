@@ -15,7 +15,7 @@
 (defun +elisp-maybe-regenerate-autoloads-h ()
   "Regenerate module autoloads if current file is a module lib file."
   (when-let* ((file (buffer-file-name))
-              (modules-dir (file-name-concat user-emacs-directory "modules/"))
+              (modules-dir +modules-directory)
               ((string-prefix-p modules-dir file))
               ((or (string-suffix-p "/lib.el" file)
                    (string-match-p "/lib/[^/]+\\.el\\'" file))))

@@ -104,7 +104,7 @@ Only show first TODO at each level."
   "Process for updating agenda files.")
 
 (defconst +agenda-files-update-script
-  (file-name-concat user-emacs-directory "scripts/update-agenda-files.sh")
+  (file-name-concat +config-root "scripts/update-agenda-files.sh")
   "Path to script that updates org-agenda-files.")
 
 ;;;###autoload

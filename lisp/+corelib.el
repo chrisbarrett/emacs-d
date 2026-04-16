@@ -11,8 +11,7 @@
 (require 'cl-lib)
 (require 'subr-x)
 
-(defvar +config-dir nil)
-(defvar +lisp-dir nil)
+(require '+core-paths)
 
 (defvar +default-minibuffer-maps
   '(minibuffer-local-map
@@ -440,7 +439,7 @@ Every time PRED returns non-nil, the list is split into a new chunk."
 (defun +read-eld (file)
   "Read Lisp data FILE into memory."
   (with-temp-buffer
-    (insert-file-contents-literally (file-name-concat user-emacs-directory file))
+    (insert-file-contents-literally (file-name-concat +config-root file))
     (read (current-buffer))))
 
 (defun +plist-delete (key plist)

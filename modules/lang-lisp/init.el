@@ -17,8 +17,7 @@
           (list (rx (group (+? any)) ".el" eos)
                 (rx (backref 1) "-tests.el")))
 
-(+dirlocals-set (list (file-name-concat user-emacs-directory "lisp")
-                      (file-name-concat user-emacs-directory "modules"))
+(+dirlocals-set (list +lisp-dir +modules-directory)
   `((emacs-lisp-mode . ((mode . emacs-config)))))
 
 (+define-file-template (rx ".el" eos) "emacs-lisp.eld")

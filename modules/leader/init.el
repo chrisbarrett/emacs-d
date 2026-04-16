@@ -60,7 +60,7 @@
               (let* ((modes (nreverse (parent-mode-list major-mode)))
                      (mode (completing-read "Snippets table for mode: " modes nil t))
                      (filename (format "%s.eld" (string-remove-suffix "-mode" mode))))
-                (find-file (file-name-concat user-emacs-directory "templates" filename))))
+                (find-file (file-name-concat +config-root "templates" filename))))
             :wk "edit templates...")
 
 
@@ -261,13 +261,13 @@
 
   "e" (list (defun +goto-emacs-init-file ()
               (interactive)
-              (find-file (file-name-concat user-emacs-directory "init.el")))
+              (find-file (file-name-concat +config-root "init.el")))
             :wk "init file")
 
   "s" (list (defun +goto-emacs-site-file ()
               (interactive)
               (project-find-file-in nil (list +site-files-directory)
-                                    (project-current nil user-emacs-directory)))
+                                    (project-current nil +config-root)))
             :wk "site file...")
 
   "n" (list (defun +goto-nix-file ()

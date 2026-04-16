@@ -14,10 +14,10 @@
 (defvar org-roam-directory "~/org/roam/")
 (defvar org-default-notes-file "~/org/notes.org")
 
-(defvar +site-files-directory (file-name-concat user-emacs-directory "site/"))
+(defvar +site-files-directory (file-name-concat +config-root "site/"))
 
-(add-to-list 'trusted-content (file-name-concat user-emacs-directory "early-init.el"))
-(add-to-list 'trusted-content (file-name-concat user-emacs-directory "init.el"))
+(add-to-list 'trusted-content (file-name-concat +config-root "early-init.el"))
+(add-to-list 'trusted-content (file-name-concat +config-root "init.el"))
 (add-to-list 'trusted-content +init-dir)
 (add-to-list 'trusted-content +lisp-dir)
 (add-to-list 'trusted-content +config-dir)

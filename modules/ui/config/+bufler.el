@@ -32,7 +32,7 @@
                    (mode-match "*Info*" (rx bos "info-"))))
 
         (group
-         (dir user-emacs-directory))
+         (dir +config-root))
 
         (group
          (dir org-directory)

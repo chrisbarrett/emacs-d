@@ -40,7 +40,7 @@
                (and (string-match-p (rx "/.") root)
                     (not (string-prefix-p "~/.config/" root))))))))
 
-  (project-remember-project (project-try-vc user-emacs-directory))
+  (project-remember-project (project-try-vc +config-root))
   (project-remember-project (project-try-vc org-directory))
 
   (define-advice project-remember-projects-under (:before (dir &optional recursive) save-for-rescan)

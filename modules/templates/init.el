@@ -9,7 +9,7 @@
 
 (require '+autoloads)
 
-(defvar +templates-dir (file-name-concat user-emacs-directory "templates/"))
+(defvar +templates-dir (file-name-concat +config-root "templates/"))
 
 ;; Tempel: text snippets with field navigation.
 (with-eval-after-load 'tempel
@@ -37,7 +37,7 @@
 
 ;; Autoinsert: file templates for new files.
 (with-eval-after-load 'autoinsert
-  (setq auto-insert-directory (file-name-concat user-emacs-directory "file-templates/"))
+  (setq auto-insert-directory (file-name-concat +config-root "file-templates/"))
   (setq auto-insert-alist nil)
   (setq auto-insert-query nil)
   (auto-insert-mode +1))

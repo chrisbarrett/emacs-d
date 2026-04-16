@@ -19,7 +19,7 @@
                    '(:tree-type (month day))
                    kvps))
                 (template-file (name)
-                  `(file ,(file-name-concat user-emacs-directory "capture-templates" name))))
+                  `(file ,(file-name-concat +config-root "capture-templates" name))))
 
         (list (notes-datetree "t" "Todo" "* TODO %?")
               (notes-datetree "n" "Note" "* %T %?")

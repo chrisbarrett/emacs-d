@@ -17,10 +17,6 @@
 (require 'cl-lib)
 (require '+core-paths)
 
-(defvar +modules-directory
-  (expand-file-name "modules" user-emacs-directory)
-  "Directory containing module directories.")
-
 (defconst +modules-autoloads-file (file-name-concat +lisp-dir "+autoloads.el"))
 
 
