@@ -32,100 +32,39 @@
 ;; File template for flake.nix
 (+define-file-template (rx "flake.nix" eos) "flake.eld")
 
+;;; Tree-sitter span detection for embedded languages in Nix multiline strings
+
+(+load "lib/+nix-ts-spans.el")
+
 ;;; Polymode — syntax highlighting for embedded languages in multiline strings
-;;
-;; Nix multiline strings use '' delimiters. Nixpkgs convention marks the
-;; embedded language with a comment before the string:
-;;   buildPhase = /* bash */ ''
-;;   buildPhase =
-;;     # bash
-;;     ''
 
 (use-package polymode
   :defer t
   :init
-  (defun +nix-poly--head-matcher (lang)
-    "Return head-matcher regex for LANG annotation before a Nix multiline string.
-Matches both `/* lang */' block comments and `# lang' line comments,
-with `''' potentially on the same or next line."
-    (rx-to-string
-     `(seq (or (seq "/*" (+ space) ,lang (+ space) "*/")
-               (seq "# " ,lang))
-           (* space) (? "\n" (* space))
-           "''")))
-
   (define-hostmode poly-nix-ts-hostmode
     :mode 'nix-ts-mode)
 
-  (define-innermode poly-nix-bash-innermode
-    :mode 'bash-ts-mode
-    :head-matcher (+nix-poly--head-matcher "bash")
-    :tail-matcher (rx bol (* space) "''")
-    :head-mode 'host
-    :tail-mode 'host)
-
-  (define-innermode poly-nix-python-innermode
-    :mode 'python-ts-mode
-    :head-matcher (+nix-poly--head-matcher "python")
-    :tail-matcher (rx bol (* space) "''")
-    :head-mode 'host
-    :tail-mode 'host)
-
-  (define-innermode poly-nix-elisp-innermode
-    :mode 'emacs-lisp-mode
-    :head-matcher (+nix-poly--head-matcher "elisp")
-    :tail-matcher (rx bol (* space) "''")
-    :head-mode 'host
-    :tail-mode 'host)
-
-  (define-innermode poly-nix-lua-innermode
-    :mode 'lua-ts-mode
-    :head-matcher (+nix-poly--head-matcher "lua")
-    :tail-matcher (rx bol (* space) "''")
-    :head-mode 'host
-    :tail-mode 'host)
-
-  (define-innermode poly-nix-json-innermode
-    :mode 'json-ts-mode
-    :head-matcher (+nix-poly--head-matcher "json")
-    :tail-matcher (rx bol (* space) "''")
-    :head-mode 'host
-    :tail-mode 'host)
-
-  (define-innermode poly-nix-sql-innermode
-    :mode 'sql-mode
-    :head-matcher (+nix-poly--head-matcher "sql")
-    :tail-matcher (rx bol (* space) "''")
-    :head-mode 'host
-    :tail-mode 'host)
-
-  (define-innermode poly-nix-rust-innermode
-    :mode 'rust-ts-mode
-    :head-matcher (+nix-poly--head-matcher "rust")
-    :tail-matcher (rx bol (* space) "''")
-    :head-mode 'host
-    :tail-mode 'host)
-
-  (define-innermode poly-nix-c-innermode
-    :mode 'c-ts-mode
-    :head-matcher (+nix-poly--head-matcher "c")
-    :tail-matcher (rx bol (* space) "''")
+  (define-auto-innermode poly-nix-ts-auto-innermode
+    :head-matcher #'+nix-ts--head-matcher
+    :tail-matcher #'+nix-ts--tail-matcher
+    :mode-matcher #'+nix-ts--mode-matcher
     :head-mode 'host
     :tail-mode 'host)
 
   (define-polymode poly-nix-ts-mode
     :hostmode 'poly-nix-ts-hostmode
-    :innermodes '(poly-nix-bash-innermode
-                  poly-nix-python-innermode
-                  poly-nix-elisp-innermode
-                  poly-nix-lua-innermode
-                  poly-nix-json-innermode
-                  poly-nix-sql-innermode
-                  poly-nix-rust-innermode
-                  poly-nix-c-innermode))
+    :innermodes '(poly-nix-ts-auto-innermode))
+
+  (defun +nix-ts--init-cache ()
+    "Build span cache and register for parser notifications."
+    (+nix-ts--rebuild-cache)
+    (dolist (parser (treesit-parser-list))
+      (when (eq (treesit-parser-language parser) 'nix)
+        (add-to-list 'treesit-parser-notifiers #'+nix-ts--rebuild-cache))))
 
   (add-to-list 'major-mode-remap-alist '(nix-ts-mode . poly-nix-ts-mode))
 
+  (add-hook 'poly-nix-ts-mode-hook #'+nix-ts--init-cache)
   (add-hook 'poly-nix-ts-mode-hook #'+polymode-refontify-inner-spans))
 
 
@@ -164,17 +103,11 @@ Overlays are created in BASE buffer."
                   (overlay-put ov 'face '+polymode-interpolation-face)
                   (overlay-put ov '+polymode-fence t))))))))))
 
-(defun +nix--multiline-head-valid-p (beg)
-  "Return non-nil if overlay at BEG still matches a Nix multiline annotation."
-  (save-excursion
-    (goto-char beg)
-    (looking-at (rx (or (seq "/*" (+ space) (+ (any "A-Za-z_-")) (+ space) "*/")
-                        (seq "#" (+ space) (+ (any "A-Za-z_-"))))))))
-
 (with-eval-after-load '+code-fences
   (+code-fences-register 'nix-ts-mode
                          :head-valid-p #'+nix--multiline-head-valid-p
                          :unquoted-p (lambda (_beg _end) t)
-                         :interpolation-fn #'+nix--add-interpolation-overlays))
+                         :interpolation-fn #'+nix--add-interpolation-overlays
+                         :count-openers #'+nix-ts--count-openers))
 
 ;;; init.el ends here

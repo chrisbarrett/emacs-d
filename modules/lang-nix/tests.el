@@ -7,14 +7,18 @@
 ;;; Code:
 
 (require 'ert)
+(require 'treesit)
 
 ;; Load module init from this directory
 ;; May fail in batch mode due to missing dependencies
 (let* ((module-dir (file-name-directory (or load-file-name buffer-file-name)))
-       (init-file (expand-file-name "init.el" module-dir)))
+       (init-file (expand-file-name "init.el" module-dir))
+       (lib-dir (expand-file-name "lib" module-dir)))
+  (add-to-list 'load-path lib-dir)
   (condition-case nil
       (load init-file nil 'nomessage)
-    (error nil)))
+    (error nil))
+  (require '+nix-ts-spans nil t))
 
 ;;; P1: Opening *.nix file activates nix-ts-mode
 
@@ -83,6 +87,225 @@
       (with-temp-buffer
         (insert-file-contents template-file)
         (should (search-forward "directory-name" nil t))))))
+
+
+;;; Tree-sitter polymode tests
+
+(defmacro lang-nix/with-nix-buffer (content &rest body)
+  "Insert CONTENT into a temp buffer with nix tree-sitter parser, run BODY."
+  (declare (indent 1))
+  `(progn
+     (skip-unless (treesit-language-available-p 'nix))
+     (with-temp-buffer
+       (insert ,content)
+       (treesit-parser-create 'nix)
+       ,@body)))
+
+;;; Phase 1: Core infrastructure
+
+(ert-deftest lang-nix/bash-attrs-defined ()
+  "+nix-bash-attrs should be a list containing common nixpkgs phase attrs."
+  (should (boundp '+nix-bash-attrs))
+  (should (member "shellHook" +nix-bash-attrs))
+  (should (member "buildPhase" +nix-bash-attrs))
+  (should (member "installPhase" +nix-bash-attrs))
+  (should (member "configurePhase" +nix-bash-attrs)))
+
+(ert-deftest lang-nix/lang-mode-alist-defined ()
+  "+nix-lang-mode-alist should map annotation strings to major modes."
+  (should (boundp '+nix-lang-mode-alist))
+  (should (eq (cdr (assoc "bash" +nix-lang-mode-alist)) 'bash-ts-mode))
+  (should (eq (cdr (assoc "python" +nix-lang-mode-alist)) 'python-ts-mode))
+  (should (eq (cdr (assoc "elisp" +nix-lang-mode-alist)) 'emacs-lisp-mode)))
+
+(ert-deftest lang-nix/scan-spans-annotation-block-comment ()
+  "Scan should detect block comment annotation /* bash */."
+  (lang-nix/with-nix-buffer
+      "{ buildPhase = /* bash */ ''\n  echo hi\n''; }"
+    (let ((spans (+nix-ts--scan-spans)))
+      (should (= 1 (length spans)))
+      (should (eq 'bash-ts-mode (nth 4 (car spans)))))))
+
+(ert-deftest lang-nix/scan-spans-annotation-line-comment ()
+  "Scan should detect line comment annotation # python."
+  (lang-nix/with-nix-buffer
+      "{\n  configurePhase =\n    # python\n    ''\n    import sys\n  '';\n}"
+    (let ((spans (+nix-ts--scan-spans)))
+      (should (= 1 (length spans)))
+      (should (eq 'python-ts-mode (nth 4 (car spans)))))))
+
+(ert-deftest lang-nix/scan-spans-attr-name-fallback ()
+  "Scan should detect bash mode from known attr name without annotation."
+  (lang-nix/with-nix-buffer
+      "{ shellHook = ''\n  echo hi\n''; }"
+    (let ((spans (+nix-ts--scan-spans)))
+      (should (= 1 (length spans)))
+      (should (eq 'bash-ts-mode (nth 4 (car spans)))))))
+
+(ert-deftest lang-nix/scan-spans-unknown-attr-no-span ()
+  "Unknown attr without annotation should produce no span."
+  (lang-nix/with-nix-buffer
+      "{ description = ''\n  Just text\n''; }"
+    (let ((spans (+nix-ts--scan-spans)))
+      (should (= 0 (length spans))))))
+
+(ert-deftest lang-nix/scan-spans-annotation-overrides-attr ()
+  "Annotation should override attr-name-based detection."
+  (lang-nix/with-nix-buffer
+      "{ shellHook = /* python */ ''\n  import sys\n''; }"
+    (let ((spans (+nix-ts--scan-spans)))
+      (should (= 1 (length spans)))
+      (should (eq 'python-ts-mode (nth 4 (car spans)))))))
+
+(ert-deftest lang-nix/scan-spans-unknown-annotation-no-span ()
+  "Unknown annotation language should produce no span."
+  (lang-nix/with-nix-buffer
+      "{ foo = /* haskell */ ''\n  main = pure ()\n''; }"
+    (let ((spans (+nix-ts--scan-spans)))
+      (should (= 0 (length spans))))))
+
+(ert-deftest lang-nix/scan-spans-multiple ()
+  "Multiple bindings should produce multiple sorted spans."
+  (lang-nix/with-nix-buffer
+      "{\n  shellHook = ''\n    echo a\n  '';\n  buildPhase = /* python */ ''\n    import sys\n  '';\n}"
+    (let ((spans (+nix-ts--scan-spans)))
+      (should (= 2 (length spans)))
+      (should (eq 'bash-ts-mode (nth 4 (car spans))))
+      (should (eq 'python-ts-mode (nth 4 (cadr spans))))
+      (should (< (nth 0 (car spans)) (nth 0 (cadr spans)))))))
+
+(ert-deftest lang-nix/scan-spans-nested-attrpath ()
+  "Multi-part attrpath like packages.x86.installPhase should match."
+  (lang-nix/with-nix-buffer
+      "{ packages.x86.installPhase = ''\n  make install\n''; }"
+    (let ((spans (+nix-ts--scan-spans)))
+      (should (= 1 (length spans)))
+      (should (eq 'bash-ts-mode (nth 4 (car spans)))))))
+
+(ert-deftest lang-nix/scan-spans-head-boundary-annotation ()
+  "Head should start at annotation comment, end after opening ''."
+  (lang-nix/with-nix-buffer
+      "{ foo = /* bash */ ''\n  echo hi\n''; }"
+    (let* ((spans (+nix-ts--scan-spans))
+           (span (car spans)))
+      (should span)
+      (should (string-match-p "/\\*" (buffer-substring (nth 0 span) (+ (nth 0 span) 2))))
+      (should (string= "''" (buffer-substring (- (nth 1 span) 2) (nth 1 span)))))))
+
+(ert-deftest lang-nix/scan-spans-head-boundary-attr ()
+  "Head should start at attr name when no annotation."
+  (lang-nix/with-nix-buffer
+      "{ shellHook = ''\n  echo hi\n''; }"
+    (let* ((spans (+nix-ts--scan-spans))
+           (span (car spans)))
+      (should span)
+      (should (string= "shellHook" (buffer-substring (nth 0 span) (+ (nth 0 span) 9)))))))
+
+(ert-deftest lang-nix/scan-spans-tail-boundary ()
+  "Tail should be the closing ''."
+  (lang-nix/with-nix-buffer
+      "{ shellHook = ''\n  echo hi\n''; }"
+    (let* ((spans (+nix-ts--scan-spans))
+           (span (car spans)))
+      (should span)
+      (should (string= "''" (buffer-substring (nth 2 span) (nth 3 span)))))))
+
+;;; Phase 2: Polymode matchers
+
+(ert-deftest lang-nix/head-matcher-forward ()
+  "Head-matcher with AHEAD>0 should find next span's head."
+  (lang-nix/with-nix-buffer
+      "{ shellHook = ''\n  echo hi\n''; }"
+    (setq +nix-ts--cached-spans (+nix-ts--scan-spans))
+    (goto-char (point-min))
+    (let ((result (+nix-ts--head-matcher 1)))
+      (should result)
+      (should (consp result))
+      (should (= (car result) (nth 0 (car +nix-ts--cached-spans))))
+      (should (= (cdr result) (nth 1 (car +nix-ts--cached-spans)))))))
+
+(ert-deftest lang-nix/head-matcher-backward ()
+  "Head-matcher with AHEAD<0 should find previous span's head."
+  (lang-nix/with-nix-buffer
+      "{ shellHook = ''\n  echo hi\n''; }"
+    (setq +nix-ts--cached-spans (+nix-ts--scan-spans))
+    (goto-char (point-max))
+    (let ((result (+nix-ts--head-matcher -1)))
+      (should result)
+      (should (= (car result) (nth 0 (car +nix-ts--cached-spans)))))))
+
+(ert-deftest lang-nix/head-matcher-forward-no-match ()
+  "Head-matcher forward past last span returns nil."
+  (lang-nix/with-nix-buffer
+      "{ shellHook = ''\n  echo hi\n''; }"
+    (setq +nix-ts--cached-spans (+nix-ts--scan-spans))
+    (goto-char (nth 1 (car +nix-ts--cached-spans)))
+    (should-not (+nix-ts--head-matcher 1))))
+
+(ert-deftest lang-nix/tail-matcher-forward ()
+  "Tail-matcher with AHEAD>0 should find next span's tail."
+  (lang-nix/with-nix-buffer
+      "{ shellHook = ''\n  echo hi\n''; }"
+    (setq +nix-ts--cached-spans (+nix-ts--scan-spans))
+    (goto-char (point-min))
+    (let ((result (+nix-ts--tail-matcher 1)))
+      (should result)
+      (should (= (car result) (nth 2 (car +nix-ts--cached-spans))))
+      (should (= (cdr result) (nth 3 (car +nix-ts--cached-spans)))))))
+
+(ert-deftest lang-nix/tail-matcher-backward ()
+  "Tail-matcher with AHEAD<0 should find previous span's tail."
+  (lang-nix/with-nix-buffer
+      "{ shellHook = ''\n  echo hi\n''; }"
+    (setq +nix-ts--cached-spans (+nix-ts--scan-spans))
+    (goto-char (point-max))
+    (let ((result (+nix-ts--tail-matcher -1)))
+      (should result)
+      (should (= (car result) (nth 2 (car +nix-ts--cached-spans)))))))
+
+(ert-deftest lang-nix/mode-matcher-returns-mode-name ()
+  "Mode-matcher should return mode name string at head position."
+  (lang-nix/with-nix-buffer
+      "{ shellHook = ''\n  echo hi\n''; }"
+    (setq +nix-ts--cached-spans (+nix-ts--scan-spans))
+    (goto-char (nth 0 (car +nix-ts--cached-spans)))
+    (let ((result (+nix-ts--mode-matcher)))
+      (should (stringp result))
+      (should (string= "bash-ts" result)))))
+
+(ert-deftest lang-nix/mode-matcher-annotation ()
+  "Mode-matcher should return correct mode for annotated span."
+  (lang-nix/with-nix-buffer
+      "{ foo = /* python */ ''\n  import sys\n''; }"
+    (setq +nix-ts--cached-spans (+nix-ts--scan-spans))
+    (goto-char (nth 0 (car +nix-ts--cached-spans)))
+    (let ((result (+nix-ts--mode-matcher)))
+      (should (string= "python-ts" result)))))
+
+;;; Phase 3: Code-fences integration
+
+(ert-deftest lang-nix/head-valid-p-tree-sitter ()
+  "Head-valid-p should validate using tree-sitter at annotation position."
+  (lang-nix/with-nix-buffer
+      "{ foo = /* bash */ ''\n  echo hi\n''; }"
+    (setq +nix-ts--cached-spans (+nix-ts--scan-spans))
+    (let ((head-beg (nth 0 (car +nix-ts--cached-spans))))
+      (should (+nix--multiline-head-valid-p head-beg)))))
+
+(ert-deftest lang-nix/head-valid-p-attr-name ()
+  "Head-valid-p should validate at attr-name position for known attrs."
+  (lang-nix/with-nix-buffer
+      "{ shellHook = ''\n  echo hi\n''; }"
+    (setq +nix-ts--cached-spans (+nix-ts--scan-spans))
+    (let ((head-beg (nth 0 (car +nix-ts--cached-spans))))
+      (should (+nix--multiline-head-valid-p head-beg)))))
+
+(ert-deftest lang-nix/count-openers-matches-cache ()
+  "Count-openers should return number of cached spans."
+  (lang-nix/with-nix-buffer
+      "{\n  shellHook = ''\n    echo a\n  '';\n  buildPhase = /* python */ ''\n    import sys\n  '';\n}"
+    (setq +nix-ts--cached-spans (+nix-ts--scan-spans))
+    (should (= 2 (+nix-ts--count-openers)))))
 
 (provide 'lang-nix-tests)
 
