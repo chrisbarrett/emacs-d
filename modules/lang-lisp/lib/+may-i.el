@@ -16,7 +16,7 @@
                     '(elisp-semantic-font-lock-keywords)))))
 
 ;;;###autoload
-(add-to-list 'auto-mode-alist (cons (rx "/may-i/config.lisp" eos)
+(add-to-list 'auto-mode-alist (cons (rx "/may-i/" (+? any) ".lisp" eos)
                                     'may-i-config-mode))
 
 (put 'defcontext 'lisp-indent-function 1)
