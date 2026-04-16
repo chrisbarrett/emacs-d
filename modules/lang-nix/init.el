@@ -60,7 +60,7 @@
     (+nix-ts--rebuild-cache)
     (dolist (parser (treesit-parser-list))
       (when (eq (treesit-parser-language parser) 'nix)
-        (add-to-list 'treesit-parser-notifiers #'+nix-ts--rebuild-cache))))
+        (treesit-parser-add-notifier parser #'+nix-ts--rebuild-cache))))
 
   (add-to-list 'major-mode-remap-alist '(nix-ts-mode . poly-nix-ts-mode))
 
