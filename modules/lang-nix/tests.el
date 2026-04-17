@@ -103,13 +103,13 @@
 
 ;;; Phase 1: Core infrastructure
 
-(ert-deftest lang-nix/bash-attrs-defined ()
-  "+nix-bash-attrs should be a list containing common nixpkgs phase attrs."
-  (should (boundp '+nix-bash-attrs))
-  (should (member "shellHook" +nix-bash-attrs))
-  (should (member "buildPhase" +nix-bash-attrs))
-  (should (member "installPhase" +nix-bash-attrs))
-  (should (member "configurePhase" +nix-bash-attrs)))
+(ert-deftest lang-nix/attrpath-mode-alist-defined ()
+  "+nix-attrpath-mode-alist should match common bash attrs."
+  (should (boundp '+nix-attrpath-mode-alist))
+  (should (eq 'bash-ts-mode (+nix-ts--resolve-attrpath-mode "shellHook")))
+  (should (eq 'bash-ts-mode (+nix-ts--resolve-attrpath-mode "buildPhase")))
+  (should (eq 'bash-ts-mode (+nix-ts--resolve-attrpath-mode "installPhase")))
+  (should (eq 'bash-ts-mode (+nix-ts--resolve-attrpath-mode "configurePhase"))))
 
 (ert-deftest lang-nix/lang-mode-alist-defined ()
   "+nix-lang-mode-alist should map annotation strings to major modes."
@@ -160,7 +160,7 @@
 (ert-deftest lang-nix/scan-spans-unknown-annotation-no-span ()
   "Unknown annotation language should produce no span."
   (lang-nix/with-nix-buffer
-      "{ foo = /* haskell */ ''\n  main = pure ()\n''; }"
+      "{ foo = /* zzz-nonexistent-xyz */ ''\n  main = pure ()\n''; }"
     (let ((spans (+nix-ts--scan-spans)))
       (should (= 0 (length spans))))))
 
@@ -306,6 +306,124 @@
       "{\n  shellHook = ''\n    echo a\n  '';\n  buildPhase = /* python */ ''\n    import sys\n  '';\n}"
     (setq +nix-ts--cached-spans (+nix-ts--scan-spans))
     (should (= 2 (+nix-ts--count-openers)))))
+
+;;; Attrpath reconstruction
+
+(ert-deftest lang-nix/binding-attrpath-flat ()
+  "Flat attrpath returns full dotted path."
+  (lang-nix/with-nix-buffer
+      "{ programs.may-i.extraConfig = ''\n  stuff\n''; }"
+    (let* ((root (treesit-buffer-root-node))
+           (query (treesit-query-compile 'nix '((indented_string_expression) @s)))
+           (str-node (cdr (car (treesit-query-capture root query))))
+           (binding (treesit-node-parent str-node)))
+      (should (string= "programs.may-i.extraConfig"
+                        (+nix-ts--binding-attrpath binding))))))
+
+(ert-deftest lang-nix/binding-attrpath-nested ()
+  "Nested attrset reconstructs full dotted path."
+  (lang-nix/with-nix-buffer
+      "{ programs.may-i = { extraConfig = ''\n  stuff\n''; }; }"
+    (let* ((root (treesit-buffer-root-node))
+           (query (treesit-query-compile 'nix '((indented_string_expression) @s)))
+           (str-node (cdr (car (treesit-query-capture root query))))
+           (binding (treesit-node-parent str-node)))
+      (should (string= "programs.may-i.extraConfig"
+                        (+nix-ts--binding-attrpath binding))))))
+
+(ert-deftest lang-nix/binding-attrpath-let ()
+  "Let-binding attrpath is just the leaf name."
+  (lang-nix/with-nix-buffer
+      "let myScript = ''\n  stuff\n''; in myScript"
+    (let* ((root (treesit-buffer-root-node))
+           (query (treesit-query-compile 'nix '((indented_string_expression) @s)))
+           (str-node (cdr (car (treesit-query-capture root query))))
+           (binding (treesit-node-parent str-node)))
+      (should (string= "myScript"
+                        (+nix-ts--binding-attrpath binding))))))
+
+(ert-deftest lang-nix/binding-attrpath-deeply-nested-quoted ()
+  "Deeply nested path with quoted attrs preserves quotes."
+  (lang-nix/with-nix-buffer
+      "{ services = { nginx = { virtualHosts.\"example.com\" = { locations.\"/\" = { extraConfig = ''\n  stuff\n''; }; }; }; }; }"
+    (let* ((root (treesit-buffer-root-node))
+           (query (treesit-query-compile 'nix '((indented_string_expression) @s)))
+           (str-node (cdr (car (treesit-query-capture root query))))
+           (binding (treesit-node-parent str-node)))
+      (should (string= "services.nginx.virtualHosts.\"example.com\".locations.\"/\".extraConfig"
+                        (+nix-ts--binding-attrpath binding))))))
+
+;;; Comment resolution with fboundp fallback
+
+(ert-deftest lang-nix/resolve-comment-mode-alist-wins ()
+  "Alist match wins over fboundp probe."
+  (should (eq 'bash-ts-mode (+nix-ts--resolve-comment-mode "# bash"))))
+
+(ert-deftest lang-nix/resolve-comment-mode-fboundp-fallback ()
+  "fboundp probe works when alist has no match."
+  (cl-letf (((symbol-function 'test-nix-probe-mode) #'ignore))
+    (should (eq 'test-nix-probe-mode
+                (+nix-ts--resolve-comment-mode "# test-nix-probe")))))
+
+(ert-deftest lang-nix/resolve-comment-mode-neither ()
+  "Returns nil when neither alist nor fboundp matches."
+  (should-not (+nix-ts--resolve-comment-mode "# zzz-nonexistent-xyz")))
+
+;;; Attrpath regexp resolution
+
+(ert-deftest lang-nix/resolve-attrpath-mode-leaf ()
+  "Leaf attr like shellHook matches."
+  (should (eq 'bash-ts-mode (+nix-ts--resolve-attrpath-mode "shellHook"))))
+
+(ert-deftest lang-nix/resolve-attrpath-mode-full-path ()
+  "Full dotted path matches leaf pattern."
+  (should (eq 'bash-ts-mode (+nix-ts--resolve-attrpath-mode "packages.x86.installPhase"))))
+
+(ert-deftest lang-nix/resolve-attrpath-mode-no-match ()
+  "Non-matching attrpath returns nil."
+  (should-not (+nix-ts--resolve-attrpath-mode "description")))
+
+;;; Integration tests
+
+(ert-deftest lang-nix/scan-spans-fboundp-mode ()
+  "Scan resolves mode via fboundp when alist has no match."
+  (lang-nix/with-nix-buffer
+      "{\n  extraConfig =\n    # test-nix-probe\n    ''\n    stuff\n  '';\n}"
+    (cl-letf (((symbol-function 'test-nix-probe-mode) #'ignore))
+      (let ((spans (+nix-ts--scan-spans)))
+        (should (= 1 (length spans)))
+        (should (eq 'test-nix-probe-mode (nth 4 (car spans))))))))
+
+(ert-deftest lang-nix/scan-spans-attrpath-custom-regexp ()
+  "Scan resolves mode via custom attrpath regexp (no annotation)."
+  (lang-nix/with-nix-buffer
+      "{ programs.may-i = { extraConfig = ''\n  stuff\n''; }; }"
+    (let ((+nix-attrpath-mode-alist
+           (cons '("programs\\.may-i\\." . test-nix-probe-mode)
+                 +nix-attrpath-mode-alist)))
+      (cl-letf (((symbol-function 'test-nix-probe-mode) #'ignore))
+        (let ((spans (+nix-ts--scan-spans)))
+          (should (= 1 (length spans)))
+          (should (eq 'test-nix-probe-mode (nth 4 (car spans)))))))))
+
+(ert-deftest lang-nix/scan-spans-comment-overrides-attrpath ()
+  "Comment annotation wins over attrpath regexp match."
+  (lang-nix/with-nix-buffer
+      "{ shellHook = /* python */ ''\n  import sys\n''; }"
+    (let ((spans (+nix-ts--scan-spans)))
+      (should (= 1 (length spans)))
+      (should (eq 'python-ts-mode (nth 4 (car spans)))))))
+
+;;; Span tuple 6th element (attrpath field)
+
+(ert-deftest lang-nix/scan-spans-attrpath-in-tuple ()
+  "Span tuple 6th element contains attrpath string."
+  (lang-nix/with-nix-buffer
+      "{ shellHook = ''\n  echo hi\n''; }"
+    (let ((spans (+nix-ts--scan-spans)))
+      (should (= 1 (length spans)))
+      (should (stringp (nth 5 (car spans))))
+      (should (string= "shellHook" (nth 5 (car spans)))))))
 
 (provide 'lang-nix-tests)
 

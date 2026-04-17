@@ -4,16 +4,19 @@
 
 (require 'treesit)
 
-(defvar +nix-bash-attrs
-  '("shellHook" "buildPhase" "installPhase" "configurePhase"
-    "checkPhase" "fixupPhase" "unpackPhase" "patchPhase"
-    "preBuild" "postBuild" "preInstall" "postInstall"
-    "preConfigure" "postConfigure" "preCheck" "postCheck"
-    "preFixup" "postFixup" "script"
-    "preStart" "postStart" "preStop" "postStop"
-    "ExecStart" "ExecStartPre" "ExecStartPost"
-    "ExecStop" "ExecStopPost" "ExecReload")
-  "Nix attribute names that conventionally contain bash scripts.")
+(defvar +nix-attrpath-mode-alist
+  `((,(rx (or "shellHook"
+              "buildPhase" "installPhase" "configurePhase"
+              "checkPhase" "fixupPhase" "unpackPhase" "patchPhase"
+              "preBuild" "postBuild" "preInstall" "postInstall"
+              "preConfigure" "postConfigure" "preCheck" "postCheck"
+              "preFixup" "postFixup" "script"
+              "preStart" "postStart" "preStop" "postStop"
+              "ExecStart" "ExecStartPre" "ExecStartPost"
+              "ExecStop" "ExecStopPost" "ExecReload")
+          eos)
+     . bash-ts-mode))
+  "Alist of (REGEXP . MODE-SYMBOL) for attrpath-based mode detection.")
 
 (defvar +nix-lang-mode-alist
   '(("bash"   . bash-ts-mode)
@@ -27,7 +30,7 @@
   "Alist mapping annotation language names to major mode symbols.")
 
 (defvar-local +nix-ts--cached-spans nil
-  "Sorted list of (HEAD-BEG HEAD-END TAIL-BEG TAIL-END MODE-SYMBOL).")
+  "Sorted list of (HEAD-BEG HEAD-END TAIL-BEG TAIL-END MODE-SYMBOL ATTRPATH).")
 
 (defun +nix-ts--parse-comment-lang (comment-text)
   "Extract language name from COMMENT-TEXT like \"/* bash */\" or \"# bash\"."
@@ -38,6 +41,41 @@
    ((string-match (rx "#" (+ space) (group (+ (any "A-Za-z_-"))))
                   comment-text)
     (match-string 1 comment-text))))
+
+(defun +nix-ts--binding-attrpath (binding-node)
+  "Build full dotted attrpath for BINDING-NODE by walking ancestors."
+  (let (segments)
+    (while (and binding-node
+                (equal (treesit-node-type binding-node) "binding"))
+      (let ((ap (treesit-node-child-by-field-name binding-node "attrpath")))
+        (when ap
+          (let (names
+                (n (treesit-node-child-count ap t)))
+            (dotimes (i n)
+              (push (treesit-node-text (treesit-node-child ap i t)) names))
+            (push (string-join (nreverse names) ".") segments))))
+      (setq binding-node
+            (let ((p (treesit-node-parent binding-node)))
+              (while (and p (not (equal (treesit-node-type p) "binding")))
+                (setq p (treesit-node-parent p)))
+              p)))
+    (string-join (nreverse segments) ".")))
+
+(defun +nix-ts--resolve-comment-mode (comment-text)
+  "Resolve COMMENT-TEXT to a mode symbol.
+Tries `+nix-lang-mode-alist' first, then fboundp probe."
+  (let ((lang (+nix-ts--parse-comment-lang comment-text)))
+    (when lang
+      (or (cdr (assoc lang +nix-lang-mode-alist))
+          (let ((sym (intern (concat lang "-mode"))))
+            (when (fboundp sym) sym))))))
+
+(defun +nix-ts--resolve-attrpath-mode (attrpath)
+  "Resolve ATTRPATH to a mode symbol via `+nix-attrpath-mode-alist'."
+  (when attrpath
+    (cl-loop for (regexp . mode) in +nix-attrpath-mode-alist
+             when (string-match-p regexp attrpath)
+             return mode)))
 
 (defun +nix-ts--group-captures (captures fields)
   "Group CAPTURES into lists of alists keyed by FIELDS.
@@ -57,7 +95,7 @@ Each group is a complete set of FIELDS captured from one binding."
 
 (defun +nix-ts--scan-spans ()
   "Scan buffer for Nix bindings with indented string expressions.
-Returns sorted list of (HEAD-BEG HEAD-END TAIL-BEG TAIL-END MODE-SYMBOL)."
+Returns sorted list of (HEAD-BEG HEAD-END TAIL-BEG TAIL-END MODE-SYMBOL ATTRPATH)."
   (let* ((root (treesit-buffer-root-node))
          (query-annotated
           (treesit-query-compile
@@ -76,14 +114,15 @@ Returns sorted list of (HEAD-BEG HEAD-END TAIL-BEG TAIL-END MODE-SYMBOL)."
          (plain-matches (treesit-query-capture root query-plain))
          (annotated-strs (make-hash-table :test 'eql))
          spans)
-    ;; Process annotated bindings (take priority)
+    ;; Process annotated bindings (comment resolution takes priority)
     (let ((groups (+nix-ts--group-captures annotated-matches '(attr lang-comment str))))
       (dolist (group groups)
         (let* ((comment-node (cdr (assq 'lang-comment group)))
                (str-node (cdr (assq 'str group)))
                (comment-text (treesit-node-text comment-node))
-               (lang (+nix-ts--parse-comment-lang comment-text))
-               (mode (cdr (assoc lang +nix-lang-mode-alist))))
+               (mode (+nix-ts--resolve-comment-mode comment-text))
+               (binding-node (treesit-node-parent str-node))
+               (attrpath (+nix-ts--binding-attrpath binding-node)))
           (when mode
             (let* ((str-start (treesit-node-start str-node))
                    (str-end (treesit-node-end str-node))
@@ -92,22 +131,24 @@ Returns sorted list of (HEAD-BEG HEAD-END TAIL-BEG TAIL-END MODE-SYMBOL)."
                    (tail-beg (- str-end 2))
                    (tail-end str-end))
               (puthash str-start t annotated-strs)
-              (push (list head-beg head-end tail-beg tail-end mode) spans))))))
-    ;; Process plain bindings (attr-name fallback)
+              (push (list head-beg head-end tail-beg tail-end mode attrpath) spans))))))
+    ;; Process plain bindings (attrpath fallback)
     (let ((groups (+nix-ts--group-captures plain-matches '(attr str))))
       (dolist (group groups)
         (let* ((attr-node (cdr (assq 'attr group)))
                (str-node (cdr (assq 'str group)))
                (str-start (treesit-node-start str-node)))
           (unless (gethash str-start annotated-strs)
-            (let ((attr-name (treesit-node-text attr-node)))
-              (when (member attr-name +nix-bash-attrs)
+            (let* ((binding-node (treesit-node-parent str-node))
+                   (attrpath (+nix-ts--binding-attrpath binding-node))
+                   (mode (+nix-ts--resolve-attrpath-mode attrpath)))
+              (when mode
                 (let* ((str-end (treesit-node-end str-node))
                        (head-beg (treesit-node-start attr-node))
                        (head-end (+ str-start 2))
                        (tail-beg (- str-end 2))
                        (tail-end str-end))
-                  (push (list head-beg head-end tail-beg tail-end 'bash-ts-mode) spans))))))))
+                  (push (list head-beg head-end tail-beg tail-end mode attrpath) spans))))))))
     (sort spans (lambda (a b) (< (car a) (car b))))))
 
 (defun +nix-ts--rebuild-cache (&rest _)
