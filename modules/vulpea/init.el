@@ -30,12 +30,12 @@
            "C-c C-i" #'vulpea-insert)
 
   :custom
-  (vulpea-db-sync-directories (list +notes-directory))
   (vulpea-select-describe-fn #'+vulpea-note-describe-olp)
   (vulpea-create-default-template '(:file-name "notes/${slug}.org"))
   (vulpea-buffer-alias-property "ROAM_ALIASES")
 
   :config
+  (setq vulpea-db-location (no-littering-expand-var-file-name "vulpea/vulpea.db"))
   (vulpea-db-autosync-mode +1)
 
   (+local-leader-set-key 'org-mode-map
