@@ -9,7 +9,7 @@
 ;;;###autoload
 (defface +org-id-link
   '((t (:weight semi-bold :inherit font-lock-variable-name-face)))
-  "Face for ID links; these would typically be org-roam links."
+  "Face for ID links."
   :group 'org-link)
 
 ;;;###autoload

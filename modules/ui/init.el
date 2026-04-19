@@ -106,7 +106,7 @@
           help-mode-hook
           shell-command-mode-hook
           eat-mode-hook
-          org-roam-mode-hook)
+          vulpea-ui-sidebar-mode-hook)
          . hide-mode-line-mode)
   :preface
   (defvar-local +hide-modeline-was-enabled-p nil)
@@ -354,7 +354,7 @@
                       (derived-mode . occur-mode)
                       (derived-mode . embark-collect-mode)
                       ,(rx bos "*Embark Export: ")
-                      ,(rx bos "*org-roam-search"))
+)
                     '(window-width . 80))))
 
            ;; Right side
@@ -379,8 +379,7 @@
                        (derived-mode . woman-mode)
                        (derived-mode . magit-log-mode)
                        ,(rx bos "*eldoc*" eos)
-                       ,(rx bos "*org-roam*" eos)
-                       ,(rx bos "*org-roam-links*" eos)
+                       ,(rx bos "*vulpea-ui*" eos)
                        ,(rx bos "magit-process: "))
                      '(window-width . 80))))
 

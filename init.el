@@ -11,7 +11,7 @@
   (user-error "Emacs 30 required"))
 
 (defvar org-directory "~/org/")
-(defvar org-roam-directory "~/org/roam/")
+(defvar +notes-directory "~/org/roam/")
 (defvar org-default-notes-file "~/org/notes.org")
 
 (defvar +site-files-directory (file-name-concat +config-root "site/"))
@@ -159,7 +159,7 @@ files in each module."
 (use-package +hooks
   :demand t
   :init
-  (defconst +expensive-packages '(org org-roam org-agenda forge))
+  (defconst +expensive-packages '(org vulpea org-agenda forge))
   :config
   ;; Warn if expensive packages were loaded during init sequence.
   (add-transient-hook! 'after-init-hook

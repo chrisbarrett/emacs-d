@@ -18,7 +18,7 @@
 ;; External variables
 (defvar +site-files-directory)
 (defvar org-default-notes-file)
-(defvar org-roam-directory)
+(defvar +notes-directory)
 
 
 
@@ -286,13 +286,13 @@
               (interactive)
               (find-file org-default-notes-file))
             :wk "notes")
-  "i" (list (defun +goto-org-roam-index ()
+  "i" (list (defun +goto-notes-index ()
               (interactive)
-              (find-file (file-name-concat org-roam-directory "notes/index.org")))
-            :wk "roam index")
+              (find-file (file-name-concat +notes-directory "notes/index.org")))
+            :wk "notes index")
   "t" (list (defun +goto-org-todos ()
               (interactive)
-              (find-file (file-name-concat org-roam-directory "todos.org")))
+              (find-file (file-name-concat +notes-directory "todos.org")))
             :wk "todos")
   "a" (list (defun +org-agenda-dwim ()
               (interactive)
@@ -303,12 +303,10 @@
   "v" '(org-tags-view :wk "search by tag")
   "k" #'org-capture
   "l" '(org-store-link :wk "store link")
-  "f" '(+org-roam-node-find :wk "find (roam)")
-  "s" '(org-roam-search :wk "search (roam)")
-  "w" '(timekeep-visit-node :wk "work file")
+  "f" '(+vulpea-find :wk "find note")
 
   "c" '(nil :wk "clock")
-  "r" '(nil :wk "roam/review"))
+  "r" '(nil :wk "notes"))
 
 (+define-leader-keys :prefix "SPC o c" ;; org clocking
   "c" '(org-clock-in-last :wk "clock in (last)")
@@ -326,11 +324,9 @@
   "g" '(org-clock-goto :wk "goto clock")
   "q" '(org-clock-cancel :wk "cancel"))
 
-(+define-leader-keys :prefix "SPC o r" ;; org roam/review
-  "d" '(org-roam-review-list-recently-added :wk "list recent")
-  "l" '(org-roam-links :wk "linked nodes")
-  "r" '(org-roam-review :wk "review")
-  "t" '(org-roam-search-tags :wk "search by tag"))
+(+define-leader-keys :prefix "SPC o r" ;; notes
+  "b" '(vulpea-find-backlink :wk "find backlink")
+  "s" '(vulpea-ui-sidebar-toggle :wk "sidebar"))
 
 (+define-leader-keys :prefix "SPC t" ;; toggles
   "b" '(breadcrumb-mode :wk "breadcrumbs (header)")

@@ -13,7 +13,7 @@
 
 (cl-eval-when (compile)
   (require 'eww)
-  (require 'org-roam))
+)
 
 ;;;###autoload
 (defvar +capture-context nil
@@ -176,7 +176,7 @@ RENDERED-CONTENT is the text-rendered content."
 ;;;###autoload
 (defun +capture-litnote-function ()
   "Target function for litnote capture.
-Creates new file in org-roam-directory/litnotes/ with metadata from URL."
+Creates new file in +notes-directory/litnotes/ with metadata from URL."
   (let* ((context (or (+litnote-meta-try-from-eww)
                       (+litnote-meta-from-url))))
 
@@ -200,7 +200,7 @@ Creates new file in org-roam-directory/litnotes/ with metadata from URL."
 
     (setq +capture-context context)
     (let ((filename (format "%s.org" (s-snake-case (plist-get context :title)))))
-      (find-file (file-name-concat org-roam-directory "litnotes" filename)))))
+      (find-file (file-name-concat +notes-directory "litnotes" filename)))))
 
 
 

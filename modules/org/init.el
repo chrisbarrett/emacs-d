@@ -354,7 +354,7 @@
                  (`latex (format "\\href{https://www.rfc-editor.org/rfc/rfc%s.html}{%s}" rfc-num desc))
                  (_ desc)))))
 
-  ;; Use a distinct face for ID (org-roam) links
+  ;; Use a distinct face for ID links
   (org-link-set-parameters "id" :face '+org-id-link)
 
   ;; Make RET follow ID links in the same window.

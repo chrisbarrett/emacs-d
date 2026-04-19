@@ -176,7 +176,7 @@ INTERACTIVE is set when called interactively."
     omnisharp
     org
     org-present
-    org-roam
+    ;; org-roam removed; using vulpea
     osx-dictionary
     outline
     ovpn-mode
