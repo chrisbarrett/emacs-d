@@ -1,3 +1,2 @@
 ;; -*- lisp-data -*-
-(nix-ts-mode
- polymode)
+(nix-ts-mode)
