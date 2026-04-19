@@ -112,7 +112,7 @@
              ((org-agenda-tag-filter-preset '("-work" "-ignore"))))
 
             ("w" "work agenda" ,sections
-             ((org-agenda-tag-filter-preset (list "-ignore" (format "+%s" (timekeep-work-tag)))))))))
+             ((org-agenda-tag-filter-preset (list "-ignore" (format "+%s" (+work-tag)))))))))
 
   ;; Avoid running possibly expensive ${major-mode}-local-vars-hook while building
   ;; the agenda.

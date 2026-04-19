@@ -26,9 +26,9 @@
               (notes-datetree "N" "Note (setting time)" "* %^T %?")
 
               '("w" "work")
-              (notes-datetree "wt" "Todo" "* TODO %?               :%(timekeep-work-tag):work:")
-              (notes-datetree "wn" "Note" "* %T %?                 :%(timekeep-work-tag):work:")
-              (notes-datetree "wN" "Note (setting time)" "* %^T %? :%(timekeep-work-tag):work:")
+              (notes-datetree "wt" "Todo" "* TODO %?               :%(+work-tag):work:")
+              (notes-datetree "wn" "Note" "* %T %?                 :%(+work-tag):work:")
+              (notes-datetree "wN" "Note (setting time)" "* %^T %? :%(+work-tag):work:")
 
               (notes-datetree "l" "Link" "* %T %(org-cliplink-capture)\n%?")
 
