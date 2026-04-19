@@ -124,6 +124,7 @@
 (setq menu-bar-mode nil)
 (setq tool-bar-mode nil)
 (setq scroll-bar-mode nil)
+(setq ns-use-native-fullscreen nil)
 (setq frame-resize-pixelwise t)
 (setq frame-inhibit-implied-resize t)
 
