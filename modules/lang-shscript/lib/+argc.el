@@ -63,6 +63,10 @@
               "flag" "env" "meta"))
   "Regexp matching a line containing an argc directive.")
 
+(defconst argc--comment-line-re
+  (rx bol (* space) "#")
+  "Regexp matching any comment line.")
+
 (defvar argc--face-rules
   `(;; Base: description text gets doc face.
     ;; Later rules create higher-priority overlays that override.
@@ -182,7 +186,7 @@ and END is EOL of last directive in each block."
               (block-end (line-end-position)))
           (forward-line 1)
           (while (and (not (eobp))
-                      (looking-at argc--directive-re))
+                      (looking-at argc--comment-line-re))
             (setq block-end (line-end-position))
             (forward-line 1))
           (push (list block-beg block-end) blocks))))

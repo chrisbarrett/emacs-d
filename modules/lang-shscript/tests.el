@@ -481,6 +481,15 @@
     (should-not (cl-some (lambda (ov) (overlay-get ov 'argc-box))
                          (overlays-in (point-min) (point-max))))))
 
+;;; P41: comment continuation lines included in block
+
+(ert-deftest argc-test-find-blocks-comment-continuation ()
+  "Plain comment lines between directives should form one block."
+  (with-temp-buffer
+    (insert "# @describe Open dired in emacsclient.\n# If pane exists, switch.\n#\n# @arg path=. Directory\n")
+    (let ((blocks (argc--find-blocks)))
+      (should (= 1 (length blocks))))))
+
 (provide 'lang-shscript-tests)
 
 ;;; tests.el ends here
