@@ -266,14 +266,17 @@ LABEL is an optional right-aligned bold label."
                     (overlay-put ov 'before-string (concat top "\n" left-border))
                     (setq first nil))
                 (overlay-put ov 'before-string left-border))
-              (overlay-put ov 'after-string (concat pad right-border))
+              (let ((after (concat pad right-border)))
+                (put-text-property 0 1 'cursor t after)
+                (overlay-put ov 'after-string after))
               (setq last-ov ov last-pad pad last-right-border right-border))
             (when (= (forward-line 1) 1)
               (cl-return)))
           ;; Append bottom border to last line's after-string
           (when last-ov
-            (overlay-put last-ov 'after-string
-                         (concat last-pad last-right-border "\n" bottom))))))))
+            (let ((after (concat last-pad last-right-border "\n" bottom)))
+              (put-text-property 0 1 'cursor t after)
+              (overlay-put last-ov 'after-string after))))))))
 
 ;;; Overlay management
 
