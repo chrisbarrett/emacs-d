@@ -455,21 +455,20 @@
                               (overlays-in (point-min) (point-max))))))
         (should (= count-1 count-2))))))
 
-;;; P39: bottom border overlay exists as separate overlay
+;;; P39: bottom border is part of last line's after-string
 
-(ert-deftest argc-test-bottom-border-separate ()
-  "Bottom border should be a zero-width overlay after the block."
+(ert-deftest argc-test-bottom-border-on-last-line ()
+  "Bottom border should be in the last line overlay's after-string."
   (with-temp-buffer
     (insert "# @cmd Foo\nfoo() {\n}\n")
     (argc--apply-box-overlays)
-    (let ((bottom-ovs (cl-remove-if-not
+    (let ((has-bottom (cl-some
                        (lambda (ov)
                          (and (overlay-get ov 'argc-box)
-                              (let ((bs (overlay-get ov 'before-string)))
-                                (and bs (string-match-p "└" bs)))
-                              (= (overlay-start ov) (overlay-end ov))))
+                              (let ((as (overlay-get ov 'after-string)))
+                                (and as (string-match-p "└" as)))))
                        (overlays-in (point-min) (point-max)))))
-      (should (= 1 (length bottom-ovs))))))
+      (should has-bottom))))
 
 ;;; P40: no box overlays on non-directive content
 
@@ -489,6 +488,18 @@
     (insert "# @describe Open dired in emacsclient.\n# If pane exists, switch.\n#\n# @arg path=. Directory\n")
     (let ((blocks (argc--find-blocks)))
       (should (= 1 (length blocks))))))
+
+;;; P42: no zero-width overlay for bottom border
+
+(ert-deftest argc-test-no-zero-width-box-overlay ()
+  "Bottom border should not use a zero-width overlay at a navigable position."
+  (with-temp-buffer
+    (insert "# @cmd Foo\nfoo() {\n}\n")
+    (argc--apply-box-overlays)
+    (should-not (cl-some (lambda (ov)
+                           (and (overlay-get ov 'argc-box)
+                                (= (overlay-start ov) (overlay-end ov))))
+                         (overlays-in (point-min) (point-max))))))
 
 (provide 'lang-shscript-tests)
 

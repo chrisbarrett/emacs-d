@@ -249,7 +249,8 @@ LABEL is an optional right-aligned bold label."
              (bottom (argc--make-border box-width ?└ ?┘)))
         ;; Per-line overlays: content only (lbeg to lend, no newline)
         (goto-char beg)
-        (let ((first t))
+        (let ((first t)
+              last-ov last-pad last-right-border)
           (while (<= (point) end)
             (let* ((lbeg (line-beginning-position))
                    (lend (line-end-position))
@@ -261,20 +262,18 @@ LABEL is an optional right-aligned bold label."
               (overlay-put ov 'argc t)
               (overlay-put ov 'argc-box t)
               (if first
-                  (let ((top-line (concat top "\n")))
-                    (put-text-property 0 (length top-line) 'cursor t top-line)
-                    (overlay-put ov 'before-string (concat top-line left-border))
+                  (progn
+                    (overlay-put ov 'before-string (concat top "\n" left-border))
                     (setq first nil))
                 (overlay-put ov 'before-string left-border))
-              (overlay-put ov 'after-string (concat pad right-border)))
+              (overlay-put ov 'after-string (concat pad right-border))
+              (setq last-ov ov last-pad pad last-right-border right-border))
             (when (= (forward-line 1) 1)
-              (cl-return))))
-        ;; Bottom border: separate overlay after the block
-        (let* ((after-pos (min (1+ end) (point-max)))
-               (ov (make-overlay after-pos after-pos nil t)))
-          (overlay-put ov 'argc t)
-          (overlay-put ov 'argc-box t)
-          (overlay-put ov 'before-string (concat bottom "\n")))))))
+              (cl-return)))
+          ;; Append bottom border to last line's after-string
+          (when last-ov
+            (overlay-put last-ov 'after-string
+                         (concat last-pad last-right-border "\n" bottom))))))))
 
 ;;; Overlay management
 
