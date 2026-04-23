@@ -20,6 +20,7 @@
   :mode "\\.kdl\\'")
 
 (use-package json-ts-mode
+  :mode "\\.json\\'"
   :hook (json-ts-mode-local-vars-hook . eglot-ensure))
 
 (use-package yaml-ts-mode

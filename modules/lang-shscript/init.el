@@ -8,6 +8,7 @@
 (require 'cl-lib)
 
 (add-to-list 'magic-mode-alist `(,(rx bol "#!" (+? nonl) "nix-shell" eol) . bash-ts-mode))
+(alist-set! major-mode-remap-alist 'sh-mode 'bash-ts-mode)
 
 (define-advice sh-set-shell (:around (fn &rest args) silence-messages)
   (cl-letf (((symbol-function 'message) #'ignore))

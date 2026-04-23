@@ -14,6 +14,7 @@
 (require '+corelib)
 
 (use-package rust-ts-mode
+  :mode "\\.rs\\'"
   :hook (rust-ts-mode-local-vars-hook . eglot-ensure)
   :config
   ;; Rust doc comments are Markdown
