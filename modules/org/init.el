@@ -52,7 +52,7 @@
   (setq org-hide-emphasis-markers t)
   (setq org-pretty-entities t)
   (setq org-startup-folded nil)
-  (setq org-startup-indented nil)
+  (setq org-startup-indented t)
   (setq org-startup-shrink-all-tables t)
   (setq org-startup-with-inline-images t)
   (setq org-fontify-quote-and-verse-blocks t)
@@ -412,7 +412,7 @@
   :demand t
   :custom
   (org-modern-table nil) ; looks terrible in TTY
-  (org-modern-hide-stars 'leading)
+  (org-modern-hide-stars nil)
   (org-modern-fold-stars
    '(("›" . "·")))
   (org-modern-block-name
