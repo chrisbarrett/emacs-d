@@ -23,6 +23,7 @@
   :hook (json-ts-mode-local-vars-hook . eglot-ensure))
 
 (use-package yaml-ts-mode
+  :mode "\\.ya?ml\\'"
   :hook (yaml-ts-mode-local-vars-hook . eglot-ensure)
   :config
   (setq-hook! 'yaml-ts-mode-hook
