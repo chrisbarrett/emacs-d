@@ -13,7 +13,6 @@
 (require '+corelib)
 
 (use-package misery
-  :load-path "~/src/chrisbarrett/emacs-misery"
   :hook (+first-file-hook . misery-global-mode)
   :custom
   (misery-show-summary-in-minibuffer nil))
