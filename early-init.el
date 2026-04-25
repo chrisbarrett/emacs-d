@@ -73,6 +73,11 @@
 (setq modus-themes-bold-constructs nil)
 
 (setq +theme-light 'modus-operandi-tinted)
+
+;; I prefer solarized light bg.
+(setq modus-operandi-tinted-palette-overrides
+      '((bg-main "#fdf6e3")))
+
 (setq +theme-dark 'modus-vivendi)
 
 (when initial-window-system
