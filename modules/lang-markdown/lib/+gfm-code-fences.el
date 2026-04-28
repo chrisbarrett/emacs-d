@@ -139,7 +139,7 @@ Each block is (BLOCK-BEG BLOCK-END INDENT-WIDTH)."
 
 ;;; Border face & primitives
 
-(defconst gfm-code-fences--border-face 'font-lock-doc-face
+(defconst gfm-code-fences--border-face 'parenthesis
   "Face for the box border around pre blocks.")
 
 (defun gfm-code-fences--max-line-width (beg end &optional indent)
