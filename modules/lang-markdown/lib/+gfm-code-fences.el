@@ -85,49 +85,86 @@ where any of LANG, LANG-BEG, LANG-END may be nil."
                 (goto-char (line-end-position))))))))
     (nreverse blocks)))
 
+;;; Border face
+
+(defconst gfm-code-fences--border-face 'markdown-markup-face
+  "Face for the curved fence border.")
+
+(defun gfm-code-fences--display-string (kind face icon has-lang)
+  "Build the display string for KIND with FACE.
+KIND is `top', `body' or `bottom'. ICON and HAS-LANG only apply to `top'."
+  (let ((box (propertize (pcase kind
+                           ('top    "╭┄")
+                           ('body   "│ ")
+                           ('bottom "╰┄"))
+                         'face face)))
+    (pcase kind
+      ('top (cond (icon     (concat box " " icon " "))
+                  (has-lang (concat box " "))
+                  (t        box)))
+      (_ box))))
+
+(defun gfm-code-fences--target-prop (kind)
+  "Overlay property used to render KIND."
+  (if (eq kind 'body) 'before-string 'display))
+
 ;;; Overlay application
+
+(defvar-local gfm-code-fences--overlays nil
+  "All fence overlays currently in this buffer.")
+
+(defun gfm-code-fences--make-overlay (beg end kind block-beg block-end
+                                          &optional icon has-lang revealable)
+  "Create a fence overlay between BEG and END with KIND.
+BLOCK-BEG/BLOCK-END mark the enclosing block. ICON and HAS-LANG
+configure the `top' kind. REVEALABLE marks the overlay for cursor reveal."
+  (let* ((str (gfm-code-fences--display-string
+               kind gfm-code-fences--border-face icon has-lang))
+         (ov (make-overlay beg end)))
+    (overlay-put ov 'gfm-code-fences t)
+    (overlay-put ov 'gfm-code-fences-kind kind)
+    (overlay-put ov 'gfm-code-fences-icon icon)
+    (overlay-put ov 'gfm-code-fences-has-lang has-lang)
+    (overlay-put ov 'gfm-code-fences-block-beg block-beg)
+    (overlay-put ov 'gfm-code-fences-block-end block-end)
+    (when revealable
+      (overlay-put ov 'gfm-code-fences-revealable t)
+      (overlay-put ov 'evaporate t))
+    (overlay-put ov (gfm-code-fences--target-prop kind) str)
+    (push ov gfm-code-fences--overlays)
+    ov))
 
 (defun gfm-code-fences--apply-overlays ()
   "Create overlays for fenced code blocks in the current buffer."
   (save-excursion
     (dolist (block (gfm-code-fences--find-blocks))
       (cl-destructuring-bind
-          (open-beg open-end close-beg close-end lang lang-beg lang-end) block
-        (let* ((border-face 'markdown-markup-face)
-               (top (propertize "╭┄" 'face border-face))
-               (bottom (propertize "╰┄" 'face border-face))
-               (lhs (propertize "│ " 'face border-face))
+          (open-beg _open-end close-beg close-end lang lang-beg _lang-end) block
+        (let* ((block-beg (save-excursion
+                            (goto-char open-beg) (line-beginning-position)))
+               (block-end close-end)
                (icon (and lang (gfm-code-fences--icon-for-lang lang))))
-          ;; Single evaporative overlay over the backticks (and any
-          ;; whitespace before the language) — replaces them with
-          ;; `╭┄ <icon> ' while leaving the language tag visible.
-          (let* ((prefix (cond (icon (concat top " " icon " "))
-                               (lang-beg (concat top " "))
-                               (t top)))
-                 (cover-end (or lang-beg
-                                (save-excursion
-                                  (goto-char open-beg)
-                                  (line-end-position))))
-                 (ov (make-overlay open-beg cover-end)))
-            (overlay-put ov 'gfm-code-fences t)
-            (overlay-put ov 'gfm-code-fences-revealable t)
-            (overlay-put ov 'evaporate t)
-            (overlay-put ov 'display prefix))
+          ;; Top: single evaporative overlay over backticks (+ leading
+          ;; whitespace before the language tag).
+          (let ((cover-end (or lang-beg
+                               (save-excursion
+                                 (goto-char open-beg)
+                                 (line-end-position)))))
+            (gfm-code-fences--make-overlay open-beg cover-end 'top
+                                           block-beg block-end
+                                           icon (and lang t) t))
           ;; Body lines: prepend `│ '.
           (save-excursion
             (goto-char open-beg)
             (forward-line 1)
             (while (< (line-beginning-position) close-beg)
-              (let* ((lbeg (line-beginning-position))
-                     (ov (make-overlay lbeg lbeg)))
-                (overlay-put ov 'gfm-code-fences t)
-                (overlay-put ov 'before-string lhs))
+              (let ((lbeg (line-beginning-position)))
+                (gfm-code-fences--make-overlay lbeg lbeg 'body
+                                               block-beg block-end))
               (forward-line 1)))
-          ;; Replace closing backticks with curve + dashes.
-          (let ((ov (make-overlay close-beg close-end)))
-            (overlay-put ov 'gfm-code-fences t)
-            (overlay-put ov 'gfm-code-fences-revealable t)
-            (overlay-put ov 'display bottom)))))))
+          ;; Bottom: replace closing backticks with curve + dash.
+          (gfm-code-fences--make-overlay close-beg close-end 'bottom
+                                         block-beg block-end nil nil t))))))
 
 ;;; Cursor-driven reveal
 
@@ -158,12 +195,16 @@ where any of LANG, LANG-BEG, LANG-END may be nil."
         (overlay-put ov 'display nil)
         (push ov gfm-code-fences--hidden-ovs)))))
 
+
 ;;; Overlay management
 
 (defun gfm-code-fences--remove-overlays (&optional beg end)
   "Remove all gfm-code-fences overlays between BEG and END."
   (remove-overlays (or beg (point-min)) (or end (point-max))
-                   'gfm-code-fences t))
+                   'gfm-code-fences t)
+  (unless (or beg end)
+    (setq gfm-code-fences--overlays nil
+          gfm-code-fences--hidden-ovs nil)))
 
 (defun gfm-code-fences--rebuild ()
   "Remove and recreate all gfm-code-fences overlays."
@@ -205,7 +246,6 @@ where any of LANG, LANG-BEG, LANG-END may be nil."
     (remove-hook 'post-command-hook #'gfm-code-fences--reveal t)
     (when (timerp gfm-code-fences--rebuild-timer)
       (cancel-timer gfm-code-fences--rebuild-timer))
-    (setq gfm-code-fences--hidden-ovs nil)
     (gfm-code-fences--remove-overlays)))
 
 (provide '+gfm-code-fences)
