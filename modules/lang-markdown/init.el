@@ -33,6 +33,7 @@
   :hook
   (gfm-mode-hook . visual-line-mode)
   (gfm-mode-hook . +markdown-fontify-gfm-callouts)
+  (gfm-mode-hook . gfm-callouts-mode)
 
   :custom
   (markdown-fontify-code-blocks-natively t)

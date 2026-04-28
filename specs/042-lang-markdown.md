@@ -51,6 +51,24 @@ Font-lock highlighting for GFM alert/callout syntax:
 Additionally, `<!-- prettier-ignore-start -->` and `<!-- prettier-ignore-end -->`
 comments are dimmed via `+markdown-prettier-ignore-comment-face`.
 
+### GFM Callout Boxes
+
+`gfm-callouts-mode` (auto-enabled in `gfm-mode`) draws Unicode box overlays
+around callout blockquotes:
+
+```
+> [!IMPORTANT]
+> body...
+```
+
+Per row, the buffer `>` (and the `[`/`]` brackets on the marker line) is faded
+toward the theme background — computed via `+theme-default-background` blended
+10% toward the default foreground — so the original markdown stays selectable
+but recedes visually. The box border is drawn to the right of the `>` column;
+the top border integrates the `[!TYPE]` label inline with `┌─...─┐`, and
+border colour follows the per-type face (`+markdown-gfm-callout-*-face`).
+Overlays rebuild debounced on buffer changes. Source: `lib/+gfm-callouts.el`.
+
 ### TAB Key Behavior
 
 In insert state, TAB calls `+markdown-tab-dwim`:
@@ -65,6 +83,7 @@ In insert state, TAB calls `+markdown-tab-dwim`:
 | :------------------------- | :--------------------------------- |
 | +markdown-tab-dwim         | Smart TAB with snippet/cycle       |
 | +markdown-fontify-gfm-callouts | Add callout font-lock keywords |
+| gfm-callouts-mode          | Box overlays around callouts       |
 
 ### Faces
 

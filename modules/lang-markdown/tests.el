@@ -167,6 +167,72 @@ The first matching entry in auto-mode-alist should be gfm-mode."
   (skip-unless (boundp 'gfm-mode-hook))
   (should (memq '+markdown-fontify-gfm-callouts gfm-mode-hook)))
 
+;;; gfm-callouts tests
+
+(let* ((module-dir (file-name-directory (or load-file-name buffer-file-name)))
+       (callouts-file (expand-file-name "lib/+gfm-callouts.el" module-dir)))
+  (when (file-exists-p callouts-file)
+    (load callouts-file nil 'nomessage)))
+
+(defun lang-markdown-tests--callout-block (type body)
+  "Build a callout source block of TYPE with BODY lines."
+  (concat (format "> [!%s]\n" type)
+          (mapconcat (lambda (l) (concat "> " l)) body "\n")
+          "\n"))
+
+(ert-deftest lang-markdown/gfm-callouts-mode-defined ()
+  (should (fboundp 'gfm-callouts-mode)))
+
+(ert-deftest lang-markdown/gfm-callouts-find-blocks-detects-types ()
+  "Each known callout type is detected with its label."
+  (skip-unless (fboundp 'gfm-callouts--find-blocks))
+  (dolist (type '("NOTE" "TIP" "IMPORTANT" "WARNING" "CAUTION" "CRITICAL"))
+    (with-temp-buffer
+      (insert (lang-markdown-tests--callout-block type '("hello")))
+      (let ((blocks (gfm-callouts--find-blocks)))
+        (should (= 1 (length blocks)))
+        (should (equal type (nth 2 (car blocks))))))))
+
+(ert-deftest lang-markdown/gfm-callouts-find-blocks-multiline ()
+  "Block end extends through subsequent blockquote lines."
+  (skip-unless (fboundp 'gfm-callouts--find-blocks))
+  (with-temp-buffer
+    (insert "> [!IMPORTANT]\n> line one\n> line two\n\nplain\n")
+    (let* ((blocks (gfm-callouts--find-blocks))
+           (block (car blocks)))
+      (should (= 1 (length blocks)))
+      (goto-char (nth 1 block))
+      (should (string= "> line two"
+                       (buffer-substring-no-properties
+                        (line-beginning-position) (line-end-position)))))))
+
+(ert-deftest lang-markdown/gfm-callouts-find-blocks-ignores-plain-blockquote ()
+  (skip-unless (fboundp 'gfm-callouts--find-blocks))
+  (with-temp-buffer
+    (insert "> just a quote\n> with two lines\n")
+    (should-not (gfm-callouts--find-blocks))))
+
+(ert-deftest lang-markdown/gfm-callouts-mode-creates-overlays ()
+  (skip-unless (fboundp 'gfm-callouts-mode))
+  (with-temp-buffer
+    (insert "> [!NOTE]\n> Hello.\n")
+    (gfm-callouts-mode 1)
+    (should (cl-some (lambda (ov) (overlay-get ov 'gfm-callouts))
+                     (overlays-in (point-min) (point-max))))))
+
+(ert-deftest lang-markdown/gfm-callouts-mode-removes-overlays ()
+  (skip-unless (fboundp 'gfm-callouts-mode))
+  (with-temp-buffer
+    (insert "> [!NOTE]\n> Hello.\n")
+    (gfm-callouts-mode 1)
+    (gfm-callouts-mode -1)
+    (should-not (cl-some (lambda (ov) (overlay-get ov 'gfm-callouts))
+                         (overlays-in (point-min) (point-max))))))
+
+(ert-deftest lang-markdown/gfm-callouts-enabled-via-gfm-mode-hook ()
+  (skip-unless (boundp 'gfm-mode-hook))
+  (should (memq 'gfm-callouts-mode gfm-mode-hook)))
+
 (provide 'lang-markdown-tests)
 
 ;;; lang-markdown/tests.el ends here
