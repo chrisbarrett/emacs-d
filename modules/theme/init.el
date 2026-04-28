@@ -20,7 +20,13 @@
                                    (:inherit lazy-highlight))))
                         '(iedit-occurrence ((t (:inherit query-replace))))
                         ;; Dim delimiters like commas, semicolons, etc.
-                        '(font-lock-delimiter-face ((t (:inherit shadow)))))
+                        '(font-lock-delimiter-face ((t (:inherit shadow))))
+                        ;; Drop the pre/code-block background on light themes;
+                        ;; the gfm-code-fences border replaces it visually.
+                        '(markdown-pre-face ((((background light))
+                                              (:background unspecified))))
+                        '(markdown-code-face ((((background light))
+                                               (:background unspecified)))))
 
 
 

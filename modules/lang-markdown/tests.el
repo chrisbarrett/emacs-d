@@ -280,6 +280,24 @@ The first matching entry in auto-mode-alist should be gfm-mode."
   (skip-unless (boundp 'gfm-mode-hook))
   (should (memq 'gfm-code-fences-mode gfm-mode-hook)))
 
+(ert-deftest lang-markdown/gfm-code-fences-find-indent-block ()
+  (skip-unless (fboundp 'gfm-code-fences--find-indent-blocks))
+  (with-temp-buffer
+    (insert "Para.\n\n    code one\n    code two\n\nMore.\n")
+    (let ((blocks (gfm-code-fences--find-indent-blocks nil)))
+      (should (= 1 (length blocks)))
+      (should (= 4 (nth 2 (car blocks)))))))
+
+(ert-deftest lang-markdown/gfm-code-fences-skip-indent-inside-fence ()
+  (skip-unless (and (fboundp 'gfm-code-fences--find-indent-blocks)
+                    (fboundp 'gfm-code-fences--find-blocks)))
+  (with-temp-buffer
+    (insert "```\n    looks indented\n```\n")
+    (let* ((fenced (gfm-code-fences--find-blocks))
+           (excluded (mapcar (lambda (b) (cons (nth 0 b) (nth 3 b))) fenced))
+           (indents (gfm-code-fences--find-indent-blocks excluded)))
+      (should (= 0 (length indents))))))
+
 (provide 'lang-markdown-tests)
 
 ;;; lang-markdown/tests.el ends here
