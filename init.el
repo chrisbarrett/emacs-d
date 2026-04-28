@@ -201,6 +201,8 @@ files in each module."
 ;; Load module init.el files after all autoloads are registered.
 (+modules-load-inits (+modules-collect-init-files))
 
+;; Trust module srcs for flymake.
+(mapc #'+modules-register-trusted-content (+modules-discover))
 
 ;;; Load site/**.el
 

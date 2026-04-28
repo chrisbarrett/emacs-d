@@ -605,6 +605,47 @@
       (makunbound marker-sym)
       (delete-directory +modules-directory t))))
 
+;;; Tests for +modules-register-trusted-content
+
+(ert-deftest modules--register-trusted-content--adds-base-and-lib ()
+  "Adds module base dir and lib/ subdir to `trusted-content'."
+  (let ((temp-dir (make-temp-file "module-" t))
+        (trusted-content nil))
+    (unwind-protect
+        (progn
+          (+modules-register-trusted-content temp-dir)
+          (should (member (file-name-as-directory temp-dir) trusted-content))
+          (should (member (file-name-as-directory
+                           (expand-file-name "lib" temp-dir))
+                          trusted-content)))
+      (delete-directory temp-dir t))))
+
+(ert-deftest modules--register-trusted-content--no-duplicates ()
+  "Calling twice does not duplicate entries."
+  (let ((temp-dir (make-temp-file "module-" t))
+        (trusted-content nil))
+    (unwind-protect
+        (progn
+          (+modules-register-trusted-content temp-dir)
+          (+modules-register-trusted-content temp-dir)
+          (should (= 1 (cl-count (file-name-as-directory temp-dir)
+                                 trusted-content :test #'equal)))
+          (should (= 1 (cl-count (file-name-as-directory
+                                  (expand-file-name "lib" temp-dir))
+                                 trusted-content :test #'equal))))
+      (delete-directory temp-dir t))))
+
+(ert-deftest modules--register-trusted-content--uses-trailing-slash ()
+  "Entries end with a directory separator so `trusted-content-p' matches."
+  (let ((temp-dir (make-temp-file "module-" t))
+        (trusted-content nil))
+    (unwind-protect
+        (progn
+          (+modules-register-trusted-content temp-dir)
+          (dolist (entry trusted-content)
+            (should (directory-name-p entry))))
+      (delete-directory temp-dir t))))
+
 (provide '+modules-tests)
 
 ;;; +modules-tests.el ends here

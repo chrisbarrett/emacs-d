@@ -218,6 +218,19 @@ the symbol `fboundp' without loading its source file."
   (message "Regenerated %s" +modules-autoloads-file))
 
 
+;;; Trusted Content Registration
+
+(defun +modules-register-trusted-content (module-dir)
+  "Add MODULE-DIR and its lib/ subdirectory to `trusted-content'.
+
+`trusted-content' matches against the immediate parent directory of a
+file, so each module's base directory and lib/ subdirectory must be
+registered explicitly."
+  (add-to-list 'trusted-content (file-name-as-directory module-dir))
+  (add-to-list 'trusted-content
+               (file-name-as-directory (expand-file-name "lib" module-dir))))
+
+
 ;;; Init Loading
 
 (defun +modules--find-init-file (module-dir)
