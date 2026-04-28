@@ -23,6 +23,8 @@
   :init
   (add-hook 'hcl-mode-hook #'+hcl-mode-setup))
 
+(add-to-list 'auto-mode-alist (cons (rx "/.terragrunt-filters" eos) 'conf-space-mode))
+
 (use-package terraform-mode
   :mode "\\.tf\\'")
 
