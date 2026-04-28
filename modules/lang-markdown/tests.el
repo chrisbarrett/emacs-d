@@ -233,6 +233,53 @@ The first matching entry in auto-mode-alist should be gfm-mode."
   (skip-unless (boundp 'gfm-mode-hook))
   (should (memq 'gfm-callouts-mode gfm-mode-hook)))
 
+;;; gfm-code-fences tests
+
+(let* ((module-dir (file-name-directory (or load-file-name buffer-file-name)))
+       (fences-file (expand-file-name "lib/+gfm-code-fences.el" module-dir)))
+  (when (file-exists-p fences-file)
+    (load fences-file nil 'nomessage)))
+
+(ert-deftest lang-markdown/gfm-code-fences-mode-defined ()
+  (should (fboundp 'gfm-code-fences-mode)))
+
+(ert-deftest lang-markdown/gfm-code-fences-find-block ()
+  (skip-unless (fboundp 'gfm-code-fences--find-blocks))
+  (with-temp-buffer
+    (insert "```bash\necho hi\n```\n")
+    (let ((blocks (gfm-code-fences--find-blocks)))
+      (should (= 1 (length blocks)))
+      (should (equal "bash" (nth 4 (car blocks)))))))
+
+(ert-deftest lang-markdown/gfm-code-fences-find-block-no-lang ()
+  (skip-unless (fboundp 'gfm-code-fences--find-blocks))
+  (with-temp-buffer
+    (insert "```\ntext\n```\n")
+    (let ((blocks (gfm-code-fences--find-blocks)))
+      (should (= 1 (length blocks)))
+      (should-not (nth 4 (car blocks))))))
+
+(ert-deftest lang-markdown/gfm-code-fences-mode-creates-overlays ()
+  (skip-unless (fboundp 'gfm-code-fences-mode))
+  (with-temp-buffer
+    (insert "```bash\necho hi\n```\n")
+    (gfm-code-fences-mode 1)
+    (should (cl-some (lambda (ov) (overlay-get ov 'gfm-code-fences))
+                     (overlays-in (point-min) (point-max))))))
+
+(ert-deftest lang-markdown/gfm-code-fences-mode-removes-overlays ()
+  (skip-unless (fboundp 'gfm-code-fences-mode))
+  (with-temp-buffer
+    (insert "```bash\necho hi\n```\n")
+    (gfm-code-fences-mode 1)
+    (gfm-code-fences-mode -1)
+    (should-not (cl-some (lambda (ov) (overlay-get ov 'gfm-code-fences))
+                         (overlays-in (point-min) (point-max))))))
+
+(ert-deftest lang-markdown/gfm-code-fences-enabled-via-gfm-mode-hook ()
+  (skip-unless (boundp 'gfm-mode-hook))
+  (should (memq 'gfm-code-fences-mode gfm-mode-hook)))
+
 (provide 'lang-markdown-tests)
 
 ;;; lang-markdown/tests.el ends here
