@@ -156,28 +156,41 @@ Each block is (BLOCK-BEG BLOCK-END INDENT-WIDTH)."
         (forward-line 1)))
     max-col))
 
-(defun gfm-code-fences--top-string (width face &optional icon)
-  "Build a top border WIDTH cols wide.
-ICON, if non-nil, is right-aligned like `┌──── <icon> ┐'."
+(defun gfm-code-fences--top-strings (width face buffer-width &optional icon)
+  "Return (LEADING . TRAILING) split of the top border WIDTH cols wide.
+LEADING covers BUFFER-WIDTH cols (matching the marker line's char count) so
+the buffer text shows in place of LEADING when it is revealed; TRAILING
+covers the remaining decoration. ICON, if non-nil, is right-aligned."
   (let* ((l (propertize "┌" 'face face))
-         (r (propertize "┐" 'face face)))
+         (r (propertize "┐" 'face face))
+         (gap (propertize " " 'face face))
+         (leading-dash-w (max 0 (1- buffer-width)))
+         (leading (concat l (propertize (make-string leading-dash-w ?─)
+                                        'face face))))
     (cond
      (icon
       (let* ((icon-w (string-width icon))
-             (fill-w (max 1 (- width 4 icon-w)))
-             (fill (propertize (make-string fill-w ?─) 'face face))
-             (gap (propertize " " 'face face)))
-        (concat l fill gap icon gap r)))
+             (total-fill-w (max 1 (- width 4 icon-w)))
+             (rem-fill-w (max 1 (- total-fill-w leading-dash-w)))
+             (rem-fill (propertize (make-string rem-fill-w ?─) 'face face)))
+        (cons leading (concat rem-fill gap icon gap r))))
      (t
-      (let ((fill (propertize (make-string (max 1 (- width 2)) ?─) 'face face)))
-        (concat l fill r))))))
+      (let* ((total-fill-w (max 1 (- width 2)))
+             (rem-fill-w (max 1 (- total-fill-w leading-dash-w)))
+             (rem-fill (propertize (make-string rem-fill-w ?─) 'face face)))
+        (cons leading (concat rem-fill r)))))))
 
-(defun gfm-code-fences--bottom-string (width face)
-  "Build a bottom border WIDTH cols wide."
-  (let ((fill (propertize (make-string (max 1 (- width 2)) ?─) 'face face)))
-    (concat (propertize "└" 'face face)
-            fill
-            (propertize "┘" 'face face))))
+(defun gfm-code-fences--bottom-strings (width face buffer-width)
+  "Return (LEADING . TRAILING) split of the bottom border WIDTH cols wide.
+LEADING covers BUFFER-WIDTH cols matching the marker line's char count."
+  (let* ((leading-dash-w (max 0 (1- buffer-width)))
+         (leading (concat (propertize "└" 'face face)
+                          (propertize (make-string leading-dash-w ?─)
+                                      'face face)))
+         (total-fill-w (max 1 (- width 2)))
+         (rem-fill-w (max 1 (- total-fill-w leading-dash-w)))
+         (rem-fill (propertize (make-string rem-fill-w ?─) 'face face)))
+    (cons leading (concat rem-fill (propertize "┘" 'face face)))))
 
 (defun gfm-code-fences--right-after (box-width face)
   "Build the after-string that draws the right border at column BOX-WIDTH."
@@ -206,21 +219,36 @@ ICON, if non-nil, is right-aligned like `┌──── <icon> ┐'."
   "Wrap a line-bounded block in a box.
 OPEN-LINE-BEG/END mark the opening marker line, CLOSE-LINE-BEG/END the
 closing marker line. FACE colours the border. LABEL, if non-nil, is
-right-aligned in the top border."
+right-aligned in the top border.
+
+The opening/closing marker lines are split into:
+- a leading overlay (display covers the marker chars; evaporative + revealable)
+- a trailing overlay (after-string with the rest of the border decoration;
+  preserved even when the leading overlay is revealed)."
   (let* ((body-beg (save-excursion
                      (goto-char open-line-end) (forward-line 1) (point)))
          (body-end (max body-beg (1- close-line-beg)))
          (max-content (gfm-code-fences--max-line-width body-beg body-end))
          (box-width (max 80 (+ max-content 4)))
-         (top-str (gfm-code-fences--top-string box-width face label))
-         (bot-str (gfm-code-fences--bottom-string box-width face))
+         (open-buf-width (- open-line-end open-line-beg))
+         (close-buf-width (- close-line-end close-line-beg))
+         (top-split (gfm-code-fences--top-strings box-width face
+                                                  open-buf-width label))
+         (bot-split (gfm-code-fences--bottom-strings box-width face
+                                                     close-buf-width))
          (lhs (propertize "│ " 'face face)))
+    ;; Top — leading on the marker line, trailing after.
     (let ((ov (make-overlay open-line-beg open-line-end)))
-      (overlay-put ov 'gfm-code-fences-kind 'top)
+      (overlay-put ov 'gfm-code-fences-kind 'top-leading)
       (overlay-put ov 'gfm-code-fences-revealable t)
       (overlay-put ov 'evaporate t)
-      (overlay-put ov 'display top-str)
+      (overlay-put ov 'display (car top-split))
       (gfm-code-fences--register ov))
+    (let ((ov (make-overlay open-line-end open-line-end nil nil t)))
+      (overlay-put ov 'gfm-code-fences-kind 'top-trailing)
+      (overlay-put ov 'after-string (cdr top-split))
+      (gfm-code-fences--register ov))
+    ;; Body lines.
     (save-excursion
       (goto-char body-beg)
       (while (< (line-beginning-position) close-line-beg)
@@ -233,11 +261,16 @@ right-aligned in the top border."
                        (gfm-code-fences--right-after box-width face))
           (gfm-code-fences--register ov))
         (forward-line 1)))
+    ;; Bottom — leading on the marker line, trailing after.
     (let ((ov (make-overlay close-line-beg close-line-end)))
-      (overlay-put ov 'gfm-code-fences-kind 'bottom)
+      (overlay-put ov 'gfm-code-fences-kind 'bottom-leading)
       (overlay-put ov 'gfm-code-fences-revealable t)
       (overlay-put ov 'evaporate t)
-      (overlay-put ov 'display bot-str)
+      (overlay-put ov 'display (car bot-split))
+      (gfm-code-fences--register ov))
+    (let ((ov (make-overlay close-line-end close-line-end nil nil t)))
+      (overlay-put ov 'gfm-code-fences-kind 'bottom-trailing)
+      (overlay-put ov 'after-string (cdr bot-split))
       (gfm-code-fences--register ov))))
 
 (defun gfm-code-fences--apply-fenced-block (block fenced-ranges)
@@ -303,8 +336,12 @@ INDENT-WIDTH is the buffer indent (4 for spaces, 1 for tab)."
     (let* ((face gfm-code-fences--border-face)
            (max-content (gfm-code-fences--max-line-width beg end indent-width))
            (box-width (max 80 (+ max-content 4)))
-           (top-str (gfm-code-fences--top-string box-width face nil))
-           (bot-str (gfm-code-fences--bottom-string box-width face))
+           ;; Indent blocks have no marker line; use a 0-width split so the
+           ;; full top/bottom border lives in the trailing piece.
+           (top-split (gfm-code-fences--top-strings box-width face 0 nil))
+           (bot-split (gfm-code-fences--bottom-strings box-width face 0))
+           (top-str (concat (car top-split) (cdr top-split)))
+           (bot-str (concat (car bot-split) (cdr bot-split)))
            (lhs (propertize "│ " 'face face))
            (first t))
       (while (and (not (eobp)) (<= (line-beginning-position) end))
@@ -316,7 +353,7 @@ INDENT-WIDTH is the buffer indent (4 for spaces, 1 for tab)."
                (rhs-ov (make-overlay lend lend nil nil t))
                (after (gfm-code-fences--right-after box-width face)))
           (overlay-put body-ov 'gfm-code-fences-kind 'indent-body)
-          (overlay-put body-ov 'evaporate t)
+          (overlay-put body-ov 'cursor-intangible t)
           (overlay-put body-ov 'display lhs)
           (when first
             (overlay-put body-ov 'before-string (concat top-str "\n")))
@@ -410,6 +447,7 @@ INDENT-WIDTH is the buffer indent (4 for spaces, 1 for tab)."
   :lighter " gfm-cf"
   (if gfm-code-fences-mode
       (progn
+        (cursor-intangible-mode 1)
         (gfm-code-fences--rebuild)
         (add-hook 'after-change-functions
                   #'gfm-code-fences--schedule-rebuild nil t)
@@ -419,7 +457,8 @@ INDENT-WIDTH is the buffer indent (4 for spaces, 1 for tab)."
     (remove-hook 'post-command-hook #'gfm-code-fences--reveal t)
     (when (timerp gfm-code-fences--rebuild-timer)
       (cancel-timer gfm-code-fences--rebuild-timer))
-    (gfm-code-fences--remove-overlays)))
+    (gfm-code-fences--remove-overlays)
+    (cursor-intangible-mode -1)))
 
 (provide '+gfm-code-fences)
 
