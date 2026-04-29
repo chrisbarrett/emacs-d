@@ -35,6 +35,7 @@
   (gfm-mode-hook . +markdown-fontify-gfm-callouts)
   (gfm-mode-hook . gfm-callouts-mode)
   (gfm-mode-hook . gfm-code-fences-mode)
+  (gfm-mode-hook . gfm-tables-mode)
 
   :custom
   (markdown-fontify-code-blocks-natively t)
