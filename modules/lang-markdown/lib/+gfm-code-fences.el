@@ -143,14 +143,14 @@ Each block is (BLOCK-BEG BLOCK-END INDENT-WIDTH)."
   "Face for the box border around pre blocks.")
 
 (defun gfm-code-fences--text-width ()
-  "Return the current window's usable text width with a sane fallback.
-Reserves one column of headroom so the right border never collides with a
-visual-line-mode wrap indicator."
-  (1- (or (when-let* ((win (or (get-buffer-window (current-buffer))
-                               (get-buffer-window (current-buffer) t))))
-            (window-width win))
-          fill-column
-          80)))
+  "Return the current window's max chars per visual line, with a sane fallback.
+Uses `window-max-chars-per-line', which already excludes the continuation
+column, so it stays stable across mode-init / window-config-change rebuilds."
+  (or (when-let* ((win (or (get-buffer-window (current-buffer))
+                           (get-buffer-window (current-buffer) t))))
+        (window-max-chars-per-line win))
+      fill-column
+      80))
 
 (defun gfm-code-fences--box-cap ()
   "Return the maximum allowable box-width.
@@ -219,6 +219,69 @@ LEADING covers BUFFER-WIDTH cols matching the marker line's char count."
     (put-text-property 0 1 'cursor t str)
     str))
 
+(defun gfm-code-fences--simulate-wrap (text width &optional cont-prefix-w)
+  "Simulate word-wrap of TEXT in a WIDTH-col window.
+CONT-PREFIX-W is the width of the wrap-prefix shown on continuation
+visual lines (default 0). Returns (LAST-COL . WRAP-POSITIONS) where
+LAST-COL is the visual column the text reaches on its final visual line
+(including the wrap-prefix on continuations) and WRAP-POSITIONS is the
+list of TEXT positions at which a wrap occurs."
+  (let* ((cont-prefix-w (or cont-prefix-w 0))
+         (pos 0)
+         (col 0)
+         (len (length text))
+         (first-line t)
+         (wraps nil))
+    (while (< pos len)
+      (let* ((line-width (if first-line width (- width cont-prefix-w)))
+             (remaining (- len pos))
+             (space-left (- line-width col)))
+        (cond
+         ((<= remaining space-left)
+          (setq col (+ col remaining)
+                pos len))
+         (t
+          (let* ((slice (substring text pos (+ pos space-left)))
+                 (wrap-at (cl-position ?\s slice :from-end t))
+                 (next-pos (if wrap-at (+ pos wrap-at 1) (+ pos space-left))))
+            (push next-pos wraps)
+            (setq pos next-pos
+                  col 0
+                  first-line nil))))))
+    (cons (if first-line col (+ col cont-prefix-w))
+          (nreverse wraps))))
+
+(defun gfm-code-fences--last-visual-col (text width &optional cont-prefix-w)
+  "Estimate last visual column TEXT reaches.
+See `gfm-code-fences--simulate-wrap'."
+  (car (gfm-code-fences--simulate-wrap text width cont-prefix-w)))
+
+(defconst gfm-code-fences--wrap-prefix-w 2
+  "Visual width of the wrap-prefix shown on continuation visual lines.")
+
+(defun gfm-code-fences--wrap-prefix (face)
+  "Wrap-prefix string used on continuation lines."
+  (propertize "⋱ " 'face face))
+
+
+(defun gfm-code-fences--right-after-overflow (face line-text)
+  "After-string padding the right border to the window edge for a wrapped line.
+LINE-TEXT is the line's buffer content; the function simulates word-wrap to
+work out where the line ends visually, accounting for the wrap-prefix on
+continuation lines."
+  (let* ((text-width (gfm-code-fences--text-width))
+         ;; +2 for the `│ ' before-string contribution to the first visual line.
+         (visual-col (gfm-code-fences--last-visual-col
+                      (concat "│ " line-text) text-width
+                      gfm-code-fences--wrap-prefix-w))
+         (target-col (1- text-width))
+         (pad-len (max 0 (- target-col visual-col)))
+         (pad (propertize (make-string pad-len ?\s) 'face face))
+         (pipe (propertize "│" 'face face))
+         (str (concat pad pipe)))
+    (put-text-property 0 1 'cursor t str)
+    str))
+
 ;;; Overlay application
 
 (defvar-local gfm-code-fences--overlays nil
@@ -255,6 +318,7 @@ The opening/closing marker lines are split into:
          (max-content (gfm-code-fences--max-line-width body-beg body-end))
          (text-width (gfm-code-fences--text-width))
          (box-width (min text-width (max 80 (+ max-content 4))))
+         (content-budget (- box-width 4))
          (open-buf-width (- open-line-end open-line-beg))
          (close-buf-width (- close-line-end close-line-beg))
          (top-split (gfm-code-fences--top-strings box-width face
@@ -282,8 +346,12 @@ The opening/closing marker lines are split into:
                (ov (make-overlay lbeg lend nil nil t)))
           (overlay-put ov 'gfm-code-fences-kind 'body)
           (overlay-put ov 'before-string lhs)
+          (overlay-put ov 'wrap-prefix (gfm-code-fences--wrap-prefix face))
           (overlay-put ov 'after-string
-                       (gfm-code-fences--right-after box-width face))
+                       (if (> (- lend lbeg) content-budget)
+                           (gfm-code-fences--right-after-overflow
+                            face (buffer-substring-no-properties lbeg lend))
+                         (gfm-code-fences--right-after box-width face)))
           (gfm-code-fences--register ov))
         (forward-line 1)))
     ;; Bottom — leading on the marker line, trailing after.
@@ -362,6 +430,7 @@ INDENT-WIDTH is the buffer indent (4 for spaces, 1 for tab)."
            (max-content (gfm-code-fences--max-line-width beg end indent-width))
            (text-width (gfm-code-fences--text-width))
            (box-width (min text-width (max 80 (+ max-content 4))))
+           (content-budget (- box-width 4))
            ;; Indent blocks have no marker line; use a 0-width split so the
            ;; full top/bottom border lives in the trailing piece.
            (top-split (gfm-code-fences--top-strings box-width face 0 nil))
@@ -375,15 +444,24 @@ INDENT-WIDTH is the buffer indent (4 for spaces, 1 for tab)."
                (lend (line-end-position))
                (cover-end (min (+ lbeg indent-width) lend))
                (last-line (>= lend end))
+               (line-content-w (max 0 (- (- lend lbeg) indent-width)))
                (body-ov (make-overlay lbeg cover-end))
                (rhs-ov (make-overlay lend lend nil nil t))
-               (after (gfm-code-fences--right-after box-width face)))
+               (line-text (buffer-substring-no-properties cover-end lend))
+               (overflow-p (> line-content-w content-budget))
+               (after (if overflow-p
+                          (gfm-code-fences--right-after-overflow face line-text)
+                        (gfm-code-fences--right-after box-width face))))
           (overlay-put body-ov 'gfm-code-fences-kind 'indent-body)
           (overlay-put body-ov 'cursor-intangible t)
           (overlay-put body-ov 'display lhs)
           (when first
             (overlay-put body-ov 'before-string (concat top-str "\n")))
           (gfm-code-fences--register body-ov)
+          (let ((wrap-ov (make-overlay lbeg lend nil nil t)))
+            (overlay-put wrap-ov 'gfm-code-fences-kind 'indent-wrap)
+            (overlay-put wrap-ov 'wrap-prefix (gfm-code-fences--wrap-prefix face))
+            (gfm-code-fences--register wrap-ov))
           (overlay-put rhs-ov 'gfm-code-fences-kind 'indent-rhs)
           (overlay-put rhs-ov 'after-string
                        (if last-line (concat after "\n" bot-str) after))
