@@ -44,7 +44,7 @@
 
   (setq-hook! markdown-mode
     spell-fu-faces-exclude '(markdown-pre-face markdown-inline-code-face
-                             markdown-reference-face))
+                             markdown-code-face markdown-reference-face))
 
   (setq-hook! org-mode
     spell-fu-faces-exclude '(org-meta-line org-link org-code org-block
