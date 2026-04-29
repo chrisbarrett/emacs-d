@@ -20,12 +20,13 @@
   (require 'exec-path-from-shell)
   (unless (executable-find "aspell")
     (warn "Could not find aspell program; spell checking will not work"))
+
   (ispell-set-spellchecker-params)
+
   ;; Treat aspell dictionaries as UTF-8
   (add-to-list 'file-coding-system-alist
                (cons (rx "aspell." (+? nonl) ".pws" eos) 'utf-8-unix)))
 
-;; spell-fu hooks - enable in text, prog, and conf modes
 (use-package spell-fu
   :hook
   (text-mode-hook . spell-fu-mode)
@@ -36,14 +37,22 @@
            "zn" #'spell-fu-goto-next-error
            "zp" #'spell-fu-goto-previous-error
            "zg" #'spell-fu-word-add
-           "zx" #'spell-fu-word-remove))
+           "zx" #'spell-fu-word-remove)
+  :config
+  (spell-fu-dictionary-add (spell-fu-get-ispell-dictionary "en_AU"))
+  (spell-fu-dictionary-add (spell-fu-get-ispell-dictionary "fr"))
+
+  (setq-hook! markdown-mode
+    spell-fu-faces-exclude '(markdown-pre-face markdown-inline-code-face
+                             markdown-reference-face))
+
+  (setq-hook! org-mode
+    spell-fu-faces-exclude '(org-meta-line org-link org-code org-block
+                             org-block-begin-line org-block-end-line
+                             org-footnote org-tag org-modern-tag org-verbatim)))
 
 (use-package flyspell-correct
   :general
   (:states 'normal "z SPC" #'flyspell-correct-at-point))
-
-
-(add-hook 'spell-fu-mode-hook #'+spellcheck-add-dictionaries)
-(add-hook 'org-mode-hook #'+spellcheck-setup-org)
 
 ;;; init.el ends here
