@@ -142,6 +142,22 @@ Each block is (BLOCK-BEG BLOCK-END INDENT-WIDTH)."
 (defconst gfm-code-fences--border-face 'parenthesis
   "Face for the box border around pre blocks.")
 
+(defun gfm-code-fences--text-width ()
+  "Return the current window's usable text width with a sane fallback.
+Reserves one column of headroom so the right border never collides with a
+visual-line-mode wrap indicator."
+  (1- (or (when-let* ((win (or (get-buffer-window (current-buffer))
+                               (get-buffer-window (current-buffer) t))))
+            (window-width win))
+          fill-column
+          80)))
+
+(defun gfm-code-fences--box-cap ()
+  "Return the maximum allowable box-width.
+One column is reserved as headroom so a fitting block's right border never
+touches the window edge; overflow lines may use the full text width."
+  (1- (gfm-code-fences--text-width)))
+
 (defun gfm-code-fences--max-line-width (beg end &optional indent)
   "Maximum line width between BEG and END, subtracting INDENT from each line."
   (let ((max-col 0)
@@ -225,11 +241,20 @@ The opening/closing marker lines are split into:
 - a leading overlay (display covers the marker chars; evaporative + revealable)
 - a trailing overlay (after-string with the rest of the border decoration;
   preserved even when the leading overlay is revealed)."
-  (let* ((body-beg (save-excursion
+  (let* ((open-line-beg (save-excursion
+                          (goto-char open-line-beg) (line-beginning-position)))
+         (open-line-end (save-excursion
+                          (goto-char open-line-end) (line-end-position)))
+         (close-line-beg (save-excursion
+                           (goto-char close-line-beg) (line-beginning-position)))
+         (close-line-end (save-excursion
+                           (goto-char close-line-end) (line-end-position)))
+         (body-beg (save-excursion
                      (goto-char open-line-end) (forward-line 1) (point)))
          (body-end (max body-beg (1- close-line-beg)))
          (max-content (gfm-code-fences--max-line-width body-beg body-end))
-         (box-width (max 80 (+ max-content 4)))
+         (text-width (gfm-code-fences--text-width))
+         (box-width (min text-width (max 80 (+ max-content 4))))
          (open-buf-width (- open-line-end open-line-beg))
          (close-buf-width (- close-line-end close-line-beg))
          (top-split (gfm-code-fences--top-strings box-width face
@@ -335,7 +360,8 @@ INDENT-WIDTH is the buffer indent (4 for spaces, 1 for tab)."
     (goto-char beg)
     (let* ((face gfm-code-fences--border-face)
            (max-content (gfm-code-fences--max-line-width beg end indent-width))
-           (box-width (max 80 (+ max-content 4)))
+           (text-width (gfm-code-fences--text-width))
+           (box-width (min text-width (max 80 (+ max-content 4))))
            ;; Indent blocks have no marker line; use a 0-width split so the
            ;; full top/bottom border lives in the trailing piece.
            (top-split (gfm-code-fences--top-strings box-width face 0 nil))
@@ -451,8 +477,12 @@ INDENT-WIDTH is the buffer indent (4 for spaces, 1 for tab)."
         (gfm-code-fences--rebuild)
         (add-hook 'after-change-functions
                   #'gfm-code-fences--schedule-rebuild nil t)
+        (add-hook 'window-configuration-change-hook
+                  #'gfm-code-fences--schedule-rebuild nil t)
         (add-hook 'post-command-hook #'gfm-code-fences--reveal nil t))
     (remove-hook 'after-change-functions
+                 #'gfm-code-fences--schedule-rebuild t)
+    (remove-hook 'window-configuration-change-hook
                  #'gfm-code-fences--schedule-rebuild t)
     (remove-hook 'post-command-hook #'gfm-code-fences--reveal t)
     (when (timerp gfm-code-fences--rebuild-timer)
