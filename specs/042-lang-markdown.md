@@ -69,6 +69,34 @@ the top border integrates the `[!TYPE]` label inline with `┌─...─┐`, and
 border colour follows the per-type face (`+markdown-gfm-callout-*-face`).
 Overlays rebuild debounced on buffer changes. Source: `lib/+gfm-callouts.el`.
 
+### GFM Tables
+
+`gfm-tables-mode` (auto-enabled in `gfm-mode`) replaces source GFM tables
+with bordered, zebra-striped grid overlays:
+
+```
+| Header A | Header B |
+| :------- | :------- |
+| a1       | b1       |
+| a2       | b2       |
+```
+
+Renders as a `┌─…─┐` / `└─…─┘` box with a continuous `├─…─┤` rule between
+the bold header and body, exterior `│` borders, and a 1-char default-bg
+gap between cells that punches through the alt-bg stripe to expose
+column boundaries. Cell content is normalised to per-column max width
+(≥1 space of internal padding on each side) so unaligned source still
+renders columnar. Tables overlapping a fenced code block are skipped.
+
+Cursor entry into a row suppresses that row's display so the source is
+editable; rebuilds debounce on a 0.2 s idle timer (after-change and
+window-configuration-change) and on theme change. Per-buffer rebuild
+stats surface via `M-x gfm-tables-stats`; rebuilds slower than
+`gfm-tables-slow-rebuild-threshold` (default 0.05 s) emit a warning.
+The stripe colour is `gfm-tables-row-alt-face` (light `#efe9dd`, dark
+`#313244`); border colour reuses `parenthesis`. Source:
+`lib/+gfm-tables.el`.
+
 ### TAB Key Behavior
 
 In insert state, TAB calls `+markdown-tab-dwim`:
@@ -84,6 +112,9 @@ In insert state, TAB calls `+markdown-tab-dwim`:
 | +markdown-tab-dwim         | Smart TAB with snippet/cycle       |
 | +markdown-fontify-gfm-callouts | Add callout font-lock keywords |
 | gfm-callouts-mode          | Box overlays around callouts       |
+| gfm-code-fences-mode       | Curved boxes around fenced/indent code |
+| gfm-tables-mode            | Bordered zebra grids for GFM tables |
+| gfm-tables-stats           | Show buffer's rebuild statistics   |
 
 ### Faces
 
@@ -95,6 +126,7 @@ In insert state, TAB calls `+markdown-tab-dwim`:
 | +markdown-gfm-callout-warning-face      | [!WARNING] marker         |
 | +markdown-gfm-callout-caution-face      | [!CAUTION]/[!CRITICAL]    |
 | +markdown-prettier-ignore-comment-face  | prettier-ignore comments  |
+| gfm-tables-row-alt-face                 | Stripe bg for alt body rows |
 
 ### Keybindings
 

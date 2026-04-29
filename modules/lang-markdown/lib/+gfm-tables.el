@@ -1,0 +1,455 @@
+;;; +gfm-tables.el --- Visual treatment for GFM tables -*- lexical-binding: t; -*-
+
+;;; Commentary:
+
+;; Minor mode that adorns GitHub Flavored Markdown tables with bordered,
+;; zebra-striped grids:
+;;
+;;   ┌──────────────────┐
+;;   │ Header A │ Header B │
+;;   ├──────────────────┤
+;;   │ a1       │ b1       │
+;;   │ a2       │ b2       │
+;;   └──────────────────┘
+;;
+;; Source rows stay in place but are display-replaced with a composed
+;; per-row string carrying outer `│' borders, padded cells, and a 1-char
+;; default-bg gap between cells.  Cursor entry suppresses the row's
+;; display so the underlying source can be edited normally; rebuilds
+;; are debounced via a 0.2-second idle timer.
+
+;;; Code:
+
+(require 'cl-lib)
+(require '+gfm-code-fences nil t)
+
+(defgroup gfm-tables nil
+  "Visual treatment for GitHub Flavored Markdown tables."
+  :group 'markdown-faces)
+
+(defface gfm-tables-row-alt-face
+  '((((background light)) :background "#efe9dd")
+    (((background dark))  :background "#313244"))
+  "Stripe colour for alternating GFM table body rows."
+  :group 'gfm-tables)
+
+(defcustom gfm-tables-slow-rebuild-threshold 0.05
+  "Threshold in seconds above which a single rebuild emits a warning."
+  :type 'number
+  :group 'gfm-tables)
+
+(defconst gfm-tables--border-face 'parenthesis
+  "Face used for table border characters.")
+
+(defconst gfm-tables--delim-re
+  "^| *:?-+:? *\\(?:| *:?-+:? *\\)*|[[:blank:]]*$"
+  "Regexp matching a GFM table delimiter row.")
+
+;;; Cell parser
+
+(defun gfm-tables--split-row (line)
+  "Split table-row LINE into a list of trimmed cell strings.
+Honours `\\|' escapes and treats `|' inside backtick code spans as
+literal.  Backtick spans support arbitrary opening run lengths and a
+matching closing run; an unmatched opening run is treated as literal
+backticks."
+  (let* ((trim (string-trim line))
+         (trim (if (string-prefix-p "|" trim) (substring trim 1) trim))
+         (trim (if (string-suffix-p "|" trim) (substring trim 0 -1) trim))
+         (n (length trim))
+         (i 0)
+         (start 0)
+         (in-tick 0)
+         (cells nil))
+    (while (< i n)
+      (let ((ch (aref trim i)))
+        (cond
+         ((and (= in-tick 0) (eq ch ?\\) (< (1+ i) n))
+          (setq i (+ i 2)))
+         ((eq ch ?`)
+          (let ((run-start i))
+            (while (and (< i n) (eq (aref trim i) ?`))
+              (setq i (1+ i)))
+            (let ((run-len (- i run-start)))
+              (cond
+               ((= in-tick 0)
+                (let ((j i)
+                      (matched nil))
+                  (while (and (< j n) (not matched))
+                    (if (eq (aref trim j) ?`)
+                        (let ((js j))
+                          (while (and (< j n) (eq (aref trim j) ?`))
+                            (setq j (1+ j)))
+                          (when (= (- j js) run-len)
+                            (setq matched t)))
+                      (setq j (1+ j))))
+                  (when matched
+                    (setq in-tick run-len))))
+               ((= in-tick run-len)
+                (setq in-tick 0))))))
+         ((and (= in-tick 0) (eq ch ?|))
+          (push (substring trim start i) cells)
+          (setq i (1+ i))
+          (setq start i))
+         (t
+          (setq i (1+ i))))))
+    (push (substring trim start n) cells)
+    (mapcar (lambda (c)
+              (string-trim (replace-regexp-in-string "\\\\|" "|" c)))
+            (nreverse cells))))
+
+;;; Block discovery
+
+(defun gfm-tables--in-ranges-p (pos ranges)
+  "Non-nil if POS lies in any (BEG . END) range in RANGES."
+  (cl-some (lambda (r) (and (>= pos (car r)) (<= pos (cdr r)))) ranges))
+
+(defun gfm-tables--find-blocks (&optional excluded-ranges)
+  "Return all GFM tables in the buffer.
+Each entry is (HEADER-BEG DELIM-BEG BODY-BEG BODY-END).  Tables whose
+delimiter row falls inside any (BEG . END) range in EXCLUDED-RANGES are
+skipped."
+  (let (blocks)
+    (save-excursion
+      (save-match-data
+        (goto-char (point-min))
+        (while (re-search-forward gfm-tables--delim-re nil t)
+          (let* ((delim-beg (match-beginning 0))
+                 (delim-end (match-end 0)))
+            (cond
+             ((gfm-tables--in-ranges-p delim-beg excluded-ranges)
+              (goto-char delim-end))
+             (t
+              (let ((header-beg
+                     (save-excursion
+                       (goto-char delim-beg)
+                       (and (= (forward-line -1) 0)
+                            (looking-at-p "^|")
+                            (line-beginning-position)))))
+                (cond
+                 ((not header-beg)
+                  (goto-char delim-end))
+                 (t
+                  (let ((body-beg (save-excursion
+                                    (goto-char delim-end)
+                                    (forward-line 1)
+                                    (line-beginning-position)))
+                        (body-end nil))
+                    (save-excursion
+                      (goto-char body-beg)
+                      (let ((last body-beg)
+                            (any nil))
+                        (while (and (not (eobp))
+                                    (looking-at-p "^|"))
+                          (setq any t
+                                last (line-end-position))
+                          (forward-line 1))
+                        (setq body-end (and any last))))
+                    (when body-end
+                      (push (list header-beg delim-beg body-beg body-end)
+                            blocks)
+                      (goto-char body-end))
+                    (unless body-end
+                      (goto-char delim-end)))))))))))) ; whew
+    (nreverse blocks)))
+
+;;; Column widths
+
+(defun gfm-tables--column-widths (rows)
+  "Return per-column max widths across ROWS as a vector.
+Each row is a list of cell strings; column count is the longest row."
+  (let* ((cols (apply #'max 0 (mapcar #'length rows)))
+         (widths (make-vector cols 0)))
+    (dolist (row rows)
+      (cl-loop for cell in row
+               for i from 0
+               do (aset widths i
+                        (max (aref widths i) (string-width cell)))))
+    widths))
+
+(defun gfm-tables--box-width (col-widths)
+  "Return the visual width of the table given COL-WIDTHS.
+Width = 2 (outer pipes) + Σ(col-w + 2) + (cols - 1) gaps."
+  (let* ((cols (length col-widths))
+         (cell-sum (cl-loop for i from 0 below cols
+                            sum (+ (aref col-widths i) 2))))
+    (+ 2 cell-sum (max 0 (1- cols)))))
+
+;;; Compose strings
+
+(defun gfm-tables--compose-row (cells col-widths role)
+  "Compose ROLE row's display string from CELLS and COL-WIDTHS.
+ROLE is one of `header', `body-default', or `body-alt'.
+
+Default-bg segments (gap chars, default-bg cells, header cells) are
+left un-faced so they inherit the active `default' face.  This lets
+focus-dim packages (per-window face remaps) and the terminal's tmux
+pane dim track those segments automatically without any rebuild."
+  (let* ((border-face gfm-tables--border-face)
+         (cell-face (cl-case role
+                      (header '(:weight bold))
+                      (body-alt 'gfm-tables-row-alt-face)
+                      (t nil)))
+         (n (length col-widths))
+         (parts nil))
+    (push (propertize "│" 'face border-face) parts)
+    (cl-loop for i from 0 below n
+             for w = (aref col-widths i)
+             for cell = (or (nth i cells) "")
+             for cell-w = (string-width cell)
+             for pad = (max 0 (- w cell-w))
+             for rendered = (concat " " cell (make-string pad ?\s) " ")
+             do (push (if cell-face
+                          (propertize rendered 'face cell-face)
+                        rendered)
+                      parts)
+                (when (< i (1- n))
+                  (push " " parts)))
+    (push (propertize "│" 'face border-face) parts)
+    (apply #'concat (nreverse parts))))
+
+(defun gfm-tables--rule-row (box-width)
+  "Return a continuous `├─…─┤' rule string of total width BOX-WIDTH."
+  (let ((face gfm-tables--border-face))
+    (concat (propertize "├" 'face face)
+            (propertize (make-string (max 0 (- box-width 2)) ?─)
+                        'face face)
+            (propertize "┤" 'face face))))
+
+(defun gfm-tables--top-border (box-width)
+  "Return a `┌─…─┐' top border of total width BOX-WIDTH."
+  (let ((face gfm-tables--border-face))
+    (concat (propertize "┌" 'face face)
+            (propertize (make-string (max 0 (- box-width 2)) ?─)
+                        'face face)
+            (propertize "┐" 'face face))))
+
+(defun gfm-tables--bottom-border (box-width)
+  "Return a `└─…─┘' bottom border of total width BOX-WIDTH."
+  (let ((face gfm-tables--border-face))
+    (concat (propertize "└" 'face face)
+            (propertize (make-string (max 0 (- box-width 2)) ?─)
+                        'face face)
+            (propertize "┘" 'face face))))
+
+;;; Overlay application
+
+(defvar-local gfm-tables--overlays nil
+  "All gfm-tables overlays currently in this buffer.")
+
+(defvar-local gfm-tables--hidden-ovs nil
+  "Revealable overlays whose display is currently suppressed.")
+
+(defun gfm-tables--register (ov)
+  "Tag OV as a gfm-tables overlay and remember it for bulk cleanup."
+  (overlay-put ov 'gfm-tables t)
+  (push ov gfm-tables--overlays)
+  ov)
+
+(defun gfm-tables--remove-overlays (&optional beg end)
+  "Remove all gfm-tables overlays between BEG and END."
+  (remove-overlays (or beg (point-min)) (or end (point-max))
+                   'gfm-tables t)
+  (unless (or beg end)
+    (setq gfm-tables--overlays nil
+          gfm-tables--hidden-ovs nil)))
+
+(defun gfm-tables--apply-table (header-beg delim-beg body-beg body-end)
+  "Decorate one table identified by HEADER-BEG, DELIM-BEG, BODY-BEG, BODY-END."
+  (save-excursion
+    (let* ((header-end (save-excursion
+                         (goto-char header-beg) (line-end-position)))
+           (delim-end (save-excursion
+                        (goto-char delim-beg) (line-end-position)))
+           (header-line (buffer-substring-no-properties
+                         header-beg header-end))
+           (header-cells (gfm-tables--split-row header-line))
+           (body-rows '())
+           (body-positions '()))
+      (goto-char body-beg)
+      (while (< (point) body-end)
+        (let* ((lbeg (line-beginning-position))
+               (lend (line-end-position))
+               (line (buffer-substring-no-properties lbeg lend)))
+          (push (cons lbeg lend) body-positions)
+          (push (gfm-tables--split-row line) body-rows))
+        (forward-line 1))
+      (setq body-rows (nreverse body-rows)
+            body-positions (nreverse body-positions))
+      (let* ((all-rows (cons header-cells body-rows))
+             (col-widths (gfm-tables--column-widths all-rows))
+             (box-width (gfm-tables--box-width col-widths))
+             (top (gfm-tables--top-border box-width))
+             (bottom (gfm-tables--bottom-border box-width))
+             (rule (gfm-tables--rule-row box-width))
+             (n-body (length body-rows)))
+        ;; Header overlay carries top border as before-string.
+        (let ((ov (make-overlay header-beg header-end))
+              (str (gfm-tables--compose-row header-cells col-widths
+                                            'header)))
+          (overlay-put ov 'evaporate t)
+          (overlay-put ov 'gfm-tables-revealable t)
+          (overlay-put ov 'display str)
+          (overlay-put ov 'before-string (concat top "\n"))
+          (gfm-tables--register ov))
+        ;; Delimiter row → continuous rule.
+        (let ((ov (make-overlay delim-beg delim-end)))
+          (overlay-put ov 'evaporate t)
+          (overlay-put ov 'gfm-tables-revealable t)
+          (overlay-put ov 'display rule)
+          (gfm-tables--register ov))
+        ;; Body rows.
+        (cl-loop for (lbeg . lend) in body-positions
+                 for cells in body-rows
+                 for idx from 1
+                 for last-p = (= idx n-body)
+                 for role = (if (cl-evenp idx) 'body-alt 'body-default)
+                 for str = (gfm-tables--compose-row cells col-widths role)
+                 do (let ((ov (make-overlay lbeg lend)))
+                      (overlay-put ov 'evaporate t)
+                      (overlay-put ov 'gfm-tables-revealable t)
+                      (overlay-put ov 'display str)
+                      (when last-p
+                        (overlay-put ov 'after-string
+                                     (concat "\n" bottom)))
+                      (gfm-tables--register ov)))))))
+
+(defun gfm-tables--fenced-ranges ()
+  "Return (BEG . END) ranges of fenced code blocks, if discoverable."
+  (and (fboundp 'gfm-code-fences--find-blocks)
+       (mapcar (lambda (b) (cons (nth 0 b) (nth 3 b)))
+               (gfm-code-fences--find-blocks))))
+
+(defun gfm-tables--apply-overlays ()
+  "Apply table overlays to all GFM tables in the buffer."
+  (let ((excluded (gfm-tables--fenced-ranges))
+        (n 0))
+    (dolist (block (gfm-tables--find-blocks excluded))
+      (cl-destructuring-bind (h d bb be) block
+        (gfm-tables--apply-table h d bb be)
+        (cl-incf n)))
+    n))
+
+;;; Cursor-driven reveal
+
+(defun gfm-tables--reveal ()
+  "Suppress display on revealable overlays containing point; restore others."
+  (let ((pos (point)))
+    (setq gfm-tables--hidden-ovs
+          (cl-loop for ov in gfm-tables--hidden-ovs
+                   if (and (overlay-buffer ov)
+                           (>= pos (overlay-start ov))
+                           (<= pos (overlay-end ov)))
+                   collect ov
+                   else do (when (overlay-buffer ov)
+                             (overlay-put
+                              ov 'display
+                              (overlay-get ov 'gfm-tables-saved-display))
+                             (overlay-put
+                              ov 'gfm-tables-saved-display nil))))
+    (dolist (ov (overlays-in pos (1+ pos)))
+      (when (and (overlay-get ov 'gfm-tables-revealable)
+                 (overlay-get ov 'display)
+                 (not (memq ov gfm-tables--hidden-ovs)))
+        (overlay-put ov 'gfm-tables-saved-display
+                     (overlay-get ov 'display))
+        (overlay-put ov 'display nil)
+        (push ov gfm-tables--hidden-ovs)))))
+
+;;; Performance instrumentation
+
+(defvar-local gfm-tables--stats nil
+  "Per-buffer alist of rebuild stats.")
+
+(defun gfm-tables--init-stats ()
+  "Reset the per-buffer rebuild stats to zero."
+  (setq gfm-tables--stats
+        (list (cons 'rebuild-count 0)
+              (cons 'total-time 0.0)
+              (cons 'last-time 0.0)
+              (cons 'max-time 0.0)
+              (cons 'table-count 0))))
+
+(defun gfm-tables--record-stats (duration table-count)
+  "Update stats with DURATION and TABLE-COUNT from one rebuild."
+  (unless gfm-tables--stats (gfm-tables--init-stats))
+  (setf (alist-get 'rebuild-count gfm-tables--stats)
+        (1+ (alist-get 'rebuild-count gfm-tables--stats)))
+  (setf (alist-get 'total-time gfm-tables--stats)
+        (+ duration (alist-get 'total-time gfm-tables--stats)))
+  (setf (alist-get 'last-time gfm-tables--stats) duration)
+  (setf (alist-get 'max-time gfm-tables--stats)
+        (max duration (alist-get 'max-time gfm-tables--stats)))
+  (setf (alist-get 'table-count gfm-tables--stats) table-count)
+  (when (> duration gfm-tables-slow-rebuild-threshold)
+    (message "gfm-tables: slow rebuild in %s: %.3fs"
+             (buffer-name) duration)))
+
+(defun gfm-tables-stats ()
+  "Display the current buffer's gfm-tables rebuild statistics."
+  (interactive)
+  (if (not gfm-tables--stats)
+      (message "gfm-tables: no stats yet")
+    (let-alist gfm-tables--stats
+      (message
+       "gfm-tables [%s]: rebuilds=%d total=%.3fs last=%.3fs max=%.3fs tables=%d"
+       (buffer-name)
+       .rebuild-count .total-time .last-time .max-time .table-count))))
+
+;;; Rebuild scheduler
+
+(defun gfm-tables--rebuild ()
+  "Remove and recreate all gfm-tables overlays."
+  (let ((start (current-time)))
+    (gfm-tables--remove-overlays)
+    (let ((n (gfm-tables--apply-overlays)))
+      (gfm-tables--record-stats (float-time (time-since start)) n))))
+
+(defvar-local gfm-tables--rebuild-timer nil
+  "Idle timer for debounced overlay rebuilds.")
+
+(defvar gfm-tables-mode)
+
+(defun gfm-tables--schedule-rebuild (&rest _)
+  "Schedule a debounced overlay rebuild.
+Skips indirect buffers since base buffer overlays already cover them."
+  (unless (buffer-base-buffer)
+    (when (timerp gfm-tables--rebuild-timer)
+      (cancel-timer gfm-tables--rebuild-timer))
+    (setq gfm-tables--rebuild-timer
+          (run-with-idle-timer
+           0.2 nil
+           (lambda (buf)
+             (when (buffer-live-p buf)
+               (with-current-buffer buf
+                 (when gfm-tables-mode
+                   (gfm-tables--rebuild)))))
+           (current-buffer)))))
+
+;;; Minor mode
+
+;;;###autoload
+(define-minor-mode gfm-tables-mode
+  "Adorn GFM tables with bordered, zebra-striped overlays."
+  :lighter " gfm-tb"
+  (if gfm-tables-mode
+      (progn
+        (gfm-tables--init-stats)
+        (gfm-tables--rebuild)
+        (add-hook 'after-change-functions
+                  #'gfm-tables--schedule-rebuild nil t)
+        (add-hook 'window-configuration-change-hook
+                  #'gfm-tables--schedule-rebuild nil t)
+        (add-hook 'post-command-hook #'gfm-tables--reveal nil t))
+    (remove-hook 'after-change-functions
+                 #'gfm-tables--schedule-rebuild t)
+    (remove-hook 'window-configuration-change-hook
+                 #'gfm-tables--schedule-rebuild t)
+    (remove-hook 'post-command-hook #'gfm-tables--reveal t)
+    (when (timerp gfm-tables--rebuild-timer)
+      (cancel-timer gfm-tables--rebuild-timer))
+    (gfm-tables--remove-overlays)))
+
+(provide '+gfm-tables)
+
+;;; +gfm-tables.el ends here

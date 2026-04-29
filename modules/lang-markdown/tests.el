@@ -298,6 +298,133 @@ The first matching entry in auto-mode-alist should be gfm-mode."
            (indents (gfm-code-fences--find-indent-blocks excluded)))
       (should (= 0 (length indents))))))
 
+;;; gfm-tables tests
+
+(let* ((module-dir (file-name-directory (or load-file-name buffer-file-name)))
+       (tables-file (expand-file-name "lib/+gfm-tables.el" module-dir)))
+  (when (file-exists-p tables-file)
+    (load tables-file nil 'nomessage)))
+
+(ert-deftest lang-markdown/gfm-tables-mode-defined ()
+  (should (fboundp 'gfm-tables-mode)))
+
+(ert-deftest lang-markdown/gfm-tables-row-alt-face-defined ()
+  (should (facep 'gfm-tables-row-alt-face)))
+
+;;; Cell parser
+
+(ert-deftest lang-markdown/gfm-tables-split-row-simple ()
+  (skip-unless (fboundp 'gfm-tables--split-row))
+  (should (equal '("a" "b" "c")
+                 (gfm-tables--split-row "| a | b | c |"))))
+
+(ert-deftest lang-markdown/gfm-tables-split-row-escaped-pipe ()
+  (skip-unless (fboundp 'gfm-tables--split-row))
+  (should (equal '("a | b" "c")
+                 (gfm-tables--split-row "| a \\| b | c |"))))
+
+(ert-deftest lang-markdown/gfm-tables-split-row-single-tick-code ()
+  (skip-unless (fboundp 'gfm-tables--split-row))
+  (should (equal '("a" "`b|c`" "d")
+                 (gfm-tables--split-row "| a | `b|c` | d |"))))
+
+(ert-deftest lang-markdown/gfm-tables-split-row-double-tick-code ()
+  (skip-unless (fboundp 'gfm-tables--split-row))
+  (should (equal '("a" "``b|c``" "d")
+                 (gfm-tables--split-row "| a | ``b|c`` | d |"))))
+
+(ert-deftest lang-markdown/gfm-tables-split-row-unbalanced-tick ()
+  "Unbalanced backtick is treated as literal text."
+  (skip-unless (fboundp 'gfm-tables--split-row))
+  (should (equal '("a" "`b" "c")
+                 (gfm-tables--split-row "| a | `b | c |"))))
+
+;;; Block discovery
+
+(ert-deftest lang-markdown/gfm-tables-find-blocks-standard ()
+  (skip-unless (fboundp 'gfm-tables--find-blocks))
+  (with-temp-buffer
+    (insert "| A | B |\n| - | - |\n| 1 | 2 |\n| 3 | 4 |\n")
+    (let ((blocks (gfm-tables--find-blocks)))
+      (should (= 1 (length blocks))))))
+
+(ert-deftest lang-markdown/gfm-tables-find-blocks-rejects-lone-delim ()
+  (skip-unless (fboundp 'gfm-tables--find-blocks))
+  (with-temp-buffer
+    (insert "Some prose.\n| - | - |\nMore prose.\n")
+    (should-not (gfm-tables--find-blocks))))
+
+(ert-deftest lang-markdown/gfm-tables-find-blocks-skips-fenced ()
+  (skip-unless (and (fboundp 'gfm-tables--find-blocks)
+                    (fboundp 'gfm-code-fences--find-blocks)))
+  (with-temp-buffer
+    (insert "```\n| A | B |\n| - | - |\n| 1 | 2 |\n```\n")
+    (let* ((fenced (gfm-code-fences--find-blocks))
+           (excluded (mapcar (lambda (b) (cons (nth 0 b) (nth 3 b))) fenced))
+           (blocks (gfm-tables--find-blocks excluded)))
+      (should (= 0 (length blocks))))))
+
+;;; Column widths
+
+(ert-deftest lang-markdown/gfm-tables-column-widths-unaligned ()
+  (skip-unless (fboundp 'gfm-tables--column-widths))
+  (let* ((rows '(("Header" "B")
+                 ("a" "longer")
+                 ("xx" "y")))
+         (widths (gfm-tables--column-widths rows)))
+    (should (equal 6 (aref widths 0)))
+    (should (equal 6 (aref widths 1)))))
+
+(ert-deftest lang-markdown/gfm-tables-box-width ()
+  (skip-unless (fboundp 'gfm-tables--box-width))
+  ;; 2 cols, widths 3 and 5 → 2 + (5) + (7) + 1 = 15
+  (should (= 15 (gfm-tables--box-width (vector 3 5)))))
+
+;;; Mode lifecycle
+
+(ert-deftest lang-markdown/gfm-tables-mode-creates-overlays ()
+  (skip-unless (fboundp 'gfm-tables-mode))
+  (with-temp-buffer
+    (insert "| A | B |\n| - | - |\n| 1 | 2 |\n")
+    (gfm-tables-mode 1)
+    (should (cl-some (lambda (ov) (overlay-get ov 'gfm-tables))
+                     (overlays-in (point-min) (point-max))))))
+
+(ert-deftest lang-markdown/gfm-tables-mode-removes-overlays ()
+  (skip-unless (fboundp 'gfm-tables-mode))
+  (with-temp-buffer
+    (insert "| A | B |\n| - | - |\n| 1 | 2 |\n")
+    (gfm-tables-mode 1)
+    (gfm-tables-mode -1)
+    (should-not (cl-some (lambda (ov) (overlay-get ov 'gfm-tables))
+                         (overlays-in (point-min) (point-max))))))
+
+(ert-deftest lang-markdown/gfm-tables-enabled-via-gfm-mode-hook ()
+  (skip-unless (boundp 'gfm-mode-hook))
+  (should (memq 'gfm-tables-mode gfm-mode-hook)))
+
+;;; Reveal
+
+(ert-deftest lang-markdown/gfm-tables-reveal-cycle ()
+  (skip-unless (fboundp 'gfm-tables-mode))
+  (with-temp-buffer
+    (insert "| A | B |\n| - | - |\n| 1 | 2 |\n")
+    (gfm-tables-mode 1)
+    ;; Move into header row.
+    (goto-char (point-min))
+    (gfm-tables--reveal)
+    (let ((header-ov (cl-find-if
+                      (lambda (ov)
+                        (and (overlay-get ov 'gfm-tables-revealable)
+                             (= (overlay-start ov) (point-min))))
+                      (overlays-in (point-min) (point-max)))))
+      (should header-ov)
+      (should-not (overlay-get header-ov 'display))
+      ;; Move out.
+      (goto-char (point-max))
+      (gfm-tables--reveal)
+      (should (overlay-get header-ov 'display)))))
+
 (provide 'lang-markdown-tests)
 
 ;;; lang-markdown/tests.el ends here
