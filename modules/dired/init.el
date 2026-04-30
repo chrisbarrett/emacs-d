@@ -40,7 +40,14 @@
   (setq-hook! 'dired-mode-hook
     dired-listing-switches (if (file-remote-p default-directory)
                                "-al"
-                             "--almost-all --human-readable --group-directories-first --no-group")))
+                             "--almost-all --human-readable --group-directories-first --no-group"))
+
+  ;; Force byte-wise collation so dotfiles sort before underscore-prefixed
+  ;; entries. The user's LANG (en_NZ.UTF-8) treats `_' as collating before `.',
+  ;; which is surprising in file listings.
+  (define-advice insert-directory (:around (fn &rest args) sort-c-collate)
+    (let ((process-environment (cons "LC_COLLATE=C" process-environment)))
+      (apply fn args))))
 
 ;; Extra functionality around omitting files, etc.
 (use-package dired-x
