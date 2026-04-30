@@ -417,6 +417,463 @@ Cases are restricted to modes that ship with Emacs so the test never skips."
   ;; 2 cols, widths 3 and 5 → 2 + (5) + (7) + 1 = 15
   (should (= 15 (gfm-tables--box-width (vector 3 5)))))
 
+;;; Cell wrapping
+
+(ert-deftest lang-markdown/gfm-tables-cell-tokens-splits-on-whitespace ()
+  (skip-unless (fboundp 'gfm-tables--cell-tokens))
+  (should (equal '("foo" "bar" "baz")
+                 (gfm-tables--cell-tokens "  foo  bar baz "))))
+
+(ert-deftest lang-markdown/gfm-tables-cell-tokens-empty-string ()
+  (skip-unless (fboundp 'gfm-tables--cell-tokens))
+  (should (equal '() (gfm-tables--cell-tokens "")))
+  (should (equal '() (gfm-tables--cell-tokens "   "))))
+
+(ert-deftest lang-markdown/gfm-tables-cell-tokens-preserves-properties ()
+  (skip-unless (fboundp 'gfm-tables--cell-tokens))
+  (let* ((src (concat "abc " (propertize "def" 'face 'bold)))
+         (tokens (gfm-tables--cell-tokens src)))
+    (should (equal '("abc" "def") tokens))
+    (should (eq 'bold (get-text-property 0 'face (cadr tokens))))))
+
+(ert-deftest lang-markdown/gfm-tables-slice-by-visible-width-basic ()
+  (skip-unless (fboundp 'gfm-tables--slice-by-visible-width))
+  (should (equal '("abc" "de") (gfm-tables--slice-by-visible-width "abcde" 3))))
+
+(ert-deftest lang-markdown/gfm-tables-slice-by-visible-width-zero-falls-back ()
+  (skip-unless (fboundp 'gfm-tables--slice-by-visible-width))
+  ;; Width 0 must still make progress (one char per slice).
+  (let ((chunks (gfm-tables--slice-by-visible-width "ab" 0)))
+    (should (= 2 (length chunks)))))
+
+(ert-deftest lang-markdown/gfm-tables-wrap-cell-no-wrap ()
+  (skip-unless (fboundp 'gfm-tables--wrap-cell))
+  (should (equal '("hello") (gfm-tables--wrap-cell "hello" 10))))
+
+(ert-deftest lang-markdown/gfm-tables-wrap-cell-word-boundary ()
+  (skip-unless (fboundp 'gfm-tables--wrap-cell))
+  (should (equal '("the quick" "brown fox")
+                 (gfm-tables--wrap-cell "the quick brown fox" 9))))
+
+(ert-deftest lang-markdown/gfm-tables-wrap-cell-hard-break-long-word ()
+  (skip-unless (fboundp 'gfm-tables--wrap-cell))
+  (let ((lines (gfm-tables--wrap-cell "abcdefghij" 4)))
+    (should (cl-every (lambda (l) (<= (string-width l) 4)) lines))
+    (should (equal "abcdefghij" (apply #'concat lines)))))
+
+(ert-deftest lang-markdown/gfm-tables-wrap-cell-empty-returns-one-empty-line ()
+  (skip-unless (fboundp 'gfm-tables--wrap-cell))
+  (should (equal '("") (gfm-tables--wrap-cell "" 5))))
+
+(ert-deftest lang-markdown/gfm-tables-wrap-cell-preserves-properties ()
+  (skip-unless (fboundp 'gfm-tables--wrap-cell))
+  (let* ((src (concat (propertize "abc" 'face 'bold) " def"))
+         (lines (gfm-tables--wrap-cell src 3)))
+    (should (eq 'bold (get-text-property 0 'face (car lines))))))
+
+;;; Width fitting
+
+(ert-deftest lang-markdown/gfm-tables-fit-widths-under-budget-passthrough ()
+  (skip-unless (fboundp 'gfm-tables--fit-widths))
+  (should (equal (vector 3 5) (gfm-tables--fit-widths (vector 3 5) 100))))
+
+(ert-deftest lang-markdown/gfm-tables-fit-widths-caps-widest ()
+  (skip-unless (fboundp 'gfm-tables--fit-widths))
+  ;; natural sum 30, budget 20: smaller col fits naturally, widest capped.
+  (let ((fitted (gfm-tables--fit-widths (vector 5 25) 20)))
+    (should (= 5 (aref fitted 0)))
+    (should (= 15 (aref fitted 1)))))
+
+(ert-deftest lang-markdown/gfm-tables-fit-widths-equal-distribution ()
+  (skip-unless (fboundp 'gfm-tables--fit-widths))
+  ;; Equal natural widths over budget → all capped equally.
+  (let ((fitted (gfm-tables--fit-widths (vector 20 20) 30)))
+    (should (= (aref fitted 0) (aref fitted 1)))
+    (should (<= (+ (aref fitted 0) (aref fitted 1)) 30))))
+
+(ert-deftest lang-markdown/gfm-tables-fit-widths-uses-full-budget ()
+  "Integer slack from binary search is distributed so sum = budget."
+  (skip-unless (fboundp 'gfm-tables--fit-widths))
+  ;; Natural [15 118 57], budget 50: water cap is 17 → 15+17+17=49.
+  ;; The 1 unit of slack must be redistributed so total = 50.
+  (let ((fitted (gfm-tables--fit-widths (vector 15 118 57) 50)))
+    (should (= 50 (cl-loop for w across fitted sum w)))))
+
+(ert-deftest lang-markdown/gfm-tables-fit-widths-floor-at-1 ()
+  (skip-unless (fboundp 'gfm-tables--fit-widths))
+  ;; Tiny budget shouldn't produce zero widths.
+  (let ((fitted (gfm-tables--fit-widths (vector 10 10 10) 1)))
+    (should (cl-every (lambda (w) (>= w 1)) (cl-coerce fitted 'list)))))
+
+;;; Multi-line compose
+
+(ert-deftest lang-markdown/gfm-tables-compose-multiline-row-single-line ()
+  "If no cell exceeds its width, output is a single line (no `\\n')."
+  (skip-unless (fboundp 'gfm-tables--compose-multiline-row))
+  (let ((row (gfm-tables--compose-multiline-row '("a" "b") (vector 1 1)
+                                                'body-default)))
+    (should-not (string-match-p "\n" row))))
+
+(ert-deftest lang-markdown/gfm-tables-compose-multiline-row-wraps-cell ()
+  "A cell wider than its column wraps to multiple visual lines."
+  (skip-unless (fboundp 'gfm-tables--compose-multiline-row))
+  (let* ((row (gfm-tables--compose-multiline-row
+               '("a" "one two three four") (vector 1 9)
+               'body-default))
+         (lines (split-string row "\n")))
+    (should (>= (length lines) 2))
+    (should (cl-every (lambda (l) (= (length l) (length (car lines)))) lines))))
+
+(ert-deftest lang-markdown/gfm-tables-compose-multiline-row-pads-short-cells ()
+  "Short cells get padded with blank lines so columns stay aligned."
+  (skip-unless (fboundp 'gfm-tables--compose-multiline-row))
+  (let* ((row (gfm-tables--compose-multiline-row
+               '("x" "long content that wraps") (vector 1 6)
+               'body-default))
+         (lines (split-string row "\n")))
+    ;; All lines have equal display width.
+    (should (cl-every (lambda (l) (= (length l) (length (car lines)))) lines))
+    ;; First line carries `x' but later lines have only spaces / decoration in
+    ;; the first column.
+    (should (string-match-p "x" (car lines)))
+    (dolist (l (cdr lines))
+      (should-not (string-match-p "x" (substring l 0 3))))))
+
+;;; Cell fontification
+
+(ert-deftest lang-markdown/gfm-tables-fontify-cell-applies-bold-face ()
+  "Bold markdown inside a cell receives `markdown-bold-face'."
+  (skip-unless (and (fboundp 'gfm-tables--fontify-cell)
+                    (fboundp 'markdown-mode)))
+  (let ((s (gfm-tables--fontify-cell "**bold**")))
+    (should (cl-some (lambda (i)
+                       (let ((f (get-text-property i 'face s)))
+                         (or (eq f 'markdown-bold-face)
+                             (and (listp f) (memq 'markdown-bold-face f)))))
+                     (number-sequence 0 (1- (length s)))))))
+
+(ert-deftest lang-markdown/gfm-tables-fontify-cell-applies-code-face ()
+  "Inline code inside a cell receives `markdown-inline-code-face'."
+  (skip-unless (and (fboundp 'gfm-tables--fontify-cell)
+                    (fboundp 'markdown-mode)))
+  (let ((s (gfm-tables--fontify-cell "`code`")))
+    (should (cl-some (lambda (i)
+                       (let ((f (get-text-property i 'face s)))
+                         (or (eq f 'markdown-inline-code-face)
+                             (and (listp f)
+                                  (memq 'markdown-inline-code-face f)))))
+                     (number-sequence 0 (1- (length s)))))))
+
+(ert-deftest lang-markdown/gfm-tables-fontify-cell-preserves-width ()
+  "Fontified cell has the same visible width as the raw cell when
+`markdown-hide-markup' is off — i.e. markup chars remain on screen."
+  (skip-unless (and (fboundp 'gfm-tables--fontify-cell)
+                    (fboundp 'gfm-tables--visible-width)
+                    (fboundp 'markdown-mode)))
+  (with-temp-buffer
+    (setq buffer-invisibility-spec '(t))
+    (dolist (raw '("plain" "**bold**" "*it*" "`code`" "[t](u)" ""))
+      (let ((fontified (gfm-tables--fontify-cell raw)))
+        (should (= (string-width raw)
+                   (gfm-tables--visible-width fontified)))))))
+
+(ert-deftest lang-markdown/gfm-tables-visible-width-honours-display ()
+  "`display' string property changes visible width."
+  (skip-unless (fboundp 'gfm-tables--visible-width))
+  (let ((s (concat "abc" (propertize "X" 'display "longer") "de")))
+    (should (= (+ 5 (string-width "longer"))
+               (gfm-tables--visible-width s)))))
+
+(ert-deftest lang-markdown/gfm-tables-visible-width-honours-invisibility-spec ()
+  "Invisible-tagged chars only shrink width when in `buffer-invisibility-spec'."
+  (skip-unless (fboundp 'gfm-tables--visible-width))
+  (let ((s (concat "ab" (propertize "XX" 'invisible 'tag) "cd")))
+    (with-temp-buffer
+      (setq buffer-invisibility-spec nil)
+      (should (= 6 (gfm-tables--visible-width s)))
+      (setq buffer-invisibility-spec '(tag))
+      (should (= 4 (gfm-tables--visible-width s))))))
+
+(ert-deftest lang-markdown/gfm-tables-compose-row-preserves-cell-faces ()
+  "`compose-row' on body-alt row keeps existing markdown faces on cell text."
+  (skip-unless (and (fboundp 'gfm-tables--compose-row)
+                    (fboundp 'gfm-tables--fontify-cell)
+                    (fboundp 'markdown-mode)))
+  (let* ((cell (gfm-tables--fontify-cell "**bold**"))
+         (row (gfm-tables--compose-row (list cell) (vector 8) 'body-alt)))
+    (should (cl-some (lambda (i)
+                       (let ((f (get-text-property i 'face row)))
+                         (and (listp f) (memq 'markdown-bold-face f))))
+                     (number-sequence 0 (1- (length row)))))
+    (should (cl-some (lambda (i)
+                       (let ((f (get-text-property i 'face row)))
+                         (and (listp f)
+                              (memq 'gfm-tables-row-alt-face f))))
+                     (number-sequence 0 (1- (length row)))))))
+
+;;; Overlay lifetime
+
+(ert-deftest lang-markdown/gfm-tables-overlays-not-evaporative ()
+  "Table overlays must not evaporate when their region empties."
+  (skip-unless (fboundp 'gfm-tables-mode))
+  (with-temp-buffer
+    (insert "| A | B |\n| - | - |\n| 1 | 2 |\n")
+    (gfm-tables-mode 1)
+    (dolist (ov (overlays-in (point-min) (point-max)))
+      (when (overlay-get ov 'gfm-tables)
+        (should-not (overlay-get ov 'evaporate))))))
+
+;;; Indirect editing
+
+(ert-deftest lang-markdown/gfm-tables-block-at-point-inside ()
+  (skip-unless (fboundp 'gfm-tables--block-at-point))
+  (with-temp-buffer
+    (insert "intro\n| A | B |\n| - | - |\n| 1 | 2 |\nout\n")
+    (goto-char (point-min))
+    (search-forward "1")
+    (let ((bounds (gfm-tables--block-at-point)))
+      (should bounds)
+      (should (< (car bounds) (point)))
+      (should (> (cdr bounds) (point))))))
+
+(ert-deftest lang-markdown/gfm-tables-block-at-point-outside-returns-nil ()
+  (skip-unless (fboundp 'gfm-tables--block-at-point))
+  (with-temp-buffer
+    (insert "intro\n| A | B |\n| - | - |\n| 1 | 2 |\nout\n")
+    (goto-char (point-min))
+    (should-not (gfm-tables--block-at-point))))
+
+(ert-deftest lang-markdown/gfm-tables-edit-table-command-defined ()
+  (should (commandp 'gfm-tables-edit-table-at-point)))
+
+(ert-deftest lang-markdown/gfm-tables-edit-cell-command-defined ()
+  (should (commandp 'gfm-tables-edit-cell-at-point)))
+
+(ert-deftest lang-markdown/gfm-tables-cell-edit-sanitise-strips-newlines ()
+  (skip-unless (fboundp 'gfm-tables--cell-edit-sanitise))
+  (with-temp-buffer
+    (insert "a\nb\nc")
+    (gfm-tables--cell-edit-sanitise)
+    (should (equal "a b c" (buffer-string)))))
+
+(ert-deftest lang-markdown/gfm-tables-cell-edit-sanitise-escapes-pipe ()
+  (skip-unless (fboundp 'gfm-tables--cell-edit-sanitise))
+  (with-temp-buffer
+    (insert "a|b")
+    (gfm-tables--cell-edit-sanitise)
+    (should (equal "a\\|b" (buffer-string)))))
+
+(ert-deftest lang-markdown/gfm-tables-cell-edit-sanitise-keeps-existing-escape ()
+  (skip-unless (fboundp 'gfm-tables--cell-edit-sanitise))
+  (with-temp-buffer
+    (insert "a\\|b")
+    (gfm-tables--cell-edit-sanitise)
+    (should (equal "a\\|b" (buffer-string)))))
+
+(ert-deftest lang-markdown/gfm-tables-cell-edit-sanitise-leading-pipe ()
+  (skip-unless (fboundp 'gfm-tables--cell-edit-sanitise))
+  (with-temp-buffer
+    (insert "|a")
+    (gfm-tables--cell-edit-sanitise)
+    (should (equal "\\|a" (buffer-string)))))
+
+;;; Cell bounds + active-cell highlight
+
+(ert-deftest lang-markdown/gfm-tables-cell-bounds-simple ()
+  (skip-unless (fboundp 'gfm-tables--cell-bounds))
+  (with-temp-buffer
+    (insert "| A | B |")
+    (let ((cb (gfm-tables--cell-bounds (point-min) (point-max))))
+      (should (= 2 (length cb)))
+      ;; First cell content begins right after the leading `|'.
+      (should (eq ?| (char-before (car (nth 0 cb)))))
+      (should (eq ?| (char-after  (cdr (nth 0 cb))))))))
+
+(ert-deftest lang-markdown/gfm-tables-cell-bounds-honours-escape ()
+  (skip-unless (fboundp 'gfm-tables--cell-bounds))
+  (with-temp-buffer
+    (insert "| a \\| b | c |")
+    (let ((cb (gfm-tables--cell-bounds (point-min) (point-max))))
+      (should (= 2 (length cb))))))
+
+(ert-deftest lang-markdown/gfm-tables-cell-info-at-point ()
+  (skip-unless (fboundp 'gfm-tables-mode))
+  (with-temp-buffer
+    (insert "| A | B |\n| - | - |\n| 1 | 2 |\n")
+    (gfm-tables-mode 1)
+    (goto-char (point-min))
+    (search-forward "1")
+    (let ((info (gfm-tables--cell-info-at-point)))
+      (should info)
+      (should (= 0 (cdr info))))))
+
+(ert-deftest lang-markdown/gfm-tables-active-cell-highlight-applied ()
+  "Display string carries the active-cell face after entering the row."
+  (skip-unless (fboundp 'gfm-tables-mode))
+  (with-temp-buffer
+    (insert "| A | B |\n| - | - |\n| 1 | 2 |\n")
+    (gfm-tables-mode 1)
+    (goto-char (point-min))
+    (search-forward "1")
+    (gfm-tables--update-cursor-highlight)
+    (let* ((ov gfm-tables--highlighted-row-ov)
+           (disp (overlay-get ov 'display))
+           (has-face (cl-some
+                      (lambda (i)
+                        (let ((f (get-text-property i 'face disp)))
+                          (or (eq f 'gfm-tables-active-cell-face)
+                              (and (listp f)
+                                   (memq 'gfm-tables-active-cell-face f)))))
+                      (number-sequence 0 (1- (length disp))))))
+      (should has-face)
+      (should gfm-tables--cursor-anchor))))
+
+(ert-deftest lang-markdown/gfm-tables-cursor-highlight-restores-off-row ()
+  "Moving point out of a table restores the cursor and original display."
+  (skip-unless (fboundp 'gfm-tables-mode))
+  (with-temp-buffer
+    (insert "| A | B |\n| - | - |\n| 1 | 2 |\nout of table\n")
+    (gfm-tables-mode 1)
+    (goto-char (point-min))
+    (search-forward "1")
+    (gfm-tables--update-cursor-highlight)
+    (let ((row-ov gfm-tables--highlighted-row-ov))
+      (goto-char (point-max))
+      (gfm-tables--update-cursor-highlight)
+      (should-not gfm-tables--highlighted-row-ov)
+      (should-not (overlay-get row-ov 'gfm-tables-saved-display))
+      (should-not gfm-tables--cursor-anchor))))
+
+;;; Header column reordering
+
+(ert-deftest lang-markdown/gfm-tables-column-right-swaps ()
+  (skip-unless (fboundp 'gfm-tables-column-right))
+  (with-temp-buffer
+    (insert "| A | B | C |\n| - | - | - |\n| 1 | 2 | 3 |\n")
+    (gfm-tables-mode 1)
+    (goto-char (point-min))
+    (search-forward "A")
+    (goto-char (1- (point)))
+    (gfm-tables-column-right)
+    (goto-char (point-min))
+    (let ((header-line (buffer-substring-no-properties
+                        (point) (line-end-position)))
+          (body-line (progn (forward-line 2)
+                            (buffer-substring-no-properties
+                             (point) (line-end-position)))))
+      (should (string-match-p "B.*A" header-line))
+      (should (string-match-p "2.*1" body-line)))))
+
+(ert-deftest lang-markdown/gfm-tables-column-left-edge-errors ()
+  (skip-unless (fboundp 'gfm-tables-column-left))
+  (with-temp-buffer
+    (insert "| A | B |\n| - | - |\n| 1 | 2 |\n")
+    (gfm-tables-mode 1)
+    (goto-char (point-min))
+    (search-forward "A")
+    (goto-char (1- (point)))
+    (should-error (gfm-tables-column-left) :type 'user-error)))
+
+(ert-deftest lang-markdown/gfm-tables-column-swap-rejects-body ()
+  (skip-unless (fboundp 'gfm-tables-column-right))
+  (with-temp-buffer
+    (insert "| A | B |\n| - | - |\n| 1 | 2 |\n")
+    (gfm-tables-mode 1)
+    (goto-char (point-min))
+    (search-forward "1")
+    (goto-char (1- (point)))
+    (should-error (gfm-tables-column-right) :type 'user-error)))
+
+;;; Cell-wise navigation
+
+(ert-deftest lang-markdown/gfm-tables-cell-forward-moves-cell ()
+  (skip-unless (fboundp 'gfm-tables-cell-forward))
+  (with-temp-buffer
+    (insert "| A | B | C |\n| - | - | - |\n| 1 | 2 | 3 |\n")
+    (gfm-tables-mode 1)
+    (goto-char (point-min))
+    (search-forward "1")
+    (goto-char (1- (point))) ; stand on the digit
+    (let ((before (gfm-tables--cell-info-at-point)))
+      (should before)
+      (gfm-tables-cell-forward)
+      (let ((after (gfm-tables--cell-info-at-point)))
+        (should after)
+        (should (= (1+ (cdr before)) (cdr after)))))))
+
+(ert-deftest lang-markdown/gfm-tables-cell-tab-wraps-to-next-row ()
+  (skip-unless (fboundp 'gfm-tables-cell-tab))
+  (with-temp-buffer
+    (insert "| A | B |\n| - | - |\n| 1 | 2 |\n| 3 | 4 |\n")
+    (gfm-tables-mode 1)
+    (goto-char (point-min))
+    (search-forward "B")
+    (goto-char (1- (point)))
+    (gfm-tables-cell-tab)
+    (let ((info (gfm-tables--cell-info-at-point)))
+      (should info)
+      (should (= 0 (cdr info)))
+      ;; Landed on body row 1 (`1' digit nearby).
+      (should (string-match-p "1" (buffer-substring (line-beginning-position)
+                                                    (line-end-position)))))))
+
+(ert-deftest lang-markdown/gfm-tables-cell-tab-inserts-row-at-end ()
+  (skip-unless (fboundp 'gfm-tables-cell-tab))
+  (with-temp-buffer
+    (insert "| A | B |\n| - | - |\n| 1 | 2 |\n")
+    (gfm-tables-mode 1)
+    (goto-char (point-min))
+    (search-forward "2")
+    (goto-char (1- (point)))
+    (gfm-tables-cell-tab)
+    (let ((info (gfm-tables--cell-info-at-point)))
+      (should info)
+      (should (= 0 (cdr info)))
+      ;; New body row is empty: source line of the form `|  |  |'.
+      (should (string-match-p "^|[[:space:]]*|[[:space:]]*|"
+                              (buffer-substring (line-beginning-position)
+                                                (line-end-position)))))))
+
+(ert-deftest lang-markdown/gfm-tables-cell-backtab-wraps-to-prev-row ()
+  (skip-unless (fboundp 'gfm-tables-cell-backtab))
+  (with-temp-buffer
+    (insert "| A | B |\n| - | - |\n| 1 | 2 |\n| 3 | 4 |\n")
+    (gfm-tables-mode 1)
+    (goto-char (point-min))
+    (search-forward "1")
+    (goto-char (1- (point)))
+    (gfm-tables-cell-backtab)
+    (let ((info (gfm-tables--cell-info-at-point)))
+      (should info)
+      ;; Wrapped to header row's last cell.
+      (should (= 1 (cdr info)))
+      (should (string-match-p "B" (buffer-substring (line-beginning-position)
+                                                    (line-end-position)))))))
+
+(ert-deftest lang-markdown/gfm-tables-row-down-skips-delim ()
+  (skip-unless (fboundp 'gfm-tables-row-down))
+  (with-temp-buffer
+    (insert "| A | B |\n| - | - |\n| 1 | 2 |\n| 3 | 4 |\n")
+    (gfm-tables-mode 1)
+    (goto-char (point-min))
+    (search-forward "A")
+    (goto-char (1- (point)))
+    (gfm-tables-row-down)
+    ;; The body row's source line begins with `|', followed by ` 1 ' for cell 0.
+    ;; row-down lands on the first content char, which is the space right after `|'.
+    (should (string-match-p "^| 1 "
+                            (buffer-substring (line-beginning-position)
+                                              (line-end-position))))
+    (should (eq ?\s (char-after (point))))))
+
+;;; Evil shim
+
+(ert-deftest lang-markdown/gfm-tables-evil-edit-commands-listed ()
+  (should (boundp 'gfm-tables--evil-edit-commands))
+  (should (memq 'evil-insert gfm-tables--evil-edit-commands))
+  (should (memq 'evil-change gfm-tables--evil-edit-commands))
+  (should (memq 'evil-open-below gfm-tables--evil-edit-commands)))
+
 ;;; Mode lifecycle
 
 (ert-deftest lang-markdown/gfm-tables-mode-creates-overlays ()
@@ -439,28 +896,6 @@ Cases are restricted to modes that ship with Emacs so the test never skips."
 (ert-deftest lang-markdown/gfm-tables-enabled-via-gfm-mode-hook ()
   (skip-unless (boundp 'gfm-mode-hook))
   (should (memq 'gfm-tables-mode gfm-mode-hook)))
-
-;;; Reveal
-
-(ert-deftest lang-markdown/gfm-tables-reveal-cycle ()
-  (skip-unless (fboundp 'gfm-tables-mode))
-  (with-temp-buffer
-    (insert "| A | B |\n| - | - |\n| 1 | 2 |\n")
-    (gfm-tables-mode 1)
-    ;; Move into header row.
-    (goto-char (point-min))
-    (gfm-tables--reveal)
-    (let ((header-ov (cl-find-if
-                      (lambda (ov)
-                        (and (overlay-get ov 'gfm-tables-revealable)
-                             (= (overlay-start ov) (point-min))))
-                      (overlays-in (point-min) (point-max)))))
-      (should header-ov)
-      (should-not (overlay-get header-ov 'display))
-      ;; Move out.
-      (goto-char (point-max))
-      (gfm-tables--reveal)
-      (should (overlay-get header-ov 'display)))))
 
 (provide 'lang-markdown-tests)
 
