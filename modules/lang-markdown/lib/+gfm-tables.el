@@ -29,9 +29,18 @@
   :group 'markdown-faces)
 
 (defface gfm-tables-row-alt-face
-  '((((background light)) :background "#efe9dd")
-    (((background dark))  :background "#313244"))
+  '((((background light)) :background "#f6f1e6")
+    (((background dark))  :background "#262637"))
   "Stripe colour for alternating GFM table body rows."
+  :group 'gfm-tables)
+
+(defface gfm-tables-row-alt-cap-face
+  '((((background light)) :foreground "#f6f1e6")
+    (((background dark))  :foreground "#262637"))
+  "Foreground for alt-row half-block caps.
+Mirrors the background of `gfm-tables-row-alt-face' so that
+`▐' / `▌' chars at row ends paint a half-cell of alt-bg, extending
+the row's background to the header box's vertical edges."
   :group 'gfm-tables)
 
 (defcustom gfm-tables-slow-rebuild-threshold 0.05
@@ -255,8 +264,16 @@ pane dim track those segments automatically without any rebuild."
                       (body-alt 'gfm-tables-row-alt-face)
                       (t nil)))
          (n (length col-widths))
-         (parts nil))
-    (push (propertize "│" 'face border-face) parts)
+         (parts nil)
+         (lhs (cl-case role
+                (header (propertize "│" 'face border-face))
+                (body-alt (propertize "▐" 'face 'gfm-tables-row-alt-cap-face))
+                (t " ")))
+         (rhs (cl-case role
+                (header (propertize "│" 'face border-face))
+                (body-alt (propertize "▌" 'face 'gfm-tables-row-alt-cap-face))
+                (t " "))))
+    (push lhs parts)
     (cl-loop for i from 0 below n
              for w = (aref col-widths i)
              for cell = (or (nth i cells) "")
@@ -269,16 +286,18 @@ pane dim track those segments automatically without any rebuild."
                 (push rendered parts)
                 (when (< i (1- n))
                   (push " " parts)))
-    (push (propertize "│" 'face border-face) parts)
+    (push rhs parts)
     (apply #'concat (nreverse parts))))
 
 (defun gfm-tables--rule-row (box-width)
-  "Return a continuous `├─…─┤' rule string of total width BOX-WIDTH."
+  "Return a `└─…─┘' string closing the header row, total width BOX-WIDTH.
+Body rows below have no left/right borders, so the rule row caps the
+header box at its bottom corners."
   (let ((face gfm-tables--border-face))
-    (concat (propertize "├" 'face face)
+    (concat (propertize "└" 'face face)
             (propertize (make-string (max 0 (- box-width 2)) ?─)
                         'face face)
-            (propertize "┤" 'face face))))
+            (propertize "┘" 'face face))))
 
 (defun gfm-tables--top-border (box-width)
   "Return a `┌─…─┐' top border of total width BOX-WIDTH."
@@ -289,12 +308,15 @@ pane dim track those segments automatically without any rebuild."
             (propertize "┐" 'face face))))
 
 (defun gfm-tables--bottom-border (box-width)
-  "Return a `└─…─┘' bottom border of total width BOX-WIDTH."
+  "Return a horizontal rule of total width BOX-WIDTH.
+The leftmost and rightmost cells use half-width box-drawing chars
+`╶' and `╴' so the rule begins/ends at the cell's midpoint rather
+than its edge, aligning with the body row's leading/trailing pad."
   (let ((face gfm-tables--border-face))
-    (concat (propertize "└" 'face face)
+    (concat (propertize "╶" 'face face)
             (propertize (make-string (max 0 (- box-width 2)) ?─)
                         'face face)
-            (propertize "┘" 'face face))))
+            (propertize "╴" 'face face))))
 
 ;;; Overlay application
 
