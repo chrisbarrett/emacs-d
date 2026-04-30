@@ -417,6 +417,128 @@ Cases are restricted to modes that ship with Emacs so the test never skips."
   ;; 2 cols, widths 3 and 5 → 2 + (5) + (7) + 1 = 15
   (should (= 15 (gfm-tables--box-width (vector 3 5)))))
 
+;;; Cell wrapping
+
+(ert-deftest lang-markdown/gfm-tables-cell-tokens-splits-on-whitespace ()
+  (skip-unless (fboundp 'gfm-tables--cell-tokens))
+  (should (equal '("foo" "bar" "baz")
+                 (gfm-tables--cell-tokens "  foo  bar baz "))))
+
+(ert-deftest lang-markdown/gfm-tables-cell-tokens-empty-string ()
+  (skip-unless (fboundp 'gfm-tables--cell-tokens))
+  (should (equal '() (gfm-tables--cell-tokens "")))
+  (should (equal '() (gfm-tables--cell-tokens "   "))))
+
+(ert-deftest lang-markdown/gfm-tables-cell-tokens-preserves-properties ()
+  (skip-unless (fboundp 'gfm-tables--cell-tokens))
+  (let* ((src (concat "abc " (propertize "def" 'face 'bold)))
+         (tokens (gfm-tables--cell-tokens src)))
+    (should (equal '("abc" "def") tokens))
+    (should (eq 'bold (get-text-property 0 'face (cadr tokens))))))
+
+(ert-deftest lang-markdown/gfm-tables-slice-by-visible-width-basic ()
+  (skip-unless (fboundp 'gfm-tables--slice-by-visible-width))
+  (should (equal '("abc" "de") (gfm-tables--slice-by-visible-width "abcde" 3))))
+
+(ert-deftest lang-markdown/gfm-tables-slice-by-visible-width-zero-falls-back ()
+  (skip-unless (fboundp 'gfm-tables--slice-by-visible-width))
+  ;; Width 0 must still make progress (one char per slice).
+  (let ((chunks (gfm-tables--slice-by-visible-width "ab" 0)))
+    (should (= 2 (length chunks)))))
+
+(ert-deftest lang-markdown/gfm-tables-wrap-cell-no-wrap ()
+  (skip-unless (fboundp 'gfm-tables--wrap-cell))
+  (should (equal '("hello") (gfm-tables--wrap-cell "hello" 10))))
+
+(ert-deftest lang-markdown/gfm-tables-wrap-cell-word-boundary ()
+  (skip-unless (fboundp 'gfm-tables--wrap-cell))
+  (should (equal '("the quick" "brown fox")
+                 (gfm-tables--wrap-cell "the quick brown fox" 9))))
+
+(ert-deftest lang-markdown/gfm-tables-wrap-cell-hard-break-long-word ()
+  (skip-unless (fboundp 'gfm-tables--wrap-cell))
+  (let ((lines (gfm-tables--wrap-cell "abcdefghij" 4)))
+    (should (cl-every (lambda (l) (<= (string-width l) 4)) lines))
+    (should (equal "abcdefghij" (apply #'concat lines)))))
+
+(ert-deftest lang-markdown/gfm-tables-wrap-cell-empty-returns-one-empty-line ()
+  (skip-unless (fboundp 'gfm-tables--wrap-cell))
+  (should (equal '("") (gfm-tables--wrap-cell "" 5))))
+
+(ert-deftest lang-markdown/gfm-tables-wrap-cell-preserves-properties ()
+  (skip-unless (fboundp 'gfm-tables--wrap-cell))
+  (let* ((src (concat (propertize "abc" 'face 'bold) " def"))
+         (lines (gfm-tables--wrap-cell src 3)))
+    (should (eq 'bold (get-text-property 0 'face (car lines))))))
+
+;;; Width fitting
+
+(ert-deftest lang-markdown/gfm-tables-fit-widths-under-budget-passthrough ()
+  (skip-unless (fboundp 'gfm-tables--fit-widths))
+  (should (equal (vector 3 5) (gfm-tables--fit-widths (vector 3 5) 100))))
+
+(ert-deftest lang-markdown/gfm-tables-fit-widths-caps-widest ()
+  (skip-unless (fboundp 'gfm-tables--fit-widths))
+  ;; natural sum 30, budget 20: smaller col fits naturally, widest capped.
+  (let ((fitted (gfm-tables--fit-widths (vector 5 25) 20)))
+    (should (= 5 (aref fitted 0)))
+    (should (= 15 (aref fitted 1)))))
+
+(ert-deftest lang-markdown/gfm-tables-fit-widths-equal-distribution ()
+  (skip-unless (fboundp 'gfm-tables--fit-widths))
+  ;; Equal natural widths over budget → all capped equally.
+  (let ((fitted (gfm-tables--fit-widths (vector 20 20) 30)))
+    (should (= (aref fitted 0) (aref fitted 1)))
+    (should (<= (+ (aref fitted 0) (aref fitted 1)) 30))))
+
+(ert-deftest lang-markdown/gfm-tables-fit-widths-uses-full-budget ()
+  "Integer slack from binary search is distributed so sum = budget."
+  (skip-unless (fboundp 'gfm-tables--fit-widths))
+  ;; Natural [15 118 57], budget 50: water cap is 17 → 15+17+17=49.
+  ;; The 1 unit of slack must be redistributed so total = 50.
+  (let ((fitted (gfm-tables--fit-widths (vector 15 118 57) 50)))
+    (should (= 50 (cl-loop for w across fitted sum w)))))
+
+(ert-deftest lang-markdown/gfm-tables-fit-widths-floor-at-1 ()
+  (skip-unless (fboundp 'gfm-tables--fit-widths))
+  ;; Tiny budget shouldn't produce zero widths.
+  (let ((fitted (gfm-tables--fit-widths (vector 10 10 10) 1)))
+    (should (cl-every (lambda (w) (>= w 1)) (cl-coerce fitted 'list)))))
+
+;;; Multi-line compose
+
+(ert-deftest lang-markdown/gfm-tables-compose-multiline-row-single-line ()
+  "If no cell exceeds its width, output is a single line (no `\\n')."
+  (skip-unless (fboundp 'gfm-tables--compose-multiline-row))
+  (let ((row (gfm-tables--compose-multiline-row '("a" "b") (vector 1 1)
+                                                'body-default)))
+    (should-not (string-match-p "\n" row))))
+
+(ert-deftest lang-markdown/gfm-tables-compose-multiline-row-wraps-cell ()
+  "A cell wider than its column wraps to multiple visual lines."
+  (skip-unless (fboundp 'gfm-tables--compose-multiline-row))
+  (let* ((row (gfm-tables--compose-multiline-row
+               '("a" "one two three four") (vector 1 9)
+               'body-default))
+         (lines (split-string row "\n")))
+    (should (>= (length lines) 2))
+    (should (cl-every (lambda (l) (= (length l) (length (car lines)))) lines))))
+
+(ert-deftest lang-markdown/gfm-tables-compose-multiline-row-pads-short-cells ()
+  "Short cells get padded with blank lines so columns stay aligned."
+  (skip-unless (fboundp 'gfm-tables--compose-multiline-row))
+  (let* ((row (gfm-tables--compose-multiline-row
+               '("x" "long content that wraps") (vector 1 6)
+               'body-default))
+         (lines (split-string row "\n")))
+    ;; All lines have equal display width.
+    (should (cl-every (lambda (l) (= (length l) (length (car lines)))) lines))
+    ;; First line carries `x' but later lines have only spaces / decoration in
+    ;; the first column.
+    (should (string-match-p "x" (car lines)))
+    (dolist (l (cdr lines))
+      (should-not (string-match-p "x" (substring l 0 3))))))
+
 ;;; Cell fontification
 
 (ert-deftest lang-markdown/gfm-tables-fontify-cell-applies-bold-face ()

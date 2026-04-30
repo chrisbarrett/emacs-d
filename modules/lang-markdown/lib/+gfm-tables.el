@@ -248,6 +248,116 @@ Width = 2 (outer pipes) + Σ(col-w + 2) + (cols - 1) gaps."
                             sum (+ (aref col-widths i) 2))))
     (+ 2 cell-sum (max 0 (1- cols)))))
 
+;;; Width fitting
+
+(defun gfm-tables--available-width ()
+  "Return the available char width for a table in the current buffer.
+Uses `window-max-chars-per-line', which accounts for the wrap-indicator
+column on ttys and the fringe on graphical frames.  Falls back to
+`fill-column' or 80 when no window currently shows the buffer."
+  (let ((win (or (get-buffer-window (current-buffer))
+                 (get-buffer-window (current-buffer) t))))
+    (or (and win (window-max-chars-per-line win))
+        fill-column
+        80)))
+
+(defun gfm-tables--fit-widths (natural budget)
+  "Cap NATURAL column widths so their sum ≤ BUDGET.
+Returns a vector the same length as NATURAL.  Uses water-filling:
+columns naturally below the cap stay at their natural width; columns
+above are capped.  Any integer slack left after capping is
+distributed +1 at a time across the capped columns so the result
+uses the full BUDGET.  Cap floors at 1 to avoid empty columns."
+  (let* ((widths (cl-coerce natural 'vector))
+         (total (cl-loop for w across widths sum w)))
+    (cond
+     ((<= total budget) widths)
+     ((zerop (length widths)) widths)
+     (t
+      (let ((lo 1)
+            (hi (apply #'max 1 (cl-coerce widths 'list))))
+        (while (< lo hi)
+          (let* ((mid (/ (+ lo hi 1) 2))
+                 (s (cl-loop for w across widths sum (min w mid))))
+            (if (> s budget)
+                (setq hi (1- mid))
+              (setq lo mid))))
+        (let* ((cap (max 1 lo))
+               (fitted (cl-map 'vector (lambda (w) (min w cap)) widths))
+               (slack (- budget (cl-loop for w across fitted sum w))))
+          (cl-loop for i from 0 below (length fitted)
+                   while (> slack 0)
+                   when (and (= (aref fitted i) cap)
+                             (> (aref widths i) cap))
+                   do (cl-incf (aref fitted i))
+                      (cl-decf slack))
+          fitted))))))
+
+;;; Cell wrapping
+
+(defun gfm-tables--cell-tokens (cell)
+  "Split CELL on whitespace runs into a list of word substrings.
+Text properties on CELL are preserved on each word."
+  (let ((n (length cell)) (i 0) (words nil))
+    (while (< i n)
+      (while (and (< i n) (memq (aref cell i) '(?\s ?\t)))
+        (cl-incf i))
+      (let ((start i))
+        (while (and (< i n) (not (memq (aref cell i) '(?\s ?\t))))
+          (cl-incf i))
+        (when (> i start)
+          (push (substring cell start i) words))))
+    (nreverse words)))
+
+(defun gfm-tables--slice-by-visible-width (s width)
+  "Slice S into chunks each with visible-width ≤ WIDTH, preserving props.
+A WIDTH ≤ 0 still makes progress: at least one char per chunk."
+  (let ((target (max 1 width))
+        (chunks nil)
+        (i 0)
+        (n (length s)))
+    (while (< i n)
+      (let ((j i) (w 0))
+        (while (and (< j n)
+                    (let ((cw (string-width
+                               (substring-no-properties s j (1+ j)))))
+                      (or (= j i) (<= (+ w cw) target))))
+          (cl-incf w (string-width (substring-no-properties s j (1+ j))))
+          (cl-incf j))
+        (push (substring s i j) chunks)
+        (setq i j)))
+    (nreverse chunks)))
+
+(defun gfm-tables--wrap-cell (cell width)
+  "Wrap fontified CELL to lines of visible-width ≤ WIDTH.
+Returns a non-empty list of propertized line strings.  Words longer
+than WIDTH are hard-broken.  An empty CELL returns (\"\")."
+  (let ((target (max 1 width))
+        (words (gfm-tables--cell-tokens cell))
+        (line "")
+        (lines nil))
+    (dolist (w words)
+      (let ((ww (gfm-tables--visible-width w)))
+        (cond
+         ((> ww target)
+          (unless (string-empty-p line)
+            (push line lines)
+            (setq line ""))
+          (let ((chunks (gfm-tables--slice-by-visible-width w target)))
+            (dolist (c (butlast chunks))
+              (push c lines))
+            (setq line (car (last chunks)))))
+         ((<= (+ (gfm-tables--visible-width line)
+                 (if (string-empty-p line) 0 1)
+                 ww)
+              target)
+          (setq line (if (string-empty-p line) w (concat line " " w))))
+         (t
+          (push line lines)
+          (setq line w)))))
+    (push line lines)
+    (or (nreverse lines) (list ""))))
+
 ;;; Compose strings
 
 (defun gfm-tables--compose-row (cells col-widths role)
@@ -288,6 +398,26 @@ pane dim track those segments automatically without any rebuild."
                   (push " " parts)))
     (push rhs parts)
     (apply #'concat (nreverse parts))))
+
+(defun gfm-tables--compose-multiline-row (cells col-widths role)
+  "Compose ROLE row, wrapping each cell to its column width.
+Returns a string in which visual lines are joined by newlines.  All
+cells in the row are padded to the tallest cell's height with empty
+strings, so the column grid stays aligned across visual lines."
+  (let* ((widths-list (cl-coerce col-widths 'list))
+         (wrapped (cl-mapcar #'gfm-tables--wrap-cell cells widths-list))
+         (height (apply #'max 1 (mapcar #'length wrapped)))
+         (padded (mapcar (lambda (lines)
+                           (append lines
+                                   (make-list (- height (length lines)) "")))
+                         wrapped)))
+    (mapconcat
+     (lambda (idx)
+       (gfm-tables--compose-row
+        (mapcar (lambda (cell-lines) (nth idx cell-lines)) padded)
+        col-widths role))
+     (number-sequence 0 (1- height))
+     "\n")))
 
 (defun gfm-tables--rule-row (box-width)
   "Return a `└─…─┘' string closing the header row, total width BOX-WIDTH.
@@ -366,7 +496,12 @@ than its edge, aligning with the body row's leading/trailing pad."
       (setq body-rows (nreverse body-rows)
             body-positions (nreverse body-positions))
       (let* ((all-rows (cons header-cells body-rows))
-             (col-widths (gfm-tables--column-widths all-rows))
+             (natural (gfm-tables--column-widths all-rows))
+             (n-cols (length natural))
+             (overhead (+ (* 3 n-cols) 1))
+             (budget (max n-cols
+                          (- (gfm-tables--available-width) overhead)))
+             (col-widths (gfm-tables--fit-widths natural budget))
              (box-width (gfm-tables--box-width col-widths))
              (top (gfm-tables--top-border box-width))
              (bottom (gfm-tables--bottom-border box-width))
@@ -374,8 +509,8 @@ than its edge, aligning with the body row's leading/trailing pad."
              (n-body (length body-rows)))
         ;; Header overlay carries top border as before-string.
         (let ((ov (make-overlay header-beg header-end))
-              (str (gfm-tables--compose-row header-cells col-widths
-                                            'header)))
+              (str (gfm-tables--compose-multiline-row
+                    header-cells col-widths 'header)))
           (overlay-put ov 'evaporate t)
           (overlay-put ov 'gfm-tables-revealable t)
           (overlay-put ov 'display str)
@@ -393,7 +528,8 @@ than its edge, aligning with the body row's leading/trailing pad."
                  for idx from 1
                  for last-p = (= idx n-body)
                  for role = (if (cl-evenp idx) 'body-alt 'body-default)
-                 for str = (gfm-tables--compose-row cells col-widths role)
+                 for str = (gfm-tables--compose-multiline-row
+                            cells col-widths role)
                  do (let ((ov (make-overlay lbeg lend)))
                       (overlay-put ov 'evaporate t)
                       (overlay-put ov 'gfm-tables-revealable t)
