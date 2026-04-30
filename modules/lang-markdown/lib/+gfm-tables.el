@@ -850,6 +850,42 @@ in the indirect buffer (recentering if it has scrolled off-screen)."
 Used to anchor the visible terminal cursor at the active cell's first
 char rather than at the right edge of the overlay's display range.")
 
+(defvar-local gfm-tables--saved-cursor-type 'gfm-tables-unset
+  "Stashed `cursor-type' captured before being hidden over a table.
+The sentinel `gfm-tables-unset' means no value is stashed; the
+sentinel `gfm-tables-global' means the variable was not buffer-local
+when we stashed it.")
+
+(defvar-local gfm-tables--saved-visible-cursor 'gfm-tables-unset
+  "Stashed `visible-cursor' frame parameter while a table cell is active.")
+
+(defun gfm-tables--save-and-hide-cursor ()
+  "Hide the buffer cursor, stashing the previous value for restoration.
+Affects both `cursor-type' (graphical) and the selected frame's
+`visible-cursor' parameter (terminal) so the cursor goes away on tty."
+  (when (eq gfm-tables--saved-cursor-type 'gfm-tables-unset)
+    (setq gfm-tables--saved-cursor-type
+          (if (local-variable-p 'cursor-type)
+              cursor-type
+            'gfm-tables-global)))
+  (setq-local cursor-type nil)
+  (when (and (eq gfm-tables--saved-visible-cursor 'gfm-tables-unset)
+             (eq (framep (selected-frame)) t))
+    (setq gfm-tables--saved-visible-cursor
+          (frame-parameter nil 'visible-cursor))
+    (set-frame-parameter nil 'visible-cursor nil)))
+
+(defun gfm-tables--restore-cursor ()
+  "Restore the stashed `cursor-type' and `visible-cursor', if any."
+  (unless (eq gfm-tables--saved-cursor-type 'gfm-tables-unset)
+    (if (eq gfm-tables--saved-cursor-type 'gfm-tables-global)
+        (kill-local-variable 'cursor-type)
+      (setq-local cursor-type gfm-tables--saved-cursor-type))
+    (setq gfm-tables--saved-cursor-type 'gfm-tables-unset))
+  (unless (eq gfm-tables--saved-visible-cursor 'gfm-tables-unset)
+    (set-frame-parameter nil 'visible-cursor gfm-tables--saved-visible-cursor)
+    (setq gfm-tables--saved-visible-cursor 'gfm-tables-unset)))
+
 (defun gfm-tables--clear-cursor-anchor ()
   "Remove the `cursor' text property previously set by us, if any."
   (when (and gfm-tables--cursor-anchor
@@ -930,7 +966,7 @@ Also anchors the visible cursor at the cell's first buffer char."
       (gfm-tables--set-cursor-anchor (car (nth idx cb))))))
 
 (defun gfm-tables--hide-cursor-highlight ()
-  "Restore the row's original display and clear the cursor anchor."
+  "Restore the row's original display, clear the cursor anchor, and the cursor."
   (when (and gfm-tables--highlighted-row-ov
              (overlay-buffer gfm-tables--highlighted-row-ov))
     (let* ((ov gfm-tables--highlighted-row-ov)
@@ -939,12 +975,14 @@ Also anchors the visible cursor at the cell's first buffer char."
         (overlay-put ov 'display orig))
       (overlay-put ov 'gfm-tables-saved-display nil)))
   (gfm-tables--clear-cursor-anchor)
+  (gfm-tables--restore-cursor)
   (setq gfm-tables--highlighted-row-ov nil))
 
 (defun gfm-tables--update-cursor-highlight ()
-  "Highlight the active cell at point.
-The visible cursor is anchored at the cell's first display char via
-the `cursor' text property on the display string."
+  "Highlight the active cell at point and hide the buffer cursor.
+The cursor is hidden because tty Emacs always renders it at the
+overlay's right edge regardless of any `cursor' positioning hints, so
+the highlight alone conveys cell selection."
   (let ((info (gfm-tables--cell-info-at-point)))
     (cond
      (info
@@ -952,7 +990,8 @@ the `cursor' text property on the display string."
             (idx (cdr info)))
         (unless (eq row-ov gfm-tables--highlighted-row-ov)
           (gfm-tables--hide-cursor-highlight))
-        (gfm-tables--show-cell-highlight row-ov idx)))
+        (gfm-tables--show-cell-highlight row-ov idx))
+      (gfm-tables--save-and-hide-cursor))
      (t
       (gfm-tables--hide-cursor-highlight)))))
 
