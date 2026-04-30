@@ -611,6 +611,41 @@ Cases are restricted to modes that ship with Emacs so the test never skips."
                               (memq 'gfm-tables-row-alt-face f))))
                      (number-sequence 0 (1- (length row)))))))
 
+;;; Overlay lifetime
+
+(ert-deftest lang-markdown/gfm-tables-overlays-not-evaporative ()
+  "Table overlays must not evaporate when their region empties."
+  (skip-unless (fboundp 'gfm-tables-mode))
+  (with-temp-buffer
+    (insert "| A | B |\n| - | - |\n| 1 | 2 |\n")
+    (gfm-tables-mode 1)
+    (dolist (ov (overlays-in (point-min) (point-max)))
+      (when (overlay-get ov 'gfm-tables)
+        (should-not (overlay-get ov 'evaporate))))))
+
+;;; Indirect editing
+
+(ert-deftest lang-markdown/gfm-tables-block-at-point-inside ()
+  (skip-unless (fboundp 'gfm-tables--block-at-point))
+  (with-temp-buffer
+    (insert "intro\n| A | B |\n| - | - |\n| 1 | 2 |\nout\n")
+    (goto-char (point-min))
+    (search-forward "1")
+    (let ((bounds (gfm-tables--block-at-point)))
+      (should bounds)
+      (should (< (car bounds) (point)))
+      (should (> (cdr bounds) (point))))))
+
+(ert-deftest lang-markdown/gfm-tables-block-at-point-outside-returns-nil ()
+  (skip-unless (fboundp 'gfm-tables--block-at-point))
+  (with-temp-buffer
+    (insert "intro\n| A | B |\n| - | - |\n| 1 | 2 |\nout\n")
+    (goto-char (point-min))
+    (should-not (gfm-tables--block-at-point))))
+
+(ert-deftest lang-markdown/gfm-tables-edit-table-command-defined ()
+  (should (commandp 'gfm-tables-edit-table-at-point)))
+
 ;;; Mode lifecycle
 
 (ert-deftest lang-markdown/gfm-tables-mode-creates-overlays ()
@@ -633,28 +668,6 @@ Cases are restricted to modes that ship with Emacs so the test never skips."
 (ert-deftest lang-markdown/gfm-tables-enabled-via-gfm-mode-hook ()
   (skip-unless (boundp 'gfm-mode-hook))
   (should (memq 'gfm-tables-mode gfm-mode-hook)))
-
-;;; Reveal
-
-(ert-deftest lang-markdown/gfm-tables-reveal-cycle ()
-  (skip-unless (fboundp 'gfm-tables-mode))
-  (with-temp-buffer
-    (insert "| A | B |\n| - | - |\n| 1 | 2 |\n")
-    (gfm-tables-mode 1)
-    ;; Move into header row.
-    (goto-char (point-min))
-    (gfm-tables--reveal)
-    (let ((header-ov (cl-find-if
-                      (lambda (ov)
-                        (and (overlay-get ov 'gfm-tables-revealable)
-                             (= (overlay-start ov) (point-min))))
-                      (overlays-in (point-min) (point-max)))))
-      (should header-ov)
-      (should-not (overlay-get header-ov 'display))
-      ;; Move out.
-      (goto-char (point-max))
-      (gfm-tables--reveal)
-      (should (overlay-get header-ov 'display)))))
 
 (provide 'lang-markdown-tests)
 

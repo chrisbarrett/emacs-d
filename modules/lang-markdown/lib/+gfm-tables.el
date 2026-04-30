@@ -453,9 +453,6 @@ than its edge, aligning with the body row's leading/trailing pad."
 (defvar-local gfm-tables--overlays nil
   "All gfm-tables overlays currently in this buffer.")
 
-(defvar-local gfm-tables--hidden-ovs nil
-  "Revealable overlays whose display is currently suppressed.")
-
 (defun gfm-tables--register (ov)
   "Tag OV as a gfm-tables overlay and remember it for bulk cleanup."
   (overlay-put ov 'gfm-tables t)
@@ -467,8 +464,7 @@ than its edge, aligning with the body row's leading/trailing pad."
   (remove-overlays (or beg (point-min)) (or end (point-max))
                    'gfm-tables t)
   (unless (or beg end)
-    (setq gfm-tables--overlays nil
-          gfm-tables--hidden-ovs nil)))
+    (setq gfm-tables--overlays nil)))
 
 (defun gfm-tables--apply-table (header-beg delim-beg body-beg body-end)
   "Decorate one table identified by HEADER-BEG, DELIM-BEG, BODY-BEG, BODY-END."
@@ -511,15 +507,11 @@ than its edge, aligning with the body row's leading/trailing pad."
         (let ((ov (make-overlay header-beg header-end))
               (str (gfm-tables--compose-multiline-row
                     header-cells col-widths 'header)))
-          (overlay-put ov 'evaporate t)
-          (overlay-put ov 'gfm-tables-revealable t)
           (overlay-put ov 'display str)
           (overlay-put ov 'before-string (concat top "\n"))
           (gfm-tables--register ov))
         ;; Delimiter row → continuous rule.
         (let ((ov (make-overlay delim-beg delim-end)))
-          (overlay-put ov 'evaporate t)
-          (overlay-put ov 'gfm-tables-revealable t)
           (overlay-put ov 'display rule)
           (gfm-tables--register ov))
         ;; Body rows.
@@ -531,8 +523,6 @@ than its edge, aligning with the body row's leading/trailing pad."
                  for str = (gfm-tables--compose-multiline-row
                             cells col-widths role)
                  do (let ((ov (make-overlay lbeg lend)))
-                      (overlay-put ov 'evaporate t)
-                      (overlay-put ov 'gfm-tables-revealable t)
                       (overlay-put ov 'display str)
                       (when last-p
                         (overlay-put ov 'after-string
@@ -554,32 +544,6 @@ than its edge, aligning with the body row's leading/trailing pad."
         (gfm-tables--apply-table h d bb be)
         (cl-incf n)))
     n))
-
-;;; Cursor-driven reveal
-
-(defun gfm-tables--reveal ()
-  "Suppress display on revealable overlays containing point; restore others."
-  (let ((pos (point)))
-    (setq gfm-tables--hidden-ovs
-          (cl-loop for ov in gfm-tables--hidden-ovs
-                   if (and (overlay-buffer ov)
-                           (>= pos (overlay-start ov))
-                           (<= pos (overlay-end ov)))
-                   collect ov
-                   else do (when (overlay-buffer ov)
-                             (overlay-put
-                              ov 'display
-                              (overlay-get ov 'gfm-tables-saved-display))
-                             (overlay-put
-                              ov 'gfm-tables-saved-display nil))))
-    (dolist (ov (overlays-in pos (1+ pos)))
-      (when (and (overlay-get ov 'gfm-tables-revealable)
-                 (overlay-get ov 'display)
-                 (not (memq ov gfm-tables--hidden-ovs)))
-        (overlay-put ov 'gfm-tables-saved-display
-                     (overlay-get ov 'display))
-        (overlay-put ov 'display nil)
-        (push ov gfm-tables--hidden-ovs)))))
 
 ;;; Performance instrumentation
 
@@ -664,16 +628,46 @@ Skips indirect buffers since base buffer overlays already cover them."
         (add-hook 'after-change-functions
                   #'gfm-tables--schedule-rebuild nil t)
         (add-hook 'window-configuration-change-hook
-                  #'gfm-tables--schedule-rebuild nil t)
-        (add-hook 'post-command-hook #'gfm-tables--reveal nil t))
+                  #'gfm-tables--schedule-rebuild nil t))
     (remove-hook 'after-change-functions
                  #'gfm-tables--schedule-rebuild t)
     (remove-hook 'window-configuration-change-hook
                  #'gfm-tables--schedule-rebuild t)
-    (remove-hook 'post-command-hook #'gfm-tables--reveal t)
     (when (timerp gfm-tables--rebuild-timer)
       (cancel-timer gfm-tables--rebuild-timer))
     (gfm-tables--remove-overlays)))
+
+;;; Indirect editing
+
+(declare-function edit-indirect-region "edit-indirect")
+(declare-function orgtbl-mode "org-table")
+(declare-function markdown-mode "markdown-mode")
+
+(defun gfm-tables--block-at-point ()
+  "Return (BEG . END) of the table block containing point, or nil."
+  (let ((pt (point)))
+    (cl-loop for (header-beg _delim-beg _body-beg body-end)
+             in (gfm-tables--find-blocks)
+             when (and (>= pt header-beg) (<= pt body-end))
+             return (cons header-beg body-end))))
+
+;;;###autoload
+(defun gfm-tables-edit-table-at-point ()
+  "Open the GFM table containing point in an indirect edit buffer.
+The edit buffer uses `markdown-mode' with `orgtbl-mode' enabled, so
+TAB navigates cells, content auto-aligns on edit, and column
+operations (M-<right>/<left>) work as in `org-mode'."
+  (interactive)
+  (require 'edit-indirect)
+  (let ((bounds (gfm-tables--block-at-point)))
+    (unless bounds
+      (user-error "Point is not inside a GFM table"))
+    (let* ((edit-indirect-guess-mode-function
+            (lambda (_parent _beg _end) (markdown-mode)))
+           (buf (edit-indirect-region (car bounds) (cdr bounds) t)))
+      (with-current-buffer buf
+        (when (fboundp 'orgtbl-mode)
+          (orgtbl-mode 1))))))
 
 (provide '+gfm-tables)
 
