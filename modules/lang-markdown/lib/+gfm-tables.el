@@ -856,35 +856,26 @@ The sentinel `gfm-tables-unset' means no value is stashed; the
 sentinel `gfm-tables-global' means the variable was not buffer-local
 when we stashed it.")
 
-(defvar-local gfm-tables--saved-visible-cursor 'gfm-tables-unset
-  "Stashed `visible-cursor' frame parameter while a table cell is active.")
-
 (defun gfm-tables--save-and-hide-cursor ()
   "Hide the buffer cursor, stashing the previous value for restoration.
-Affects both `cursor-type' (graphical) and the selected frame's
-`visible-cursor' parameter (terminal) so the cursor goes away on tty."
+Reliable on graphical frames; tty cursor visibility is left as-is
+because tmux + post-redisplay re-shows from Emacs's own internals
+make it impractical to keep hidden in a terminal without intrusive
+hacks."
   (when (eq gfm-tables--saved-cursor-type 'gfm-tables-unset)
     (setq gfm-tables--saved-cursor-type
           (if (local-variable-p 'cursor-type)
               cursor-type
             'gfm-tables-global)))
-  (setq-local cursor-type nil)
-  (when (and (eq gfm-tables--saved-visible-cursor 'gfm-tables-unset)
-             (eq (framep (selected-frame)) t))
-    (setq gfm-tables--saved-visible-cursor
-          (frame-parameter nil 'visible-cursor))
-    (set-frame-parameter nil 'visible-cursor nil)))
+  (setq-local cursor-type nil))
 
 (defun gfm-tables--restore-cursor ()
-  "Restore the stashed `cursor-type' and `visible-cursor', if any."
+  "Restore the stashed `cursor-type', if any."
   (unless (eq gfm-tables--saved-cursor-type 'gfm-tables-unset)
     (if (eq gfm-tables--saved-cursor-type 'gfm-tables-global)
         (kill-local-variable 'cursor-type)
       (setq-local cursor-type gfm-tables--saved-cursor-type))
-    (setq gfm-tables--saved-cursor-type 'gfm-tables-unset))
-  (unless (eq gfm-tables--saved-visible-cursor 'gfm-tables-unset)
-    (set-frame-parameter nil 'visible-cursor gfm-tables--saved-visible-cursor)
-    (setq gfm-tables--saved-visible-cursor 'gfm-tables-unset)))
+    (setq gfm-tables--saved-cursor-type 'gfm-tables-unset)))
 
 (defun gfm-tables--clear-cursor-anchor ()
   "Remove the `cursor' text property previously set by us, if any."
