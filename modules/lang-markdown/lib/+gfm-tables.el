@@ -656,11 +656,14 @@ than its edge, aligning with the body row's leading/trailing pad."
 ;;; Rebuild scheduler
 
 (defun gfm-tables--rebuild ()
-  "Remove and recreate all gfm-tables overlays."
+  "Remove and recreate all gfm-tables overlays.
+Re-applies the active-cell highlight afterwards so cell selection
+survives window-configuration changes and other rebuild triggers."
   (let ((start (current-time)))
     (gfm-tables--remove-overlays)
     (let ((n (gfm-tables--apply-overlays)))
-      (gfm-tables--record-stats (float-time (time-since start)) n))))
+      (gfm-tables--record-stats (float-time (time-since start)) n))
+    (gfm-tables--update-cursor-highlight)))
 
 (defvar-local gfm-tables--rebuild-timer nil
   "Idle timer for debounced overlay rebuilds.")
@@ -727,28 +730,115 @@ Skips indirect buffers since base buffer overlays already cover them."
              when (and (>= pt header-beg) (<= pt body-end))
              return (cons header-beg body-end))))
 
+(defvar-local gfm-tables--edit-source-buffer nil
+  "Buffer-local in the indirect edit buffer; points to the parent buffer.")
+
+(defvar-local gfm-tables--edit-pending-cell-info nil
+  "Stashed (LINE-OFFSET . CELL-IDX) captured before edit-indirect commits.
+Set on the parent buffer by `gfm-tables--edit-before-commit', consumed
+by `gfm-tables--edit-after-commit' which runs in the parent.")
+
+(defun gfm-tables--edit-cell-info-here (&optional region-beg)
+  "Return (LINE-OFFSET . CELL-IDX) for point on the current line.
+LINE-OFFSET is counted from REGION-BEG (defaulting to `point-min'),
+so the value is comparable between a source buffer (passing the table's
+start) and an indirect edit buffer (whose `point-min' is that start)."
+  (let* ((cb (gfm-tables--cell-bounds (line-beginning-position)
+                                      (line-end-position)))
+         (idx (or (and cb
+                       (cl-position-if
+                        (lambda (b)
+                          (and (>= (point) (car b))
+                               (< (point) (cdr b))))
+                        cb))
+                  0))
+         (line-offset (count-lines (or region-beg (point-min))
+                                   (line-beginning-position))))
+    (cons line-offset idx)))
+
+(defun gfm-tables--goto-cell-on-current-line (idx)
+  "Move point to the start of cell IDX on the current line, if it exists."
+  (let ((cb (gfm-tables--cell-bounds (line-beginning-position)
+                                     (line-end-position))))
+    (when (and cb (< idx (length cb)))
+      (goto-char (car (nth idx cb))))))
+
+(defun gfm-tables--edit-before-commit ()
+  "Capture indirect-buffer cell position into the parent buffer."
+  (let ((info (gfm-tables--edit-cell-info-here))
+        (parent gfm-tables--edit-source-buffer))
+    (when (and parent (buffer-live-p parent))
+      (with-current-buffer parent
+        (setq gfm-tables--edit-pending-cell-info info)))))
+
+(defun gfm-tables--edit-after-commit (beg _end)
+  "After commit, move point to the captured cell and recenter if off-screen.
+The actual move is deferred to the next event-loop tick so it runs
+after any after-advice on `edit-indirect-commit' (e.g. the one
+`markdown-mode' installs to track committed positions)."
+  (when gfm-tables--edit-pending-cell-info
+    (let* ((info gfm-tables--edit-pending-cell-info)
+           (line-offset (car info))
+           (cell-idx (cdr info))
+           (buf (current-buffer)))
+      (setq gfm-tables--edit-pending-cell-info nil)
+      (run-at-time
+       0 nil
+       (lambda ()
+         (when (buffer-live-p buf)
+           (with-current-buffer buf
+             (goto-char beg)
+             (forward-line line-offset)
+             (gfm-tables--goto-cell-on-current-line cell-idx)
+             (let ((win (get-buffer-window buf)))
+               (when (window-live-p win)
+                 (set-window-point win (point))
+                 (unless (pos-visible-in-window-p (point) win)
+                   (with-selected-window win (recenter)))))
+             (when (bound-and-true-p gfm-tables-mode)
+               (gfm-tables--update-cursor-highlight)))))))))
+
 ;;;###autoload
 (defun gfm-tables-edit-table-at-point ()
   "Open the GFM table containing point in an indirect edit buffer.
 The edit buffer uses `markdown-mode' with `orgtbl-mode' enabled, so
-TAB navigates cells, content auto-aligns on edit, and column
-operations (M-<right>/<left>) work as in `org-mode'.  Point in the
-edit buffer is placed at the same source offset as in the parent."
+TAB navigates cells, edits auto-align columns, and M-<right>/<left>
+moves columns as in `org-mode'.  Point in the indirect buffer lands
+at the same cell as in the parent.  When the indirect buffer is
+committed, point in the parent is moved to the cell point was on
+in the indirect buffer (recentering if it has scrolled off-screen)."
   (interactive)
   (require 'edit-indirect)
   (let ((bounds (gfm-tables--block-at-point))
-        (src-pt (point)))
+        (src-buf (current-buffer)))
     (unless bounds
       (user-error "Point is not inside a GFM table"))
-    (let* ((edit-indirect-guess-mode-function
+    (let* ((info (gfm-tables--edit-cell-info-here (car bounds)))
+           (line-offset (car info))
+           (cell-idx (cdr info))
+           ;; Extend region to include the trailing newline so markdown-mode's
+           ;; `after-commit-function' (which appends \n when the region doesn't
+           ;; end in one) is a no-op.
+           (region-end (min (point-max) (1+ (cdr bounds))))
+           (edit-indirect-guess-mode-function
             (lambda (_parent _beg _end) (markdown-mode)))
-           (buf (edit-indirect-region (car bounds) (cdr bounds) t))
-           (offset (- src-pt (car bounds))))
+           (buf (edit-indirect-region (car bounds) region-end t)))
       (with-current-buffer buf
         (when (fboundp 'orgtbl-mode)
           (orgtbl-mode 1))
-        (goto-char (max (point-min)
-                        (min (point-max) (+ (point-min) offset))))))))
+        ;; Source region ends mid-line (at body-end, before its newline);
+        ;; suppress the auto-trailing newline so commit doesn't insert one.
+        (setq-local require-final-newline nil)
+        (setq-local mode-require-final-newline nil)
+        (setq gfm-tables--edit-source-buffer src-buf)
+        (goto-char (point-min))
+        (forward-line line-offset)
+        (gfm-tables--goto-cell-on-current-line cell-idx)
+        (add-hook 'edit-indirect-before-commit-hook
+                  #'gfm-tables--edit-before-commit nil t))
+      (with-current-buffer src-buf
+        (add-hook 'edit-indirect-after-commit-functions
+                  #'gfm-tables--edit-after-commit nil t)))))
 
 ;;; Active-cell highlight
 
@@ -948,9 +1038,15 @@ Returns non-nil on success, nil when there is no previous table row."
       (gfm-tables--goto-cell (car info) most-positive-fixnum))))
 
 (defun gfm-tables--maybe-snap-to-cell ()
-  "If point landed inside a table after a non-table motion, snap to cell 0."
-  (let ((info (gfm-tables--cell-info-at-point)))
-    (when info (gfm-tables--goto-cell (car info) 0))))
+  "If point landed on a table row after a non-table motion, snap to cell 0.
+Looks for a row overlay at the current line's beginning, so this
+works even when Emacs has already bounced point to the overlay's
+right edge after the inbound motion."
+  (let ((row-ov (cl-find-if
+                 (lambda (o) (overlay-get o 'gfm-tables-cell-bounds))
+                 (overlays-at (line-beginning-position)))))
+    (when row-ov
+      (gfm-tables--goto-cell row-ov 0))))
 
 (defmacro gfm-tables--define-evil-motion (name table-fn evil-fn fall-through)
   "Define NAME as a wrapper dispatching between TABLE-FN and EVIL-FN.
