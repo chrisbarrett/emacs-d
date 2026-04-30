@@ -713,6 +713,46 @@ Cases are restricted to modes that ship with Emacs so the test never skips."
       (should-not (overlay-get row-ov 'gfm-tables-saved-display))
       (should-not gfm-tables--cursor-anchor))))
 
+;;; Header column reordering
+
+(ert-deftest lang-markdown/gfm-tables-column-right-swaps ()
+  (skip-unless (fboundp 'gfm-tables-column-right))
+  (with-temp-buffer
+    (insert "| A | B | C |\n| - | - | - |\n| 1 | 2 | 3 |\n")
+    (gfm-tables-mode 1)
+    (goto-char (point-min))
+    (search-forward "A")
+    (goto-char (1- (point)))
+    (gfm-tables-column-right)
+    (goto-char (point-min))
+    (let ((header-line (buffer-substring-no-properties
+                        (point) (line-end-position)))
+          (body-line (progn (forward-line 2)
+                            (buffer-substring-no-properties
+                             (point) (line-end-position)))))
+      (should (string-match-p "B.*A" header-line))
+      (should (string-match-p "2.*1" body-line)))))
+
+(ert-deftest lang-markdown/gfm-tables-column-left-edge-errors ()
+  (skip-unless (fboundp 'gfm-tables-column-left))
+  (with-temp-buffer
+    (insert "| A | B |\n| - | - |\n| 1 | 2 |\n")
+    (gfm-tables-mode 1)
+    (goto-char (point-min))
+    (search-forward "A")
+    (goto-char (1- (point)))
+    (should-error (gfm-tables-column-left) :type 'user-error)))
+
+(ert-deftest lang-markdown/gfm-tables-column-swap-rejects-body ()
+  (skip-unless (fboundp 'gfm-tables-column-right))
+  (with-temp-buffer
+    (insert "| A | B |\n| - | - |\n| 1 | 2 |\n")
+    (gfm-tables-mode 1)
+    (goto-char (point-min))
+    (search-forward "1")
+    (goto-char (1- (point)))
+    (should-error (gfm-tables-column-right) :type 'user-error)))
+
 ;;; Cell-wise navigation
 
 (ert-deftest lang-markdown/gfm-tables-cell-forward-moves-cell ()

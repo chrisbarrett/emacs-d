@@ -1067,6 +1067,85 @@ Returns non-nil on success, nil when there is no previous table row."
     (when info
       (gfm-tables--goto-cell (car info) most-positive-fixnum))))
 
+;;; Header column reordering
+
+(defun gfm-tables--current-block ()
+  "Return the table block (HEADER-BEG DELIM-BEG BODY-BEG BODY-END) at point."
+  (let ((pt (point)))
+    (cl-loop for block in (gfm-tables--find-blocks)
+             when (and (>= pt (nth 0 block)) (<= pt (nth 3 block)))
+             return block)))
+
+(defun gfm-tables--in-header-p ()
+  "Non-nil if point is on the header row of a table."
+  (let ((block (gfm-tables--current-block)))
+    (and block (= (line-beginning-position) (nth 0 block)))))
+
+(defun gfm-tables--swap-cells-in-line (line-pos a b)
+  "On the line containing LINE-POS, swap cell A with cell B by index.
+A and B are zero-based.  No-op if either index is out of range."
+  (save-excursion
+    (goto-char line-pos)
+    (let* ((lb (line-beginning-position))
+           (le (line-end-position))
+           (cb (gfm-tables--cell-bounds lb le))
+           (n (length cb)))
+      (when (and (< a n) (< b n) (/= a b))
+        (let* ((lo (min a b))
+               (hi (max a b))
+               (lo-beg (car (nth lo cb)))
+               (lo-end (cdr (nth lo cb)))
+               (hi-beg (car (nth hi cb)))
+               (hi-end (cdr (nth hi cb)))
+               (lo-text (buffer-substring-no-properties lo-beg lo-end))
+               (hi-text (buffer-substring-no-properties hi-beg hi-end)))
+          ;; Replace high range first so low positions stay valid.
+          (delete-region hi-beg hi-end)
+          (goto-char hi-beg)
+          (insert lo-text)
+          (delete-region lo-beg lo-end)
+          (goto-char lo-beg)
+          (insert hi-text))))))
+
+(defun gfm-tables--swap-columns (direction)
+  "Swap the active cell's column with its DIRECTION (-1 or 1) neighbour."
+  (unless (gfm-tables--in-header-p)
+    (user-error "Column reordering is only available on the header row"))
+  (let* ((info (gfm-tables--cell-info-at-point))
+         (block (gfm-tables--current-block))
+         (src-idx (cdr info))
+         (dst-idx (+ src-idx direction))
+         (n-cols (length (overlay-get (car info) 'gfm-tables-cell-bounds))))
+    (unless (and (>= dst-idx 0) (< dst-idx n-cols))
+      (user-error "No column in that direction"))
+    (let ((header-beg (nth 0 block))
+          (delim-beg (nth 1 block))
+          (body-beg  (nth 2 block))
+          (body-end  (nth 3 block)))
+      (save-excursion
+        (gfm-tables--swap-cells-in-line header-beg src-idx dst-idx)
+        (gfm-tables--swap-cells-in-line delim-beg src-idx dst-idx)
+        (goto-char body-beg)
+        (while (and (< (point) body-end) (looking-at-p "^|"))
+          (gfm-tables--swap-cells-in-line (point) src-idx dst-idx)
+          (forward-line 1))))
+    (gfm-tables--rebuild)
+    (let ((row-ov (cl-find-if (lambda (o)
+                                (overlay-get o 'gfm-tables-cell-bounds))
+                              (overlays-at (line-beginning-position)))))
+      (when row-ov
+        (gfm-tables--goto-cell row-ov dst-idx)))))
+
+(defun gfm-tables-column-left ()
+  "Swap the active header column with the column to its left."
+  (interactive)
+  (gfm-tables--swap-columns -1))
+
+(defun gfm-tables-column-right ()
+  "Swap the active header column with the column to its right."
+  (interactive)
+  (gfm-tables--swap-columns 1))
+
 (defun gfm-tables--maybe-snap-to-cell ()
   "If point landed on a table row after a non-table motion, snap to cell 0.
 Looks for a row overlay at the current line's beginning, so this
@@ -1099,12 +1178,19 @@ the symbol `snap', a post-call landing in a table snaps to cell 0."
          ,(when (eq fall-through 'snap)
             '(gfm-tables--maybe-snap-to-cell))))))
 
-(gfm-tables--define-evil-motion gfm-tables--evil-h gfm-tables-cell-backward  evil-backward-char  nil)
-(gfm-tables--define-evil-motion gfm-tables--evil-l gfm-tables-cell-forward   evil-forward-char   nil)
-(gfm-tables--define-evil-motion gfm-tables--evil-j gfm-tables-row-down       evil-next-line      snap)
-(gfm-tables--define-evil-motion gfm-tables--evil-k gfm-tables-row-up         evil-previous-line  snap)
-(gfm-tables--define-evil-motion gfm-tables--evil-^ gfm-tables-row-first-cell evil-first-non-blank nil)
-(gfm-tables--define-evil-motion gfm-tables--evil-$ gfm-tables-row-last-cell  evil-end-of-line     nil)
+(gfm-tables--define-evil-motion gfm-tables--evil-h gfm-tables-cell-backward  evil-backward-char           nil)
+(gfm-tables--define-evil-motion gfm-tables--evil-l gfm-tables-cell-forward   evil-forward-char            nil)
+(gfm-tables--define-evil-motion gfm-tables--evil-j gfm-tables-row-down       evil-next-line               snap)
+(gfm-tables--define-evil-motion gfm-tables--evil-k gfm-tables-row-up         evil-previous-line           snap)
+(gfm-tables--define-evil-motion gfm-tables--evil-^ gfm-tables-row-first-cell evil-first-non-blank         nil)
+(gfm-tables--define-evil-motion gfm-tables--evil-$ gfm-tables-row-last-cell  evil-end-of-line             nil)
+(gfm-tables--define-evil-motion gfm-tables--evil-w gfm-tables-cell-forward   evil-forward-word-begin      nil)
+(gfm-tables--define-evil-motion gfm-tables--evil-W gfm-tables-cell-forward   evil-forward-WORD-begin      nil)
+(gfm-tables--define-evil-motion gfm-tables--evil-e gfm-tables-cell-forward   evil-forward-word-end        nil)
+(gfm-tables--define-evil-motion gfm-tables--evil-E gfm-tables-cell-forward   evil-forward-WORD-end        nil)
+(gfm-tables--define-evil-motion gfm-tables--evil-b gfm-tables-cell-backward  evil-backward-word-begin     nil)
+(gfm-tables--define-evil-motion gfm-tables--evil-B gfm-tables-cell-backward  evil-backward-WORD-begin     nil)
+(gfm-tables--define-evil-motion gfm-tables--evil-0 gfm-tables-row-first-cell evil-beginning-of-line       nil)
 
 (define-key gfm-tables-mode-map [remap evil-backward-char] #'gfm-tables--evil-h)
 (define-key gfm-tables-mode-map [remap evil-forward-char] #'gfm-tables--evil-l)
@@ -1112,6 +1198,19 @@ the symbol `snap', a post-call landing in a table snaps to cell 0."
 (define-key gfm-tables-mode-map [remap evil-previous-line] #'gfm-tables--evil-k)
 (define-key gfm-tables-mode-map [remap evil-first-non-blank] #'gfm-tables--evil-^)
 (define-key gfm-tables-mode-map [remap evil-end-of-line] #'gfm-tables--evil-$)
+(define-key gfm-tables-mode-map [remap evil-forward-word-begin] #'gfm-tables--evil-w)
+(define-key gfm-tables-mode-map [remap evil-forward-WORD-begin] #'gfm-tables--evil-W)
+(define-key gfm-tables-mode-map [remap evil-forward-word-end]   #'gfm-tables--evil-e)
+(define-key gfm-tables-mode-map [remap evil-forward-WORD-end]   #'gfm-tables--evil-E)
+(define-key gfm-tables-mode-map [remap evil-backward-word-begin] #'gfm-tables--evil-b)
+(define-key gfm-tables-mode-map [remap evil-backward-WORD-begin] #'gfm-tables--evil-B)
+(define-key gfm-tables-mode-map [remap evil-beginning-of-line]  #'gfm-tables--evil-0)
+
+(with-eval-after-load 'evil
+  (dolist (state '(normal motion visual))
+    (evil-define-minor-mode-key state 'gfm-tables-mode
+      (kbd "M-h") #'gfm-tables-column-left
+      (kbd "M-l") #'gfm-tables-column-right)))
 
 ;;; Evil insert/replace shim
 
