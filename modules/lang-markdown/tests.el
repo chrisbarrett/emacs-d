@@ -417,6 +417,78 @@ Cases are restricted to modes that ship with Emacs so the test never skips."
   ;; 2 cols, widths 3 and 5 → 2 + (5) + (7) + 1 = 15
   (should (= 15 (gfm-tables--box-width (vector 3 5)))))
 
+;;; Cell fontification
+
+(ert-deftest lang-markdown/gfm-tables-fontify-cell-applies-bold-face ()
+  "Bold markdown inside a cell receives `markdown-bold-face'."
+  (skip-unless (and (fboundp 'gfm-tables--fontify-cell)
+                    (fboundp 'markdown-mode)))
+  (let ((s (gfm-tables--fontify-cell "**bold**")))
+    (should (cl-some (lambda (i)
+                       (let ((f (get-text-property i 'face s)))
+                         (or (eq f 'markdown-bold-face)
+                             (and (listp f) (memq 'markdown-bold-face f)))))
+                     (number-sequence 0 (1- (length s)))))))
+
+(ert-deftest lang-markdown/gfm-tables-fontify-cell-applies-code-face ()
+  "Inline code inside a cell receives `markdown-inline-code-face'."
+  (skip-unless (and (fboundp 'gfm-tables--fontify-cell)
+                    (fboundp 'markdown-mode)))
+  (let ((s (gfm-tables--fontify-cell "`code`")))
+    (should (cl-some (lambda (i)
+                       (let ((f (get-text-property i 'face s)))
+                         (or (eq f 'markdown-inline-code-face)
+                             (and (listp f)
+                                  (memq 'markdown-inline-code-face f)))))
+                     (number-sequence 0 (1- (length s)))))))
+
+(ert-deftest lang-markdown/gfm-tables-fontify-cell-preserves-width ()
+  "Fontified cell has the same visible width as the raw cell when
+`markdown-hide-markup' is off — i.e. markup chars remain on screen."
+  (skip-unless (and (fboundp 'gfm-tables--fontify-cell)
+                    (fboundp 'gfm-tables--visible-width)
+                    (fboundp 'markdown-mode)))
+  (with-temp-buffer
+    (setq buffer-invisibility-spec '(t))
+    (dolist (raw '("plain" "**bold**" "*it*" "`code`" "[t](u)" ""))
+      (let ((fontified (gfm-tables--fontify-cell raw)))
+        (should (= (string-width raw)
+                   (gfm-tables--visible-width fontified)))))))
+
+(ert-deftest lang-markdown/gfm-tables-visible-width-honours-display ()
+  "`display' string property changes visible width."
+  (skip-unless (fboundp 'gfm-tables--visible-width))
+  (let ((s (concat "abc" (propertize "X" 'display "longer") "de")))
+    (should (= (+ 5 (string-width "longer"))
+               (gfm-tables--visible-width s)))))
+
+(ert-deftest lang-markdown/gfm-tables-visible-width-honours-invisibility-spec ()
+  "Invisible-tagged chars only shrink width when in `buffer-invisibility-spec'."
+  (skip-unless (fboundp 'gfm-tables--visible-width))
+  (let ((s (concat "ab" (propertize "XX" 'invisible 'tag) "cd")))
+    (with-temp-buffer
+      (setq buffer-invisibility-spec nil)
+      (should (= 6 (gfm-tables--visible-width s)))
+      (setq buffer-invisibility-spec '(tag))
+      (should (= 4 (gfm-tables--visible-width s))))))
+
+(ert-deftest lang-markdown/gfm-tables-compose-row-preserves-cell-faces ()
+  "`compose-row' on body-alt row keeps existing markdown faces on cell text."
+  (skip-unless (and (fboundp 'gfm-tables--compose-row)
+                    (fboundp 'gfm-tables--fontify-cell)
+                    (fboundp 'markdown-mode)))
+  (let* ((cell (gfm-tables--fontify-cell "**bold**"))
+         (row (gfm-tables--compose-row (list cell) (vector 8) 'body-alt)))
+    (should (cl-some (lambda (i)
+                       (let ((f (get-text-property i 'face row)))
+                         (and (listp f) (memq 'markdown-bold-face f))))
+                     (number-sequence 0 (1- (length row)))))
+    (should (cl-some (lambda (i)
+                       (let ((f (get-text-property i 'face row)))
+                         (and (listp f)
+                              (memq 'gfm-tables-row-alt-face f))))
+                     (number-sequence 0 (1- (length row)))))))
+
 ;;; Mode lifecycle
 
 (ert-deftest lang-markdown/gfm-tables-mode-creates-overlays ()

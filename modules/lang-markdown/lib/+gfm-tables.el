@@ -22,6 +22,7 @@
 
 (require 'cl-lib)
 (require '+gfm-code-fences nil t)
+(require 'markdown-mode nil t)
 
 (defgroup gfm-tables nil
   "Visual treatment for GitHub Flavored Markdown tables."
@@ -44,6 +45,68 @@
 (defconst gfm-tables--delim-re
   "^| *:?-+:? *\\(?:| *:?-+:? *\\)*|[[:blank:]]*$"
   "Regexp matching a GFM table delimiter row.")
+
+;;; Cell fontification
+
+(defconst gfm-tables--fontify-buffer-name " *gfm-tables-fontify*")
+
+(defun gfm-tables--fontify-buffer ()
+  "Return a reusable hidden buffer in `markdown-mode' for cell fontification."
+  (let ((buf (get-buffer gfm-tables--fontify-buffer-name)))
+    (unless (and buf (buffer-live-p buf))
+      (setq buf (get-buffer-create gfm-tables--fontify-buffer-name))
+      (with-current-buffer buf
+        (let ((inhibit-message t))
+          (delay-mode-hooks
+            (when (fboundp 'markdown-mode)
+              (markdown-mode))))))
+    buf))
+
+(defun gfm-tables--fontify-cell (cell)
+  "Return CELL with markdown inline syntax fontified.
+The visible width of the result equals the visible width of CELL,
+provided `markdown-hide-markup' is nil (the default)."
+  (cond
+   ((or (null cell) (string-empty-p cell)) (or cell ""))
+   ((not (fboundp 'markdown-mode)) cell)
+   (t
+    (with-current-buffer (gfm-tables--fontify-buffer)
+      (let ((inhibit-modification-hooks t))
+        (erase-buffer)
+        (insert cell)
+        (font-lock-ensure))
+      (buffer-string)))))
+
+(defun gfm-tables--invisible-p (val spec)
+  "Non-nil if invisibility property VAL is hidden under SPEC.
+SPEC is a `buffer-invisibility-spec' value."
+  (cond
+   ((null val) nil)
+   ((eq spec t) t)
+   ((listp spec)
+    (cl-some (lambda (e)
+               (let ((tag (if (consp e) (car e) e)))
+                 (if (listp val) (memq tag val) (eq tag val))))
+             spec))))
+
+(defun gfm-tables--visible-width (s)
+  "Return on-screen width of S in the current buffer.
+Honours `display' string replacements and any `invisible' property
+that is currently hidden by `buffer-invisibility-spec'."
+  (let ((spec buffer-invisibility-spec)
+        (w 0) (i 0) (n (length s)))
+    (while (< i n)
+      (let* ((nd (or (next-single-property-change i 'display s) n))
+             (ni (or (next-single-property-change i 'invisible s) n))
+             (next (min nd ni))
+             (invis (get-text-property i 'invisible s))
+             (disp (get-text-property i 'display s)))
+        (cond
+         ((gfm-tables--invisible-p invis spec) nil)
+         ((stringp disp) (cl-incf w (string-width disp)))
+         (t (cl-incf w (string-width (substring-no-properties s i next)))))
+        (setq i next)))
+    w))
 
 ;;; Cell parser
 
@@ -164,7 +227,8 @@ Each row is a list of cell strings; column count is the longest row."
       (cl-loop for cell in row
                for i from 0
                do (aset widths i
-                        (max (aref widths i) (string-width cell)))))
+                        (max (aref widths i)
+                             (gfm-tables--visible-width cell)))))
     widths))
 
 (defun gfm-tables--box-width (col-widths)
@@ -196,13 +260,13 @@ pane dim track those segments automatically without any rebuild."
     (cl-loop for i from 0 below n
              for w = (aref col-widths i)
              for cell = (or (nth i cells) "")
-             for cell-w = (string-width cell)
+             for cell-w = (gfm-tables--visible-width cell)
              for pad = (max 0 (- w cell-w))
              for rendered = (concat " " cell (make-string pad ?\s) " ")
-             do (push (if cell-face
-                          (propertize rendered 'face cell-face)
-                        rendered)
-                      parts)
+             do (when cell-face
+                  (add-face-text-property 0 (length rendered)
+                                          cell-face t rendered))
+                (push rendered parts)
                 (when (< i (1- n))
                   (push " " parts)))
     (push (propertize "│" 'face border-face) parts)
@@ -263,7 +327,8 @@ pane dim track those segments automatically without any rebuild."
                         (goto-char delim-beg) (line-end-position)))
            (header-line (buffer-substring-no-properties
                          header-beg header-end))
-           (header-cells (gfm-tables--split-row header-line))
+           (header-cells (mapcar #'gfm-tables--fontify-cell
+                                 (gfm-tables--split-row header-line)))
            (body-rows '())
            (body-positions '()))
       (goto-char body-beg)
@@ -272,7 +337,9 @@ pane dim track those segments automatically without any rebuild."
                (lend (line-end-position))
                (line (buffer-substring-no-properties lbeg lend)))
           (push (cons lbeg lend) body-positions)
-          (push (gfm-tables--split-row line) body-rows))
+          (push (mapcar #'gfm-tables--fontify-cell
+                        (gfm-tables--split-row line))
+                body-rows))
         (forward-line 1))
       (setq body-rows (nreverse body-rows)
             body-positions (nreverse body-positions))
