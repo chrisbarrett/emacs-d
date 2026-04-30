@@ -298,6 +298,54 @@ The first matching entry in auto-mode-alist should be gfm-mode."
            (indents (gfm-code-fences--find-indent-blocks excluded)))
       (should (= 0 (length indents))))))
 
+;;; Language → mode mapping
+
+(ert-deftest lang-markdown/gfm-code-fences-lang-mode-aliases ()
+  "GitHub-recognised language aliases map to canonical major mode symbols."
+  (skip-unless (fboundp 'gfm-code-fences--lang-mode))
+  (dolist (case '(("golang"     . go-mode)
+                  ("rs"         . rust-mode)
+                  ("py"         . python-mode)
+                  ("rb"         . ruby-mode)
+                  ("kt"         . kotlin-mode)
+                  ("cs"         . csharp-mode)
+                  ("c#"         . csharp-mode)
+                  ("cpp"        . c++-mode)
+                  ("yml"        . yaml-mode)
+                  ("javascript" . js-mode)
+                  ("ts"         . typescript-mode)
+                  ("jsx"        . js-jsx-mode)
+                  ("zsh"        . sh-mode)
+                  ("shell"      . sh-mode)
+                  ("dockerfile" . dockerfile-mode)
+                  ("elisp"      . emacs-lisp-mode)
+                  ("emacs-lisp" . emacs-lisp-mode)))
+    (should (eq (cdr case) (gfm-code-fences--lang-mode (car case))))))
+
+(ert-deftest lang-markdown/gfm-code-fences-lang-mode-case-insensitive ()
+  "Language tag lookup is case-insensitive."
+  (skip-unless (fboundp 'gfm-code-fences--lang-mode))
+  (should (eq 'go-mode      (gfm-code-fences--lang-mode "GoLang")))
+  (should (eq 'csharp-mode  (gfm-code-fences--lang-mode "C#")))
+  (should (eq 'js-mode      (gfm-code-fences--lang-mode "JavaScript"))))
+
+(ert-deftest lang-markdown/gfm-code-fences-lang-mode-fallback ()
+  "Unknown languages fall back to <lang>-mode."
+  (skip-unless (fboundp 'gfm-code-fences--lang-mode))
+  (should (eq 'totally-made-up-mode
+              (gfm-code-fences--lang-mode "totally-made-up"))))
+
+(ert-deftest lang-markdown/gfm-code-fences-icon-for-aliased-lang ()
+  "Icon lookup returns a non-empty string for aliased language tags."
+  (skip-unless (and (fboundp 'gfm-code-fences--icon-for-lang)
+                    (fboundp 'nerd-icons-icon-for-mode)))
+  (dolist (lang '("golang" "rs" "py" "rb" "yml" "javascript" "zsh"))
+    (let ((icon (gfm-code-fences--icon-for-lang lang)))
+      (should (and (stringp icon) (> (length icon) 0)))
+      ;; Must not be the fundamental-mode fallback icon.
+      (let ((fallback (nerd-icons-icon-for-mode 'fundamental-mode)))
+        (should-not (equal icon fallback))))))
+
 ;;; gfm-tables tests
 
 (let* ((module-dir (file-name-directory (or load-file-name buffer-file-name)))
