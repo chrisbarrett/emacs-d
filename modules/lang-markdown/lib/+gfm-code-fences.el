@@ -25,147 +25,6 @@
   "Visual treatment for GFM fenced code blocks."
   :group 'markdown-faces)
 
-(defcustom gfm-code-fences-language-mode-alist
-  '(;; C-family
-    ("c"             . c-mode)
-    ("c#"            . csharp-mode)
-    ("cs"            . csharp-mode)
-    ("csharp"        . csharp-mode)
-    ("c++"           . c++-mode)
-    ("cpp"           . c++-mode)
-    ("objc"          . objc-mode)
-    ("objective-c"   . objc-mode)
-    ("objectivec"    . objc-mode)
-    ;; Scripting
-    ("bash"          . sh-mode)
-    ("console"       . sh-mode)
-    ("sh"            . sh-mode)
-    ("shell"         . sh-mode)
-    ("shell-session" . sh-mode)
-    ("shellsession"  . sh-mode)
-    ("zsh"           . sh-mode)
-    ("fish"          . fish-mode)
-    ("powershell"    . powershell-mode)
-    ("ps1"           . powershell-mode)
-    ("pwsh"          . powershell-mode)
-    ("bat"           . bat-mode)
-    ("batch"         . bat-mode)
-    ("nu"            . nushell-mode)
-    ("nushell"       . nushell-mode)
-    ;; Web
-    ("html"          . html-mode)
-    ("xml"           . nxml-mode)
-    ("css"           . css-mode)
-    ("scss"          . scss-mode)
-    ("sass"          . sass-mode)
-    ("less"          . less-css-mode)
-    ("stylus"        . stylus-mode)
-    ("vue"           . vue-mode)
-    ("svelte"        . svelte-mode)
-    ("haml"          . haml-mode)
-    ("pug"           . pug-mode)
-    ("jade"          . jade-mode)
-    ;; JS/TS family
-    ("javascript"    . js-mode)
-    ("js"            . js-mode)
-    ("jsx"           . js-jsx-mode)
-    ("typescript"    . typescript-mode)
-    ("ts"            . typescript-mode)
-    ("tsx"           . tsx-ts-mode)
-    ("coffee"        . coffee-mode)
-    ("coffeescript"  . coffee-mode)
-    ;; Systems / general-purpose
-    ("go"            . go-mode)
-    ("golang"        . go-mode)
-    ("rust"          . rust-mode)
-    ("rs"            . rust-mode)
-    ("ron"           . ron-mode)
-    ("zig"           . zig-mode)
-    ("nim"           . nim-mode)
-    ("crystal"       . crystal-mode)
-    ("d"             . d-mode)
-    ("ada"           . ada-mode)
-    ("verilog"       . verilog-mode)
-    ;; JVM
-    ("java"          . java-mode)
-    ("kotlin"        . kotlin-mode)
-    ("kt"            . kotlin-mode)
-    ("kts"           . kotlin-mode)
-    ("scala"         . scala-mode)
-    ("groovy"        . groovy-mode)
-    ("clojure"       . clojure-mode)
-    ("clj"           . clojure-mode)
-    ("clojurescript" . clojurescript-mode)
-    ("cljs"          . clojurescript-mode)
-    ("cljc"          . clojurec-mode)
-    ;; Functional / Lisp
-    ("emacs-lisp"    . emacs-lisp-mode)
-    ("elisp"         . emacs-lisp-mode)
-    ("el"            . emacs-lisp-mode)
-    ("common-lisp"   . lisp-mode)
-    ("lisp"          . lisp-mode)
-    ("scheme"        . scheme-mode)
-    ("racket"        . scheme-mode)
-    ("haskell"       . haskell-mode)
-    ("hs"            . haskell-mode)
-    ("ocaml"         . tuareg-mode)
-    ("ml"            . tuareg-mode)
-    ("elm"           . elm-mode)
-    ("erlang"        . erlang-mode)
-    ("erl"           . erlang-mode)
-    ("elixir"        . elixir-mode)
-    ("ex"            . elixir-mode)
-    ("exs"           . elixir-mode)
-    ("purescript"    . purescript-mode)
-    ("fsharp"        . fsharp-mode)
-    ("f#"            . fsharp-mode)
-    ;; Dynamic
-    ("python"        . python-mode)
-    ("py"            . python-mode)
-    ("ruby"          . ruby-mode)
-    ("rb"            . ruby-mode)
-    ("perl"          . perl-mode)
-    ("pl"            . perl-mode)
-    ("php"           . php-mode)
-    ("lua"           . lua-mode)
-    ("r"             . ess-r-mode)
-    ("matlab"        . matlab-mode)
-    ("dart"          . dart-mode)
-    ("swift"         . swift-mode)
-    ("gdscript"      . gdscript-mode)
-    ;; Data / config
-    ("json"          . json-mode)
-    ("jsonc"         . jsonc-mode)
-    ("yaml"          . yaml-mode)
-    ("yml"           . yaml-mode)
-    ("toml"          . toml-mode)
-    ("csv"           . csv-mode)
-    ("graphql"       . graphql-mode)
-    ("gql"           . graphql-mode)
-    ("sql"           . sql-mode)
-    ("nix"           . nix-mode)
-    ;; Build / infra
-    ("dockerfile"    . dockerfile-mode)
-    ("docker"        . dockerfile-mode)
-    ("makefile"      . makefile-mode)
-    ("make"          . makefile-mode)
-    ("cmake"         . cmake-mode)
-    ("nginx"         . nginx-mode)
-    ("apache"        . apache-mode)
-    ;; Misc
-    ("markdown"      . markdown-mode)
-    ("md"            . markdown-mode)
-    ("diff"          . diff-mode)
-    ("patch"         . diff-mode)
-    ("tex"           . texinfo-mode)
-    ("latex"         . texinfo-mode))
-  "Map GFM code-block language tags to major mode symbols for icon lookup.
-Lookup is case-insensitive against the language tag in the opening fence.
-The mode symbol need not be `fboundp'; it is consulted only by
-`nerd-icons-icon-for-mode' to pick a glyph."
-  :group 'gfm-code-fences
-  :type '(alist :key-type string :value-type symbol))
-
 (defconst gfm-code-fences--open-re
   (rx bol (* blank)
       (group "```" (* "`"))
@@ -181,12 +40,11 @@ The mode symbol need not be `fboundp'; it is consulted only by
 
 (defun gfm-code-fences--lang-mode (lang)
   "Best-guess major mode symbol for LANG.
-Consults `gfm-code-fences-language-mode-alist' (case-insensitive) first
-so GitHub-recognised aliases resolve to a mode symbol that
-`nerd-icons-icon-for-mode' has an entry for, even when the mode is not
-installed."
-  (or (cdr (assoc (downcase lang) gfm-code-fences-language-mode-alist))
-      (cdr (assoc lang markdown-code-lang-modes))
+Consults `markdown-code-lang-modes' case-insensitively without the
+`fboundp' filter `markdown-get-lang-mode' applies, so an icon can still
+be picked even when the corresponding mode is not installed."
+  (or (alist-get lang markdown-code-lang-modes nil nil
+                 (lambda (a b) (string-equal (downcase a) (downcase b))))
       (let ((ts (intern (concat lang "-ts-mode"))))
         (and (fboundp ts) ts))
       (intern (concat lang "-mode"))))
