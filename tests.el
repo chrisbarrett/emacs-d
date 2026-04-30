@@ -151,6 +151,8 @@ Parses command-line arguments and runs appropriate tests."
   "Set up use-package and its custom keywords for tests."
   ;; Load use-package core
   (require 'use-package-core nil t)
+  ;; Match early-init.el so :hook (foo-hook . fn) does not double the suffix.
+  (setq use-package-hook-name-suffix nil)
   ;; Load custom keywords
   (require '+use-package-keywords nil t)
   (when (fboundp '+use-package-keywords-setup)

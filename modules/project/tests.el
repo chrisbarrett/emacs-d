@@ -22,9 +22,7 @@
   (project-module--load-lib)
   ;; Define required variables that init.el expects
   (defvar org-directory user-emacs-directory)
-  (condition-case nil
-      (load (expand-file-name "init.el" project-module--dir) nil t)
-    (error nil)))
+  (load (expand-file-name "init.el" project-module--dir) nil t))
 
 
 ;;; P1: project-vc-ignores contains ".cache/"
@@ -70,7 +68,7 @@
 
 (ert-deftest project-test-beframe-mode-enabled ()
   "beframe-mode is enabled."
-  (skip-unless (featurep 'beframe))
+  (require 'beframe)
   (project-module--load-init)
   (should (bound-and-true-p beframe-mode)))
 
@@ -79,8 +77,8 @@
 
 (ert-deftest project-test-consult-buffer-query-advice ()
   "consult--buffer-query has beframe filter advice."
-  (skip-unless (fboundp 'consult--buffer-query))
-  (skip-unless (featurep 'beframe))
+  (require 'consult)
+  (require 'beframe)
   (project-module--load-init)
   (let ((advices (advice--symbol-function 'consult--buffer-query)))
     (should advices)

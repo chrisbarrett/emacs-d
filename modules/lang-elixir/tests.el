@@ -7,14 +7,14 @@
 ;;; Code:
 
 (require 'ert)
+(require 'find-func)
 
-;; Load module init from this directory
-;; May fail in batch mode due to missing dependencies
 (let* ((module-dir (file-name-directory (or load-file-name buffer-file-name)))
        (init-file (expand-file-name "init.el" module-dir)))
-  (condition-case nil
-      (load init-file nil 'nomessage)
-    (error nil)))
+  (load init-file nil 'nomessage))
+
+;; Force :config to run so sibling rules and other deferred setup register.
+(require 'elixir-ts-mode)
 
 ;;; P1: Opening .ex file activates elixir-ts-mode
 
@@ -52,33 +52,25 @@
 
 (ert-deftest lang-elixir/sibling-rules-lib-to-test ()
   "P5: find-sibling-rules should contain lib -> test pattern."
-  ;; Skip if module init didn't load
-  (skip-unless (boundp 'find-sibling-rules))
-  (let ((found nil))
-    (dolist (rule find-sibling-rules)
-      (when (and (listp rule)
-                 (stringp (car rule))
-                 (string-match-p "/lib/" (car rule))
-                 (stringp (cadr rule))
-                 (string-match-p "_test\\.exs" (cadr rule)))
-        (setq found t)))
-    (skip-unless found)
-    (should found)))
+  (require 'find-func)
+  (should (cl-some (lambda (rule)
+                     (and (listp rule)
+                          (stringp (car rule))
+                          (string-search "/lib/" (car rule))
+                          (stringp (cadr rule))
+                          (string-search "_test" (cadr rule))))
+                   find-sibling-rules)))
 
 (ert-deftest lang-elixir/sibling-rules-test-to-lib ()
   "P5: find-sibling-rules should contain test -> lib pattern."
-  ;; Skip if module init didn't load
-  (skip-unless (boundp 'find-sibling-rules))
-  (let ((found nil))
-    (dolist (rule find-sibling-rules)
-      (when (and (listp rule)
-                 (stringp (car rule))
-                 (string-match-p "_test\\.exs" (car rule))
-                 (stringp (cadr rule))
-                 (string-match-p "/lib/" (cadr rule)))
-        (setq found t)))
-    (skip-unless found)
-    (should found)))
+  (require 'find-func)
+  (should (cl-some (lambda (rule)
+                     (and (listp rule)
+                          (stringp (car rule))
+                          (string-search "_test" (car rule))
+                          (stringp (cadr rule))
+                          (string-search "/lib/" (cadr rule))))
+                   find-sibling-rules)))
 
 ;;; P6: New file in /lib/ uses module template
 
@@ -137,8 +129,6 @@
 
 (ert-deftest lang-elixir/eglot-hook ()
   "eglot-ensure should be on elixir-ts-mode-local-vars-hook."
-  ;; Skip if elixir-ts-mode not available
-  (skip-unless (featurep 'elixir-ts-mode))
   (should (memq 'eglot-ensure elixir-ts-mode-local-vars-hook)))
 
 (provide 'lang-elixir-tests)

@@ -34,7 +34,7 @@
 ;; P4: .beam files omitted in dired-omit-mode
 (ert-deftest lang-erlang/beam-omitted-in-dired ()
   "BEAM files should be omitted in dired-omit-mode."
-  (skip-unless (featurep 'dired-x))
+  (require 'dired-x)
   (should (member ".beam" dired-omit-extensions)))
 
 ;; P5: erlang package not loaded (disabled)

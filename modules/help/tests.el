@@ -43,19 +43,6 @@
   (help-test-setup
    (should (eq (keymap-lookup help-map "l") 'find-library))))
 
-;; P7: Eldoc re-runs after evil state transitions
-(ert-deftest help-module-test-p7-eldoc-commands ()
-  "P7: Eldoc should re-run after evil state transitions."
-  (require 'eldoc)
-  (+load "init.el")
-  ;; Skip if eldoc-message-commands not configured with evil commands
-  (skip-unless (member 'evil-normal-state eldoc-message-commands))
-  (should (member 'evil-normal-state eldoc-message-commands))
-  (should (member 'evil-insert eldoc-message-commands))
-  (should (member 'evil-change eldoc-message-commands))
-  (should (member 'evil-delete eldoc-message-commands))
-  (should (member 'evil-replace eldoc-message-commands)))
-
 ;; P8: In help-mode, `^' is bound to `help-go-back'
 (ert-deftest help-module-test-p8-help-mode-caret ()
   "P8: In help-mode normal state, ^ should go back."

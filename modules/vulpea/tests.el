@@ -11,9 +11,8 @@
   (when (file-exists-p lib-file)
     (load lib-file nil t)))
 
-(condition-case nil
-    (load (expand-file-name "init.el" vulpea-test--module-dir) nil t)
-  (error nil))
+(load (expand-file-name "init.el" vulpea-test--module-dir) nil t)
+(require 'vulpea-note)
 
 
 ;;; P1: vulpea-db-autosync-mode enabled in config
@@ -37,13 +36,11 @@
 
 (ert-deftest vulpea-test-p2-sensitive-filter-rejects-tagged ()
   :tags '(vulpea)
-  (skip-unless (featurep 'vulpea-note))
   (let ((note (make-vulpea-note :tags '("daily" "project"))))
     (should-not (+vulpea-note-visible-p note))))
 
 (ert-deftest vulpea-test-p2-sensitive-filter-accepts-clean ()
   :tags '(vulpea)
-  (skip-unless (featurep 'vulpea-note))
   (let ((note (make-vulpea-note :tags '("project" "work"))))
     (should (+vulpea-note-visible-p note))))
 

@@ -22,11 +22,8 @@
 (defun nav-module--load-init ()
   "Load nav module init.el."
   (nav-module--load-lib)
-  (condition-case nil
-      (progn
-        (load (expand-file-name "init.el" nav-module--dir) nil t)
-        (setq nav-module--init-loaded t))
-    (error nil)))
+  (load (expand-file-name "init.el" nav-module--dir) nil t)
+  (setq nav-module--init-loaded t))
 
 ;; Load the module
 (nav-module--load-lib)
@@ -36,16 +33,14 @@
 
 (ert-deftest nav/p2-winner-mode-after-call ()
   "winner-mode should be enabled or configured."
-  ;; In batch mode, winner-mode may not be enabled due to after-call deferral
-  ;; Just check that it's configured
-  (skip-unless (featurep 'winner))
+  (require 'winner)
   (should (boundp 'winner-boring-buffers)))
 
 ;;; P3: better-jumper-mode enabled
 
 (ert-deftest nav/p3-better-jumper-mode ()
   "better-jumper-mode should be enabled after first-file/buffer hooks."
-  (skip-unless (fboundp 'better-jumper-mode))
+  (require 'better-jumper)
   (should (boundp 'better-jumper-mode)))
 
 ;;; P5: save-place-mode enabled
@@ -64,21 +59,16 @@
 
 (ert-deftest nav/p9-avy-dispatch-custom-actions ()
   "avy-dispatch-alist should include custom c and K actions."
-  ;; Skip if avy use-package forms failed in batch mode
-  (skip-unless (and (require 'avy nil t)
-                    ;; Check if our custom dispatch was set
-                    (assq ?c (default-value 'avy-dispatch-alist))))
+  (require 'avy)
   (let ((dispatch (default-value 'avy-dispatch-alist)))
-    (should (assq ?c dispatch))
     (should (eq (cdr (assq ?c dispatch)) '+avy-action-change-move))
-    (should (assq ?K dispatch))
     (should (eq (cdr (assq ?K dispatch)) '+avy-action-evil-lookup))))
 
 ;;; Winner boring buffers
 
 (ert-deftest nav/winner-boring-buffers ()
   "winner-boring-buffers should exclude common popup buffers."
-  (skip-unless (boundp 'winner-boring-buffers))
+  (require 'winner)
   (should (member "*Completions*" winner-boring-buffers))
   (should (member "*Help*" winner-boring-buffers)))
 

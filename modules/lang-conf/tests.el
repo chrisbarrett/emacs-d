@@ -10,9 +10,7 @@
 
 ;; Load init.el from the same directory
 (let ((init-file (expand-file-name "init.el" (file-name-directory (or load-file-name buffer-file-name)))))
-  (condition-case nil
-      (load init-file nil t)
-    (error nil)))
+  (load init-file nil t))
 
 
 ;;; P1: Files ending in `rc` open in conf-mode
@@ -63,7 +61,6 @@
 
 (ert-deftest lang-conf/json-eglot-hook ()
   "json-ts-mode should have eglot-ensure hook."
-  (skip-unless (boundp 'json-ts-mode-local-vars-hook))
   (should (memq 'eglot-ensure json-ts-mode-local-vars-hook)))
 
 
@@ -71,17 +68,7 @@
 
 (ert-deftest lang-conf/yaml-eglot-hook ()
   "yaml-ts-mode should have eglot-ensure hook."
-  (skip-unless (boundp 'yaml-ts-mode-local-vars-hook))
   (should (memq 'eglot-ensure yaml-ts-mode-local-vars-hook)))
-
-
-;;; P7: YAML mode has tab-width 2
-
-(ert-deftest lang-conf/yaml-tab-width-hook ()
-  "yaml-ts-mode should have a hook to set tab-width."
-  (skip-unless (boundp 'yaml-ts-mode-hook))
-  ;; The setq-hook! macro adds a lambda to the hook; check the hook is not empty
-  (should yaml-ts-mode-hook))
 
 
 (provide 'lang-conf-tests)

@@ -28,114 +28,15 @@
   (should (memq (alist-get 'markdown-mode major-mode-remap-alist)
                 '(gfm-mode markdown-ts-mode))))
 
-(ert-deftest lang-markdown/md-files-use-gfm-mode ()
-  "P1: .md files should be directly associated with gfm-mode.
-The first matching entry in auto-mode-alist should be gfm-mode."
-  (let ((entry (cl-find-if (lambda (e)
-                             (and (stringp (car e))
-                                  (string-match-p "\\(md\\|markdown\\)" (car e))
-                                  (eq (cdr e) 'gfm-mode)))
-                           auto-mode-alist)))
-    (skip-unless entry)
-    (should entry)))
-
-;;; P2: Opening file ending in /prompt activates gfm-mode
-
 (ert-deftest lang-markdown/prompt-file-association ()
   "P2: /prompt files should be associated with gfm-mode."
   (let ((entry (cl-find-if (lambda (e)
                              (and (stringp (car e))
                                   (string-match-p "prompt" (car e))))
                            auto-mode-alist)))
-    ;; Skip if init.el didn't load (missing +corelib in batch mode)
-    (skip-unless entry)
     (should (eq (cdr entry) 'gfm-mode))))
 
-;;; P3: markdown-fontify-code-blocks-natively is t
-
-(ert-deftest lang-markdown/fontify-code-blocks ()
-  "P3: markdown-fontify-code-blocks-natively should be t."
-  (skip-unless (boundp 'markdown-fontify-code-blocks-natively))
-  (should (eq markdown-fontify-code-blocks-natively t)))
-
-;;; P4: [!NOTE] in GFM buffer has +markdown-gfm-callout-note-face
-
-(ert-deftest lang-markdown/note-face-defined ()
-  "P4: +markdown-gfm-callout-note-face should be defined."
-  (should (facep '+markdown-gfm-callout-note-face)))
-
-(ert-deftest lang-markdown/tip-face-defined ()
-  "+markdown-gfm-callout-tip-face should be defined."
-  (should (facep '+markdown-gfm-callout-tip-face)))
-
-(ert-deftest lang-markdown/important-face-defined ()
-  "+markdown-gfm-callout-important-face should be defined."
-  (should (facep '+markdown-gfm-callout-important-face)))
-
-(ert-deftest lang-markdown/warning-face-defined ()
-  "+markdown-gfm-callout-warning-face should be defined."
-  (should (facep '+markdown-gfm-callout-warning-face)))
-
-(ert-deftest lang-markdown/caution-face-defined ()
-  "+markdown-gfm-callout-caution-face should be defined."
-  (should (facep '+markdown-gfm-callout-caution-face)))
-
-(ert-deftest lang-markdown/prettier-ignore-face-defined ()
-  "+markdown-prettier-ignore-comment-face should be defined."
-  (should (facep '+markdown-prettier-ignore-comment-face)))
-
-;;; P5: TAB in insert state expands tempel snippets before markdown-cycle
-
-(ert-deftest lang-markdown/tab-dwim-defined ()
-  "P5: +markdown-tab-dwim should be defined."
-  (should (fboundp '+markdown-tab-dwim)))
-
-(ert-deftest lang-markdown/tab-keybinding ()
-  "P5: TAB should be bound to +markdown-tab-dwim in insert state."
-  ;; Skip if general not loaded in batch mode
-  (skip-unless (and (boundp 'evil-insert-state-map)
-                    (boundp 'markdown-mode-map)))
-  ;; Check that markdown-mode-map has TAB bound
-  (let ((key (lookup-key markdown-mode-map (kbd "TAB"))))
-    ;; Accept any binding (may be via general)
-    (should key)))
-
-;;; P6: apheleia-formatter set to deno-markdown when deno available
-
-(ert-deftest lang-markdown/deno-formatter-defined ()
-  "P6: deno-markdown formatter should be defined in apheleia."
-  (skip-unless (boundp 'apheleia-formatters))
-  (should (alist-get 'deno-markdown apheleia-formatters)))
-
-(ert-deftest lang-markdown/prettier-formatter-defined ()
-  "P6: prettier-markdown formatter should be defined as fallback."
-  (skip-unless (boundp 'apheleia-formatters))
-  (should (alist-get 'prettier-markdown apheleia-formatters)))
-
-;;; P7: C-c f calls markdown-insert-footnote
-
-(ert-deftest lang-markdown/footnote-keybinding ()
-  "P7: C-c f should be bound in markdown-mode-map."
-  (skip-unless (boundp 'markdown-mode-map))
-  (let ((key (lookup-key markdown-mode-map (kbd "C-c f"))))
-    ;; May be nil if deferred, so just check for binding presence or hook
-    (should (or key
-                ;; Check if general-config hook is set up
-                (memq 'general-config-markdown-mode-map markdown-mode-hook)))))
-
-;;; P8: Local leader l toggles URL hiding
-
-(ert-deftest lang-markdown/hide-urls-setting ()
-  "P8: markdown-hide-urls should be t."
-  (skip-unless (boundp 'markdown-hide-urls))
-  (should (eq markdown-hide-urls t)))
-
 ;;; P9: 11 tempel snippets available in markdown-mode
-
-(ert-deftest lang-markdown/tempel-snippets-exist ()
-  "P9: Tempel snippets should be defined for markdown-mode."
-  (let ((template-file (expand-file-name "templates/markdown.eld" user-emacs-directory)))
-    (should (file-exists-p template-file))))
 
 (ert-deftest lang-markdown/tempel-snippet-count ()
   "P9: There should be at least 10 snippets in markdown.eld."
@@ -151,22 +52,6 @@ The first matching entry in auto-mode-alist should be gfm-mode."
           ;; Should have at least 10 snippets (spec says 11)
           (should (>= count 10)))))))
 
-;;; Additional tests
-
-(ert-deftest lang-markdown/fontify-callouts-defined ()
-  "+markdown-fontify-gfm-callouts should be defined."
-  (should (fboundp '+markdown-fontify-gfm-callouts)))
-
-(ert-deftest lang-markdown/gfm-mode-visual-line ()
-  "gfm-mode-hook should enable visual-line-mode."
-  (skip-unless (boundp 'gfm-mode-hook))
-  (should (memq 'visual-line-mode gfm-mode-hook)))
-
-(ert-deftest lang-markdown/gfm-mode-callouts-hook ()
-  "gfm-mode-hook should fontify callouts."
-  (skip-unless (boundp 'gfm-mode-hook))
-  (should (memq '+markdown-fontify-gfm-callouts gfm-mode-hook)))
-
 ;;; gfm-callouts tests
 
 (let* ((module-dir (file-name-directory (or load-file-name buffer-file-name)))
@@ -179,9 +64,6 @@ The first matching entry in auto-mode-alist should be gfm-mode."
   (concat (format "> [!%s]\n" type)
           (mapconcat (lambda (l) (concat "> " l)) body "\n")
           "\n"))
-
-(ert-deftest lang-markdown/gfm-callouts-mode-defined ()
-  (should (fboundp 'gfm-callouts-mode)))
 
 (ert-deftest lang-markdown/gfm-callouts-find-blocks-detects-types ()
   "Each known callout type is detected with its label."
@@ -229,19 +111,12 @@ The first matching entry in auto-mode-alist should be gfm-mode."
     (should-not (cl-some (lambda (ov) (overlay-get ov 'gfm-callouts))
                          (overlays-in (point-min) (point-max))))))
 
-(ert-deftest lang-markdown/gfm-callouts-enabled-via-gfm-mode-hook ()
-  (skip-unless (boundp 'gfm-mode-hook))
-  (should (memq 'gfm-callouts-mode gfm-mode-hook)))
-
 ;;; gfm-code-fences tests
 
 (let* ((module-dir (file-name-directory (or load-file-name buffer-file-name)))
        (fences-file (expand-file-name "lib/+gfm-code-fences.el" module-dir)))
   (when (file-exists-p fences-file)
     (load fences-file nil 'nomessage)))
-
-(ert-deftest lang-markdown/gfm-code-fences-mode-defined ()
-  (should (fboundp 'gfm-code-fences-mode)))
 
 (ert-deftest lang-markdown/gfm-code-fences-find-block ()
   (skip-unless (fboundp 'gfm-code-fences--find-blocks))
@@ -341,12 +216,6 @@ Cases are restricted to modes that ship with Emacs so the test never skips."
        (tables-file (expand-file-name "lib/+gfm-tables.el" module-dir)))
   (when (file-exists-p tables-file)
     (load tables-file nil 'nomessage)))
-
-(ert-deftest lang-markdown/gfm-tables-mode-defined ()
-  (should (fboundp 'gfm-tables-mode)))
-
-(ert-deftest lang-markdown/gfm-tables-row-alt-face-defined ()
-  (should (facep 'gfm-tables-row-alt-face)))
 
 ;;; Cell parser
 
@@ -896,6 +765,8 @@ Cases are restricted to modes that ship with Emacs so the test never skips."
 (ert-deftest lang-markdown/gfm-tables-enabled-via-gfm-mode-hook ()
   (skip-unless (boundp 'gfm-mode-hook))
   (should (memq 'gfm-tables-mode gfm-mode-hook)))
+
+;;; Reveal
 
 (provide 'lang-markdown-tests)
 

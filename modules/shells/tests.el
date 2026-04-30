@@ -13,15 +13,12 @@
 (defvar shells--test-dir
   (file-name-directory (or load-file-name buffer-file-name)))
 
-;; Load module init
-(condition-case nil
-    (load (expand-file-name "init.el" shells--test-dir))
-  (error nil))
-
-;; Load lib for testing
-(condition-case nil
-    (load (expand-file-name "lib.el" shells--test-dir))
-  (error nil))
+(load (expand-file-name "init.el" shells--test-dir))
+(load (expand-file-name "lib.el" shells--test-dir))
+;; Load evil module's lib for `+evil-collection-disabled-list'.
+(load (expand-file-name "modules/evil/lib.el" user-emacs-directory))
+(require 'eat)
+(require 'evil)
 
 
 ;;; P6: eshell/cd advice updates zoxide database
@@ -37,8 +34,6 @@
 
 (ert-deftest shells/p8-evil-buffer-regexps ()
   "P8: Evil buffer regexps include eat pattern."
-  (skip-unless (featurep 'eat))
-  (skip-unless (featurep 'evil))
   (should (cl-some (lambda (entry)
                      (string-match-p "\\*eat" (car entry)))
                    evil-buffer-regexps)))
@@ -48,7 +43,6 @@
 
 (ert-deftest shells/p9-evil-collection-disabled ()
   "P9: +evil-collection-disabled-list includes eat."
-  (skip-unless (featurep '+evil-collection))
   (should (memq 'eat +evil-collection-disabled-list)))
 
 

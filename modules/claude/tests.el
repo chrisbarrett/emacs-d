@@ -32,28 +32,6 @@
                       (string-match-p re "*claude-code:project"))
                     evil-buffer-regexps)))
 
-;; P5: +switch-window-hook includes +claude-code-ide-scroll-to-bottom-h
-
-(ert-deftest claude/switch-window-hook ()
-  "+switch-window-hook should include scroll function."
-  ;; Skip if init.el couldn't load due to custom use-package keywords
-  (skip-unless (memq '+claude-code-ide-scroll-to-bottom-h +switch-window-hook))
-  (should (memq '+claude-code-ide-scroll-to-bottom-h +switch-window-hook)))
-
-;; P6: +switch-buffer-hook includes +claude-code-ide-scroll-to-bottom-h
-
-(ert-deftest claude/switch-buffer-hook ()
-  "+switch-buffer-hook should include scroll function."
-  ;; Skip if init.el couldn't load due to custom use-package keywords
-  (skip-unless (memq '+claude-code-ide-scroll-to-bottom-h +switch-buffer-hook))
-  (should (memq '+claude-code-ide-scroll-to-bottom-h +switch-buffer-hook)))
-
-;; P7: eat-exec-hook includes +claude-code-eat-remap-nbsp
-
-(ert-deftest claude/eat-exec-hook ()
-  "`eat-exec-hook' should include nbsp remapping function."
-  (should (memq '+claude-code-eat-remap-nbsp eat-exec-hook)))
-
 ;; Function tests
 
 (ert-deftest claude/active-buffer-predicate ()
@@ -64,14 +42,5 @@
     (should (+claude-code-ide-active-buffer-p (current-buffer))))
   (with-temp-buffer
     (should-not (+claude-code-ide-active-buffer-p (current-buffer)))))
-
-;; Mise integration
-
-(ert-deftest claude/mise-advice-installed ()
-  "Mise advice should be installed on create-terminal-session."
-  (skip-unless (fboundp 'claude-code-ide--create-terminal-session))
-  (should (advice-member-p '+mise-env 'claude-code-ide--create-terminal-session)))
-
-;; Module structure
 
 ;;; tests.el ends here

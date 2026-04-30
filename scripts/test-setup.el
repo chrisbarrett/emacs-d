@@ -56,6 +56,8 @@ This prevents tests from creating files in `user-emacs-directory'."
 
 ;; Set up use-package keywords for tests
 (require 'use-package-core nil t)
+;; Match early-init.el so :hook (foo-hook . fn) does not double the suffix.
+(setq use-package-hook-name-suffix nil)
 (require '+use-package-keywords nil t)
 (when (fboundp '+use-package-keywords-setup)
   (+use-package-keywords-setup))
