@@ -646,6 +646,114 @@ Cases are restricted to modes that ship with Emacs so the test never skips."
 (ert-deftest lang-markdown/gfm-tables-edit-table-command-defined ()
   (should (commandp 'gfm-tables-edit-table-at-point)))
 
+;;; Cell bounds + active-cell highlight
+
+(ert-deftest lang-markdown/gfm-tables-cell-bounds-simple ()
+  (skip-unless (fboundp 'gfm-tables--cell-bounds))
+  (with-temp-buffer
+    (insert "| A | B |")
+    (let ((cb (gfm-tables--cell-bounds (point-min) (point-max))))
+      (should (= 2 (length cb)))
+      ;; First cell content begins right after the leading `|'.
+      (should (eq ?| (char-before (car (nth 0 cb)))))
+      (should (eq ?| (char-after  (cdr (nth 0 cb))))))))
+
+(ert-deftest lang-markdown/gfm-tables-cell-bounds-honours-escape ()
+  (skip-unless (fboundp 'gfm-tables--cell-bounds))
+  (with-temp-buffer
+    (insert "| a \\| b | c |")
+    (let ((cb (gfm-tables--cell-bounds (point-min) (point-max))))
+      (should (= 2 (length cb))))))
+
+(ert-deftest lang-markdown/gfm-tables-cell-info-at-point ()
+  (skip-unless (fboundp 'gfm-tables-mode))
+  (with-temp-buffer
+    (insert "| A | B |\n| - | - |\n| 1 | 2 |\n")
+    (gfm-tables-mode 1)
+    (goto-char (point-min))
+    (search-forward "1")
+    (let ((info (gfm-tables--cell-info-at-point)))
+      (should info)
+      (should (= 0 (cdr info))))))
+
+(ert-deftest lang-markdown/gfm-tables-active-cell-highlight-applied ()
+  "Display string carries the active-cell face after entering the row."
+  (skip-unless (fboundp 'gfm-tables-mode))
+  (with-temp-buffer
+    (insert "| A | B |\n| - | - |\n| 1 | 2 |\n")
+    (gfm-tables-mode 1)
+    (goto-char (point-min))
+    (search-forward "1")
+    (gfm-tables--update-cursor-highlight)
+    (let* ((ov gfm-tables--highlighted-row-ov)
+           (disp (overlay-get ov 'display))
+           (has-face (cl-some
+                      (lambda (i)
+                        (let ((f (get-text-property i 'face disp)))
+                          (or (eq f 'gfm-tables-active-cell-face)
+                              (and (listp f)
+                                   (memq 'gfm-tables-active-cell-face f)))))
+                      (number-sequence 0 (1- (length disp))))))
+      (should has-face)
+      (should gfm-tables--cursor-anchor))))
+
+(ert-deftest lang-markdown/gfm-tables-cursor-highlight-restores-off-row ()
+  "Moving point out of a table restores the cursor and original display."
+  (skip-unless (fboundp 'gfm-tables-mode))
+  (with-temp-buffer
+    (insert "| A | B |\n| - | - |\n| 1 | 2 |\nout of table\n")
+    (gfm-tables-mode 1)
+    (goto-char (point-min))
+    (search-forward "1")
+    (gfm-tables--update-cursor-highlight)
+    (let ((row-ov gfm-tables--highlighted-row-ov))
+      (goto-char (point-max))
+      (gfm-tables--update-cursor-highlight)
+      (should-not gfm-tables--highlighted-row-ov)
+      (should-not (overlay-get row-ov 'gfm-tables-saved-display))
+      (should-not gfm-tables--cursor-anchor))))
+
+;;; Cell-wise navigation
+
+(ert-deftest lang-markdown/gfm-tables-cell-forward-moves-cell ()
+  (skip-unless (fboundp 'gfm-tables-cell-forward))
+  (with-temp-buffer
+    (insert "| A | B | C |\n| - | - | - |\n| 1 | 2 | 3 |\n")
+    (gfm-tables-mode 1)
+    (goto-char (point-min))
+    (search-forward "1")
+    (goto-char (1- (point))) ; stand on the digit
+    (let ((before (gfm-tables--cell-info-at-point)))
+      (should before)
+      (gfm-tables-cell-forward)
+      (let ((after (gfm-tables--cell-info-at-point)))
+        (should after)
+        (should (= (1+ (cdr before)) (cdr after)))))))
+
+(ert-deftest lang-markdown/gfm-tables-row-down-skips-delim ()
+  (skip-unless (fboundp 'gfm-tables-row-down))
+  (with-temp-buffer
+    (insert "| A | B |\n| - | - |\n| 1 | 2 |\n| 3 | 4 |\n")
+    (gfm-tables-mode 1)
+    (goto-char (point-min))
+    (search-forward "A")
+    (goto-char (1- (point)))
+    (gfm-tables-row-down)
+    ;; The body row's source line begins with `|', followed by ` 1 ' for cell 0.
+    ;; row-down lands on the first content char, which is the space right after `|'.
+    (should (string-match-p "^| 1 "
+                            (buffer-substring (line-beginning-position)
+                                              (line-end-position))))
+    (should (eq ?\s (char-after (point))))))
+
+;;; Evil shim
+
+(ert-deftest lang-markdown/gfm-tables-evil-edit-commands-listed ()
+  (should (boundp 'gfm-tables--evil-edit-commands))
+  (should (memq 'evil-insert gfm-tables--evil-edit-commands))
+  (should (memq 'evil-change gfm-tables--evil-edit-commands))
+  (should (memq 'evil-open-below gfm-tables--evil-edit-commands)))
+
 ;;; Mode lifecycle
 
 (ert-deftest lang-markdown/gfm-tables-mode-creates-overlays ()
