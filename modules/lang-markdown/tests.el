@@ -646,6 +646,37 @@ Cases are restricted to modes that ship with Emacs so the test never skips."
 (ert-deftest lang-markdown/gfm-tables-edit-table-command-defined ()
   (should (commandp 'gfm-tables-edit-table-at-point)))
 
+(ert-deftest lang-markdown/gfm-tables-edit-cell-command-defined ()
+  (should (commandp 'gfm-tables-edit-cell-at-point)))
+
+(ert-deftest lang-markdown/gfm-tables-cell-edit-sanitise-strips-newlines ()
+  (skip-unless (fboundp 'gfm-tables--cell-edit-sanitise))
+  (with-temp-buffer
+    (insert "a\nb\nc")
+    (gfm-tables--cell-edit-sanitise)
+    (should (equal "a b c" (buffer-string)))))
+
+(ert-deftest lang-markdown/gfm-tables-cell-edit-sanitise-escapes-pipe ()
+  (skip-unless (fboundp 'gfm-tables--cell-edit-sanitise))
+  (with-temp-buffer
+    (insert "a|b")
+    (gfm-tables--cell-edit-sanitise)
+    (should (equal "a\\|b" (buffer-string)))))
+
+(ert-deftest lang-markdown/gfm-tables-cell-edit-sanitise-keeps-existing-escape ()
+  (skip-unless (fboundp 'gfm-tables--cell-edit-sanitise))
+  (with-temp-buffer
+    (insert "a\\|b")
+    (gfm-tables--cell-edit-sanitise)
+    (should (equal "a\\|b" (buffer-string)))))
+
+(ert-deftest lang-markdown/gfm-tables-cell-edit-sanitise-leading-pipe ()
+  (skip-unless (fboundp 'gfm-tables--cell-edit-sanitise))
+  (with-temp-buffer
+    (insert "|a")
+    (gfm-tables--cell-edit-sanitise)
+    (should (equal "\\|a" (buffer-string)))))
+
 ;;; Cell bounds + active-cell highlight
 
 (ert-deftest lang-markdown/gfm-tables-cell-bounds-simple ()
@@ -769,6 +800,55 @@ Cases are restricted to modes that ship with Emacs so the test never skips."
       (let ((after (gfm-tables--cell-info-at-point)))
         (should after)
         (should (= (1+ (cdr before)) (cdr after)))))))
+
+(ert-deftest lang-markdown/gfm-tables-cell-tab-wraps-to-next-row ()
+  (skip-unless (fboundp 'gfm-tables-cell-tab))
+  (with-temp-buffer
+    (insert "| A | B |\n| - | - |\n| 1 | 2 |\n| 3 | 4 |\n")
+    (gfm-tables-mode 1)
+    (goto-char (point-min))
+    (search-forward "B")
+    (goto-char (1- (point)))
+    (gfm-tables-cell-tab)
+    (let ((info (gfm-tables--cell-info-at-point)))
+      (should info)
+      (should (= 0 (cdr info)))
+      ;; Landed on body row 1 (`1' digit nearby).
+      (should (string-match-p "1" (buffer-substring (line-beginning-position)
+                                                    (line-end-position)))))))
+
+(ert-deftest lang-markdown/gfm-tables-cell-tab-inserts-row-at-end ()
+  (skip-unless (fboundp 'gfm-tables-cell-tab))
+  (with-temp-buffer
+    (insert "| A | B |\n| - | - |\n| 1 | 2 |\n")
+    (gfm-tables-mode 1)
+    (goto-char (point-min))
+    (search-forward "2")
+    (goto-char (1- (point)))
+    (gfm-tables-cell-tab)
+    (let ((info (gfm-tables--cell-info-at-point)))
+      (should info)
+      (should (= 0 (cdr info)))
+      ;; New body row is empty: source line of the form `|  |  |'.
+      (should (string-match-p "^|[[:space:]]*|[[:space:]]*|"
+                              (buffer-substring (line-beginning-position)
+                                                (line-end-position)))))))
+
+(ert-deftest lang-markdown/gfm-tables-cell-backtab-wraps-to-prev-row ()
+  (skip-unless (fboundp 'gfm-tables-cell-backtab))
+  (with-temp-buffer
+    (insert "| A | B |\n| - | - |\n| 1 | 2 |\n| 3 | 4 |\n")
+    (gfm-tables-mode 1)
+    (goto-char (point-min))
+    (search-forward "1")
+    (goto-char (1- (point)))
+    (gfm-tables-cell-backtab)
+    (let ((info (gfm-tables--cell-info-at-point)))
+      (should info)
+      ;; Wrapped to header row's last cell.
+      (should (= 1 (cdr info)))
+      (should (string-match-p "B" (buffer-substring (line-beginning-position)
+                                                    (line-end-position)))))))
 
 (ert-deftest lang-markdown/gfm-tables-row-down-skips-delim ()
   (skip-unless (fboundp 'gfm-tables-row-down))

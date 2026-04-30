@@ -798,6 +798,61 @@ after any after-advice on `edit-indirect-commit' (e.g. the one
              (when (bound-and-true-p gfm-tables-mode)
                (gfm-tables--update-cursor-highlight)))))))))
 
+(defun gfm-tables--cell-content-bounds (row-ov idx)
+  "Return (BEG . END) trimmed of surrounding whitespace inside cell IDX."
+  (let* ((cb (overlay-get row-ov 'gfm-tables-cell-bounds))
+         (cell (nth idx cb))
+         (raw-beg (car cell))
+         (raw-end (cdr cell)))
+    (save-excursion
+      (goto-char raw-beg)
+      (skip-chars-forward " \t" raw-end)
+      (let ((b (point)))
+        (goto-char raw-end)
+        (skip-chars-backward " \t" raw-beg)
+        (cons b (point))))))
+
+(defun gfm-tables--edit-header-line (label)
+  "Return a header-line string for an indirect edit buffer titled LABEL."
+  (concat (propertize (concat " " label) 'face 'mode-line-emphasis)
+          (propertize "  C-c C-c" 'face 'help-key-binding) " commit"
+          (propertize "  C-c C-k" 'face 'help-key-binding) " abort"))
+
+(defun gfm-tables--cell-edit-sanitise ()
+  "Strip newlines and escape unescaped `|' in the current buffer.
+Run in the indirect cell edit buffer just before commit."
+  (save-excursion
+    (goto-char (point-min))
+    (while (search-forward "\n" nil t)
+      (replace-match " " nil t))
+    (goto-char (point-min))
+    (while (re-search-forward "\\(\\`\\|[^\\\\]\\)\\(|\\)" nil t)
+      (replace-match "\\1\\\\|" t nil))))
+
+;;;###autoload
+(defun gfm-tables-edit-cell-at-point ()
+  "Open the active table cell in an indirect markdown edit buffer.
+On commit, embedded newlines are replaced with spaces and any
+unescaped `|' is escaped to `\\|'."
+  (interactive)
+  (require 'edit-indirect)
+  (let ((info (gfm-tables--cell-info-at-point)))
+    (unless info
+      (user-error "Point is not in a table cell"))
+    (let* ((row-ov (car info))
+           (idx (cdr info))
+           (bounds (gfm-tables--cell-content-bounds row-ov idx))
+           (edit-indirect-guess-mode-function
+            (lambda (_parent _beg _end) (markdown-mode)))
+           (buf (edit-indirect-region (car bounds) (cdr bounds) t)))
+      (with-current-buffer buf
+        (setq-local require-final-newline nil)
+        (setq-local mode-require-final-newline nil)
+        (setq-local header-line-format
+                    (gfm-tables--edit-header-line "Edit cell"))
+        (add-hook 'edit-indirect-before-commit-hook
+                  #'gfm-tables--cell-edit-sanitise nil t)))))
+
 ;;;###autoload
 (defun gfm-tables-edit-table-at-point ()
   "Open the GFM table containing point in an indirect edit buffer.
@@ -830,6 +885,8 @@ in the indirect buffer (recentering if it has scrolled off-screen)."
         ;; suppress the auto-trailing newline so commit doesn't insert one.
         (setq-local require-final-newline nil)
         (setq-local mode-require-final-newline nil)
+        (setq-local header-line-format
+                    (gfm-tables--edit-header-line "Edit table"))
         (setq gfm-tables--edit-source-buffer src-buf)
         (goto-char (point-min))
         (forward-line line-offset)
@@ -1067,6 +1124,40 @@ Returns non-nil on success, nil when there is no previous table row."
     (when info
       (gfm-tables--goto-cell (car info) most-positive-fixnum))))
 
+(defun gfm-tables--insert-new-row-after-current ()
+  "Insert an empty row after the current one and put point in cell 0."
+  (let* ((info (gfm-tables--cell-info-at-point))
+         (row-ov (car info))
+         (n (length (overlay-get row-ov 'gfm-tables-cell-bounds))))
+    (goto-char (line-end-position))
+    (insert "\n|"
+            (apply #'concat (make-list n "  |")))
+    (gfm-tables--rebuild)
+    (let ((new-row (cl-find-if
+                    (lambda (o) (overlay-get o 'gfm-tables-cell-bounds))
+                    (overlays-at (line-beginning-position)))))
+      (when new-row
+        (gfm-tables--goto-cell new-row 0)))))
+
+(defun gfm-tables-cell-tab ()
+  "Move to the next cell.
+At end of a row, wrap to the next row's first cell.  At end of the
+last row, insert a fresh empty row and land in its first cell."
+  (interactive)
+  (cond
+   ((gfm-tables-cell-forward) t)
+   ((let ((next (gfm-tables--row-on-relative-line 1)))
+      (when next (gfm-tables--goto-cell next 0) t)))
+   (t (gfm-tables--insert-new-row-after-current))))
+
+(defun gfm-tables-cell-backtab ()
+  "Move to the previous cell, wrapping to the previous row's last cell at row start."
+  (interactive)
+  (unless (gfm-tables-cell-backward)
+    (let ((prev-row (gfm-tables--row-on-relative-line -1)))
+      (when prev-row
+        (gfm-tables--goto-cell prev-row most-positive-fixnum)))))
+
 ;;; Header column reordering
 
 (defun gfm-tables--current-block ()
@@ -1200,8 +1291,8 @@ the symbol `snap', a post-call landing in a table snaps to cell 0."
 (define-key gfm-tables-mode-map [remap evil-end-of-line] #'gfm-tables--evil-$)
 (define-key gfm-tables-mode-map [remap evil-forward-word-begin] #'gfm-tables--evil-w)
 (define-key gfm-tables-mode-map [remap evil-forward-WORD-begin] #'gfm-tables--evil-W)
-(define-key gfm-tables-mode-map [remap evil-forward-word-end]   #'gfm-tables--evil-e)
-(define-key gfm-tables-mode-map [remap evil-forward-WORD-end]   #'gfm-tables--evil-E)
+(define-key gfm-tables-mode-map [remap evil-forward-word-end]   #'gfm-tables-edit-cell-at-point)
+(define-key gfm-tables-mode-map [remap evil-forward-WORD-end]   #'gfm-tables-edit-cell-at-point)
 (define-key gfm-tables-mode-map [remap evil-backward-word-begin] #'gfm-tables--evil-b)
 (define-key gfm-tables-mode-map [remap evil-backward-WORD-begin] #'gfm-tables--evil-B)
 (define-key gfm-tables-mode-map [remap evil-beginning-of-line]  #'gfm-tables--evil-0)
@@ -1210,7 +1301,11 @@ the symbol `snap', a post-call landing in a table snaps to cell 0."
   (dolist (state '(normal motion visual))
     (evil-define-minor-mode-key state 'gfm-tables-mode
       (kbd "M-h") #'gfm-tables-column-left
-      (kbd "M-l") #'gfm-tables-column-right)))
+      (kbd "M-l") #'gfm-tables-column-right
+      (kbd "TAB")        #'gfm-tables-cell-tab
+      (kbd "<tab>")      #'gfm-tables-cell-tab
+      (kbd "<backtab>")  #'gfm-tables-cell-backtab
+      (kbd "S-<tab>")    #'gfm-tables-cell-backtab)))
 
 ;;; Evil insert/replace shim
 
