@@ -18,6 +18,7 @@
   :custom
   (claude-code-ide-terminal-backend 'eat)
   (claude-code-ide-enable-mcp-server t)
+  (claude-code-ide-mcp-server-port 19876)
   ;; Disable ediff for proposed changes--too interruptive.
   (claude-code-ide-use-ide-diff nil)
   :config
