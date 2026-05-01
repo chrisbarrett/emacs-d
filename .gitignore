@@ -2,7 +2,7 @@
 *.eln
 
 /site.el
-/site/*
+/site
 
 /eln-cache
 /elpa
