@@ -2,8 +2,9 @@
 
 ### Requirement: Session lifecycle MCP tools
 
-The system SHALL register two MCP tools via
-`claude-code-ide-make-tool`: `start_presentation` and `end_presentation`.
+The system SHALL register three MCP tools via
+`claude-code-ide-make-tool`: `start_presentation`, `get_presentation`,
+and `end_presentation`.
 
 `start_presentation` SHALL accept the following arguments:
 
@@ -20,11 +21,17 @@ The system SHALL register two MCP tools via
 `end_presentation` SHALL accept a single `key` string argument and
 return a status indicator.
 
+`get_presentation` SHALL accept a single `key` string argument and
+return an alist with `key`, `origin` (string), `frame_live` (boolean),
+`tmux_pane` (string or nil), `worktree` (string), and `started_at`
+(float seconds-since-epoch).  Unknown keys SHALL signal a user-error.
+
 #### Scenario: Tools are registered at module init
 
 - **WHEN** the `presentation` module is initialised
 - **THEN** `claude-code-ide-mcp-server-tools` contains entries whose
-  `:name` fields are `"start_presentation"` and `"end_presentation"`
+  `:name` fields are `"start_presentation"`, `"get_presentation"`, and
+  `"end_presentation"`
 
 #### Scenario: end_presentation with unknown key
 
@@ -119,12 +126,15 @@ The system SHALL tear down sessions according to their origin.
 ### Requirement: Mid-session frame deletion cleanup
 
 The system SHALL clear session state when a presentation frame is
-deleted by any means via a `delete-frame-functions` hook.
+deleted by any means via a `delete-frame-functions` hook.  The hook
+SHALL match sessions by `:frame` identity (not by `frame-parameter`),
+because tty-client disconnects fire `delete-frame-functions` after the
+frame's parameters have already been wiped.
 
 #### Scenario: User closes the frame manually
 
-- **WHEN** the user deletes a frame carrying a `presentation-key`
-  parameter
+- **WHEN** the user deletes a frame whose object identity matches the
+  `:frame` value of a session in `+presentation--sessions`
 - **THEN** the matching hash entry is removed
 - **AND** a subsequent `end_presentation` call with that key signals
   a user-error
