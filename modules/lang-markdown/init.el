@@ -77,6 +77,9 @@
      ("batch"         . bat-mode)
      ("nu"            . nushell-mode)
      ("nushell"       . nushell-mode)
+     ;; Terraform/Tofu
+     ("hcl"           . hcl-mode)
+     ("tf"            . terraform-mode)
      ;; Web
      ("html"          . html-mode)
      ("xml"           . nxml-mode)
