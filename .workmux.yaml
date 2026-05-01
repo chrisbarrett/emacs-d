@@ -1,0 +1,7 @@
+files:
+  symlink:
+    - elpaca
+    - site
+    - var
+  copy:
+    - lisp/+autoloads.el
