@@ -1,9 +1,11 @@
 # Presentation Sessions
 
-Agent-driven presentation surface inside Emacs. Two MCP tools
-(`start_presentation`, `end_presentation`) let an external agent spawn or
-reuse an emacsclient frame in a target tmux pane and render slides into a
-dedicated buffer.
+Agent-driven presentation surface inside Emacs. Eight MCP tools let an external
+agent spawn or reuse an emacsclient frame in a target tmux pane and walk the
+user through a deck of slides. Slide kinds: `narrative` (markdown), `file`
+(buffer narrowed to a range), `diff` (`git diff` in `diff-mode`), `layout`
+(two-pane split). Slides may carry inline overlay `annotations` tied to
+specific lines.
 
 ## Files
 
@@ -35,11 +37,29 @@ and `presentation-origin` parameters so the `delete-frame-functions` hook and
 
 ### MCP Tools
 
-| Tool                | Purpose                                                  |
-| :------------------ | :------------------------------------------------------- |
-| `start_presentation`| Spawn or reuse a frame; return key                       |
-| `get_presentation`  | Inspect a session: origin, frame_live, tmux_pane, …      |
-| `end_presentation`  | Tear down a session by key                               |
+| Tool                 | Purpose                                                  |
+| :------------------- | :------------------------------------------------------- |
+| `start_presentation` | Spawn or reuse a frame; return key                       |
+| `get_presentation`   | Inspect a session: origin, frame_live, deck position, …  |
+| `end_presentation`   | Tear down a session by key                               |
+| `push_slide`         | Append a slide to the deck and render it                 |
+| `replace_slide`      | Replace deck[i]; re-render only when i is current        |
+| `truncate_after`     | Drop deck[> i]; -1 clears the deck                       |
+| `goto_slide`         | Re-render deck[i] without mutating the deck              |
+| `get_deck`           | Return key, current_slide_index, slides[]                |
+
+### Slide kinds
+
+| Kind        | Required          | Optional                                                            |
+| :---------- | :---------------- | :------------------------------------------------------------------ |
+| `narrative` | `markdown`        | `annotations`                                                       |
+| `file`      | `path`            | `start_line`, `end_line`, `focus`, `annotations`                    |
+| `diff`      | —                 | `path`, (`base`+`head`), `annotations`                              |
+| `layout`    | `split`, `panes`  | —                                                                   |
+
+`annotations` is `[{ line, text, position? }, …]`; `position` is `"before"` /
+`"after"` (default `"after"`). Layout `split` is `"horizontal"` / `"vertical"`;
+`panes` must be exactly two non-layout slides.
 
 ### Functions
 
@@ -48,6 +68,22 @@ and `presentation-origin` parameters so the `delete-frame-functions` hook and
 | `+presentation-start`                   | Entry point invoked by `start_presentation`   |
 | `+presentation-info`                    | Entry point invoked by `get_presentation`     |
 | `+presentation-end`                     | Entry point invoked by `end_presentation`     |
+| `+presentation-deck-info`               | Entry point invoked by `get_deck`             |
+| `+presentation--coerce-slide`           | Deep alist→plist conversion for MCP payloads  |
+| `+presentation--validate-slide`         | Validate a slide spec; signal `user-error`    |
+| `+presentation--deck-push`              | Append slide; render; return new index        |
+| `+presentation--deck-replace`           | Replace deck[i]; re-render iff current        |
+| `+presentation--deck-truncate`          | Drop deck[> i]; -1 clears                     |
+| `+presentation--deck-goto`              | Re-render deck[i]; set current index          |
+| `+presentation--render-slide`           | Cleanup + dispatch + display                  |
+| `+presentation--render-current`         | Render slide at current index, or splash      |
+| `+presentation--render-narrative`       | Renderer for `narrative` slides               |
+| `+presentation--render-file`            | Renderer for `file` slides                    |
+| `+presentation--render-diff`            | Renderer for `diff` slides                    |
+| `+presentation--render-layout`          | Renderer for `layout` slides                  |
+| `+presentation--apply-annotations`      | Place annotation overlays on a buffer         |
+| `+presentation--cleanup-render-state`   | Delete overlays; run restorers                |
+| `+presentation--diff-argv`              | Pure planner for `git diff` argv              |
 | `+presentation--cmd-list-panes`         | Build `tmux list-panes` shell effect          |
 | `+presentation--cmd-split-window`       | Build `tmux split-window` shell effect        |
 | `+presentation--cmd-kill-pane`          | Build `tmux kill-pane` shell effect           |
@@ -61,9 +97,24 @@ and `presentation-origin` parameters so the `delete-frame-functions` hook and
 | `+presentation--make-key`               | Generate fresh session key                    |
 | `+presentation--find-frame-by-tty`      | Frame whose `'tty` parameter matches          |
 | `+presentation--find-existing-frame`    | First frame matching any pane in the window   |
-| `+presentation--make-splash-buffer`     | Build the `*presentation: KEY*` buffer        |
-| `+presentation--render-slide`           | Replace buffer contents with rendered slide   |
+| `+presentation--make-splash-buffer`     | Build the `*presentation: KEY*` splash buffer |
 | `+presentation--frame-deleted-h`        | Hook: clear hash entry on frame deletion      |
+
+## Deck model
+
+Each session plist carries `:deck` (vector of slide plists),
+`:current-slide-index` (integer or nil), and `:render-state` (per-slide
+bookkeeping: overlays, narrowing/read-only restorers). Mutations are
+expressed via `+presentation--deck-*` helpers; each calls
+`+presentation--render-current` to refresh the frame.
+
+## Render dispatch
+
+`+presentation--render-slide` cleans up the prior slide's render-state, runs
+`+presentation--dispatch-slide` (a `pcase` on `:kind`), then applies any
+annotations and switches the session frame to the produced buffer. Layout
+slides bypass `display-buffer`: the renderer calls `delete-other-windows` +
+`split-window` + `set-window-buffer` directly inside the session frame.
 
 ## Behaviors
 
@@ -119,5 +170,19 @@ into a presentation frame.
 13. End on unknown key signals `user-error`.
 14. Frame-deleted hook clears matching entries by `:frame` identity;
     no-op for frames not tracked by any session.
-15. MCP tools `start_presentation`, `get_presentation`, and
-    `end_presentation` are registered.
+15. MCP tools `start_presentation`, `get_presentation`,
+    `end_presentation`, `push_slide`, `replace_slide`, `truncate_after`,
+    `goto_slide`, `get_deck` are registered.
+16. `+presentation--validate-slide` rejects unknown kinds, missing
+    required fields, nested layout, half-specified diff range, and
+    non-positive annotation lines.
+17. `+presentation--deck-push|replace|truncate|goto` mutate the deck
+    in place; out-of-range indexes signal `user-error` with no
+    mutation.
+18. `+presentation--render-slide` deletes prior overlays + runs
+    restorers before dispatching the next slide.
+19. `+presentation--render-file` narrows to `start_line..end_line`,
+    overlays the `focus` range with the `region` face, and toggles
+    `buffer-read-only` with restore-on-leave.
+20. `+presentation--diff-argv` produces correct argv for working-tree,
+    range, and path-scoped diffs; rejects half-specified ranges.
