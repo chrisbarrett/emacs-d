@@ -199,18 +199,21 @@ Results are returned in execution order."
 
 ;;; 7. Narrative slide rendering
 
-(ert-deftest +presentation/render-slide-narrative-replaces-and-sets-mode ()
-  (let ((buf (generate-new-buffer "*present-test*"))
-        (+presentation-narrative-major-mode 'fundamental-mode))
-    (unwind-protect
-        (progn
-          (with-current-buffer buf (insert "stale"))
-          (+presentation--render-slide
-           buf '(:kind "narrative" :markdown "# Hello"))
+(ert-deftest +presentation/render-narrative-writes-into-key-buffer ()
+  (let* ((+presentation--sessions (make-hash-table :test 'equal))
+         (+presentation-narrative-major-mode 'fundamental-mode)
+         (key "narr-key"))
+    (puthash key (list :worktree "/tmp" :frame nil
+                       :deck [] :current-slide-index nil)
+             +presentation--sessions)
+    (let ((buf (+presentation--render-narrative
+                key '(:kind "narrative" :markdown "# Hello"))))
+      (unwind-protect
           (with-current-buffer buf
-            (should (equal (buffer-string) "# Hello"))
-            (should (eq major-mode 'fundamental-mode))))
-      (kill-buffer buf))))
+            (should (equal (buffer-name) (format "*presentation: %s*" key)))
+            (should (string-match-p "# Hello" (buffer-string)))
+            (should (eq major-mode 'fundamental-mode)))
+        (kill-buffer buf)))))
 
 
 ;;; 8. Reuse path planner
@@ -486,7 +489,13 @@ predicate returns non-nil."
     (when (fboundp 'claude-code-ide-mcp-server-get-tool-names)
       (let ((names (claude-code-ide-mcp-server-get-tool-names)))
         (should (member "start_presentation" names))
-        (should (member "end_presentation" names))))))
+        (should (member "end_presentation" names))
+        (should (member "get_presentation" names))
+        (should (member "push_slide" names))
+        (should (member "replace_slide" names))
+        (should (member "truncate_after" names))
+        (should (member "goto_slide" names))
+        (should (member "get_deck" names))))))
 
 
 ;;; get_presentation info
@@ -521,6 +530,65 @@ predicate returns non-nil."
   (let ((+presentation--sessions (make-hash-table :test 'equal)))
     (should-error (+presentation-info "no-such") :type 'user-error)))
 
+(ert-deftest +presentation/info-includes-slide-count-and-current-index ()
+  (let* ((+presentation--sessions (make-hash-table :test 'equal))
+         (key "k-info-deck"))
+    (puthash key (list :frame nil :origin 'created
+                       :tmux-pane nil :worktree "/tmp/wt"
+                       :started-at 0
+                       :deck (vector '(:kind "narrative" :markdown "a")
+                                     '(:kind "narrative" :markdown "b"))
+                       :current-slide-index 1)
+             +presentation--sessions)
+    (let ((info (+presentation-info key)))
+      (should (= (alist-get 'slide_count info) 2))
+      (should (= (alist-get 'current_slide_index info) 1)))))
+
+(ert-deftest +presentation/info-empty-deck-reports-zero-and-null-index ()
+  (let* ((+presentation--sessions (make-hash-table :test 'equal))
+         (key "k-info-empty"))
+    (puthash key (list :frame nil :origin 'created
+                       :tmux-pane nil :worktree "/tmp/wt"
+                       :started-at 0
+                       :deck [] :current-slide-index nil)
+             +presentation--sessions)
+    (let ((info (+presentation-info key)))
+      (should (= (alist-get 'slide_count info) 0))
+      (should (null (alist-get 'current_slide_index info))))))
+
+
+;;; get_deck
+
+(ert-deftest +presentation/deck-info-empty ()
+  (let* ((+presentation--sessions (make-hash-table :test 'equal))
+         (key "k-deck-e"))
+    (puthash key (list :deck [] :current-slide-index nil)
+             +presentation--sessions)
+    (let ((info (+presentation-deck-info key)))
+      (should (equal (alist-get 'key info) key))
+      (should (null (alist-get 'current_slide_index info)))
+      (should (equal (alist-get 'slides info) [])))))
+
+(ert-deftest +presentation/deck-info-non-empty ()
+  (let* ((+presentation--sessions (make-hash-table :test 'equal))
+         (key "k-deck-n"))
+    (puthash key (list :deck (vector '(:kind "narrative" :markdown "a"
+                                       :title "Intro")
+                                     '(:kind "file" :path "x.el"))
+                       :current-slide-index 0)
+             +presentation--sessions)
+    (let* ((info (+presentation-deck-info key))
+           (slides (alist-get 'slides info)))
+      (should (= (length slides) 2))
+      (let ((s0 (aref slides 0)))
+        (should (= (alist-get 'index s0) 0))
+        (should (equal (alist-get 'kind s0) "narrative"))
+        (should (equal (alist-get 'title s0) "Intro")))
+      (let ((s1 (aref slides 1)))
+        (should (= (alist-get 'index s1) 1))
+        (should (equal (alist-get 'kind s1) "file"))
+        (should (null (alist-get 'title s1)))))))
+
 
 ;;; alist-to-plist helper
 
@@ -528,5 +596,624 @@ predicate returns non-nil."
   (should (equal (+presentation--alist-to-plist '((kind . "narrative")
                                                   (markdown . "# Hi")))
                  '(:kind "narrative" :markdown "# Hi"))))
+
+
+;;; Slide-spec coercion
+
+(ert-deftest +presentation/coerce-slide-deep-converts-nested-alists ()
+  (should (equal
+           (+presentation--coerce-slide
+            '((kind . "narrative") (markdown . "# Hi")))
+           '(:kind "narrative" :markdown "# Hi"))))
+
+(ert-deftest +presentation/coerce-slide-walks-vectors-of-alists ()
+  (should (equal
+           (+presentation--coerce-slide
+            '((kind . "narrative") (markdown . "x")
+              (annotations . [((line . 1) (text . "a") (position . "after"))
+                              ((line . 2) (text . "b"))])))
+           '(:kind "narrative" :markdown "x"
+             :annotations [(:line 1 :text "a" :position "after")
+                           (:line 2 :text "b")]))))
+
+(ert-deftest +presentation/coerce-slide-recurses-into-layout-panes ()
+  (let ((coerced (+presentation--coerce-slide
+                  '((kind . "layout") (split . "horizontal")
+                    (panes . [((kind . "narrative") (markdown . "L"))
+                              ((kind . "narrative") (markdown . "R"))])))))
+    (should (equal (plist-get coerced :kind) "layout"))
+    (let ((panes (plist-get coerced :panes)))
+      (should (vectorp panes))
+      (should (equal (plist-get (aref panes 0) :markdown) "L"))
+      (should (equal (plist-get (aref panes 1) :markdown) "R")))))
+
+
+;;; Slide validation
+
+(ert-deftest +presentation/validate-slide-narrative-ok ()
+  (should (+presentation--validate-slide
+           '(:kind "narrative" :markdown "x"))))
+
+(ert-deftest +presentation/validate-slide-narrative-requires-markdown ()
+  (should-error (+presentation--validate-slide '(:kind "narrative"))
+                :type 'user-error))
+
+(ert-deftest +presentation/validate-slide-file-ok ()
+  (should (+presentation--validate-slide
+           '(:kind "file" :path "lib.el"))))
+
+(ert-deftest +presentation/validate-slide-file-requires-path ()
+  (should-error (+presentation--validate-slide '(:kind "file"))
+                :type 'user-error))
+
+(ert-deftest +presentation/validate-slide-file-line-ranges-positive ()
+  (should-error (+presentation--validate-slide
+                 '(:kind "file" :path "x" :start-line 0))
+                :type 'user-error)
+  (should-error (+presentation--validate-slide
+                 '(:kind "file" :path "x" :end-line -1))
+                :type 'user-error))
+
+(ert-deftest +presentation/validate-slide-file-focus-shape ()
+  (should (+presentation--validate-slide
+           '(:kind "file" :path "x" :focus [10 20])))
+  (should-error (+presentation--validate-slide
+                 '(:kind "file" :path "x" :focus [10]))
+                :type 'user-error))
+
+(ert-deftest +presentation/validate-slide-diff-empty-ok ()
+  (should (+presentation--validate-slide '(:kind "diff"))))
+
+(ert-deftest +presentation/validate-slide-diff-rejects-half-range ()
+  (should-error (+presentation--validate-slide
+                 '(:kind "diff" :base "main"))
+                :type 'user-error)
+  (should-error (+presentation--validate-slide
+                 '(:kind "diff" :head "feat"))
+                :type 'user-error))
+
+(ert-deftest +presentation/validate-slide-layout-ok ()
+  (should (+presentation--validate-slide
+           '(:kind "layout" :split "horizontal"
+             :panes [(:kind "narrative" :markdown "L")
+                     (:kind "narrative" :markdown "R")]))))
+
+(ert-deftest +presentation/validate-slide-layout-rejects-nested ()
+  (should-error
+   (+presentation--validate-slide
+    '(:kind "layout" :split "horizontal"
+      :panes [(:kind "layout" :split "vertical"
+               :panes [(:kind "narrative" :markdown "a")
+                       (:kind "narrative" :markdown "b")])
+              (:kind "narrative" :markdown "R")]))
+   :type 'user-error))
+
+(ert-deftest +presentation/validate-slide-layout-requires-two-panes ()
+  (should-error
+   (+presentation--validate-slide
+    '(:kind "layout" :split "horizontal"
+      :panes [(:kind "narrative" :markdown "x")]))
+   :type 'user-error))
+
+(ert-deftest +presentation/validate-slide-layout-rejects-bad-split ()
+  (should-error
+   (+presentation--validate-slide
+    '(:kind "layout" :split "diagonal"
+      :panes [(:kind "narrative" :markdown "L")
+              (:kind "narrative" :markdown "R")]))
+   :type 'user-error))
+
+(ert-deftest +presentation/validate-slide-rejects-unknown-kind ()
+  (should-error (+presentation--validate-slide '(:kind "mystery"))
+                :type 'user-error))
+
+(ert-deftest +presentation/validate-slide-annotation-line-positive ()
+  (should-error
+   (+presentation--validate-slide
+    '(:kind "narrative" :markdown "x"
+      :annotations [(:line 0 :text "t")]))
+   :type 'user-error)
+  (should-error
+   (+presentation--validate-slide
+    '(:kind "narrative" :markdown "x"
+      :annotations [(:line "5" :text "t")]))
+   :type 'user-error))
+
+(ert-deftest +presentation/validate-slide-annotation-position-enum ()
+  (should (+presentation--validate-slide
+           '(:kind "narrative" :markdown "x"
+             :annotations [(:line 1 :text "t" :position "before")
+                           (:line 2 :text "u" :position "after")
+                           (:line 3 :text "v")])))
+  (should-error
+   (+presentation--validate-slide
+    '(:kind "narrative" :markdown "x"
+      :annotations [(:line 1 :text "t" :position "elsewhere")]))
+   :type 'user-error))
+
+
+;;; Deck mutation helpers
+
+(ert-deftest +presentation/deck-push-appends-and-returns-index ()
+  (let* ((+presentation--sessions (make-hash-table :test 'equal))
+         (key "k-push"))
+    (puthash key (list :deck [] :current-slide-index nil)
+             +presentation--sessions)
+    (let ((idx (+presentation--deck-push
+                key '(:kind "narrative" :markdown "a"))))
+      (should (= idx 0))
+      (let ((s (gethash key +presentation--sessions)))
+        (should (= (length (plist-get s :deck)) 1))
+        (should (= (plist-get s :current-slide-index) 0))))
+    (let ((idx (+presentation--deck-push
+                key '(:kind "narrative" :markdown "b"))))
+      (should (= idx 1))
+      (should (= (plist-get (gethash key +presentation--sessions)
+                            :current-slide-index)
+                 1)))))
+
+(ert-deftest +presentation/deck-replace-mutates-without-changing-current ()
+  (let* ((+presentation--sessions (make-hash-table :test 'equal))
+         (key "k-rep"))
+    (puthash key (list :deck (vector '(:kind "narrative" :markdown "a")
+                                     '(:kind "narrative" :markdown "b"))
+                       :current-slide-index 1)
+             +presentation--sessions)
+    (+presentation--deck-replace key 0 '(:kind "narrative" :markdown "A"))
+    (let ((s (gethash key +presentation--sessions)))
+      (should (equal (plist-get (aref (plist-get s :deck) 0) :markdown) "A"))
+      (should (= (plist-get s :current-slide-index) 1)))))
+
+(ert-deftest +presentation/deck-replace-out-of-range-errors ()
+  (let* ((+presentation--sessions (make-hash-table :test 'equal))
+         (key "k-rep-oob"))
+    (puthash key (list :deck (vector '(:kind "narrative" :markdown "a"))
+                       :current-slide-index 0)
+             +presentation--sessions)
+    (should-error (+presentation--deck-replace
+                   key 5 '(:kind "narrative" :markdown "x"))
+                  :type 'user-error)))
+
+(ert-deftest +presentation/deck-replace-on-empty-errors ()
+  (let* ((+presentation--sessions (make-hash-table :test 'equal))
+         (key "k-rep-empty"))
+    (puthash key (list :deck [] :current-slide-index nil)
+             +presentation--sessions)
+    (should-error (+presentation--deck-replace
+                   key 0 '(:kind "narrative" :markdown "x"))
+                  :type 'user-error)))
+
+(ert-deftest +presentation/deck-truncate-drops-trailing-and-resets-current ()
+  (let* ((+presentation--sessions (make-hash-table :test 'equal))
+         (key "k-trunc"))
+    (puthash key (list :deck (vector '(:kind "narrative" :markdown "a")
+                                     '(:kind "narrative" :markdown "b")
+                                     '(:kind "narrative" :markdown "c"))
+                       :current-slide-index 2)
+             +presentation--sessions)
+    (+presentation--deck-truncate key 0)
+    (let ((s (gethash key +presentation--sessions)))
+      (should (= (length (plist-get s :deck)) 1))
+      (should (= (plist-get s :current-slide-index) 0)))))
+
+(ert-deftest +presentation/deck-truncate-keeps-current-when-not-past ()
+  (let* ((+presentation--sessions (make-hash-table :test 'equal))
+         (key "k-trunc-keep"))
+    (puthash key (list :deck (vector '(:kind "narrative" :markdown "a")
+                                     '(:kind "narrative" :markdown "b")
+                                     '(:kind "narrative" :markdown "c"))
+                       :current-slide-index 0)
+             +presentation--sessions)
+    (+presentation--deck-truncate key 1)
+    (let ((s (gethash key +presentation--sessions)))
+      (should (= (length (plist-get s :deck)) 2))
+      (should (= (plist-get s :current-slide-index) 0)))))
+
+(ert-deftest +presentation/deck-truncate-minus-one-clears-deck ()
+  (let* ((+presentation--sessions (make-hash-table :test 'equal))
+         (key "k-trunc-clear"))
+    (puthash key (list :deck (vector '(:kind "narrative" :markdown "a"))
+                       :current-slide-index 0)
+             +presentation--sessions)
+    (+presentation--deck-truncate key -1)
+    (let ((s (gethash key +presentation--sessions)))
+      (should (= (length (plist-get s :deck)) 0))
+      (should (null (plist-get s :current-slide-index))))))
+
+(ert-deftest +presentation/deck-truncate-out-of-range-errors ()
+  (let* ((+presentation--sessions (make-hash-table :test 'equal))
+         (key "k-trunc-oob"))
+    (puthash key (list :deck (vector '(:kind "narrative" :markdown "a"))
+                       :current-slide-index 0)
+             +presentation--sessions)
+    (should-error (+presentation--deck-truncate key 5) :type 'user-error)))
+
+(ert-deftest +presentation/deck-goto-sets-current-without-mutating-deck ()
+  (let* ((+presentation--sessions (make-hash-table :test 'equal))
+         (key "k-goto"))
+    (puthash key (list :deck (vector '(:kind "narrative" :markdown "a")
+                                     '(:kind "narrative" :markdown "b"))
+                       :current-slide-index 0)
+             +presentation--sessions)
+    (+presentation--deck-goto key 1)
+    (let ((s (gethash key +presentation--sessions)))
+      (should (= (length (plist-get s :deck)) 2))
+      (should (= (plist-get s :current-slide-index) 1)))))
+
+(ert-deftest +presentation/deck-goto-out-of-range-errors ()
+  (let* ((+presentation--sessions (make-hash-table :test 'equal))
+         (key "k-goto-oob"))
+    (puthash key (list :deck (vector '(:kind "narrative" :markdown "a"))
+                       :current-slide-index 0)
+             +presentation--sessions)
+    (should-error (+presentation--deck-goto key 5) :type 'user-error)))
+
+
+;;; Render dispatch
+
+(ert-deftest +presentation/render-slide-clears-prior-overlays-before-dispatch ()
+  "render-slide deletes overlays from `:render-state' before rendering."
+  (let* ((+presentation--sessions (make-hash-table :test 'equal))
+         (key "k-cleanup")
+         (sentinel-buf (generate-new-buffer "*sentinel*"))
+         (ov (with-current-buffer sentinel-buf
+               (make-overlay (point-min) (point-min))))
+         (deleted nil))
+    (unwind-protect
+        (progn
+          (puthash key (list :worktree "/tmp" :frame nil
+                             :render-state (list :overlays (list ov)))
+                   +presentation--sessions)
+          (cl-letf (((symbol-function '+presentation--dispatch-slide)
+                     (lambda (_key _slide)
+                       (setq deleted (not (overlay-buffer ov)))
+                       sentinel-buf)))
+            (+presentation--render-slide
+             key '(:kind "narrative" :markdown "x")))
+          (should deleted)
+          (should (null (+presentation--session-prop key :render-state))))
+      (when (overlay-buffer ov) (delete-overlay ov))
+      (kill-buffer sentinel-buf))))
+
+(ert-deftest +presentation/dispatch-slide-rejects-unknown-kind ()
+  (let* ((+presentation--sessions (make-hash-table :test 'equal))
+         (key "k-unknown"))
+    (puthash key (list :worktree "/tmp" :frame nil) +presentation--sessions)
+    (should-error (+presentation--dispatch-slide key '(:kind "mystery")))))
+
+
+;;; start_presentation deck wiring
+
+(ert-deftest +presentation/start-with-initial-slide-populates-deck-zero ()
+  (let* ((+presentation--sessions (make-hash-table :test 'equal))
+         (frame (selected-frame))
+         (+presentation-narrative-major-mode 'fundamental-mode))
+    (+presentation-tests--with-clean-frame
+     frame
+     (lambda ()
+       (cl-letf
+           (((symbol-function 'process-file)
+             (lambda (_program _infile dest _display &rest _args)
+               (when-let* ((b (+presentation-tests--fake-process-file-buffer dest)))
+                 (with-current-buffer b (insert "%9\t/dev/ttys099\n")))
+               0))
+            ((symbol-function 'frame-list) (lambda () (list frame)))
+            ((symbol-function 'frame-parameter)
+             (lambda (f param)
+               (when (and (eq f frame) (eq param 'tty)) "/dev/ttys099")))
+            ((symbol-function 'current-window-configuration)
+             (lambda () 'fake-wc))
+            ((symbol-function 'set-register) (lambda (_r _v) nil))
+            ((symbol-function 'switch-to-buffer) (lambda (_b) nil)))
+         (let* ((key (+presentation-start
+                      :worktree "/tmp/wt"
+                      :tmux-session "sess"
+                      :tmux-window "1"
+                      :socket "/tmp/sock"
+                      :initial-slide '(:kind "narrative" :markdown "# Hi")))
+                (sess (gethash key +presentation--sessions)))
+           (should (= (length (plist-get sess :deck)) 1))
+           (should (= (plist-get sess :current-slide-index) 0))
+           (should (equal (plist-get (aref (plist-get sess :deck) 0) :markdown)
+                          "# Hi"))))))))
+
+(defmacro +presentation-tests--with-temp-file (var content &rest body)
+  "Bind VAR to a temp file containing CONTENT for BODY's duration."
+  (declare (indent 2))
+  `(let ((,var (make-temp-file "present-test-" nil ".txt" ,content)))
+     (unwind-protect (progn ,@body)
+       (when (get-file-buffer ,var)
+         (with-current-buffer (get-file-buffer ,var)
+           (set-buffer-modified-p nil))
+         (kill-buffer (get-file-buffer ,var)))
+       (delete-file ,var))))
+
+
+;;; file slide
+
+(ert-deftest +presentation/render-file-resolves-relative-against-worktree ()
+  (let* ((+presentation--sessions (make-hash-table :test 'equal))
+         (key "k-file"))
+    (+presentation-tests--with-temp-file
+        path "alpha\nbeta\ngamma\n"
+      (let ((dir (file-name-directory path))
+            (rel (file-name-nondirectory path)))
+        (puthash key (list :worktree dir :frame nil) +presentation--sessions)
+        (let ((buf (+presentation--render-file
+                    key (list :kind "file" :path rel))))
+          (should (bufferp buf))
+          (should (equal (buffer-file-name buf) path)))))))
+
+(ert-deftest +presentation/render-file-narrows-to-line-range ()
+  (let* ((+presentation--sessions (make-hash-table :test 'equal))
+         (key "k-file-narrow"))
+    (+presentation-tests--with-temp-file
+        path "one\ntwo\nthree\nfour\nfive\n"
+      (puthash key (list :worktree (file-name-directory path) :frame nil)
+               +presentation--sessions)
+      (let ((buf (+presentation--render-file
+                  key (list :kind "file" :path path
+                            :start-line 2 :end-line 4))))
+        (with-current-buffer buf
+          (should (equal (buffer-substring-no-properties (point-min)
+                                                         (point-max))
+                         "two\nthree\nfour\n")))))))
+
+(ert-deftest +presentation/render-file-focus-creates-region-overlay ()
+  (let* ((+presentation--sessions (make-hash-table :test 'equal))
+         (key "k-file-focus"))
+    (+presentation-tests--with-temp-file
+        path "one\ntwo\nthree\nfour\nfive\n"
+      (puthash key (list :worktree (file-name-directory path) :frame nil)
+               +presentation--sessions)
+      (let ((buf (+presentation--render-file
+                  key (list :kind "file" :path path :focus [2 3]))))
+        (with-current-buffer buf
+          (let ((ovs (cl-remove-if-not
+                      (lambda (o) (eq (overlay-get o 'face) 'region))
+                      (overlays-in (point-min) (point-max)))))
+            (should (= (length ovs) 1))))))))
+
+;;; diff slide
+
+(ert-deftest +presentation/diff-argv-working-tree ()
+  (should (equal (+presentation--diff-argv "/tmp/wt" nil nil nil)
+                 '("git" "-C" "/tmp/wt" "diff"))))
+
+(ert-deftest +presentation/diff-argv-range ()
+  (should (equal (+presentation--diff-argv "/tmp/wt" "main" "feat" nil)
+                 '("git" "-C" "/tmp/wt" "diff" "main..feat"))))
+
+(ert-deftest +presentation/diff-argv-range-with-path ()
+  (should (equal (+presentation--diff-argv "/tmp/wt" "main" "feat" "src/x.el")
+                 '("git" "-C" "/tmp/wt" "diff"
+                   "main..feat" "--" "src/x.el"))))
+
+(ert-deftest +presentation/diff-argv-working-tree-with-path ()
+  (should (equal (+presentation--diff-argv "/tmp/wt" nil nil "src/x.el")
+                 '("git" "-C" "/tmp/wt" "diff" "--" "src/x.el"))))
+
+(ert-deftest +presentation/diff-argv-half-range-errors ()
+  (should-error (+presentation--diff-argv "/tmp/wt" "main" nil nil)
+                :type 'user-error)
+  (should-error (+presentation--diff-argv "/tmp/wt" nil "feat" nil)
+                :type 'user-error))
+
+(ert-deftest +presentation/render-diff-inserts-into-per-session-buffer ()
+  (let* ((+presentation--sessions (make-hash-table :test 'equal))
+         (key "k-diff"))
+    (puthash key (list :worktree "/tmp/wt" :frame nil)
+             +presentation--sessions)
+    (cl-letf (((symbol-function 'process-file)
+               (lambda (_program _infile dest _display &rest _args)
+                 (when-let* ((b (+presentation-tests--fake-process-file-buffer
+                                 dest)))
+                   (with-current-buffer b
+                     (insert "diff --git a/x b/x\n--- a/x\n+++ b/x\n")))
+                 0)))
+      (let ((buf (+presentation--render-diff
+                 key '(:kind "diff"))))
+        (unwind-protect
+            (with-current-buffer buf
+              (should (equal (buffer-name)
+                             (format "*presentation-diff: %s*" key)))
+              (should (string-match-p "diff --git" (buffer-string)))
+              (should (eq major-mode 'diff-mode)))
+          (kill-buffer buf))))))
+
+
+;;; layout slide
+
+(ert-deftest +presentation/render-layout-horizontal-splits-right ()
+  (let* ((+presentation--sessions (make-hash-table :test 'equal))
+         (key "k-layout-h")
+         (frame (selected-frame))
+         (split-args nil)
+         (window-buffers nil))
+    (puthash key (list :worktree "/tmp" :frame frame)
+             +presentation--sessions)
+    (cl-letf (((symbol-function 'delete-other-windows) (lambda () nil))
+              ((symbol-function 'split-window)
+               (lambda (&rest args) (push args split-args) 'fake-window))
+              ((symbol-function 'set-window-buffer)
+               (lambda (w b) (push (cons w b) window-buffers))))
+      (let ((result (+presentation--render-layout
+                     key '(:kind "layout" :split "horizontal"
+                           :panes [(:kind "narrative" :markdown "L")
+                                   (:kind "narrative" :markdown "R")]))))
+        (should (eq (car result) :layout))
+        (should (= (length window-buffers) 2))
+        (let ((args (car split-args)))
+          (should (memq 'right args)))))))
+
+(ert-deftest +presentation/render-layout-vertical-splits-below ()
+  (let* ((+presentation--sessions (make-hash-table :test 'equal))
+         (key "k-layout-v")
+         (frame (selected-frame))
+         (split-args nil))
+    (puthash key (list :worktree "/tmp" :frame frame)
+             +presentation--sessions)
+    (cl-letf (((symbol-function 'delete-other-windows) (lambda () nil))
+              ((symbol-function 'split-window)
+               (lambda (&rest args) (push args split-args) 'fake-window))
+              ((symbol-function 'set-window-buffer) (lambda (_w _b) nil)))
+      (+presentation--render-layout
+       key '(:kind "layout" :split "vertical"
+             :panes [(:kind "narrative" :markdown "T")
+                     (:kind "narrative" :markdown "B")]))
+      (let ((args (car split-args)))
+        (should (memq 'below args))))))
+
+(ert-deftest +presentation/deck-push-rejects-nested-layout ()
+  "Validation runs at the public push path; nested layout is rejected."
+  (let* ((+presentation--sessions (make-hash-table :test 'equal))
+         (key "k-layout-nest"))
+    (puthash key (list :deck [] :current-slide-index nil :worktree "/tmp"
+                       :frame nil)
+             +presentation--sessions)
+    (should-error
+     (+presentation--deck-push
+      key '(:kind "layout" :split "horizontal"
+            :panes [(:kind "layout" :split "vertical"
+                     :panes [(:kind "narrative" :markdown "x")
+                             (:kind "narrative" :markdown "y")])
+                    (:kind "narrative" :markdown "R")]))
+     :type 'user-error)))
+
+
+;;; annotations
+
+(ert-deftest +presentation/apply-annotations-overlay-after-string ()
+  (let* ((+presentation--sessions (make-hash-table :test 'equal))
+         (key "k-ann")
+         (buf (generate-new-buffer "*ann-buf*")))
+    (puthash key (list :worktree "/tmp" :frame nil)
+             +presentation--sessions)
+    (unwind-protect
+        (progn
+          (with-current-buffer buf
+            (insert "line1\nline2\nline3\nline4\nline5\n"))
+          (+presentation--apply-annotations
+           key buf [(:line 3 :text "note" :position "after")])
+          (let* ((rs (+presentation--session-prop key :render-state))
+                 (ovs (plist-get rs :overlays)))
+            (should (= (length ovs) 1))
+            (let ((ov (car ovs)))
+              (should (eq (overlay-buffer ov) buf))
+              (should (string-match-p "note" (overlay-get ov 'after-string))))))
+      (kill-buffer buf))))
+
+(ert-deftest +presentation/apply-annotations-before-string ()
+  (let* ((+presentation--sessions (make-hash-table :test 'equal))
+         (key "k-ann-b")
+         (buf (generate-new-buffer "*ann-b*")))
+    (puthash key (list :worktree "/tmp") +presentation--sessions)
+    (unwind-protect
+        (progn
+          (with-current-buffer buf (insert "a\nb\nc\n"))
+          (+presentation--apply-annotations
+           key buf [(:line 2 :text "B" :position "before")])
+          (let* ((rs (+presentation--session-prop key :render-state))
+                 (ov (car (plist-get rs :overlays))))
+            (should (string-match-p "B" (overlay-get ov 'before-string)))
+            (should-not (overlay-get ov 'after-string))))
+      (kill-buffer buf))))
+
+(ert-deftest +presentation/render-slide-applies-annotations-via-narrative ()
+  (let* ((+presentation--sessions (make-hash-table :test 'equal))
+         (key "k-ann-narr")
+         (+presentation-narrative-major-mode 'fundamental-mode))
+    (puthash key (list :worktree "/tmp" :frame nil)
+             +presentation--sessions)
+    (let ((buf (+presentation--render-slide
+                key '(:kind "narrative" :markdown "x\ny\nz\n"
+                      :annotations [(:line 2 :text "T")]))))
+      (unwind-protect
+          (let* ((rs (+presentation--session-prop key :render-state))
+                 (ovs (plist-get rs :overlays)))
+            (should (= (length ovs) 1))
+            (should (eq (overlay-buffer (car ovs)) buf)))
+        (kill-buffer buf)))))
+
+(ert-deftest +presentation/overlays-deleted-on-slide-change ()
+  "Push slide A with annotations; pushing slide B clears A's overlays."
+  (let* ((+presentation--sessions (make-hash-table :test 'equal))
+         (key "k-ov-clear")
+         (+presentation-narrative-major-mode 'fundamental-mode))
+    (puthash key (list :worktree "/tmp" :frame nil
+                       :deck [] :current-slide-index nil)
+             +presentation--sessions)
+    (+presentation--deck-push
+     key '(:kind "narrative" :markdown "a\nb\n"
+           :annotations [(:line 1 :text "x")]))
+    (let* ((rs (+presentation--session-prop key :render-state))
+           (old-ov (car (plist-get rs :overlays))))
+      (should (overlayp old-ov))
+      (+presentation--deck-push
+       key '(:kind "narrative" :markdown "c\nd\n"))
+      (should-not (overlay-buffer old-ov)))))
+
+(ert-deftest +presentation/end-presentation-deletes-overlays ()
+  (let* ((+presentation--sessions (make-hash-table :test 'equal))
+         (key "k-end-ov")
+         (+presentation-narrative-major-mode 'fundamental-mode))
+    (puthash key (list :worktree "/tmp" :frame nil :origin 'reused
+                       :saved-config nil
+                       :deck [] :current-slide-index nil)
+             +presentation--sessions)
+    (+presentation--deck-push
+     key '(:kind "narrative" :markdown "a\n"
+           :annotations [(:line 1 :text "x")]))
+    (let* ((rs (+presentation--session-prop key :render-state))
+           (ov (car (plist-get rs :overlays))))
+      (should (overlayp ov))
+      (+presentation-end key)
+      (should-not (overlay-buffer ov)))))
+
+
+(ert-deftest +presentation/render-file-read-only-restored-on-cleanup ()
+  (let* ((+presentation--sessions (make-hash-table :test 'equal))
+         (key "k-file-ro"))
+    (+presentation-tests--with-temp-file
+        path "x\ny\n"
+      (puthash key (list :worktree (file-name-directory path) :frame nil)
+               +presentation--sessions)
+      (let ((buf (+presentation--render-file
+                  key (list :kind "file" :path path))))
+        (with-current-buffer buf
+          (should buffer-read-only))
+        (+presentation--cleanup-render-state key)
+        (with-current-buffer buf
+          (should-not buffer-read-only))))))
+
+
+(ert-deftest +presentation/start-without-initial-slide-leaves-deck-empty ()
+  (let* ((+presentation--sessions (make-hash-table :test 'equal))
+         (frame (selected-frame)))
+    (+presentation-tests--with-clean-frame
+     frame
+     (lambda ()
+       (cl-letf
+           (((symbol-function 'process-file)
+             (lambda (_program _infile dest _display &rest _args)
+               (when-let* ((b (+presentation-tests--fake-process-file-buffer dest)))
+                 (with-current-buffer b (insert "%9\t/dev/ttys099\n")))
+               0))
+            ((symbol-function 'frame-list) (lambda () (list frame)))
+            ((symbol-function 'frame-parameter)
+             (lambda (f param)
+               (when (and (eq f frame) (eq param 'tty)) "/dev/ttys099")))
+            ((symbol-function 'current-window-configuration)
+             (lambda () 'fake-wc))
+            ((symbol-function 'set-register) (lambda (_r _v) nil))
+            ((symbol-function 'switch-to-buffer) (lambda (_b) nil)))
+         (let* ((key (+presentation-start
+                      :worktree "/tmp/wt"
+                      :tmux-session "sess"
+                      :tmux-window "1"
+                      :socket "/tmp/sock"))
+                (sess (gethash key +presentation--sessions)))
+           (should (equal (plist-get sess :deck) []))
+           (should (null (plist-get sess :current-slide-index)))))))))
 
 ;;; tests.el ends here
