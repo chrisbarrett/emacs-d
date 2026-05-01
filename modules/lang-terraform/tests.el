@@ -140,6 +140,35 @@
     (when terragrunt-entry
       (should terragrunt-entry))))
 
+;;; Nerd-icons mappings
+
+(ert-deftest lang-terraform-test-nerd-icons-terraform-mode ()
+  "terraform-mode is mapped to the terraform mdicon glyph."
+  (require 'nerd-icons nil t)
+  (skip-unless (boundp 'nerd-icons-mode-icon-alist))
+  (let ((entry (assq 'terraform-mode nerd-icons-mode-icon-alist)))
+    (should entry)
+    (should (eq (nth 1 entry) 'nerd-icons-mdicon))
+    (should (equal (nth 2 entry) "nf-md-terraform"))))
+
+(ert-deftest lang-terraform-test-nerd-icons-hcl-mode ()
+  "hcl-mode is mapped to the terraform mdicon glyph."
+  (require 'nerd-icons nil t)
+  (skip-unless (boundp 'nerd-icons-mode-icon-alist))
+  (let ((entry (assq 'hcl-mode nerd-icons-mode-icon-alist)))
+    (should entry)
+    (should (eq (nth 1 entry) 'nerd-icons-mdicon))
+    (should (equal (nth 2 entry) "nf-md-terraform"))))
+
+(ert-deftest lang-terraform-test-nerd-icons-hcl-extension ()
+  "The .hcl extension is mapped to the terraform mdicon glyph."
+  (require 'nerd-icons nil t)
+  (skip-unless (boundp 'nerd-icons-extension-icon-alist))
+  (let ((entry (assoc "hcl" nerd-icons-extension-icon-alist)))
+    (should entry)
+    (should (eq (nth 1 entry) 'nerd-icons-mdicon))
+    (should (equal (nth 2 entry) "nf-md-terraform"))))
+
 (ert-deftest lang-terraform-test-path-transform ()
   "Terragrunt stack path transformations are configured."
   (require 'compile nil t)
