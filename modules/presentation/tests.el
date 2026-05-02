@@ -1815,6 +1815,97 @@ then writes the new value into `:pane-layout' after success."
                               :current-slide-index)
                    0))))))
 
+;;; Cursor position memory across nav
+
+(ert-deftest +presentation/deck-goto-saves-and-restores-point ()
+  "Navigating away then back restores the prior cursor position."
+  (let* ((+presentation--sessions (make-hash-table :test 'equal))
+         (key "k-pt")
+         (frame (selected-frame))
+         (win (selected-window))
+         (buf (generate-new-buffer "*pt-buf*"))
+         (window-pt 17)
+         (set-calls nil))
+    (with-current-buffer buf
+      (insert (make-string 200 ?a)))
+    (unwind-protect
+        (progn
+          (puthash key (list :frame frame :worktree "/tmp"
+                             :deck (vector '(:kind "narrative" :markdown "a")
+                                           '(:kind "narrative" :markdown "b"))
+                             :current-slide-index 0)
+                   +presentation--sessions)
+          (cl-letf (((symbol-function '+presentation--render-current)
+                     (lambda (_k) nil))
+                    ((symbol-function 'frame-selected-window) (lambda (_f) win))
+                    ((symbol-function 'window-live-p) (lambda (_w) t))
+                    ((symbol-function 'window-point) (lambda (_w) window-pt))
+                    ((symbol-function 'set-window-point)
+                     (lambda (_w pt) (push pt set-calls) (setq window-pt pt)))
+                    ((symbol-function 'window-buffer) (lambda (_w) buf)))
+            (+presentation--deck-goto key 1)
+            (let* ((sess (gethash key +presentation--sessions))
+                   (alist (plist-get sess :slide-points)))
+              (should (equal (alist-get 0 alist) 17)))
+            (setq window-pt 99)
+            (+presentation--deck-goto key 0)
+            (should (member 17 set-calls))))
+      (kill-buffer buf))))
+
+(ert-deftest +presentation/deck-goto-clamps-restored-point-to-buffer ()
+  "Restored point is clamped to (point-max) of the destination buffer."
+  (let* ((+presentation--sessions (make-hash-table :test 'equal))
+         (key "k-pt-clamp")
+         (frame (selected-frame))
+         (win (selected-window))
+         (small-buf (generate-new-buffer "*small*"))
+         (set-calls nil))
+    (with-current-buffer small-buf (insert "abc"))
+    (unwind-protect
+        (progn
+          (puthash key (list :frame frame :worktree "/tmp"
+                             :deck (vector '(:kind "narrative" :markdown "x")
+                                           '(:kind "narrative" :markdown "y"))
+                             :current-slide-index 1
+                             :slide-points (list (cons 0 9999)))
+                   +presentation--sessions)
+          (cl-letf (((symbol-function '+presentation--render-current)
+                     (lambda (_k) nil))
+                    ((symbol-function 'frame-selected-window) (lambda (_f) win))
+                    ((symbol-function 'window-live-p) (lambda (_w) t))
+                    ((symbol-function 'window-point) (lambda (_w) 1))
+                    ((symbol-function 'window-buffer) (lambda (_w) small-buf))
+                    ((symbol-function 'set-window-point)
+                     (lambda (_w pt) (push pt set-calls))))
+            (+presentation--deck-goto key 0)
+            (should (= (car set-calls)
+                       (with-current-buffer small-buf (point-max))))))
+      (kill-buffer small-buf))))
+
+(ert-deftest +presentation/deck-goto-no-saved-point-leaves-window-untouched ()
+  "First visit to a slide does not call `set-window-point'."
+  (let* ((+presentation--sessions (make-hash-table :test 'equal))
+         (key "k-pt-fresh")
+         (frame (selected-frame))
+         (win (selected-window))
+         (set-called nil))
+    (puthash key (list :frame frame :worktree "/tmp"
+                       :deck (vector '(:kind "narrative" :markdown "a")
+                                     '(:kind "narrative" :markdown "b"))
+                       :current-slide-index 0)
+             +presentation--sessions)
+    (cl-letf (((symbol-function '+presentation--render-current)
+               (lambda (_k) nil))
+              ((symbol-function 'frame-selected-window) (lambda (_f) win))
+              ((symbol-function 'window-live-p) (lambda (_w) t))
+              ((symbol-function 'window-point) (lambda (_w) 5))
+              ((symbol-function 'window-buffer) (lambda (_w) (current-buffer)))
+              ((symbol-function 'set-window-point)
+               (lambda (_w _pt) (setq set-called t))))
+      (+presentation--deck-goto key 1)
+      (should-not set-called))))
+
+
 ;;; Channel capability registration
 
 (ert-deftest +presentation/inject-channel-capability-splices-experimental ()

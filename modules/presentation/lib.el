@@ -665,16 +665,54 @@ range."
         (+presentation--render-current key))))
     index))
 
+(defun +presentation--save-current-point (key)
+  "Stash point of session KEY's current slide into `:slide-points'.
+Reads the point of the frame's selected window so the value reflects
+the user's cursor when leaving the slide.  No-op when there is no
+current index, no live frame, or no live window."
+  (let* ((sess (+presentation--get-session key))
+         (cur (plist-get sess :current-slide-index))
+         (frame (plist-get sess :frame)))
+    (when (and (integerp cur) (frame-live-p frame))
+      (let ((win (frame-selected-window frame)))
+        (when (window-live-p win)
+          (let ((pt (window-point win))
+                (alist (copy-alist (plist-get sess :slide-points))))
+            (setf (alist-get cur alist) pt)
+            (+presentation--session-set key :slide-points alist)))))))
+
+(defun +presentation--restore-saved-point (key)
+  "Restore point for session KEY's current slide from `:slide-points'.
+Clamps to the destination buffer's `point-max' so a stale position
+from a shorter post-edit buffer still lands inside bounds.  No-op
+when no entry is saved for the current index."
+  (let* ((sess (+presentation--get-session key))
+         (cur (plist-get sess :current-slide-index))
+         (frame (plist-get sess :frame))
+         (alist (plist-get sess :slide-points))
+         (pt (alist-get cur alist)))
+    (when (and pt (integerp cur) (frame-live-p frame))
+      (let ((win (frame-selected-window frame)))
+        (when (window-live-p win)
+          (let* ((buf (window-buffer win))
+                 (clamped (with-current-buffer buf (min pt (point-max)))))
+            (set-window-point win clamped)))))))
+
 ;;;###autoload
 (defun +presentation--deck-goto (key index)
   "Render slide at INDEX in session KEY's deck and set it as current.
-Signals `user-error' on out-of-range INDEX."
+Saves the prior slide's cursor position into `:slide-points' before
+flipping the index, and restores any previously-saved cursor position
+for the destination slide after rendering.  Signals `user-error' on
+out-of-range INDEX."
   (let* ((deck (+presentation--deck key))
          (len (length deck)))
     (unless (and (integerp index) (>= index 0) (< index len))
       (user-error "Goto index %S out of range [0,%d)" index len))
+    (+presentation--save-current-point key)
     (+presentation--session-set key :current-slide-index index)
     (+presentation--render-current key)
+    (+presentation--restore-saved-point key)
     index))
 
 
@@ -1020,6 +1058,13 @@ Bindings advance / retreat the session's current slide via
 buffer-local `+presentation--session-key' set by the renderer."
   :lighter " Pres"
   :keymap +presentation-mode-map)
+
+(with-eval-after-load 'evil
+  (evil-make-overriding-map +presentation-mode-map)
+  (add-hook '+presentation-mode-hook
+            (lambda ()
+              (when (fboundp 'evil-normalize-keymaps)
+                (evil-normalize-keymaps)))))
 
 ;;;###autoload
 (defun +presentation-next-slide ()
