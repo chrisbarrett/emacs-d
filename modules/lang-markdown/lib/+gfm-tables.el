@@ -61,8 +61,9 @@ the row's background to the header box's vertical edges."
 
 (defvar gfm-tables-mode-map (make-sparse-keymap)
   "Keymap for `gfm-tables-mode'.
-Cell-wise navigation keys are bound under `with-eval-after-load' for
-evil so the file remains usable without evil installed.")
+Intentionally empty: cell-wise bindings live on row overlays via the
+`keymap' overlay property (`gfm-tables--row-map') so they only apply
+inside a table.")
 
 (defconst gfm-tables--delim-re
   "^| *:?-+:? *\\(?:| *:?-+:? *\\)*|[[:blank:]]*$"
@@ -561,6 +562,7 @@ strings, so the column grid stays aligned across visual lines."
                     header-cells col-widths 'header)))
           (overlay-put ov 'display str)
           (overlay-put ov 'before-string (concat top "\n"))
+          (overlay-put ov 'keymap gfm-tables--row-map)
           (overlay-put ov 'gfm-tables-cell-bounds
                        (gfm-tables--cell-bounds header-beg header-end))
           (overlay-put ov 'gfm-tables-col-widths col-widths)
@@ -579,6 +581,7 @@ strings, so the column grid stays aligned across visual lines."
                             cells col-widths role)
                  do (let ((ov (make-overlay lbeg lend)))
                       (overlay-put ov 'display str)
+                      (overlay-put ov 'keymap gfm-tables--row-map)
                       (overlay-put ov 'gfm-tables-cell-bounds
                                    (gfm-tables--cell-bounds lbeg lend))
                       (overlay-put ov 'gfm-tables-col-widths col-widths)
@@ -692,9 +695,7 @@ Skips indirect buffers since base buffer overlays already cover them."
         (add-hook 'window-configuration-change-hook
                   #'gfm-tables--schedule-rebuild nil t)
         (add-hook 'post-command-hook
-                  #'gfm-tables--update-cursor-highlight nil t)
-        (when (fboundp 'evil-normalize-keymaps)
-          (evil-normalize-keymaps)))
+                  #'gfm-tables--update-cursor-highlight nil t))
     (remove-hook 'after-change-functions
                  #'gfm-tables--schedule-rebuild t)
     (remove-hook 'window-configuration-change-hook
@@ -1092,6 +1093,7 @@ Also anchors the visible cursor at the cell's first buffer char."
 The cursor is hidden because tty Emacs always renders it at the
 overlay's right edge regardless of any `cursor' positioning hints, so
 the highlight alone conveys cell selection."
+  (gfm-tables--maybe-snap-to-cell)
   (let ((info (gfm-tables--cell-info-at-point)))
     (cond
      (info
@@ -1125,16 +1127,28 @@ end of the row-overlay's `display' range after the command."
 (defun gfm-tables--row-on-relative-line (direction)
   "Return the gfm-tables navigable row overlay DIRECTION lines from point.
 DIRECTION is 1 for the next row, -1 for the previous row.  Skips
-non-navigable rows (e.g. the delimiter)."
-  (save-excursion
-    (let ((found nil))
-      (while (and (not found)
-                  (zerop (forward-line direction)))
-        (let ((ov (cl-find-if
-                   (lambda (o) (overlay-get o 'gfm-tables-cell-bounds))
-                   (overlays-at (line-beginning-position)))))
-          (when ov (setq found ov))))
-      found)))
+non-navigable rows (e.g. the delimiter).  Confined to the current
+table block so motion at a table edge yields nil instead of jumping
+into a neighbouring table."
+  (when-let* ((block (gfm-tables--current-block)))
+    (let ((block-beg (nth 0 block))
+          (block-end (nth 3 block)))
+      (save-excursion
+        (let ((found nil)
+              (in-block t))
+          (while (and (not found) in-block
+                      (zerop (forward-line direction)))
+            (let ((lbeg (line-beginning-position)))
+              (cond
+               ((or (< lbeg block-beg) (> lbeg block-end))
+                (setq in-block nil))
+               (t
+                (let ((ov (cl-find-if
+                           (lambda (o)
+                             (overlay-get o 'gfm-tables-cell-bounds))
+                           (overlays-at lbeg))))
+                  (when ov (setq found ov)))))))
+          found)))))
 
 (defun gfm-tables-cell-forward ()
   "Move to the next cell in the current table row.
@@ -1318,15 +1332,23 @@ neighbour column is out of range."
   (gfm-tables--swap-columns 1))
 
 (defun gfm-tables--maybe-snap-to-cell ()
-  "If point landed on a table row after a non-table motion, snap to cell 0.
-Looks for a row overlay at the current line's beginning, so this
-works even when Emacs has already bounced point to the overlay's
-right edge after the inbound motion."
-  (let ((row-ov (cl-find-if
-                 (lambda (o) (overlay-get o 'gfm-tables-cell-bounds))
-                 (overlays-at (line-beginning-position)))))
-    (when row-ov
-      (gfm-tables--goto-cell row-ov 0))))
+  "If point is on a table row but outside any cell range, snap to cell 0.
+Idempotent when point already sits in a cell so it is safe to call
+unconditionally (e.g. from `post-command-hook').  Skipped when the
+row is invisible (e.g. inside a folded outline heading) so motion
+through hidden text does not pull point into a hidden table."
+  (let* ((lbeg (line-beginning-position))
+         (row-ov (cl-find-if
+                  (lambda (o) (overlay-get o 'gfm-tables-cell-bounds))
+                  (overlays-at lbeg))))
+    (when (and row-ov (not (invisible-p lbeg)))
+      (let* ((cb (overlay-get row-ov 'gfm-tables-cell-bounds))
+             (in-cell (cl-find-if
+                       (lambda (b) (and (>= (point) (car b))
+                                        (< (point) (cdr b))))
+                       cb)))
+        (unless in-cell
+          (gfm-tables--goto-cell row-ov 0))))))
 
 (defmacro gfm-tables--define-evil-motion (name table-fn evil-fn fall-through)
   "Define NAME as a wrapper dispatching between TABLE-FN and EVIL-FN.
@@ -1370,30 +1392,30 @@ the symbol `snap', a post-call landing in a table snaps to cell 0."
    ((gfm-tables--cell-info-at-point) (gfm-tables-cell-copy))
    (t (call-interactively #'evil-yank-line))))
 
-(define-key gfm-tables-mode-map [remap evil-backward-char] #'gfm-tables--evil-h)
-(define-key gfm-tables-mode-map [remap evil-forward-char] #'gfm-tables--evil-l)
-(define-key gfm-tables-mode-map [remap evil-next-line] #'gfm-tables--evil-j)
-(define-key gfm-tables-mode-map [remap evil-previous-line] #'gfm-tables--evil-k)
-(define-key gfm-tables-mode-map [remap evil-first-non-blank] #'gfm-tables--evil-^)
-(define-key gfm-tables-mode-map [remap evil-end-of-line] #'gfm-tables--evil-$)
-(define-key gfm-tables-mode-map [remap evil-forward-word-begin] #'gfm-tables--evil-w)
-(define-key gfm-tables-mode-map [remap evil-forward-WORD-begin] #'gfm-tables--evil-W)
-(define-key gfm-tables-mode-map [remap evil-forward-word-end]   #'gfm-tables-edit-cell-at-point)
-(define-key gfm-tables-mode-map [remap evil-forward-WORD-end]   #'gfm-tables-edit-cell-at-point)
-(define-key gfm-tables-mode-map [remap evil-backward-word-begin] #'gfm-tables--evil-b)
-(define-key gfm-tables-mode-map [remap evil-backward-WORD-begin] #'gfm-tables--evil-B)
-(define-key gfm-tables-mode-map [remap evil-beginning-of-line]  #'gfm-tables--evil-0)
-(define-key gfm-tables-mode-map [remap evil-yank-line]          #'gfm-tables--evil-Y)
-
-(with-eval-after-load 'evil
-  (dolist (state '(normal motion visual))
-    (evil-define-minor-mode-key state 'gfm-tables-mode
-      (kbd "M-h") #'gfm-tables-swap-column-left
-      (kbd "M-l") #'gfm-tables-swap-column-right
-      (kbd "TAB")        #'gfm-tables-cell-tab
-      (kbd "<tab>")      #'gfm-tables-cell-tab
-      (kbd "<backtab>")  #'gfm-tables-cell-backtab
-      (kbd "S-<tab>")    #'gfm-tables-cell-backtab)))
+(defvar gfm-tables--row-map
+  (let ((m (make-sparse-keymap)))
+    (define-key m (kbd "TAB")          #'gfm-tables-cell-tab)
+    (define-key m (kbd "<tab>")        #'gfm-tables-cell-tab)
+    (define-key m (kbd "<backtab>")    #'gfm-tables-cell-backtab)
+    (define-key m (kbd "S-<tab>")      #'gfm-tables-cell-backtab)
+    (define-key m (kbd "M-h")          #'gfm-tables-swap-column-left)
+    (define-key m (kbd "M-l")          #'gfm-tables-swap-column-right)
+    (define-key m [remap evil-backward-char]       #'gfm-tables--evil-h)
+    (define-key m [remap evil-forward-char]        #'gfm-tables--evil-l)
+    (define-key m [remap evil-next-line]           #'gfm-tables--evil-j)
+    (define-key m [remap evil-previous-line]       #'gfm-tables--evil-k)
+    (define-key m [remap evil-first-non-blank]     #'gfm-tables--evil-^)
+    (define-key m [remap evil-end-of-line]         #'gfm-tables--evil-$)
+    (define-key m [remap evil-forward-word-begin]  #'gfm-tables--evil-w)
+    (define-key m [remap evil-forward-WORD-begin]  #'gfm-tables--evil-W)
+    (define-key m [remap evil-forward-word-end]    #'gfm-tables-edit-cell-at-point)
+    (define-key m [remap evil-forward-WORD-end]    #'gfm-tables-edit-cell-at-point)
+    (define-key m [remap evil-backward-word-begin] #'gfm-tables--evil-b)
+    (define-key m [remap evil-backward-WORD-begin] #'gfm-tables--evil-B)
+    (define-key m [remap evil-beginning-of-line]   #'gfm-tables--evil-0)
+    (define-key m [remap evil-yank-line]           #'gfm-tables--evil-Y)
+    m)
+  "Keymap attached to row overlays; bindings only fire inside a table.")
 
 ;;; Evil insert/replace shim
 
