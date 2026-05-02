@@ -79,30 +79,41 @@ deleted as part of teardown."
   (claude-code-ide-make-tool
    :name "push_slide"
    :description
-   "Append a slide to the deck, set it as the current slide, render it.
+   "Append a slide to the deck and return its integer index.
 
-Returns the new slide's integer index.  Slide spec must include a
-`kind' field; supported kinds are `narrative', `file', `diff', and
-`layout'.  Every kind also accepts an optional `pane_layout' string
-of `tall' (claude-code on top, presentation below) or `wide'
-(claude-code on the left, presentation on the right) that reshapes the
-tmux window before rendering; absent leaves geometry unchanged.  Raises
-a user-error on validation failure (missing required fields, nested
-layout, half-specified diff range, bad annotation line, invalid
-`pane_layout')."
+The user's currently rendered slide is left untouched by default — pushing
+slides does NOT drag the user's view forward.  Pass `set_current: true'
+to opt in to setting the new slide as current and re-rendering; reserve
+this for \"please look here now\" moments.
+
+Slide spec must include a `kind' field; supported kinds are `narrative',
+`file', `diff', and `layout'.  Every kind also accepts an optional
+`pane_layout' string of `tall' (claude-code on top, presentation below)
+or `wide' (claude-code on the left, presentation on the right) that
+reshapes the tmux window before rendering; absent leaves geometry
+unchanged.  Raises a user-error on validation failure (missing required
+fields, nested layout, half-specified diff range, bad annotation line,
+invalid `pane_layout')."
    :args
    '((:name "key" :type string :description "Session key.")
-     (:name "slide" :type object :description "Slide spec object."))
+     (:name "slide" :type object :description "Slide spec object.")
+     (:name "set_current" :type boolean :optional t
+            :description
+            "When true, set the new slide as current and render it.  Default false."))
    :function
-   (lambda (key slide)
-     (+presentation--deck-push key (+presentation--coerce-slide slide))))
+   (lambda (key slide &optional set_current)
+     (+presentation--deck-push key (+presentation--coerce-slide slide)
+                               :set-current (and set_current t))))
 
   (claude-code-ide-make-tool
    :name "replace_slide"
    :description
    "Replace the slide at INDEX.  Re-renders only when INDEX is current.
 
-Raises a user-error on out-of-range INDEX or when the deck is empty."
+The user's view is dragged forward only when INDEX equals the session's
+current slide index — replacing a non-current slide updates the deck
+silently, in keeping with the user-paced flow.  Raises a user-error on
+out-of-range INDEX or when the deck is empty."
    :args
    '((:name "key" :type string :description "Session key.")
      (:name "index" :type integer :description "Zero-based slide index.")
@@ -152,5 +163,8 @@ this op is for structural recovery, not content recovery."
    (lambda (key) (+presentation-deck-info key))))
 
 (add-hook 'delete-frame-functions #'+presentation--frame-deleted-h)
+
+(with-eval-after-load 'claude-code-ide-mcp
+  (+presentation--register-channel-capability))
 
 ;;; init.el ends here

@@ -657,6 +657,58 @@ predicate returns non-nil."
 
 ;;; 14. MCP tool registration
 
+(defun +presentation-tests--load-init ()
+  "Load `modules/presentation/init.el' for MCP-tool tests.
+Returns t if loaded, nil if the file or MCP package is unavailable."
+  (when (require 'claude-code-ide-mcp-server nil t)
+    (let ((init (expand-file-name "modules/presentation/init.el"
+                                  user-emacs-directory)))
+      (when (file-exists-p init)
+        (condition-case nil (load init nil t) (error nil))
+        t))))
+
+(defun +presentation-tests--tool-spec (name)
+  "Return the registered MCP tool spec named NAME, or nil."
+  (when (boundp 'claude-code-ide-mcp-server-tools)
+    (cl-find-if (lambda (s)
+                  (equal (plist-get s :name) name))
+                claude-code-ide-mcp-server-tools)))
+
+(ert-deftest +presentation/push-slide-tool-declares-set_current-arg ()
+  "`push_slide' MCP tool registers an optional boolean `set_current' arg."
+  (skip-unless (+presentation-tests--load-init))
+  (let* ((spec (+presentation-tests--tool-spec "push_slide"))
+         (args (plist-get spec :args))
+         (sc (cl-find-if (lambda (a) (equal (plist-get a :name) "set_current"))
+                         args)))
+    (should spec)
+    (should sc)
+    (should (eq (plist-get sc :type) 'boolean))
+    (should (plist-get sc :optional))))
+
+(ert-deftest +presentation/push-slide-tool-coerces-set_current-to-set-current ()
+  "Calling the registered push_slide function with set_current: t advances."
+  (skip-unless (+presentation-tests--load-init))
+  (let* ((+presentation--sessions (make-hash-table :test 'equal))
+         (key "k-mcp-push-sc")
+         (renders 0)
+         (spec (+presentation-tests--tool-spec "push_slide"))
+         (fn (plist-get spec :function)))
+    (puthash key (list :deck [] :current-slide-index nil)
+             +presentation--sessions)
+    (cl-letf (((symbol-function '+presentation--render-current)
+               (lambda (_k) (cl-incf renders))))
+      (funcall fn key '((kind . "narrative") (markdown . "x")) t)
+      (let ((s (gethash key +presentation--sessions)))
+        (should (= (length (plist-get s :deck)) 1))
+        (should (= (plist-get s :current-slide-index) 0)))
+      (should (= renders 1))
+      (funcall fn key '((kind . "narrative") (markdown . "y")) nil)
+      (let ((s (gethash key +presentation--sessions)))
+        (should (= (length (plist-get s :deck)) 2))
+        (should (= (plist-get s :current-slide-index) 0)))
+      (should (= renders 1)))))
+
 (ert-deftest +presentation/mcp-tools-registered-after-init ()
   (skip-unless (require 'claude-code-ide-mcp-server nil t))
   (let ((init (expand-file-name "modules/presentation/init.el"
@@ -991,23 +1043,53 @@ predicate returns non-nil."
 
 ;;; Deck mutation helpers
 
-(ert-deftest +presentation/deck-push-appends-and-returns-index ()
+(ert-deftest +presentation/deck-push-default-leaves-current-and-skips-render ()
+  "Default `+presentation--deck-push' appends without touching current/render."
   (let* ((+presentation--sessions (make-hash-table :test 'equal))
-         (key "k-push"))
+         (key "k-push-default")
+         (renders 0))
     (puthash key (list :deck [] :current-slide-index nil)
              +presentation--sessions)
-    (let ((idx (+presentation--deck-push
-                key '(:kind "narrative" :markdown "a"))))
-      (should (= idx 0))
-      (let ((s (gethash key +presentation--sessions)))
-        (should (= (length (plist-get s :deck)) 1))
-        (should (= (plist-get s :current-slide-index) 0))))
-    (let ((idx (+presentation--deck-push
-                key '(:kind "narrative" :markdown "b"))))
-      (should (= idx 1))
-      (should (= (plist-get (gethash key +presentation--sessions)
-                            :current-slide-index)
-                 1)))))
+    (cl-letf (((symbol-function '+presentation--render-current)
+               (lambda (_k) (cl-incf renders))))
+      (let ((idx (+presentation--deck-push
+                  key '(:kind "narrative" :markdown "a"))))
+        (should (= idx 0))
+        (let ((s (gethash key +presentation--sessions)))
+          (should (= (length (plist-get s :deck)) 1))
+          (should (null (plist-get s :current-slide-index)))))
+      (let ((idx (+presentation--deck-push
+                  key '(:kind "narrative" :markdown "b"))))
+        (should (= idx 1))
+        (let ((s (gethash key +presentation--sessions)))
+          (should (= (length (plist-get s :deck)) 2))
+          (should (null (plist-get s :current-slide-index)))))
+      (should (= renders 0)))))
+
+(ert-deftest +presentation/deck-push-set-current-advances-and-renders ()
+  "`+presentation--deck-push' with `:set-current' t sets current and renders."
+  (let* ((+presentation--sessions (make-hash-table :test 'equal))
+         (key "k-push-sc")
+         (renders 0))
+    (puthash key (list :deck [] :current-slide-index nil)
+             +presentation--sessions)
+    (cl-letf (((symbol-function '+presentation--render-current)
+               (lambda (_k) (cl-incf renders))))
+      (let ((idx (+presentation--deck-push
+                  key '(:kind "narrative" :markdown "a")
+                  :set-current t)))
+        (should (= idx 0))
+        (let ((s (gethash key +presentation--sessions)))
+          (should (= (length (plist-get s :deck)) 1))
+          (should (= (plist-get s :current-slide-index) 0))))
+      (let ((idx (+presentation--deck-push
+                  key '(:kind "narrative" :markdown "b")
+                  :set-current t)))
+        (should (= idx 1))
+        (should (= (plist-get (gethash key +presentation--sessions)
+                              :current-slide-index)
+                   1)))
+      (should (= renders 2)))))
 
 (ert-deftest +presentation/deck-replace-mutates-without-changing-current ()
   (let* ((+presentation--sessions (make-hash-table :test 'equal))
@@ -1472,12 +1554,14 @@ then writes the new value into `:pane-layout' after success."
              +presentation--sessions)
     (+presentation--deck-push
      key '(:kind "narrative" :markdown "a\nb\n"
-           :annotations [(:line 1 :text "x")]))
+           :annotations [(:line 1 :text "x")])
+     :set-current t)
     (let* ((rs (+presentation--session-prop key :render-state))
            (old-ov (car (plist-get rs :overlays))))
       (should (overlayp old-ov))
       (+presentation--deck-push
-       key '(:kind "narrative" :markdown "c\nd\n"))
+       key '(:kind "narrative" :markdown "c\nd\n")
+       :set-current t)
       (should-not (overlay-buffer old-ov)))))
 
 (ert-deftest +presentation/end-presentation-deletes-overlays ()
@@ -1490,7 +1574,8 @@ then writes the new value into `:pane-layout' after success."
              +presentation--sessions)
     (+presentation--deck-push
      key '(:kind "narrative" :markdown "a\n"
-           :annotations [(:line 1 :text "x")]))
+           :annotations [(:line 1 :text "x")])
+     :set-current t)
     (let* ((rs (+presentation--session-prop key :render-state))
            (ov (car (plist-get rs :overlays))))
       (should (overlayp ov))
@@ -1729,6 +1814,324 @@ then writes the new value into `:pane-layout' after success."
         (should (= (plist-get (gethash key +presentation--sessions)
                               :current-slide-index)
                    0))))))
+
+;;; Cursor position memory across nav
+
+(ert-deftest +presentation/deck-goto-saves-and-restores-point ()
+  "Navigating away then back restores the prior cursor position."
+  (let* ((+presentation--sessions (make-hash-table :test 'equal))
+         (key "k-pt")
+         (frame (selected-frame))
+         (win (selected-window))
+         (buf (generate-new-buffer "*pt-buf*"))
+         (window-pt 17)
+         (set-calls nil))
+    (with-current-buffer buf
+      (insert (make-string 200 ?a)))
+    (unwind-protect
+        (progn
+          (puthash key (list :frame frame :worktree "/tmp"
+                             :deck (vector '(:kind "narrative" :markdown "a")
+                                           '(:kind "narrative" :markdown "b"))
+                             :current-slide-index 0)
+                   +presentation--sessions)
+          (cl-letf (((symbol-function '+presentation--render-current)
+                     (lambda (_k) nil))
+                    ((symbol-function 'frame-selected-window) (lambda (_f) win))
+                    ((symbol-function 'window-live-p) (lambda (_w) t))
+                    ((symbol-function 'window-point) (lambda (_w) window-pt))
+                    ((symbol-function 'set-window-point)
+                     (lambda (_w pt) (push pt set-calls) (setq window-pt pt)))
+                    ((symbol-function 'window-buffer) (lambda (_w) buf)))
+            (+presentation--deck-goto key 1)
+            (let* ((sess (gethash key +presentation--sessions))
+                   (alist (plist-get sess :slide-points)))
+              (should (equal (alist-get 0 alist) 17)))
+            (setq window-pt 99)
+            (+presentation--deck-goto key 0)
+            (should (member 17 set-calls))))
+      (kill-buffer buf))))
+
+(ert-deftest +presentation/deck-goto-clamps-restored-point-to-buffer ()
+  "Restored point is clamped to (point-max) of the destination buffer."
+  (let* ((+presentation--sessions (make-hash-table :test 'equal))
+         (key "k-pt-clamp")
+         (frame (selected-frame))
+         (win (selected-window))
+         (small-buf (generate-new-buffer "*small*"))
+         (set-calls nil))
+    (with-current-buffer small-buf (insert "abc"))
+    (unwind-protect
+        (progn
+          (puthash key (list :frame frame :worktree "/tmp"
+                             :deck (vector '(:kind "narrative" :markdown "x")
+                                           '(:kind "narrative" :markdown "y"))
+                             :current-slide-index 1
+                             :slide-points (list (cons 0 9999)))
+                   +presentation--sessions)
+          (cl-letf (((symbol-function '+presentation--render-current)
+                     (lambda (_k) nil))
+                    ((symbol-function 'frame-selected-window) (lambda (_f) win))
+                    ((symbol-function 'window-live-p) (lambda (_w) t))
+                    ((symbol-function 'window-point) (lambda (_w) 1))
+                    ((symbol-function 'window-buffer) (lambda (_w) small-buf))
+                    ((symbol-function 'set-window-point)
+                     (lambda (_w pt) (push pt set-calls))))
+            (+presentation--deck-goto key 0)
+            (should (= (car set-calls)
+                       (with-current-buffer small-buf (point-max))))))
+      (kill-buffer small-buf))))
+
+(ert-deftest +presentation/deck-goto-no-saved-point-leaves-window-untouched ()
+  "First visit to a slide does not call `set-window-point'."
+  (let* ((+presentation--sessions (make-hash-table :test 'equal))
+         (key "k-pt-fresh")
+         (frame (selected-frame))
+         (win (selected-window))
+         (set-called nil))
+    (puthash key (list :frame frame :worktree "/tmp"
+                       :deck (vector '(:kind "narrative" :markdown "a")
+                                     '(:kind "narrative" :markdown "b"))
+                       :current-slide-index 0)
+             +presentation--sessions)
+    (cl-letf (((symbol-function '+presentation--render-current)
+               (lambda (_k) nil))
+              ((symbol-function 'frame-selected-window) (lambda (_f) win))
+              ((symbol-function 'window-live-p) (lambda (_w) t))
+              ((symbol-function 'window-point) (lambda (_w) 5))
+              ((symbol-function 'window-buffer) (lambda (_w) (current-buffer)))
+              ((symbol-function 'set-window-point)
+               (lambda (_w _pt) (setq set-called t))))
+      (+presentation--deck-goto key 1)
+      (should-not set-called))))
+
+
+;;; Channel capability registration
+
+(ert-deftest +presentation/inject-channel-capability-splices-experimental ()
+  "Filter-return advice splices `experimental.claude/channel: {}'."
+  (let* ((response
+          `((jsonrpc . "2.0")
+            (id . 1)
+            (result . ((protocolVersion . "2024-11-05")
+                       (capabilities . ((tools . ((listChanged . t)))))
+                       (serverInfo . ((name . "x") (version . "0.1")))))))
+         (out (+presentation--inject-channel-capability response))
+         (caps (alist-get 'capabilities (alist-get 'result out)))
+         (exp (alist-get 'experimental caps)))
+    (should (consp exp))
+    (should (eq (alist-get 'claude/channel exp) :json-empty))
+    (should (alist-get 'tools caps))))
+
+(ert-deftest +presentation/inject-channel-capability-merges-existing-experimental ()
+  "Existing `experimental' entries are preserved alongside `claude/channel'."
+  (let* ((response
+          `((jsonrpc . "2.0")
+            (id . 1)
+            (result . ((capabilities . ((experimental . ((other . :json-empty))))) ))))
+         (out (+presentation--inject-channel-capability response))
+         (exp (alist-get 'experimental
+                         (alist-get 'capabilities
+                                    (alist-get 'result out)))))
+    (should (eq (alist-get 'claude/channel exp) :json-empty))
+    (should (eq (alist-get 'other exp) :json-empty))))
+
+(ert-deftest +presentation/register-channel-capability-noop-when-fn-unbound ()
+  "Registration silently no-ops when MCP handler symbol is unbound."
+  (cl-letf (((symbol-function 'fboundp)
+             (lambda (sym)
+               (cond ((eq sym 'claude-code-ide-mcp--handle-initialize) nil)
+                     (t (funcall #'fboundp sym))))))
+    (should-not (+presentation--register-channel-capability))))
+
+(ert-deftest +presentation/register-channel-capability-installs-advice ()
+  "When the handler exists, registration adds filter-return advice."
+  (let ((sym (gensym "fake-init-")))
+    (defalias sym (lambda (id _params)
+                    `((jsonrpc . "2.0") (id . ,id)
+                      (result . ((capabilities . ((tools . t))))))))
+    (unwind-protect
+        (progn
+          (+presentation--register-channel-capability sym)
+          (let* ((resp (funcall sym 7 nil))
+                 (caps (alist-get 'capabilities (alist-get 'result resp))))
+            (should (eq (alist-get 'claude/channel
+                                   (alist-get 'experimental caps))
+                        :json-empty))))
+      (advice-remove sym #'+presentation--inject-channel-capability)
+      (fmakunbound sym))))
+
+
+;;; Channel notification emission
+
+(ert-deftest +presentation/emit-nav-channel-forward-content-and-meta ()
+  "Forward emission composes the advance content string and string meta."
+  (let* ((+presentation--sessions (make-hash-table :test 'equal))
+         (key "k-emit-fwd")
+         (sent nil))
+    (puthash key (list :deck (vector '(:kind "narrative" :markdown "a"
+                                       :title "First")
+                                     '(:kind "file" :path "x" :title "Second")
+                                     '(:kind "narrative" :markdown "c"))
+                       :current-slide-index 1)
+             +presentation--sessions)
+    (cl-letf (((symbol-function 'claude-code-ide-mcp--send-notification)
+               (lambda (method params) (setq sent (list method params)))))
+      (+presentation--emit-nav-channel key 0 1)
+      (let* ((method (nth 0 sent))
+             (params (nth 1 sent))
+             (meta (alist-get 'meta params)))
+        (should (equal method "notifications/claude/channel"))
+        (should (equal (alist-get 'content params)
+                       "User advanced to slide 1 of 3."))
+        (should (equal (alist-get 'key meta) key))
+        (should (equal (alist-get 'current_slide meta) "1"))
+        (should (equal (alist-get 'prior_slide meta) "0"))
+        (should (equal (alist-get 'kind meta) "file"))
+        (should (equal (alist-get 'title meta) "Second"))
+        (dolist (cell meta)
+          (should (stringp (cdr cell))))))))
+
+(ert-deftest +presentation/emit-nav-channel-backward-content ()
+  "Backward emission composes the retreat content string."
+  (let* ((+presentation--sessions (make-hash-table :test 'equal))
+         (key "k-emit-bwd")
+         (sent nil))
+    (puthash key (list :deck (vector '(:kind "narrative" :markdown "a")
+                                     '(:kind "narrative" :markdown "b")
+                                     '(:kind "narrative" :markdown "c"))
+                       :current-slide-index 1)
+             +presentation--sessions)
+    (cl-letf (((symbol-function 'claude-code-ide-mcp--send-notification)
+               (lambda (_m params) (setq sent params))))
+      (+presentation--emit-nav-channel key 2 1)
+      (should (equal (alist-get 'content sent)
+                     "User retreated to slide 1 of 3.")))))
+
+(ert-deftest +presentation/emit-nav-channel-omits-title-when-absent ()
+  "When the destination slide has no `:title', `meta.title' is omitted."
+  (let* ((+presentation--sessions (make-hash-table :test 'equal))
+         (key "k-emit-no-title")
+         (sent nil))
+    (puthash key (list :deck (vector '(:kind "narrative" :markdown "a")
+                                     '(:kind "narrative" :markdown "b"))
+                       :current-slide-index 0)
+             +presentation--sessions)
+    (cl-letf (((symbol-function 'claude-code-ide-mcp--send-notification)
+               (lambda (_m params) (setq sent params))))
+      (+presentation--emit-nav-channel key 0 1)
+      (let ((meta (alist-get 'meta sent)))
+        (should-not (assoc 'title meta))
+        (should (equal (alist-get 'kind meta) "narrative"))))))
+
+(ert-deftest +presentation/emit-nav-channel-no-op-when-sender-unbound ()
+  "Emission silently no-ops when `claude-code-ide-mcp--send-notification' missing."
+  (let* ((+presentation--sessions (make-hash-table :test 'equal))
+         (key "k-emit-unbound"))
+    (puthash key (list :deck (vector '(:kind "narrative" :markdown "a")
+                                     '(:kind "narrative" :markdown "b"))
+                       :current-slide-index 0)
+             +presentation--sessions)
+    (cl-letf (((symbol-function 'fboundp)
+               (lambda (sym)
+                 (if (eq sym 'claude-code-ide-mcp--send-notification) nil
+                   (funcall #'fboundp sym)))))
+      (should-not (+presentation--emit-nav-channel key 0 1)))))
+
+(ert-deftest +presentation/emit-nav-channel-swallows-sender-errors ()
+  "Errors from the sender are swallowed; emission returns nil."
+  (let* ((+presentation--sessions (make-hash-table :test 'equal))
+         (key "k-emit-err"))
+    (puthash key (list :deck (vector '(:kind "narrative" :markdown "a")
+                                     '(:kind "narrative" :markdown "b"))
+                       :current-slide-index 0)
+             +presentation--sessions)
+    (cl-letf (((symbol-function 'claude-code-ide-mcp--send-notification)
+               (lambda (_m _p) (error "boom"))))
+      (should-not (+presentation--emit-nav-channel key 0 1)))))
+
+
+;;; Nav command emission wiring
+
+(ert-deftest +presentation/next-slide-emits-channel-after-goto ()
+  "`+presentation-next-slide' emits a forward channel notification."
+  (let* ((+presentation--sessions (make-hash-table :test 'equal))
+         (key "k-nav-emit")
+         (calls nil))
+    (puthash key (list :worktree "/tmp" :frame nil
+                       :deck (vector '(:kind "narrative" :markdown "a")
+                                     '(:kind "narrative" :markdown "b"))
+                       :current-slide-index 0)
+             +presentation--sessions)
+    (cl-letf (((symbol-function '+presentation--render-current)
+               (lambda (_k) nil))
+              ((symbol-function '+presentation--emit-nav-channel)
+               (lambda (k prior current) (push (list k prior current) calls))))
+      (with-temp-buffer
+        (setq-local +presentation--session-key key)
+        (+presentation-next-slide)
+        (should (equal calls (list (list key 0 1))))))))
+
+(ert-deftest +presentation/previous-slide-emits-channel-after-goto ()
+  "`+presentation-previous-slide' emits a backward channel notification."
+  (let* ((+presentation--sessions (make-hash-table :test 'equal))
+         (key "k-nav-emit-prev")
+         (calls nil))
+    (puthash key (list :worktree "/tmp" :frame nil
+                       :deck (vector '(:kind "narrative" :markdown "a")
+                                     '(:kind "narrative" :markdown "b"))
+                       :current-slide-index 1)
+             +presentation--sessions)
+    (cl-letf (((symbol-function '+presentation--render-current)
+               (lambda (_k) nil))
+              ((symbol-function '+presentation--emit-nav-channel)
+               (lambda (k prior current) (push (list k prior current) calls))))
+      (with-temp-buffer
+        (setq-local +presentation--session-key key)
+        (+presentation-previous-slide)
+        (should (equal calls (list (list key 1 0))))))))
+
+(ert-deftest +presentation/nav-noop-at-end-does-not-emit ()
+  "No-op nav at the deck boundary does not call the emitter."
+  (let* ((+presentation--sessions (make-hash-table :test 'equal))
+         (key "k-nav-noop")
+         (calls 0))
+    (puthash key (list :worktree "/tmp" :frame nil
+                       :deck (vector '(:kind "narrative" :markdown "a")
+                                     '(:kind "narrative" :markdown "b"))
+                       :current-slide-index 1)
+             +presentation--sessions)
+    (cl-letf (((symbol-function '+presentation--render-current)
+               (lambda (_k) nil))
+              ((symbol-function '+presentation--emit-nav-channel)
+               (lambda (&rest _) (cl-incf calls))))
+      (with-temp-buffer
+        (setq-local +presentation--session-key key)
+        (+presentation-next-slide)
+        (should (= calls 0))))))
+
+(ert-deftest +presentation/agent-driven-mutation-does-not-emit ()
+  "`goto_slide', `push_slide :set-current t', and `replace_slide' on
+current do not emit channel notifications."
+  (let* ((+presentation--sessions (make-hash-table :test 'equal))
+         (key "k-agent")
+         (calls 0))
+    (puthash key (list :worktree "/tmp" :frame nil
+                       :deck (vector '(:kind "narrative" :markdown "a")
+                                     '(:kind "narrative" :markdown "b"))
+                       :current-slide-index 0)
+             +presentation--sessions)
+    (cl-letf (((symbol-function '+presentation--render-current)
+               (lambda (_k) nil))
+              ((symbol-function '+presentation--emit-nav-channel)
+               (lambda (&rest _) (cl-incf calls))))
+      (+presentation--deck-goto key 1)
+      (+presentation--deck-push key '(:kind "narrative" :markdown "c")
+                                :set-current t)
+      (+presentation--deck-replace
+       key 2 '(:kind "narrative" :markdown "C"))
+      (should (= calls 0)))))
+
 
 (ert-deftest +presentation/session-key-is-buffer-local ()
   (with-temp-buffer

@@ -42,7 +42,7 @@ and `presentation-origin` parameters so the `delete-frame-functions` hook and
 | `start_presentation` | Spawn or reuse a frame; return key                       |
 | `get_presentation`   | Inspect a session: origin, frame_live, deck position, …  |
 | `end_presentation`   | Tear down a session by key                               |
-| `push_slide`         | Append a slide to the deck and render it                 |
+| `push_slide`         | Append a slide; render only with `set_current: true`     |
 | `replace_slide`      | Replace deck[i]; re-render only when i is current        |
 | `truncate_after`     | Drop deck[> i]; -1 clears the deck                       |
 | `goto_slide`         | Re-render deck[i] without mutating the deck              |
@@ -79,7 +79,10 @@ consecutive slides with the same hint hit tmux exactly once. Slides without
 | `+presentation-deck-info`               | Entry point invoked by `get_deck`             |
 | `+presentation--coerce-slide`           | Deep alist→plist conversion for MCP payloads  |
 | `+presentation--validate-slide`         | Validate a slide spec; signal `user-error`    |
-| `+presentation--deck-push`              | Append slide; render; return new index        |
+| `+presentation--deck-push`              | Append slide; render iff `:set-current`       |
+| `+presentation--emit-nav-channel`       | Send a `claude/channel` notification          |
+| `+presentation--inject-channel-capability` | Filter-return advice payload (capability)  |
+| `+presentation--register-channel-capability` | Install the capability advice            |
 | `+presentation--deck-replace`           | Replace deck[i]; re-render iff current        |
 | `+presentation--deck-truncate`          | Drop deck[> i]; -1 clears                     |
 | `+presentation--deck-goto`              | Re-render deck[i]; set current index          |
@@ -182,6 +185,59 @@ Navigation is bounded: `next-slide` at the last index and
 `previous-slide` at index 0 are silent no-ops. Mutation (push, replace,
 truncate) remains agent-only.
 
+### User-paced flow
+
+`push_slide` defaults to "append, don't disrupt": the slide is added
+to the deck but the user's currently rendered slide is unchanged. The
+opt-in `set_current: true` field is reserved for "look here now"
+moments, where the agent wants to drag the user's view to a freshly
+pushed slide. `start_presentation`'s `initial_slide` always renders so
+the user sees something on session start.
+
+User-driven navigation (`C-n` / `C-p`) emits a
+`notifications/claude/channel` event so the agent learns where the
+user is without polling. Agent-driven moves (`goto_slide`,
+`push_slide` with `set_current: true`, `replace_slide` of the current
+index) do NOT emit — the agent already knows.
+
+Notification payload:
+
+```
+method: "notifications/claude/channel"
+params.source:           "presentation"
+params.content:          "User advanced to slide 3 of 7."
+params.meta.key:         "presentation-1981"
+params.meta.current_slide: "3"
+params.meta.prior_slide:   "2"
+params.meta.kind:        "file"
+params.meta.title:       "Deck mutation helpers"
+```
+
+`meta` values are always strings; `title` is omitted when the slide
+has no `:title`. Emission is best-effort: when the MCP server is
+disconnected, when channels are not supported, or when the underlying
+sender errors, navigation still succeeds and no error is signalled.
+
+### Research-preview caveats
+
+Channel notifications require:
+
+- Claude Code v2.1.80 or later.
+- claude.ai login (API-key auth not supported).
+- Launching claude with
+  `--dangerously-load-development-channels server:claude-code-ide-mcp`
+  (the registered server name).
+
+Without these, navigation still works; channel notifications are
+silently dropped.
+
+The MCP server's initialize-response capability
+`experimental.claude/channel: {}` is registered via local `:filter-
+return` advice on `claude-code-ide-mcp--handle-initialize`. An
+upstream defcustom-based extension point is the long-term durable
+solution; the advice is the v0 implementation and degrades silently
+when the upstream symbol is unbound.
+
 ### display-buffer protection
 
 `modules/ui/init.el` includes a presentation-frame predicate that maps to
@@ -242,3 +298,25 @@ into a presentation frame.
 26. Renderers (`narrative`, `file`, `diff`, layout pane buffers, splash)
     set buffer-local `+presentation--session-key` and enable
     `+presentation-mode` on the produced buffer.
+27. `+presentation--deck-push` defaults to non-disrupting: appends the
+    slide but leaves `:current-slide-index` and the rendered buffer
+    untouched. `:set-current t` advances and renders.
+28. `push_slide` MCP tool coerces snake_case `set_current` to the
+    `:set-current` keyword arg.
+29. `+presentation--emit-nav-channel` composes a forward / backward
+    `content` string and a string-valued `meta` record (`key`,
+    `current_slide`, `prior_slide`, `kind`, optional `title`) and
+    sends a `notifications/claude/channel` event via the MCP
+    transport. Emission is best-effort: a missing or signalling
+    `claude-code-ide-mcp--send-notification` returns nil without
+    re-signalling.
+30. `+presentation-next-slide` / `+presentation-previous-slide` call
+    the emitter post-render; agent-driven mutation
+    (`+presentation--deck-goto`, `+presentation--deck-push` with
+    `:set-current`, `+presentation--deck-replace`) does not.
+31. `+presentation--inject-channel-capability` splices
+    `experimental.claude/channel: :json-empty' into the MCP
+    initialize-response without clobbering existing experimental
+    entries.
+32. `+presentation--register-channel-capability` no-ops when the
+    upstream MCP handler symbol is unbound.
