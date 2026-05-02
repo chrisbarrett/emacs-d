@@ -926,15 +926,31 @@ hacks."
     (setq gfm-tables--saved-cursor-type 'gfm-tables-unset)))
 
 (defconst gfm-tables--hint-groups
-  '(("Edit"
+  `(("Edit"
      (((evil-forward-word-end) . "cell")
       ((evil-insert)           . "table"))
      (((evil-yank-line)        . "copy")))
-    ("Columns"
+    ("Columns" :when ,#'gfm-tables--in-header-p
      (((gfm-tables-swap-column-left gfm-tables-swap-column-right) . "swap"))))
   "Transient-style key hint groups shown while in a GFM table cell.
-Each entry is (HEADING ROW...) where ROW is a list of (CMDS . LABEL);
-each row renders on its own line under the heading.")
+Each entry is (HEADING [KEYWORD VALUE...] ROW...) where ROW is a list of
+\(CMDS . LABEL).  Supported keywords: `:when' PREDICATE — group is shown
+only if PREDICATE returns non-nil.")
+
+(defun gfm-tables--group-split (group)
+  "Return (PROPS . ROWS) for GROUP, peeling leading plist keywords."
+  (let ((tail (cdr group))
+        (props nil))
+    (while (keywordp (car tail))
+      (push (car tail) props)
+      (push (cadr tail) props)
+      (setq tail (cddr tail)))
+    (cons (nreverse props) tail)))
+
+(defun gfm-tables--group-applicable-p (group)
+  "Return non-nil if GROUP's `:when' predicate (if any) passes."
+  (let* ((pred (plist-get (car (gfm-tables--group-split group)) :when)))
+    (or (null pred) (funcall pred))))
 
 (defun gfm-tables--key-desc (cmds)
   "Return CMDS' shortest active keys joined by `/' as a propertised string."
@@ -947,22 +963,21 @@ each row renders on its own line under the heading.")
          (propertize (mapconcat #'identity parts "/")
                      'face 'transient-key))))
 
-(defun gfm-tables--render-hint-row (row)
-  "Render one ROW of `((CMDS . LABEL) ...)' as `\" k1 lbl  k2 lbl\"'."
-  (let ((items (cl-loop for (cmds . label) in row
-                        for keys = (gfm-tables--key-desc cmds)
-                        when keys collect (concat keys " " label))))
-    (concat " " (mapconcat #'identity items "  "))))
+(defun gfm-tables--render-hint-items (rows)
+  "Flatten ROWS (list of `((CMDS . LABEL) ...)') to `\"k1 lbl  k2 lbl\"'."
+  (let ((items (cl-loop for row in rows
+                        append (cl-loop for (cmds . label) in row
+                                        for keys = (gfm-tables--key-desc cmds)
+                                        when keys
+                                        collect (concat keys " " label)))))
+    (mapconcat #'identity items "  ")))
 
 (defun gfm-tables--render-hint-group (group)
-  "Render GROUP as a list of lines: heading first, then one line per row."
-  (cons (propertize (car group) 'face 'transient-heading)
-        (mapcar #'gfm-tables--render-hint-row (cdr group))))
-
-(defun gfm-tables--pad-to (s width)
-  "Right-pad S with spaces so its visible width is WIDTH."
-  (let ((w (string-width s)))
-    (if (>= w width) s (concat s (make-string (- width w) ?\s)))))
+  "Render GROUP as a single line: heading followed by all key/label items."
+  (let ((heading (propertize (car group) 'face 'transient-heading))
+        (items (gfm-tables--render-hint-items
+                (cdr (gfm-tables--group-split group)))))
+    (if (string-empty-p items) heading (concat heading " " items))))
 
 (defvar-local gfm-tables--last-hinted-cell nil
   "Last (LINE-BEG . IDX) for which hints were echoed.
@@ -976,25 +991,11 @@ and clobber another command's message (e.g. `Copied:').")
 
 (defun gfm-tables--echo-hints ()
   "Echo the transient-style table key hints without logging to `*Messages*'."
-  (let* ((cols (mapcar #'gfm-tables--render-hint-group
-                       gfm-tables--hint-groups))
-         (height (apply #'max (mapcar #'length cols)))
-         (widths (mapcar (lambda (lines)
-                           (apply #'max (mapcar #'string-width lines)))
-                         cols))
-         (padded (cl-mapcar
-                  (lambda (lines width)
-                    (append (mapcar (lambda (l) (gfm-tables--pad-to l width))
-                                    lines)
-                            (make-list (- height (length lines))
-                                       (make-string width ?\s))))
-                  cols widths))
-         (rows (cl-loop for i from 0 below height
-                        collect (mapconcat (lambda (col) (nth i col))
-                                           padded
-                                           "   ")))
+  (let* ((groups (seq-filter #'gfm-tables--group-applicable-p
+                             gfm-tables--hint-groups))
+         (line (mapconcat #'gfm-tables--render-hint-group groups "   "))
          (message-log-max nil))
-    (message "%s" (mapconcat #'identity rows "\n"))))
+    (message "%s" line)))
 
 (defun gfm-tables--clear-cursor-anchor ()
   "Remove the `cursor' text property previously set by us, if any."
