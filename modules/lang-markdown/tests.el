@@ -615,15 +615,15 @@ Cases are restricted to modes that ship with Emacs so the test never skips."
 
 ;;; Header column reordering
 
-(ert-deftest lang-markdown/gfm-tables-column-right-swaps ()
-  (skip-unless (fboundp 'gfm-tables-column-right))
+(ert-deftest lang-markdown/gfm-tables-swap-column-right-swaps ()
+  (skip-unless (fboundp 'gfm-tables-swap-column-right))
   (with-temp-buffer
     (insert "| A | B | C |\n| - | - | - |\n| 1 | 2 | 3 |\n")
     (gfm-tables-mode 1)
     (goto-char (point-min))
     (search-forward "A")
     (goto-char (1- (point)))
-    (gfm-tables-column-right)
+    (gfm-tables-swap-column-right)
     (goto-char (point-min))
     (let ((header-line (buffer-substring-no-properties
                         (point) (line-end-position)))
@@ -633,25 +633,29 @@ Cases are restricted to modes that ship with Emacs so the test never skips."
       (should (string-match-p "B.*A" header-line))
       (should (string-match-p "2.*1" body-line)))))
 
-(ert-deftest lang-markdown/gfm-tables-column-left-edge-errors ()
-  (skip-unless (fboundp 'gfm-tables-column-left))
+(ert-deftest lang-markdown/gfm-tables-swap-column-left-edge-noop ()
+  (skip-unless (fboundp 'gfm-tables-swap-column-left))
   (with-temp-buffer
     (insert "| A | B |\n| - | - |\n| 1 | 2 |\n")
     (gfm-tables-mode 1)
     (goto-char (point-min))
     (search-forward "A")
     (goto-char (1- (point)))
-    (should-error (gfm-tables-column-left) :type 'user-error)))
+    (let ((before (buffer-string)))
+      (gfm-tables-swap-column-left)
+      (should (equal (buffer-string) before)))))
 
-(ert-deftest lang-markdown/gfm-tables-column-swap-rejects-body ()
-  (skip-unless (fboundp 'gfm-tables-column-right))
+(ert-deftest lang-markdown/gfm-tables-swap-column-on-body-noop ()
+  (skip-unless (fboundp 'gfm-tables-swap-column-right))
   (with-temp-buffer
     (insert "| A | B |\n| - | - |\n| 1 | 2 |\n")
     (gfm-tables-mode 1)
     (goto-char (point-min))
     (search-forward "1")
     (goto-char (1- (point)))
-    (should-error (gfm-tables-column-right) :type 'user-error)))
+    (let ((before (buffer-string)))
+      (gfm-tables-swap-column-right)
+      (should (equal (buffer-string) before)))))
 
 ;;; Cell-wise navigation
 

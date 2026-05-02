@@ -924,6 +924,77 @@ hacks."
       (setq-local cursor-type gfm-tables--saved-cursor-type))
     (setq gfm-tables--saved-cursor-type 'gfm-tables-unset)))
 
+(defconst gfm-tables--hint-groups
+  '(("Edit"
+     (((evil-forward-word-end) . "cell")
+      ((evil-insert)           . "table"))
+     (((evil-yank-line)        . "copy")))
+    ("Columns"
+     (((gfm-tables-swap-column-left gfm-tables-swap-column-right) . "swap"))))
+  "Transient-style key hint groups shown while in a GFM table cell.
+Each entry is (HEADING ROW...) where ROW is a list of (CMDS . LABEL);
+each row renders on its own line under the heading.")
+
+(defun gfm-tables--key-desc (cmds)
+  "Return CMDS' shortest active keys joined by `/' as a propertised string."
+  (let ((parts (delq nil
+                     (mapcar (lambda (c)
+                               (when-let* ((seq (where-is-internal c nil t)))
+                                 (key-description seq)))
+                             cmds))))
+    (and parts
+         (propertize (mapconcat #'identity parts "/")
+                     'face 'transient-key))))
+
+(defun gfm-tables--render-hint-row (row)
+  "Render one ROW of `((CMDS . LABEL) ...)' as `\" k1 lbl  k2 lbl\"'."
+  (let ((items (cl-loop for (cmds . label) in row
+                        for keys = (gfm-tables--key-desc cmds)
+                        when keys collect (concat keys " " label))))
+    (concat " " (mapconcat #'identity items "  "))))
+
+(defun gfm-tables--render-hint-group (group)
+  "Render GROUP as a list of lines: heading first, then one line per row."
+  (cons (propertize (car group) 'face 'transient-heading)
+        (mapcar #'gfm-tables--render-hint-row (cdr group))))
+
+(defun gfm-tables--pad-to (s width)
+  "Right-pad S with spaces so its visible width is WIDTH."
+  (let ((w (string-width s)))
+    (if (>= w width) s (concat s (make-string (- width w) ?\s)))))
+
+(defvar-local gfm-tables--last-hinted-cell nil
+  "Last (LINE-BEG . IDX) for which hints were echoed.
+Indexed by row line position rather than overlay identity so a rebuild
+(which replaces row overlays) does not spuriously re-trigger the echo
+and clobber another command's message (e.g. `Copied:').")
+
+(defun gfm-tables--cell-key (info)
+  "Return a stable (LINE-BEG . IDX) key for cell-info INFO, or nil."
+  (and info (cons (overlay-start (car info)) (cdr info))))
+
+(defun gfm-tables--echo-hints ()
+  "Echo the transient-style table key hints without logging to `*Messages*'."
+  (let* ((cols (mapcar #'gfm-tables--render-hint-group
+                       gfm-tables--hint-groups))
+         (height (apply #'max (mapcar #'length cols)))
+         (widths (mapcar (lambda (lines)
+                           (apply #'max (mapcar #'string-width lines)))
+                         cols))
+         (padded (cl-mapcar
+                  (lambda (lines width)
+                    (append (mapcar (lambda (l) (gfm-tables--pad-to l width))
+                                    lines)
+                            (make-list (- height (length lines))
+                                       (make-string width ?\s))))
+                  cols widths))
+         (rows (cl-loop for i from 0 below height
+                        collect (mapconcat (lambda (col) (nth i col))
+                                           padded
+                                           "   ")))
+         (message-log-max nil))
+    (message "%s" (mapconcat #'identity rows "\n"))))
+
 (defun gfm-tables--clear-cursor-anchor ()
   "Remove the `cursor' text property previously set by us, if any."
   (when (and gfm-tables--cursor-anchor
@@ -1029,9 +1100,14 @@ the highlight alone conveys cell selection."
         (unless (eq row-ov gfm-tables--highlighted-row-ov)
           (gfm-tables--hide-cursor-highlight))
         (gfm-tables--show-cell-highlight row-ov idx))
-      (gfm-tables--save-and-hide-cursor))
+      (gfm-tables--save-and-hide-cursor)
+      (let ((key (gfm-tables--cell-key info)))
+        (unless (equal key gfm-tables--last-hinted-cell)
+          (gfm-tables--echo-hints)
+          (setq gfm-tables--last-hinted-cell key))))
      (t
-      (gfm-tables--hide-cursor-highlight)))))
+      (gfm-tables--hide-cursor-highlight)
+      (setq gfm-tables--last-hinted-cell nil)))))
 
 ;;; Cell-wise navigation
 
@@ -1114,6 +1190,18 @@ Returns non-nil on success, nil when there is no previous table row."
     (when info
       (gfm-tables--goto-cell (car info) most-positive-fixnum))))
 
+(defun gfm-tables-cell-copy ()
+  "Copy the active table cell's content to the kill ring."
+  (interactive)
+  (let ((info (gfm-tables--cell-info-at-point)))
+    (unless info
+      (user-error "Point is not in a table cell"))
+    (let* ((bounds (gfm-tables--cell-content-bounds (car info) (cdr info)))
+           (text (buffer-substring-no-properties (car bounds) (cdr bounds))))
+      (kill-new text)
+      (message "Copied: %s"
+               (truncate-string-to-width text 60 nil nil t)))))
+
 (defun gfm-tables--insert-new-row-after-current ()
   "Insert an empty row after the current one and put point in cell 0."
   (let* ((info (gfm-tables--cell-info-at-point))
@@ -1189,40 +1277,42 @@ A and B are zero-based.  No-op if either index is out of range."
           (insert hi-text))))))
 
 (defun gfm-tables--swap-columns (direction)
-  "Swap the active cell's column with its DIRECTION (-1 or 1) neighbour."
-  (unless (gfm-tables--in-header-p)
-    (user-error "Column reordering is only available on the header row"))
-  (let* ((info (gfm-tables--cell-info-at-point))
-         (block (gfm-tables--current-block))
-         (src-idx (cdr info))
-         (dst-idx (+ src-idx direction))
-         (n-cols (length (overlay-get (car info) 'gfm-tables-cell-bounds))))
-    (unless (and (>= dst-idx 0) (< dst-idx n-cols))
-      (user-error "No column in that direction"))
-    (let ((header-beg (nth 0 block))
-          (delim-beg (nth 1 block))
-          (body-beg  (nth 2 block))
-          (body-end  (nth 3 block)))
-      (save-excursion
-        (gfm-tables--swap-cells-in-line header-beg src-idx dst-idx)
-        (gfm-tables--swap-cells-in-line delim-beg src-idx dst-idx)
-        (goto-char body-beg)
-        (while (and (< (point) body-end) (looking-at-p "^|"))
-          (gfm-tables--swap-cells-in-line (point) src-idx dst-idx)
-          (forward-line 1))))
-    (gfm-tables--rebuild)
-    (let ((row-ov (cl-find-if (lambda (o)
-                                (overlay-get o 'gfm-tables-cell-bounds))
-                              (overlays-at (line-beginning-position)))))
-      (when row-ov
-        (gfm-tables--goto-cell row-ov dst-idx)))))
+  "Swap the active cell's column with its DIRECTION (-1 or 1) neighbour.
+Silently no-op when point is not on a header row, or when the
+neighbour column is out of range."
+  (let* ((info (and (gfm-tables--in-header-p)
+                    (gfm-tables--cell-info-at-point)))
+         (block (and info (gfm-tables--current-block)))
+         (src-idx (and info (cdr info)))
+         (dst-idx (and info (+ src-idx direction)))
+         (n-cols (and info
+                      (length (overlay-get (car info)
+                                           'gfm-tables-cell-bounds)))))
+    (when (and info (>= dst-idx 0) (< dst-idx n-cols))
+      (let ((header-beg (nth 0 block))
+            (delim-beg (nth 1 block))
+            (body-beg  (nth 2 block))
+            (body-end  (nth 3 block)))
+        (save-excursion
+          (gfm-tables--swap-cells-in-line header-beg src-idx dst-idx)
+          (gfm-tables--swap-cells-in-line delim-beg src-idx dst-idx)
+          (goto-char body-beg)
+          (while (and (< (point) body-end) (looking-at-p "^|"))
+            (gfm-tables--swap-cells-in-line (point) src-idx dst-idx)
+            (forward-line 1))))
+      (gfm-tables--rebuild)
+      (let ((row-ov (cl-find-if (lambda (o)
+                                  (overlay-get o 'gfm-tables-cell-bounds))
+                                (overlays-at (line-beginning-position)))))
+        (when row-ov
+          (gfm-tables--goto-cell row-ov dst-idx))))))
 
-(defun gfm-tables-column-left ()
+(defun gfm-tables-swap-column-left ()
   "Swap the active header column with the column to its left."
   (interactive)
   (gfm-tables--swap-columns -1))
 
-(defun gfm-tables-column-right ()
+(defun gfm-tables-swap-column-right ()
   "Swap the active header column with the column to its right."
   (interactive)
   (gfm-tables--swap-columns 1))
@@ -1273,6 +1363,13 @@ the symbol `snap', a post-call landing in a table snaps to cell 0."
 (gfm-tables--define-evil-motion gfm-tables--evil-B gfm-tables-cell-backward  evil-backward-WORD-begin     nil)
 (gfm-tables--define-evil-motion gfm-tables--evil-0 gfm-tables-row-first-cell evil-beginning-of-line       nil)
 
+(defun gfm-tables--evil-Y ()
+  "Cell-aware shim for `evil-yank-line': copy the active cell when in a table."
+  (interactive)
+  (cond
+   ((gfm-tables--cell-info-at-point) (gfm-tables-cell-copy))
+   (t (call-interactively #'evil-yank-line))))
+
 (define-key gfm-tables-mode-map [remap evil-backward-char] #'gfm-tables--evil-h)
 (define-key gfm-tables-mode-map [remap evil-forward-char] #'gfm-tables--evil-l)
 (define-key gfm-tables-mode-map [remap evil-next-line] #'gfm-tables--evil-j)
@@ -1286,12 +1383,13 @@ the symbol `snap', a post-call landing in a table snaps to cell 0."
 (define-key gfm-tables-mode-map [remap evil-backward-word-begin] #'gfm-tables--evil-b)
 (define-key gfm-tables-mode-map [remap evil-backward-WORD-begin] #'gfm-tables--evil-B)
 (define-key gfm-tables-mode-map [remap evil-beginning-of-line]  #'gfm-tables--evil-0)
+(define-key gfm-tables-mode-map [remap evil-yank-line]          #'gfm-tables--evil-Y)
 
 (with-eval-after-load 'evil
   (dolist (state '(normal motion visual))
     (evil-define-minor-mode-key state 'gfm-tables-mode
-      (kbd "M-h") #'gfm-tables-column-left
-      (kbd "M-l") #'gfm-tables-column-right
+      (kbd "M-h") #'gfm-tables-swap-column-left
+      (kbd "M-l") #'gfm-tables-swap-column-right
       (kbd "TAB")        #'gfm-tables-cell-tab
       (kbd "<tab>")      #'gfm-tables-cell-tab
       (kbd "<backtab>")  #'gfm-tables-cell-backtab

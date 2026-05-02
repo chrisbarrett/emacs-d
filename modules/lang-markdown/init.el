@@ -191,7 +191,8 @@
   :config
   (+local-leader-set-key 'markdown-mode-map
     "l" '(markdown-toggle-url-hiding :wk "toggle URLs")
-    "f" '(markdown-insert-footnote :wk "insert footnote")))
+    "f" '(markdown-insert-footnote :wk "insert footnote")
+    "t" '(gfm-tables-mode :wk "toggle table rendering")))
 
 ;;; Formatting
 
