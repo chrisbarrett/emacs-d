@@ -739,6 +739,90 @@ Cases are restricted to modes that ship with Emacs so the test never skips."
                                               (line-end-position))))
     (should (eq ?\s (char-after (point))))))
 
+(ert-deftest lang-markdown/gfm-tables-row-down-stops-at-table-edge ()
+  "Moving down from the last row of a table does not jump into the next table."
+  (skip-unless (fboundp 'gfm-tables-row-down))
+  (with-temp-buffer
+    (insert "| A | B |\n| - | - |\n| 1 | 2 |\n\n"
+            "Some prose here.\n\n"
+            "| C | D |\n| - | - |\n| 9 | 8 |\n")
+    (gfm-tables-mode 1)
+    (goto-char (point-min))
+    (search-forward "1")
+    (goto-char (1- (point)))
+    (should (gfm-tables--cell-info-at-point))
+    (should-not (gfm-tables--row-on-relative-line 1))))
+
+(ert-deftest lang-markdown/gfm-tables-row-up-stops-at-table-edge ()
+  "Moving up from the first body row of a table stays at the header row."
+  (skip-unless (fboundp 'gfm-tables-row-up))
+  (with-temp-buffer
+    (insert "| A | B |\n| - | - |\n| 1 | 2 |\n\n"
+            "Prose.\n\n"
+            "| C | D |\n| - | - |\n| 9 | 8 |\n")
+    (gfm-tables-mode 1)
+    (goto-char (point-min))
+    (search-forward "9")
+    (goto-char (1- (point)))
+    (should (gfm-tables--cell-info-at-point))
+    (let ((up (gfm-tables--row-on-relative-line -1)))
+      ;; The only row above 9 inside this block is its header row.
+      (should up)
+      (let ((header-line
+             (save-excursion (goto-char (overlay-start up))
+                             (buffer-substring-no-properties
+                              (line-beginning-position)
+                              (line-end-position)))))
+        (should (string-match-p "C" header-line))))))
+
+(ert-deftest lang-markdown/gfm-tables-snap-from-non-cell-point ()
+  "Snap moves a non-cell point on a row line into the first cell."
+  (skip-unless (fboundp 'gfm-tables--maybe-snap-to-cell))
+  (with-temp-buffer
+    (insert "| A | B |\n| - | - |\n| 1 | 2 |\n")
+    (gfm-tables-mode 1)
+    (goto-char (point-min))
+    (search-forward "| 1 ")
+    (goto-char (line-beginning-position)) ; on `|', not in any cell
+    (let ((before (point)))
+      (gfm-tables--maybe-snap-to-cell)
+      (should (> (point) before))
+      (let* ((info (gfm-tables--cell-info-at-point))
+             (cb (overlay-get (car info) 'gfm-tables-cell-bounds))
+             (cell0 (nth 0 cb)))
+        (should (>= (point) (car cell0)))
+        (should (< (point) (cdr cell0)))))))
+
+(ert-deftest lang-markdown/gfm-tables-snap-noop-when-in-cell ()
+  "Snap leaves point alone when already inside a cell range."
+  (skip-unless (fboundp 'gfm-tables--maybe-snap-to-cell))
+  (with-temp-buffer
+    (insert "| A | B |\n| - | - |\n| 1 | 2 |\n")
+    (gfm-tables-mode 1)
+    (goto-char (point-min))
+    (search-forward "2")
+    (goto-char (1- (point)))
+    (let ((before (point)))
+      (gfm-tables--maybe-snap-to-cell)
+      (should (= before (point))))))
+
+(ert-deftest lang-markdown/gfm-tables-snap-skips-invisible-row ()
+  "Snap is a no-op when the row line is invisible."
+  (skip-unless (fboundp 'gfm-tables--maybe-snap-to-cell))
+  (with-temp-buffer
+    (insert "| A | B |\n| - | - |\n| 1 | 2 |\n")
+    (gfm-tables-mode 1)
+    (goto-char (point-min))
+    (search-forward "| 1 ")
+    (let ((lbeg (line-beginning-position))
+          (lend (line-end-position)))
+      (put-text-property lbeg lend 'invisible t)
+      (add-to-invisibility-spec t)
+      (goto-char lbeg)
+      (let ((before (point)))
+        (gfm-tables--maybe-snap-to-cell)
+        (should (= before (point)))))))
+
 ;;; Evil shim
 
 (ert-deftest lang-markdown/gfm-tables-evil-edit-commands-listed ()
