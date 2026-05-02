@@ -98,6 +98,43 @@ SPLIT is the symbol `horizontal' or `vertical'.  The new pane runs
   (make-+presentation-effect-shell
    :argv (list "tmux" "kill-pane" "-t" pane-id)))
 
+(defun +presentation--cmd-window-layout (sess win)
+  "Build a `tmux display-message -p #{window_layout}' effect for SESS:WIN."
+  (make-+presentation-effect-shell
+   :argv (list "tmux" "display-message" "-p"
+               "-t" (format "%s:%s" sess win)
+               "#{window_layout}")))
+
+(defun +presentation--cmd-select-layout (sess win layout)
+  "Build a `tmux select-layout LAYOUT' effect targeting SESS:WIN."
+  (make-+presentation-effect-shell
+   :argv (list "tmux" "select-layout"
+               "-t" (format "%s:%s" sess win)
+               layout)))
+
+(defun +presentation--pane-layout-effects (desired current tmux-session tmux-window)
+  "Return effects that reshape DESIRED on tmux TMUX-SESSION:TMUX-WINDOW.
+DESIRED and CURRENT are `tall', `wide', or nil.  Returns nil when the
+layouts already match (or DESIRED is nil)."
+  (when (and desired (not (eq desired current)))
+    (let ((target (format "%s:%s" tmux-session tmux-window)))
+      (pcase desired
+        ('tall
+         (list
+          (+presentation--cmd-select-layout tmux-session tmux-window
+                                            "main-horizontal")
+          (make-+presentation-effect-shell
+           :argv (list "tmux" "set-window-option"
+                       "-t" target "main-pane-height" "25%"))))
+        ('wide
+         (list
+          (+presentation--cmd-select-layout tmux-session tmux-window
+                                            "main-vertical")
+          (make-+presentation-effect-shell
+           :argv (list "tmux" "set-window-option"
+                       "-t" target "main-pane-width" "33%"))))
+        (_ (error "Unknown pane layout: %S" desired))))))
+
 (defun +presentation--parse-list-panes-output (output)
   "Parse OUTPUT of `tmux list-panes -F #{pane_id}\\t#{pane_tty}'.
 Return alist `((PANE-ID . TTY) ...)' in input order."
@@ -171,17 +208,23 @@ placeholder line indicating no slide has yet been pushed."
 
 ;;; Reuse path planner
 
-(defun +presentation--plan-reuse (frame key worktree)
+(defun +presentation--plan-reuse (frame key worktree tmux-session tmux-window)
   "Return effects that register a reuse-origin session keyed by KEY.
 FRAME is the matched daemon frame; WORKTREE is the start payload's
-worktree path.  The plan captures `current-window-configuration',
-pushes it to register `?P', and stores it on the session plist."
+worktree path.  TMUX-SESSION and TMUX-WINDOW are stashed on the session
+plist so subsequent renders can target the same window for geometry
+changes and teardown can restore the saved layout.  The plan captures
+`current-window-configuration', pushes it to register `?P', and stores
+it on the session plist."
   (list
+   (+presentation--cmd-window-layout tmux-session tmux-window)
    (make-+presentation-effect-elisp
     :thunk
     (lambda ()
       (let ((wc (with-selected-frame frame
-                  (current-window-configuration))))
+                  (current-window-configuration)))
+            (saved-layout (string-trim
+                           (or (nth 0 +presentation--effect-results) ""))))
         (set-register ?P (list 'window-configuration wc (point-marker)))
         (+presentation--register-session
          key
@@ -189,6 +232,9 @@ pushes it to register `?P', and stores it on the session plist."
                :origin 'reused
                :saved-config wc
                :tmux-pane nil
+               :tmux-session tmux-session
+               :tmux-window tmux-window
+               :tmux-saved-layout saved-layout
                :worktree worktree
                :started-at (float-time))))))))
 
@@ -200,19 +246,22 @@ KEY is the session key to assign.  SESS, WIN, SPLIT, SOCKET are passed
 to the tmux command builders.  WORKTREE is recorded on the session plist.
 
 Effects, in order:
-  1. `tmux list-panes' (before snapshot — runner records output).
-  2. `tmux split-window'.
-  3. Elisp: poll `tmux list-panes' (after), diff to find the new pane,
+  1. `tmux display-message -p #{window_layout}' (saved-layout capture).
+  2. `tmux list-panes' (before snapshot — runner records output).
+  3. `tmux split-window'.
+  4. Elisp: poll `tmux list-panes' (after), diff to find the new pane,
      resolve the corresponding frame.
-  4. Elisp: tag the frame, register the session."
+  5. Elisp: tag the frame, register the session including the captured
+     saved layout under `:tmux-saved-layout'."
   (let ((discovered (list nil)))                 ; (PANE-ID . TTY) | nil
     (list
+     (+presentation--cmd-window-layout sess win)
      (+presentation--cmd-list-panes sess win)
      (+presentation--cmd-split-window sess win split socket)
      (make-+presentation-effect-elisp
       :thunk
       (lambda ()
-        (let* ((before-output (nth 0 +presentation--effect-results))
+        (let* ((before-output (nth 1 +presentation--effect-results))
                (before (+presentation--parse-list-panes-output before-output))
                (new nil)
                (attempts +presentation-spawn-poll-attempts))
@@ -251,6 +300,11 @@ Effects, in order:
                  :origin 'created
                  :saved-config nil
                  :tmux-pane pane-id
+                 :tmux-session sess
+                 :tmux-window win
+                 :tmux-saved-layout
+                 (string-trim
+                  (or (nth 0 +presentation--effect-results) ""))
                  :worktree worktree
                  :started-at (float-time)))))))))
 
@@ -282,7 +336,8 @@ Return the generated session-key string."
          (existing (+presentation--find-existing-frame panes)))
     (if existing
         (+presentation--run-effects
-         (+presentation--plan-reuse existing key worktree))
+         (+presentation--plan-reuse existing key worktree
+                                    tmux-session tmux-window))
       (+presentation--run-effects
        (+presentation--plan-spawn key tmux-session tmux-window
                                   split sock worktree)))
@@ -303,28 +358,42 @@ resulting frame deletion fires `delete-frame-functions' which removes
 the hash entry."
   (let* ((session (+presentation--get-session key))
          (origin (plist-get session :origin))
-         (frame (plist-get session :frame)))
+         (frame (plist-get session :frame))
+         (saved-layout (plist-get session :tmux-saved-layout))
+         (tmux-session (plist-get session :tmux-session))
+         (tmux-window (plist-get session :tmux-window))
+         (restore-effects
+          (when (and saved-layout
+                     (stringp saved-layout)
+                     (not (string-empty-p saved-layout))
+                     tmux-session tmux-window)
+            (list (+presentation--cmd-select-layout
+                   tmux-session tmux-window saved-layout)))))
     (+presentation--cleanup-render-state key)
     (pcase origin
       ('reused
        (+presentation--run-effects
-        (list
-         (make-+presentation-effect-elisp
-          :thunk
-          (lambda ()
-            (when (frame-live-p frame)
-              (with-selected-frame frame
-                (set-window-configuration
-                 (plist-get session :saved-config)))
-              (modify-frame-parameters
-               frame
-               '((presentation-key . nil)
-                 (presentation-origin . nil))))
-            (remhash key +presentation--sessions))))))
+        (append
+         restore-effects
+         (list
+          (make-+presentation-effect-elisp
+           :thunk
+           (lambda ()
+             (when (frame-live-p frame)
+               (with-selected-frame frame
+                 (set-window-configuration
+                  (plist-get session :saved-config)))
+               (modify-frame-parameters
+                frame
+                '((presentation-key . nil)
+                  (presentation-origin . nil))))
+             (remhash key +presentation--sessions)))))))
       ('created
        (+presentation--run-effects
-        (list (+presentation--cmd-kill-pane
-               (plist-get session :tmux-pane)))))
+        (append
+         restore-effects
+         (list (+presentation--cmd-kill-pane
+                (plist-get session :tmux-pane))))))
       (other (error "Unknown session origin: %S" other)))
     'done))
 
@@ -389,15 +458,22 @@ against the `:frame' value stored on the session plist instead."
 
 ;;;###autoload
 (defun +presentation--alist-to-plist (alist)
-  "Convert ALIST with symbol or string keys to a plist with `:'-prefixed keys."
+  "Convert ALIST with symbol or string keys to a plist with `:'-prefixed keys.
+Underscores in non-keyword keys are translated to hyphens so that JSON
+fields like `start_line' / `pane_layout' arrive as `:start-line' /
+`:pane-layout'."
   (let (acc)
     (dolist (cell alist (nreverse acc))
       (let* ((k (car cell))
              (v (cdr cell))
-             (sym (cond ((keywordp k) k)
-                        ((symbolp k) (intern (concat ":" (symbol-name k))))
-                        ((stringp k) (intern (concat ":" k)))
-                        (t (error "Unsupported alist key: %S" k)))))
+             (name (cond ((keywordp k) nil)
+                         ((symbolp k) (symbol-name k))
+                         ((stringp k) k)
+                         (t (error "Unsupported alist key: %S" k))))
+             (sym (if name
+                      (intern (concat ":" (replace-regexp-in-string
+                                           "_" "-" name)))
+                    k)))
         (push sym acc)
         (push v acc)))))
 
@@ -505,6 +581,11 @@ CONTEXT may be the symbol `pane' to forbid nested layout slides."
     (when (member kind '("narrative" "file" "diff"))
       (when-let* ((anns (plist-get slide :annotations)))
         (mapc #'+presentation--validate-annotation (append anns nil))))
+    (when (plist-member slide :pane-layout)
+      (let ((pl (plist-get slide :pane-layout)))
+        (unless (member pl '("tall" "wide"))
+          (user-error
+           "Slide :pane-layout must be \"tall\" or \"wide\", got: %S" pl))))
     slide))
 
 
@@ -627,6 +708,7 @@ Signals `user-error' on out-of-range INDEX."
         (insert (or (plist-get slide :markdown) ""))
         (when (fboundp +presentation-narrative-major-mode)
           (funcall +presentation-narrative-major-mode))))
+    (+presentation--enable-mode-in buf key)
     buf))
 
 
@@ -681,6 +763,7 @@ buffer and restores its prior read-only state."
            key :restorers
            (lambda () (with-current-buffer b
                         (setq buffer-read-only prev-ro)))))))
+    (+presentation--enable-mode-in buf key)
     buf))
 
 
@@ -717,6 +800,7 @@ Runs `git diff' via the effect runner, inserts output into
         (insert (or output ""))
         (when (fboundp 'diff-mode) (diff-mode))
         (setq buffer-read-only t)))
+    (+presentation--enable-mode-in buf key)
     buf))
 
 
@@ -727,6 +811,8 @@ Runs `git diff' via the effect runner, inserts output into
          (buf1 (+presentation--dispatch-slide key (nth 0 panes)))
          (buf2 (+presentation--dispatch-slide key (nth 1 panes)))
          (frame (+presentation--session-prop key :frame)))
+    (+presentation--enable-mode-in buf1 key)
+    (+presentation--enable-mode-in buf2 key)
     (when (and frame (frame-live-p frame))
       (with-selected-frame frame
         (delete-other-windows)
@@ -781,12 +867,34 @@ Overlays are appended to session KEY's `:render-state' `:overlays'."
          (+presentation--render-state-add key :overlays ov)))
      (append annotations nil))))
 
+(defun +presentation--slide-pane-layout (slide)
+  "Return SLIDE's `:pane-layout' coerced to a symbol, or nil."
+  (when-let* ((s (plist-get slide :pane-layout)))
+    (and (stringp s) (not (string-empty-p s)) (intern s))))
+
+(defun +presentation--apply-pane-layout (key slide)
+  "Apply SLIDE's pane-layout hint to session KEY.
+Compares the slide's `:pane-layout' to the session's `:pane-layout'
+slot.  When they differ, runs the geometry effects via
+`+presentation--run-effects' and updates the slot to the new value."
+  (let* ((sess (+presentation--get-session key))
+         (desired (+presentation--slide-pane-layout slide))
+         (current (plist-get sess :pane-layout))
+         (tmux-session (plist-get sess :tmux-session))
+         (tmux-window (plist-get sess :tmux-window))
+         (effects (+presentation--pane-layout-effects
+                   desired current tmux-session tmux-window)))
+    (when effects
+      (+presentation--run-effects effects)
+      (+presentation--session-set key :pane-layout desired))))
+
 (defun +presentation--render-slide (key slide)
   "Render SLIDE as the visible slide for session KEY.
-Cleans up any prior `:render-state', dispatches to the per-kind
-renderer, applies annotations, and switches the session frame to the
-produced buffer."
+Cleans up any prior `:render-state', applies the slide's pane-layout
+hint, dispatches to the per-kind renderer, applies annotations, and
+switches the session frame to the produced buffer."
   (+presentation--cleanup-render-state key)
+  (+presentation--apply-pane-layout key slide)
   (let* ((buf (+presentation--dispatch-slide key slide))
          (frame (+presentation--session-prop key :frame))
          (anns (plist-get slide :annotations)))
@@ -809,8 +917,66 @@ produced buffer."
       (+presentation--cleanup-render-state key)
       (let ((buf (+presentation--make-splash-buffer
                   key (plist-get sess :worktree))))
+        (+presentation--enable-mode-in buf key)
         (when (and (bufferp buf) (frame-live-p frame))
           (with-selected-frame frame (switch-to-buffer buf)))
         buf)))))
+
+;;; +presentation-mode minor mode
+
+(defvar-local +presentation--session-key nil
+  "Buffer-local session key consulted by `+presentation-mode' commands.")
+
+(defvar +presentation-mode-map
+  (let ((map (make-sparse-keymap)))
+    (define-key map (kbd "C-n") #'+presentation-next-slide)
+    (define-key map (kbd "C-f") #'+presentation-next-slide)
+    (define-key map (kbd "C-p") #'+presentation-previous-slide)
+    (define-key map (kbd "C-b") #'+presentation-previous-slide)
+    map)
+  "Keymap for `+presentation-mode'.")
+
+;;;###autoload
+(define-minor-mode +presentation-mode
+  "Minor mode for navigating presentation slides.
+Bindings advance / retreat the session's current slide via
+`+presentation--deck-goto'.  The session is resolved from the
+buffer-local `+presentation--session-key' set by the renderer."
+  :lighter " Pres"
+  :keymap +presentation-mode-map)
+
+;;;###autoload
+(defun +presentation-next-slide ()
+  "Advance the current presentation session by one slide.
+No-op when the session is already at the last slide."
+  (interactive)
+  (when-let* ((key +presentation--session-key)
+              (sess (+presentation--get-session key))
+              (deck (or (plist-get sess :deck) []))
+              (cur (plist-get sess :current-slide-index)))
+    (let ((nxt (1+ cur)))
+      (when (< nxt (length deck))
+        (+presentation--deck-goto key nxt)))))
+
+;;;###autoload
+(defun +presentation-previous-slide ()
+  "Retreat the current presentation session by one slide.
+No-op when the session is already at slide 0."
+  (interactive)
+  (when-let* ((key +presentation--session-key)
+              (sess (+presentation--get-session key))
+              (cur (plist-get sess :current-slide-index)))
+    (let ((prv (1- cur)))
+      (when (>= prv 0)
+        (+presentation--deck-goto key prv)))))
+
+(defun +presentation--enable-mode-in (buffer key)
+  "Enable `+presentation-mode' in BUFFER tagged with session KEY.
+Sets the buffer-local `+presentation--session-key' before activating
+the mode so its bindings can resolve the session."
+  (when (bufferp buffer)
+    (with-current-buffer buffer
+      (setq-local +presentation--session-key key)
+      (+presentation-mode 1))))
 
 ;;; lib.el ends here
