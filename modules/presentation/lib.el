@@ -344,7 +344,7 @@ Return the generated session-key string."
     (+presentation--session-set key :deck [])
     (+presentation--session-set key :current-slide-index nil)
     (if initial-slide
-        (+presentation--deck-push key initial-slide)
+        (+presentation--deck-push key initial-slide :set-current t)
       (+presentation--render-current key))
     key))
 
@@ -608,16 +608,19 @@ CONTEXT may be the symbol `pane' to forbid nested layout slides."
   (or (+presentation--session-prop key :deck) []))
 
 ;;;###autoload
-(defun +presentation--deck-push (key slide)
-  "Append SLIDE to session KEY's deck, set current to the new index, render.
-Returns the new slide's index."
+(cl-defun +presentation--deck-push (key slide &key set-current)
+  "Append SLIDE to session KEY's deck and return the new slide's index.
+Default appends without changing the session's current slide index or
+rendering.  When SET-CURRENT is non-nil, the session's current slide
+index is set to the new index and the slide is rendered."
   (+presentation--validate-slide slide)
   (let* ((deck (+presentation--deck key))
          (new-deck (vconcat deck (vector slide)))
          (new-idx (1- (length new-deck))))
     (+presentation--session-set key :deck new-deck)
-    (+presentation--session-set key :current-slide-index new-idx)
-    (+presentation--render-current key)
+    (when set-current
+      (+presentation--session-set key :current-slide-index new-idx)
+      (+presentation--render-current key))
     new-idx))
 
 ;;;###autoload
@@ -673,6 +676,79 @@ Signals `user-error' on out-of-range INDEX."
     (+presentation--session-set key :current-slide-index index)
     (+presentation--render-current key)
     index))
+
+
+;;; Channel capability registration
+
+;;;###autoload
+(defun +presentation--inject-channel-capability (response)
+  "Splice `experimental.claude/channel: {}' into RESPONSE.
+RESPONSE is the alist returned by
+`claude-code-ide-mcp--handle-initialize'.  Used as `:filter-return'
+advice so the MCP server's initialize-response advertises the
+channel capability without requiring an upstream patch.  Returns the
+mutated RESPONSE."
+  (let* ((result (alist-get 'result response))
+         (caps (alist-get 'capabilities result))
+         (exp (or (alist-get 'experimental caps) '())))
+    (when caps
+      (setf (alist-get 'claude/channel exp) :json-empty)
+      (setf (alist-get 'experimental caps) exp)
+      (setf (alist-get 'capabilities result) caps)
+      (setf (alist-get 'result response) result)))
+  response)
+
+;;;###autoload
+(defun +presentation--register-channel-capability (&optional fn)
+  "Install `:filter-return' advice on the MCP initialize handler.
+FN defaults to `claude-code-ide-mcp--handle-initialize'.  When FN is
+unbound, registration silently no-ops and returns nil.  Otherwise
+returns the symbol that was advised."
+  (let ((sym (or fn 'claude-code-ide-mcp--handle-initialize)))
+    (when (fboundp sym)
+      (advice-add sym :filter-return
+                  #'+presentation--inject-channel-capability)
+      sym)))
+
+
+;;; Channel notification emission
+
+;;;###autoload
+(defun +presentation--emit-nav-channel (key prior current)
+  "Send a `notifications/claude/channel' event for session KEY.
+PRIOR and CURRENT are integer indices into the session's deck.
+Composes a human-readable advance / retreat content string and a
+string-valued meta record.  Emission is best-effort: errors and a
+missing `claude-code-ide-mcp--send-notification' silently no-op."
+  (condition-case _err
+      (when (fboundp 'claude-code-ide-mcp--send-notification)
+        (let* ((sess (+presentation--get-session key))
+               (deck (or (plist-get sess :deck) []))
+               (count (length deck))
+               (slide (and (integerp current)
+                           (>= current 0)
+                           (< current count)
+                           (aref deck current)))
+               (kind (plist-get slide :kind))
+               (title (plist-get slide :title))
+               (verb (if (and (integerp prior) (integerp current)
+                              (< prior current))
+                         "advanced" "retreated"))
+               (content (format "User %s to slide %d of %d."
+                                verb current count))
+               (meta (list (cons 'key key)
+                           (cons 'current_slide (number-to-string current))
+                           (cons 'prior_slide (number-to-string prior))
+                           (cons 'kind (or kind "")))))
+          (when (and title (stringp title) (not (string-empty-p title)))
+            (setq meta (append meta (list (cons 'title title)))))
+          (funcall #'claude-code-ide-mcp--send-notification
+                   "notifications/claude/channel"
+                   `((source . "presentation")
+                     (content . ,content)
+                     (meta . ,meta)))
+          nil))
+    (error nil)))
 
 
 ;;; Render-state cleanup
@@ -948,7 +1024,8 @@ buffer-local `+presentation--session-key' set by the renderer."
 ;;;###autoload
 (defun +presentation-next-slide ()
   "Advance the current presentation session by one slide.
-No-op when the session is already at the last slide."
+No-op when the session is already at the last slide.  Emits a
+`claude/channel' notification post-render."
   (interactive)
   (when-let* ((key +presentation--session-key)
               (sess (+presentation--get-session key))
@@ -956,19 +1033,22 @@ No-op when the session is already at the last slide."
               (cur (plist-get sess :current-slide-index)))
     (let ((nxt (1+ cur)))
       (when (< nxt (length deck))
-        (+presentation--deck-goto key nxt)))))
+        (+presentation--deck-goto key nxt)
+        (+presentation--emit-nav-channel key cur nxt)))))
 
 ;;;###autoload
 (defun +presentation-previous-slide ()
   "Retreat the current presentation session by one slide.
-No-op when the session is already at slide 0."
+No-op when the session is already at slide 0.  Emits a
+`claude/channel' notification post-render."
   (interactive)
   (when-let* ((key +presentation--session-key)
               (sess (+presentation--get-session key))
               (cur (plist-get sess :current-slide-index)))
     (let ((prv (1- cur)))
       (when (>= prv 0)
-        (+presentation--deck-goto key prv)))))
+        (+presentation--deck-goto key prv)
+        (+presentation--emit-nav-channel key cur prv)))))
 
 (defun +presentation--enable-mode-in (buffer key)
   "Enable `+presentation-mode' in BUFFER tagged with session KEY.
