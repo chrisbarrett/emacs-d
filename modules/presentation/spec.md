@@ -52,14 +52,22 @@ and `presentation-origin` parameters so the `delete-frame-functions` hook and
 
 | Kind        | Required          | Optional                                                            |
 | :---------- | :---------------- | :------------------------------------------------------------------ |
-| `narrative` | `markdown`        | `annotations`                                                       |
-| `file`      | `path`            | `start_line`, `end_line`, `focus`, `annotations`                    |
-| `diff`      | —                 | `path`, (`base`+`head`), `annotations`                              |
-| `layout`    | `split`, `panes`  | —                                                                   |
+| `narrative` | `markdown`        | `annotations`, `pane_layout`                                        |
+| `file`      | `path`            | `start_line`, `end_line`, `focus`, `annotations`, `pane_layout`     |
+| `diff`      | —                 | `path`, (`base`+`head`), `annotations`, `pane_layout`               |
+| `layout`    | `split`, `panes`  | `pane_layout`                                                       |
 
 `annotations` is `[{ line, text, position? }, …]`; `position` is `"before"` /
 `"after"` (default `"after"`). Layout `split` is `"horizontal"` / `"vertical"`;
 `panes` must be exactly two non-layout slides.
+
+`pane_layout` is `"tall"` or `"wide"`. When set, the renderer reshapes the
+target tmux window before rendering: `"tall"` selects `main-horizontal` with
+`main-pane-height 25%` (claude-code on top, presentation below);
+`"wide"` selects `main-vertical` with `main-pane-width 33%` (claude-code on
+the left, presentation on the right). Geometry switching is idempotent —
+consecutive slides with the same hint hit tmux exactly once. Slides without
+`pane_layout` leave geometry untouched.
 
 ### Functions
 
@@ -99,6 +107,13 @@ and `presentation-origin` parameters so the `delete-frame-functions` hook and
 | `+presentation--find-existing-frame`    | First frame matching any pane in the window   |
 | `+presentation--make-splash-buffer`     | Build the `*presentation: KEY*` splash buffer |
 | `+presentation--frame-deleted-h`        | Hook: clear hash entry on frame deletion      |
+| `+presentation--pane-layout-effects`    | Pure planner for tmux geometry effects        |
+| `+presentation--apply-pane-layout`      | Run pane-layout effects + update session slot |
+| `+presentation--cmd-window-layout`      | Build `tmux display-message #{window_layout}` |
+| `+presentation--cmd-select-layout`      | Build `tmux select-layout` shell effect       |
+| `+presentation--enable-mode-in`         | Set session key + enable `+presentation-mode' |
+| `+presentation-next-slide`              | User command: advance the deck                |
+| `+presentation-previous-slide`          | User command: retreat the deck                |
 
 ## Deck model
 
@@ -141,9 +156,31 @@ no match → spawn.
 
 ### Tear-down
 
+Both origins first run `tmux select-layout -t <window> <saved-layout>` when
+the session carries a non-empty `:tmux-saved-layout` (captured by
+`start_presentation` via `tmux display-message -p '#{window_layout}'`).
+This reverses any geometry reshaping the agent did during the session.
+Restore is skipped when the saved layout is `nil` or empty.
+
 `'reused` → restore window-config, drop frame parameters, drop hash entry.
 `'created` → emit `tmux kill-pane`; the resulting frame deletion fires
 `delete-frame-functions`, which clears the hash entry.
+
+### User navigation
+
+The renderer enables `+presentation-mode` on every produced buffer
+(narrative, file, diff, layout pane buffers, and the splash buffer) and
+sets the buffer-local `+presentation--session-key` so navigation commands
+can resolve back to the session.
+
+| Key                | Command                          |
+| :----------------- | :------------------------------- |
+| `C-n` / `C-f`      | `+presentation-next-slide`       |
+| `C-p` / `C-b`      | `+presentation-previous-slide`   |
+
+Navigation is bounded: `next-slide` at the last index and
+`previous-slide` at index 0 are silent no-ops. Mutation (push, replace,
+truncate) remains agent-only.
 
 ### display-buffer protection
 
@@ -186,3 +223,22 @@ into a presentation frame.
     `buffer-read-only` with restore-on-leave.
 20. `+presentation--diff-argv` produces correct argv for working-tree,
     range, and path-scoped diffs; rejects half-specified ranges.
+21. `+presentation--pane-layout-effects` returns the
+    `select-layout`+`set-window-option` argv pair for `'tall`/`'wide`
+    targeted at the session's tmux window, and emits no effects when
+    the requested layout matches the session slot.
+22. `+presentation--render-slide` runs the layout effects when the
+    slide's `:pane-layout` differs from the session slot, then writes
+    the new value into `:pane-layout` after success; slides without
+    `:pane-layout` leave both slot and tmux untouched.
+23. `+presentation--plan-spawn` and `+presentation--plan-reuse` capture
+    `#{window_layout}` into the session plist as `:tmux-saved-layout`.
+24. `+presentation-end` runs `tmux select-layout -t <window>
+    <saved-layout>` before its existing teardown step; an empty / nil
+    saved layout skips the restore without error.
+25. `+presentation-mode` keymap binds `C-n`/`C-f` to
+    `+presentation-next-slide` and `C-p`/`C-b` to
+    `+presentation-previous-slide`; commands no-op at deck ends.
+26. Renderers (`narrative`, `file`, `diff`, layout pane buffers, splash)
+    set buffer-local `+presentation--session-key` and enable
+    `+presentation-mode` on the produced buffer.

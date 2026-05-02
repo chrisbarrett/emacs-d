@@ -23,6 +23,9 @@ matching frame is found it is reused (its window-configuration is
 saved).  Otherwise a new pane is split off the target window running
 `emacsclient -t', and the resulting frame is captured.
 
+The current tmux window layout is captured so that `end_presentation'
+can restore the user's pre-session pane geometry.
+
 Returns a session-key string to be passed back to `end_presentation'."
    :args
    '((:name "worktree"      :type string :description "Absolute path to the worktree the session is associated with.")
@@ -80,8 +83,13 @@ deleted as part of teardown."
 
 Returns the new slide's integer index.  Slide spec must include a
 `kind' field; supported kinds are `narrative', `file', `diff', and
-`layout'.  Raises a user-error on validation failure (missing required
-fields, nested layout, half-specified diff range, bad annotation line)."
+`layout'.  Every kind also accepts an optional `pane_layout' string
+of `tall' (claude-code on top, presentation below) or `wide'
+(claude-code on the left, presentation on the right) that reshapes the
+tmux window before rendering; absent leaves geometry unchanged.  Raises
+a user-error on validation failure (missing required fields, nested
+layout, half-specified diff range, bad annotation line, invalid
+`pane_layout')."
    :args
    '((:name "key" :type string :description "Session key.")
      (:name "slide" :type object :description "Slide spec object."))

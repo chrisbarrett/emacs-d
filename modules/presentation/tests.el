@@ -23,6 +23,9 @@
 (defvar +presentation-narrative-major-mode)
 (defvar +presentation-spawn-poll-attempts)
 (defvar +presentation-spawn-poll-interval)
+(defvar +presentation--effect-results)
+(defvar +presentation-mode-map)
+(defvar +presentation--session-key)
 
 (defun +presentation-tests--with-clean-frame (frame fn)
   "Save FRAME's presentation parameters, run FN, then restore them."
@@ -221,17 +224,20 @@ Results are returned in execution order."
 (ert-deftest +presentation/plan-reuse-emits-elisp-effect ()
   (let* ((+presentation--sessions (make-hash-table :test 'equal))
          (frame (selected-frame))
-         (effects (+presentation--plan-reuse frame "k-reuse" "/tmp/wt")))
+         (effects (+presentation--plan-reuse frame "k-reuse" "/tmp/wt"
+                                              "sess" "1")))
     (+presentation-tests--with-clean-frame
      frame
      (lambda ()
-       (should (= (length effects) 1))
-       (should (+presentation-effect-elisp-p (car effects)))
+       (should (= (length effects) 2))
+       (should (+presentation-effect-shell-p (nth 0 effects)))
+       (should (+presentation-effect-elisp-p (nth 1 effects)))
        (cl-letf (((symbol-function 'current-window-configuration)
                   (lambda () 'fake-wc))
                  ((symbol-function 'set-register)
                   (lambda (_r _v) nil)))
-         (funcall (+presentation-effect-elisp-thunk (car effects)))
+         (let ((+presentation--effect-results '("L0")))
+           (funcall (+presentation-effect-elisp-thunk (nth 1 effects))))
          (let ((sess (gethash "k-reuse" +presentation--sessions)))
            (should (eq (plist-get sess :origin) 'reused))
            (should (eq (plist-get sess :saved-config) 'fake-wc))
@@ -241,7 +247,8 @@ Results are returned in execution order."
 (ert-deftest +presentation/plan-reuse-pushes-config-to-register-P ()
   (let* ((+presentation--sessions (make-hash-table :test 'equal))
          (frame (selected-frame))
-         (effects (+presentation--plan-reuse frame "k-reg" "/tmp/wt"))
+         (effects (+presentation--plan-reuse frame "k-reg" "/tmp/wt"
+                                              "sess" "1"))
          (registered nil))
     (+presentation-tests--with-clean-frame
      frame
@@ -250,27 +257,109 @@ Results are returned in execution order."
                   (lambda () 'fake-wc))
                  ((symbol-function 'set-register)
                   (lambda (r v) (push (cons r v) registered))))
-         (funcall (+presentation-effect-elisp-thunk (car effects)))
+         (let ((+presentation--effect-results '("L0")))
+           (funcall (+presentation-effect-elisp-thunk (nth 1 effects))))
          (should (assoc ?P registered)))))))
 
 
 ;;; 9. Spawn path planner
 
 (ert-deftest +presentation/plan-spawn-effect-order ()
-  "Plan-spawn emits, in order: list-panes, split-window, poll-elisp, tag-elisp."
+  "Plan-spawn emits, in order: display-message (capture window layout),
+list-panes, split-window, poll-elisp, tag-elisp."
   (let* ((effects (+presentation--plan-spawn
                    "k-spawn" "sess" "1" 'horizontal "/tmp/sock" "/tmp/wt")))
-    (should (= (length effects) 4))
+    (should (= (length effects) 5))
     (should (+presentation-effect-shell-p (nth 0 effects)))
     (should (equal (+presentation-effect-shell-argv (nth 0 effects))
+                   '("tmux" "display-message" "-p"
+                     "-t" "sess:1" "#{window_layout}")))
+    (should (+presentation-effect-shell-p (nth 1 effects)))
+    (should (equal (+presentation-effect-shell-argv (nth 1 effects))
                    '("tmux" "list-panes" "-t" "sess:1"
                      "-F" "#{pane_id}\t#{pane_tty}")))
-    (should (+presentation-effect-shell-p (nth 1 effects)))
-    (should (equal (car (+presentation-effect-shell-argv (nth 1 effects)))
-                   "tmux"))
-    (should (member "split-window" (+presentation-effect-shell-argv (nth 1 effects))))
-    (should (+presentation-effect-elisp-p (nth 2 effects)))
-    (should (+presentation-effect-elisp-p (nth 3 effects)))))
+    (should (+presentation-effect-shell-p (nth 2 effects)))
+    (should (member "split-window"
+                    (+presentation-effect-shell-argv (nth 2 effects))))
+    (should (+presentation-effect-elisp-p (nth 3 effects)))
+    (should (+presentation-effect-elisp-p (nth 4 effects)))))
+
+(ert-deftest +presentation/plan-spawn-captures-window-layout-into-session ()
+  "Running plan-spawn end-to-end stashes the captured layout on the
+session plist as `:tmux-saved-layout'."
+  (let* ((+presentation--sessions (make-hash-table :test 'equal))
+         (+presentation-spawn-poll-attempts 2)
+         (+presentation-spawn-poll-interval 0)
+         (split-happened nil)
+         (frame (selected-frame))
+         (effects (+presentation--plan-spawn
+                   "k-cap-s" "sess" "1" 'horizontal "/tmp/sock" "/tmp/wt")))
+    (+presentation-tests--with-clean-frame
+     frame
+     (lambda ()
+       (cl-letf
+           (((symbol-function 'process-file)
+             (lambda (_program _infile dest _display &rest args)
+               (when-let* ((b (+presentation-tests--fake-process-file-buffer
+                               dest)))
+                 (with-current-buffer b
+                   (cond
+                    ((member "display-message" args)
+                     (insert "saved-layout-foo"))
+                    ((member "split-window" args)
+                     (setq split-happened t))
+                    ((and (member "list-panes" args) (not split-happened))
+                     (insert "%1\t/dev/ttys001\n"))
+                    ((member "list-panes" args)
+                     (insert "%1\t/dev/ttys001\n%2\t/dev/ttys002\n"))
+                    (t nil))))
+               0))
+            ((symbol-function 'frame-list) (lambda () (list frame)))
+            ((symbol-function 'frame-parameter)
+             (lambda (f param)
+               (when (and (eq f frame) (eq param 'tty)) "/dev/ttys002"))))
+         (+presentation--run-effects effects)
+         (let ((sess (gethash "k-cap-s" +presentation--sessions)))
+           (should (equal (plist-get sess :tmux-saved-layout)
+                          "saved-layout-foo"))
+           (should (equal (plist-get sess :tmux-session) "sess"))
+           (should (equal (plist-get sess :tmux-window) "1"))))))))
+
+(ert-deftest +presentation/plan-reuse-emits-window-layout-capture-first ()
+  (let* ((frame (selected-frame))
+         (effects (+presentation--plan-reuse frame "k-reuse-cap" "/tmp/wt"
+                                              "sess" "1")))
+    (should (>= (length effects) 2))
+    (let ((first (nth 0 effects)))
+      (should (+presentation-effect-shell-p first))
+      (should (equal (+presentation-effect-shell-argv first)
+                     '("tmux" "display-message" "-p"
+                       "-t" "sess:1" "#{window_layout}"))))))
+
+(ert-deftest +presentation/plan-reuse-captures-window-layout-into-session ()
+  (let* ((+presentation--sessions (make-hash-table :test 'equal))
+         (frame (selected-frame))
+         (effects (+presentation--plan-reuse frame "k-cap-r" "/tmp/wt"
+                                              "sess" "1")))
+    (+presentation-tests--with-clean-frame
+     frame
+     (lambda ()
+       (cl-letf
+           (((symbol-function 'process-file)
+             (lambda (_program _infile dest _display &rest _args)
+               (when-let* ((b (+presentation-tests--fake-process-file-buffer
+                               dest)))
+                 (with-current-buffer b (insert "saved-layout-bar")))
+               0))
+            ((symbol-function 'current-window-configuration)
+             (lambda () 'fake-wc))
+            ((symbol-function 'set-register) (lambda (_r _v) nil)))
+         (+presentation--run-effects effects)
+         (let ((sess (gethash "k-cap-r" +presentation--sessions)))
+           (should (equal (plist-get sess :tmux-saved-layout)
+                          "saved-layout-bar"))
+           (should (equal (plist-get sess :tmux-session) "sess"))
+           (should (equal (plist-get sess :tmux-window) "1"))))))))
 
 (ert-deftest +presentation/diff-panes-after-split-discovers-new-pane ()
   "Post-split diff picks the pane that's in `after' but not in `before'."
@@ -436,6 +525,94 @@ Results are returned in execution order."
         (should tmux-call)
         (should (member "kill-pane" tmux-call))
         (should (member "%42" tmux-call))))))
+
+(ert-deftest +presentation/end-restores-saved-layout-before-kill-pane ()
+  "On `created' origin: select-layout runs before kill-pane."
+  (let* ((+presentation--sessions (make-hash-table :test 'equal))
+         (calls nil))
+    (puthash "k-rl-c"
+             (list :frame nil :origin 'created
+                   :saved-config nil
+                   :tmux-pane "%42"
+                   :tmux-session "sess" :tmux-window "1"
+                   :tmux-saved-layout "fake-layout-str"
+                   :worktree "/tmp/wt" :started-at 0)
+             +presentation--sessions)
+    (cl-letf (((symbol-function 'process-file)
+               (lambda (program _infile _dest _display &rest args)
+                 (push (cons program args) calls) 0)))
+      (+presentation-end "k-rl-c")
+      (let ((order (nreverse calls)))
+        (should (equal (nth 0 order)
+                       '("tmux" "select-layout" "-t" "sess:1"
+                         "fake-layout-str")))
+        (should (equal (nth 1 order)
+                       '("tmux" "kill-pane" "-t" "%42")))))))
+
+(ert-deftest +presentation/end-restores-saved-layout-before-window-config ()
+  "On `reused' origin: select-layout runs before set-window-configuration."
+  (let* ((+presentation--sessions (make-hash-table :test 'equal))
+         (frame (selected-frame))
+         (calls nil))
+    (+presentation-tests--with-clean-frame
+     frame
+     (lambda ()
+       (puthash "k-rl-r"
+                (list :frame frame :origin 'reused
+                      :saved-config 'fake-wc
+                      :tmux-pane nil
+                      :tmux-session "sess" :tmux-window "1"
+                      :tmux-saved-layout "fake-layout"
+                      :worktree "/tmp/wt" :started-at 0)
+                +presentation--sessions)
+       (cl-letf (((symbol-function 'process-file)
+                  (lambda (program _infile _dest _display &rest args)
+                    (push (cons program args) calls) 0))
+                 ((symbol-function 'set-window-configuration)
+                  (lambda (_wc) (push 'set-wc calls))))
+         (+presentation-end "k-rl-r")
+         (let ((order (nreverse calls)))
+           (should (equal (nth 0 order)
+                          '("tmux" "select-layout" "-t" "sess:1"
+                            "fake-layout")))
+           (should (eq (nth 1 order) 'set-wc))))))))
+
+(ert-deftest +presentation/end-skips-restore-when-saved-layout-nil ()
+  (let* ((+presentation--sessions (make-hash-table :test 'equal))
+         (calls nil))
+    (puthash "k-no-sl"
+             (list :frame nil :origin 'created
+                   :saved-config nil :tmux-pane "%5"
+                   :tmux-session "sess" :tmux-window "1"
+                   :tmux-saved-layout nil
+                   :worktree "/tmp/wt" :started-at 0)
+             +presentation--sessions)
+    (cl-letf (((symbol-function 'process-file)
+               (lambda (program _infile _dest _display &rest args)
+                 (push (cons program args) calls) 0)))
+      (+presentation-end "k-no-sl")
+      (should (null (cl-find-if
+                     (lambda (c) (member "select-layout" c))
+                     calls))))))
+
+(ert-deftest +presentation/end-skips-restore-when-saved-layout-empty ()
+  (let* ((+presentation--sessions (make-hash-table :test 'equal))
+         (calls nil))
+    (puthash "k-empty-sl"
+             (list :frame nil :origin 'created
+                   :saved-config nil :tmux-pane "%6"
+                   :tmux-session "sess" :tmux-window "1"
+                   :tmux-saved-layout ""
+                   :worktree "/tmp/wt" :started-at 0)
+             +presentation--sessions)
+    (cl-letf (((symbol-function 'process-file)
+               (lambda (program _infile _dest _display &rest args)
+                 (push (cons program args) calls) 0)))
+      (+presentation-end "k-empty-sl")
+      (should (null (cl-find-if
+                     (lambda (c) (member "select-layout" c))
+                     calls))))))
+
 
 (ert-deftest +presentation/end-on-unknown-key-signals-user-error ()
   (let ((+presentation--sessions (make-hash-table :test 'equal)))
@@ -732,6 +909,86 @@ predicate returns non-nil."
    :type 'user-error))
 
 
+;;; pane_layout validation
+
+(ert-deftest +presentation/validate-slide-pane-layout-tall-ok ()
+  (should (+presentation--validate-slide
+           '(:kind "narrative" :markdown "x" :pane-layout "tall")))
+  (should (+presentation--validate-slide
+           '(:kind "file" :path "x" :pane-layout "tall")))
+  (should (+presentation--validate-slide
+           '(:kind "diff" :pane-layout "tall")))
+  (should (+presentation--validate-slide
+           '(:kind "layout" :split "horizontal" :pane-layout "tall"
+             :panes [(:kind "narrative" :markdown "L")
+                     (:kind "narrative" :markdown "R")]))))
+
+(ert-deftest +presentation/validate-slide-pane-layout-wide-ok ()
+  (should (+presentation--validate-slide
+           '(:kind "narrative" :markdown "x" :pane-layout "wide"))))
+
+(ert-deftest +presentation/validate-slide-pane-layout-rejects-other-string ()
+  (should-error (+presentation--validate-slide
+                 '(:kind "narrative" :markdown "x" :pane-layout "huge"))
+                :type 'user-error))
+
+(ert-deftest +presentation/validate-slide-pane-layout-rejects-non-string ()
+  (should-error (+presentation--validate-slide
+                 '(:kind "narrative" :markdown "x" :pane-layout tall))
+                :type 'user-error))
+
+(ert-deftest +presentation/validate-slide-pane-layout-rejects-empty ()
+  (should-error (+presentation--validate-slide
+                 '(:kind "narrative" :markdown "x" :pane-layout ""))
+                :type 'user-error))
+
+(ert-deftest +presentation/validate-slide-pane-layout-absent-ok ()
+  (should (+presentation--validate-slide '(:kind "narrative" :markdown "x")))
+  (should (+presentation--validate-slide '(:kind "file" :path "x")))
+  (should (+presentation--validate-slide '(:kind "diff")))
+  (should (+presentation--validate-slide
+           '(:kind "layout" :split "horizontal"
+             :panes [(:kind "narrative" :markdown "L")
+                     (:kind "narrative" :markdown "R")]))))
+
+;;; pane_layout effect planner
+
+(ert-deftest +presentation/pane-layout-effects-tall ()
+  (let ((effects (+presentation--pane-layout-effects 'tall nil "sess" "1")))
+    (should (= (length effects) 2))
+    (should (equal (+presentation-effect-shell-argv (nth 0 effects))
+                   '("tmux" "select-layout"
+                     "-t" "sess:1" "main-horizontal")))
+    (should (equal (+presentation-effect-shell-argv (nth 1 effects))
+                   '("tmux" "set-window-option"
+                     "-t" "sess:1" "main-pane-height" "25%")))))
+
+(ert-deftest +presentation/pane-layout-effects-wide ()
+  (let ((effects (+presentation--pane-layout-effects 'wide 'tall "sess" "1")))
+    (should (= (length effects) 2))
+    (should (equal (+presentation-effect-shell-argv (nth 0 effects))
+                   '("tmux" "select-layout"
+                     "-t" "sess:1" "main-vertical")))
+    (should (equal (+presentation-effect-shell-argv (nth 1 effects))
+                   '("tmux" "set-window-option"
+                     "-t" "sess:1" "main-pane-width" "33%")))))
+
+(ert-deftest +presentation/pane-layout-effects-idempotent ()
+  (should (null (+presentation--pane-layout-effects 'tall 'tall "sess" "1")))
+  (should (null (+presentation--pane-layout-effects 'wide 'wide "sess" "1")))
+  (should (null (+presentation--pane-layout-effects nil nil "sess" "1"))))
+
+
+(ert-deftest +presentation/coerce-slide-converts-pane-layout-snake-to-kebab ()
+  (should (equal (plist-get
+                  (+presentation--coerce-slide
+                   '((kind . "narrative")
+                     (markdown . "x")
+                     (pane_layout . "tall")))
+                  :pane-layout)
+                 "tall")))
+
+
 ;;; Deck mutation helpers
 
 (ert-deftest +presentation/deck-push-appends-and-returns-index ()
@@ -874,6 +1131,76 @@ predicate returns non-nil."
           (should (null (+presentation--session-prop key :render-state))))
       (when (overlay-buffer ov) (delete-overlay ov))
       (kill-buffer sentinel-buf))))
+
+(ert-deftest +presentation/render-slide-runs-pane-layout-effects-and-stores ()
+  "Render runs layout effects when slide hint differs from session slot,
+then writes the new value into `:pane-layout' after success."
+  (let* ((+presentation--sessions (make-hash-table :test 'equal))
+         (key "k-pl-render")
+         (calls nil))
+    (puthash key (list :worktree "/tmp" :frame nil
+                       :tmux-session "sess" :tmux-window "1"
+                       :pane-layout nil :render-state nil
+                       :deck [] :current-slide-index nil)
+             +presentation--sessions)
+    (cl-letf (((symbol-function 'process-file)
+               (lambda (program _infile _dest _display &rest args)
+                 (push (cons program args) calls) 0))
+              ((symbol-function '+presentation--dispatch-slide)
+               (lambda (_k _s) (generate-new-buffer " *tmp*"))))
+      (+presentation--render-slide
+       key '(:kind "narrative" :markdown "x" :pane-layout "tall"))
+      (let ((tmux-calls (cl-count-if (lambda (c) (equal (car c) "tmux"))
+                                     calls)))
+        (should (= tmux-calls 2)))
+      (should (eq (plist-get (gethash key +presentation--sessions)
+                             :pane-layout)
+                  'tall)))))
+
+(ert-deftest +presentation/render-slide-pane-layout-idempotent ()
+  "Three slides all marked `tall' invoke tmux exactly once."
+  (let* ((+presentation--sessions (make-hash-table :test 'equal))
+         (key "k-pl-id")
+         (calls nil))
+    (puthash key (list :worktree "/tmp" :frame nil
+                       :tmux-session "sess" :tmux-window "1"
+                       :pane-layout nil :render-state nil
+                       :deck [] :current-slide-index nil)
+             +presentation--sessions)
+    (cl-letf (((symbol-function 'process-file)
+               (lambda (program _infile _dest _display &rest args)
+                 (push (cons program args) calls) 0))
+              ((symbol-function '+presentation--dispatch-slide)
+               (lambda (_k _s) (generate-new-buffer " *tmp*"))))
+      (dotimes (_ 3)
+        (+presentation--render-slide
+         key '(:kind "narrative" :markdown "x" :pane-layout "tall")))
+      (let ((tmux-calls (cl-count-if (lambda (c) (equal (car c) "tmux"))
+                                     calls)))
+        (should (= tmux-calls 2))))))
+
+(ert-deftest +presentation/render-slide-without-pane-layout-leaves-state ()
+  "Slide without `:pane-layout' leaves session slot and tmux untouched."
+  (let* ((+presentation--sessions (make-hash-table :test 'equal))
+         (key "k-pl-none")
+         (calls nil))
+    (puthash key (list :worktree "/tmp" :frame nil
+                       :tmux-session "sess" :tmux-window "1"
+                       :pane-layout 'wide :render-state nil
+                       :deck [] :current-slide-index nil)
+             +presentation--sessions)
+    (cl-letf (((symbol-function 'process-file)
+               (lambda (program _infile _dest _display &rest args)
+                 (push (cons program args) calls) 0))
+              ((symbol-function '+presentation--dispatch-slide)
+               (lambda (_k _s) (generate-new-buffer " *tmp*"))))
+      (+presentation--render-slide
+       key '(:kind "narrative" :markdown "x"))
+      (should (null (cl-find-if (lambda (c) (equal (car c) "tmux")) calls)))
+      (should (eq (plist-get (gethash key +presentation--sessions)
+                             :pane-layout)
+                  'wide)))))
+
 
 (ert-deftest +presentation/dispatch-slide-rejects-unknown-kind ()
   (let* ((+presentation--sessions (make-hash-table :test 'equal))
@@ -1215,5 +1542,202 @@ predicate returns non-nil."
                 (sess (gethash key +presentation--sessions)))
            (should (equal (plist-get sess :deck) []))
            (should (null (plist-get sess :current-slide-index)))))))))
+
+;;; Renderer hookup of +presentation-mode
+
+(ert-deftest +presentation/render-narrative-enables-presentation-mode ()
+  (let* ((+presentation--sessions (make-hash-table :test 'equal))
+         (key "k-narr-mode")
+         (+presentation-narrative-major-mode 'fundamental-mode))
+    (puthash key (list :worktree "/tmp" :frame nil) +presentation--sessions)
+    (let ((buf (+presentation--render-narrative
+                key '(:kind "narrative" :markdown "x"))))
+      (unwind-protect
+          (with-current-buffer buf
+            (should +presentation-mode)
+            (should (equal +presentation--session-key key))
+            (should (local-variable-p '+presentation--session-key)))
+        (kill-buffer buf)))))
+
+(ert-deftest +presentation/render-file-enables-presentation-mode ()
+  (let* ((+presentation--sessions (make-hash-table :test 'equal))
+         (key "k-file-mode"))
+    (+presentation-tests--with-temp-file
+        path "x\n"
+      (puthash key (list :worktree (file-name-directory path) :frame nil)
+               +presentation--sessions)
+      (let ((buf (+presentation--render-file
+                  key (list :kind "file" :path path))))
+        (with-current-buffer buf
+          (should +presentation-mode)
+          (should (equal +presentation--session-key key)))))))
+
+(ert-deftest +presentation/render-diff-enables-presentation-mode ()
+  (let* ((+presentation--sessions (make-hash-table :test 'equal))
+         (key "k-diff-mode"))
+    (puthash key (list :worktree "/tmp/wt" :frame nil) +presentation--sessions)
+    (cl-letf (((symbol-function 'process-file)
+               (lambda (_p _i dest _d &rest _a)
+                 (when-let* ((b (+presentation-tests--fake-process-file-buffer
+                                 dest)))
+                   (with-current-buffer b (insert "")))
+                 0)))
+      (let ((buf (+presentation--render-diff
+                  key '(:kind "diff"))))
+        (unwind-protect
+            (with-current-buffer buf
+              (should +presentation-mode)
+              (should (equal +presentation--session-key key)))
+          (kill-buffer buf))))))
+
+(ert-deftest +presentation/render-layout-enables-mode-on-both-panes ()
+  (let* ((+presentation--sessions (make-hash-table :test 'equal))
+         (key "k-layout-mode")
+         (frame (selected-frame))
+         (+presentation-narrative-major-mode 'fundamental-mode))
+    (puthash key (list :worktree "/tmp" :frame frame) +presentation--sessions)
+    (cl-letf (((symbol-function 'delete-other-windows) (lambda () nil))
+              ((symbol-function 'split-window)
+               (lambda (&rest _) 'fake-window))
+              ((symbol-function 'set-window-buffer) (lambda (_w _b) nil)))
+      (let* ((result (+presentation--render-layout
+                      key '(:kind "layout" :split "horizontal"
+                            :panes [(:kind "narrative" :markdown "L")
+                                    (:kind "narrative" :markdown "R")])))
+             (buf1 (nth 2 result))
+             (buf2 (nth 3 result)))
+        (with-current-buffer buf1
+          (should +presentation-mode)
+          (should (equal +presentation--session-key key)))
+        (with-current-buffer buf2
+          (should +presentation-mode)
+          (should (equal +presentation--session-key key)))))))
+
+(ert-deftest +presentation/splash-buffer-has-presentation-mode ()
+  (let* ((+presentation--sessions (make-hash-table :test 'equal))
+         (frame (selected-frame)))
+    (+presentation-tests--with-clean-frame
+     frame
+     (lambda ()
+       (cl-letf
+           (((symbol-function 'process-file)
+             (lambda (_p _i dest _d &rest _a)
+               (when-let* ((b (+presentation-tests--fake-process-file-buffer
+                               dest)))
+                 (with-current-buffer b (insert "%9\t/dev/ttys099\n")))
+               0))
+            ((symbol-function 'frame-list) (lambda () (list frame)))
+            ((symbol-function 'frame-parameter)
+             (lambda (f param)
+               (when (and (eq f frame) (eq param 'tty)) "/dev/ttys099")))
+            ((symbol-function 'current-window-configuration)
+             (lambda () 'fake-wc))
+            ((symbol-function 'set-register) (lambda (_r _v) nil))
+            ((symbol-function 'switch-to-buffer) (lambda (_b) nil)))
+         (let* ((key (+presentation-start
+                      :worktree "/tmp/wt"
+                      :tmux-session "sess"
+                      :tmux-window "1"
+                      :socket "/tmp/sock"))
+                (buf (get-buffer (format "*presentation: %s*" key))))
+           (with-current-buffer buf
+             (should +presentation-mode)
+             (should (equal +presentation--session-key key)))))))))
+
+
+;;; +presentation-mode minor mode
+
+(ert-deftest +presentation/mode-keymap-bindings ()
+  "C-n and C-f are bound to next-slide; C-p and C-b to previous-slide."
+  (should (eq (lookup-key +presentation-mode-map (kbd "C-n"))
+              '+presentation-next-slide))
+  (should (eq (lookup-key +presentation-mode-map (kbd "C-f"))
+              '+presentation-next-slide))
+  (should (eq (lookup-key +presentation-mode-map (kbd "C-p"))
+              '+presentation-previous-slide))
+  (should (eq (lookup-key +presentation-mode-map (kbd "C-b"))
+              '+presentation-previous-slide)))
+
+(ert-deftest +presentation/next-slide-advances-deck ()
+  (let* ((+presentation--sessions (make-hash-table :test 'equal))
+         (key "k-nav-n"))
+    (puthash key (list :worktree "/tmp" :frame nil
+                       :deck (vector '(:kind "narrative" :markdown "a")
+                                     '(:kind "narrative" :markdown "b")
+                                     '(:kind "narrative" :markdown "c"))
+                       :current-slide-index 0)
+             +presentation--sessions)
+    (cl-letf (((symbol-function '+presentation--render-current)
+               (lambda (_k) nil)))
+      (with-temp-buffer
+        (setq-local +presentation--session-key key)
+        (+presentation-next-slide)
+        (should (= (plist-get (gethash key +presentation--sessions)
+                              :current-slide-index)
+                   1))
+        (+presentation-next-slide)
+        (should (= (plist-get (gethash key +presentation--sessions)
+                              :current-slide-index)
+                   2))))))
+
+(ert-deftest +presentation/next-slide-noop-at-end ()
+  (let* ((+presentation--sessions (make-hash-table :test 'equal))
+         (key "k-nav-end"))
+    (puthash key (list :worktree "/tmp" :frame nil
+                       :deck (vector '(:kind "narrative" :markdown "a")
+                                     '(:kind "narrative" :markdown "b"))
+                       :current-slide-index 1)
+             +presentation--sessions)
+    (cl-letf (((symbol-function '+presentation--render-current)
+               (lambda (_k) nil)))
+      (with-temp-buffer
+        (setq-local +presentation--session-key key)
+        (+presentation-next-slide)
+        (should (= (plist-get (gethash key +presentation--sessions)
+                              :current-slide-index)
+                   1))))))
+
+(ert-deftest +presentation/previous-slide-retreats-deck ()
+  (let* ((+presentation--sessions (make-hash-table :test 'equal))
+         (key "k-nav-p"))
+    (puthash key (list :worktree "/tmp" :frame nil
+                       :deck (vector '(:kind "narrative" :markdown "a")
+                                     '(:kind "narrative" :markdown "b"))
+                       :current-slide-index 1)
+             +presentation--sessions)
+    (cl-letf (((symbol-function '+presentation--render-current)
+               (lambda (_k) nil)))
+      (with-temp-buffer
+        (setq-local +presentation--session-key key)
+        (+presentation-previous-slide)
+        (should (= (plist-get (gethash key +presentation--sessions)
+                              :current-slide-index)
+                   0))))))
+
+(ert-deftest +presentation/previous-slide-noop-at-zero ()
+  (let* ((+presentation--sessions (make-hash-table :test 'equal))
+         (key "k-nav-p0"))
+    (puthash key (list :worktree "/tmp" :frame nil
+                       :deck (vector '(:kind "narrative" :markdown "a"))
+                       :current-slide-index 0)
+             +presentation--sessions)
+    (cl-letf (((symbol-function '+presentation--render-current)
+               (lambda (_k) nil)))
+      (with-temp-buffer
+        (setq-local +presentation--session-key key)
+        (+presentation-previous-slide)
+        (should (= (plist-get (gethash key +presentation--sessions)
+                              :current-slide-index)
+                   0))))))
+
+(ert-deftest +presentation/session-key-is-buffer-local ()
+  (with-temp-buffer
+    (setq-local +presentation--session-key "K1")
+    (should (equal +presentation--session-key "K1"))
+    (should (local-variable-p '+presentation--session-key))
+    (with-temp-buffer
+      (should (or (null +presentation--session-key)
+                  (not (equal +presentation--session-key "K1")))))))
+
 
 ;;; tests.el ends here
