@@ -411,6 +411,42 @@ The opening/closing marker lines are split into:
             (when close-beg
               (list open-beg open-end close-beg close-end))))))))
 
+(defun gfm-code-fences--yaml-mode ()
+  "Return a yaml major-mode symbol that's currently fboundp, or nil.
+Prefer `yaml-ts-mode' when its tree-sitter grammar is available."
+  (cond ((and (fboundp 'yaml-ts-mode)
+              (fboundp 'treesit-language-available-p)
+              (treesit-language-available-p 'yaml))
+         'yaml-ts-mode)
+        ((fboundp 'yaml-mode) 'yaml-mode)))
+
+(defun gfm-code-fences--fontify-yaml-body (start end)
+  "Apply YAML font-lock face overlays to buffer region [START, END]."
+  (when-let* ((lang-mode (gfm-code-fences--yaml-mode))
+              ((> end start)))
+    (let ((string (buffer-substring-no-properties start end))
+          (target-buffer (current-buffer))
+          pos next)
+      (with-current-buffer
+          (get-buffer-create
+           (format " *gfm-code-fences-yaml-fontification:%s*"
+                   (symbol-name lang-mode)))
+        (let ((inhibit-modification-hooks nil))
+          (delete-region (point-min) (point-max))
+          (insert string " "))
+        (unless (eq major-mode lang-mode)
+          (funcall lang-mode))
+        (font-lock-ensure)
+        (setq pos (point-min))
+        (while (setq next (next-single-property-change pos 'face))
+          (when-let* ((val (get-text-property pos 'face)))
+            (let ((ov (make-overlay (+ start (1- pos))
+                                    (1- (+ start next))
+                                    target-buffer)))
+              (overlay-put ov 'face val)
+              (gfm-code-fences--register ov)))
+          (setq pos next))))))
+
 (defun gfm-code-fences--apply-yaml-helmet (fenced-ranges)
   "Adorn leading YAML frontmatter and add its range to FENCED-RANGES."
   (when-let* ((helmet (gfm-code-fences--find-yaml-helmet)))
@@ -420,10 +456,17 @@ The opening/closing marker lines are split into:
              (open-line-beg (save-excursion
                               (goto-char open-beg) (line-beginning-position)))
              (open-line-end (save-excursion
-                              (goto-char open-beg) (line-end-position))))
+                              (goto-char open-beg) (line-end-position)))
+             (body-beg (min close-beg
+                            (save-excursion
+                              (goto-char open-line-end)
+                              (forward-line 1)
+                              (point))))
+             (body-end (max body-beg (1- close-beg))))
         (push (cons open-line-beg close-end) (cdr fenced-ranges))
         (gfm-code-fences--apply-bordered-block
-         open-line-beg open-line-end close-beg close-end face label)))))
+         open-line-beg open-line-end close-beg close-end face label)
+        (gfm-code-fences--fontify-yaml-body body-beg body-end)))))
 
 (defun gfm-code-fences--apply-indent-block (beg end indent-width)
   "Adorn the indented code block at [BEG, END] with a full curved box.

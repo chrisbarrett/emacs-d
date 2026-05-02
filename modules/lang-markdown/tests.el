@@ -163,6 +163,38 @@
       (should (= 1 (length blocks)))
       (should (= 4 (nth 2 (car blocks)))))))
 
+(ert-deftest lang-markdown/gfm-code-fences-yaml-mode-prefers-treesit ()
+  "Helmet language mode picks yaml-ts-mode when grammar available."
+  (skip-unless (fboundp 'gfm-code-fences--yaml-mode))
+  (skip-unless (and (fboundp 'treesit-language-available-p)
+                    (treesit-language-available-p 'yaml)))
+  (should (eq 'yaml-ts-mode (gfm-code-fences--yaml-mode))))
+
+(ert-deftest lang-markdown/gfm-code-fences-yaml-helmet-fontifies-body ()
+  "YAML helmet body receives face overlays from the chosen yaml mode."
+  (skip-unless (and (fboundp 'gfm-code-fences-mode)
+                    (fboundp 'gfm-code-fences--yaml-mode)
+                    (gfm-code-fences--yaml-mode)
+                    (fboundp 'treesit-language-available-p)
+                    (treesit-language-available-p 'yaml)))
+  (with-temp-buffer
+    (insert "---\nkey: value\n---\nbody\n")
+    (gfm-code-fences-mode 1)
+    (goto-char (point-min))
+    (search-forward "key")
+    (let ((pos (match-beginning 0)))
+      (should (cl-some (lambda (ov)
+                         (and (overlay-get ov 'gfm-code-fences)
+                              (overlay-get ov 'face)))
+                       (overlays-at pos))))))
+
+(ert-deftest lang-markdown/gfm-code-fences-yaml-helmet-empty-body-noerror ()
+  "Empty YAML helmet body does not error during rebuild."
+  (skip-unless (fboundp 'gfm-code-fences-mode))
+  (with-temp-buffer
+    (insert "---\n---\nbody\n")
+    (should (progn (gfm-code-fences-mode 1) t))))
+
 (ert-deftest lang-markdown/gfm-code-fences-skip-indent-inside-fence ()
   (skip-unless (and (fboundp 'gfm-code-fences--find-indent-blocks)
                     (fboundp 'gfm-code-fences--find-blocks)))
