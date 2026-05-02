@@ -56,7 +56,7 @@ the row's background to the header box's vertical edges."
   :type 'number
   :group 'gfm-tables)
 
-(defconst gfm-tables--border-face 'parenthesis
+(defconst gfm-tables--border-face '+markdown-overlay-border-face
   "Face used for table border characters.")
 
 (defvar gfm-tables-mode-map (make-sparse-keymap)
@@ -437,14 +437,9 @@ pane dim track those segments automatically without any rebuild."
                       (t nil)))
          (n (length col-widths))
          (parts nil)
-         (lhs (cl-case role
-                (header (propertize "│" 'face border-face))
-                (body-alt (propertize "▐" 'face 'gfm-tables-row-alt-cap-face))
-                (t " ")))
-         (rhs (cl-case role
-                (header (propertize "│" 'face border-face))
-                (body-alt (propertize "▌" 'face 'gfm-tables-row-alt-cap-face))
-                (t " "))))
+         (pipe (propertize "│" 'face border-face))
+         (lhs pipe)
+         (rhs pipe))
     (push lhs parts)
     (cl-loop for i from 0 below n
              for w = (aref col-widths i)
@@ -482,14 +477,12 @@ strings, so the column grid stays aligned across visual lines."
      "\n")))
 
 (defun gfm-tables--rule-row (box-width)
-  "Return a `└─…─┘' string closing the header row, total width BOX-WIDTH.
-Body rows below have no left/right borders, so the rule row caps the
-header box at its bottom corners."
+  "Return a `├─…─┤' T-junction rule between header and body, width BOX-WIDTH."
   (let ((face gfm-tables--border-face))
-    (concat (propertize "└" 'face face)
+    (concat (propertize "├" 'face face)
             (propertize (make-string (max 0 (- box-width 2)) ?─)
                         'face face)
-            (propertize "┘" 'face face))))
+            (propertize "┤" 'face face))))
 
 (defun gfm-tables--top-border (box-width)
   "Return a `┌─…─┐' top border of total width BOX-WIDTH."
@@ -500,15 +493,12 @@ header box at its bottom corners."
             (propertize "┐" 'face face))))
 
 (defun gfm-tables--bottom-border (box-width)
-  "Return a horizontal rule of total width BOX-WIDTH.
-The leftmost and rightmost cells use half-width box-drawing chars
-`╶' and `╴' so the rule begins/ends at the cell's midpoint rather
-than its edge, aligning with the body row's leading/trailing pad."
+  "Return a `└─…─┘' bottom border of total width BOX-WIDTH."
   (let ((face gfm-tables--border-face))
-    (concat (propertize "╶" 'face face)
+    (concat (propertize "└" 'face face)
             (propertize (make-string (max 0 (- box-width 2)) ?─)
                         'face face)
-            (propertize "╴" 'face face))))
+            (propertize "┘" 'face face))))
 
 ;;; Overlay application
 

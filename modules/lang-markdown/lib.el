@@ -40,6 +40,13 @@
   "Face for prettier-ignore comments."
   :group 'markdown-faces)
 
+(defface +markdown-overlay-border-face
+  '((((background dark))  :foreground "#6c7086")
+    (((background light)) :foreground "#b9b2a3")
+    (t :inherit shadow))
+  "Face for overlay borders around fenced code blocks and tables."
+  :group 'markdown-faces)
+
 
 ;;;###autoload
 (defun +markdown-tab-dwim ()

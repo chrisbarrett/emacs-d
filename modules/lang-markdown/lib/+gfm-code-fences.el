@@ -143,7 +143,7 @@ Each block is (BLOCK-BEG BLOCK-END INDENT-WIDTH)."
 
 ;;; Border face & primitives
 
-(defconst gfm-code-fences--border-face 'parenthesis
+(defconst gfm-code-fences--border-face '+markdown-overlay-border-face
   "Face for the box border around pre blocks.")
 
 (defun gfm-code-fences--text-width ()
