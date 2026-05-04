@@ -88,44 +88,64 @@ type string (e.g. \"IMPORTANT\")."
 
 ;;; Box drawing
 
-(defun gfm-callouts--upright (str face)
-  "Propertize STR with FACE forced upright.
+(defun gfm-callouts--upright (str face &optional bg)
+  "Propertize STR with FACE forced upright; optionally set background BG.
 The display string sits over buffer text whose face may carry
 `:slant italic' (e.g. `markdown-blockquote-face'); unspecified
-attributes leak from the underlying face, so anchor `:slant normal'."
-  (propertize str 'face `(:inherit ,face :slant normal)))
+attributes leak from the underlying face, so anchor `:slant normal'.
+BG paints the box's tinted background onto each decoration char so
+the box reads as a contiguous coloured panel (after-strings and
+display strings don't pick up overlay `face' from the buffer)."
+  (let* ((spec `(:inherit ,face :slant normal))
+         (spec (if bg (append spec (list :background bg)) spec)))
+    (propertize str 'face spec)))
 
-(defun gfm-callouts--top-strings (width title face buffer-width)
+(defun gfm-callouts--tinted-bg (face)
+  "Blend FACE's foreground 10% toward `+theme-default-background'.
+Returns a hex colour string, or nil if either colour is unresolvable."
+  (require 'color)
+  (let* ((fg (face-foreground face nil t))
+         (bg (and (boundp '+theme-default-background)
+                  +theme-default-background))
+         (fg-rgb (and fg (color-name-to-rgb fg)))
+         (bg-rgb (and bg (color-name-to-rgb bg))))
+    (when (and fg-rgb bg-rgb)
+      (apply #'color-rgb-to-hex
+             (append (cl-mapcar (lambda (b f) (+ b (* 0.1 (- f b))))
+                                bg-rgb fg-rgb)
+                     '(2))))))
+
+(defun gfm-callouts--top-strings (width title face buffer-width &optional bg)
   "Build (LEADING . TRAILING) for the top border.
 
-Layout: `┌─ TITLE ─...─┐'.  WIDTH is the total visual width, TITLE
+Layout: `┌─▌TITLE├─...─┐'.  WIDTH is the total visual width, TITLE
 the type label, FACE the border colour, BUFFER-WIDTH the marker
-line's buffer-character count.  LEADING covers exactly BUFFER-WIDTH
-columns so it can be set as the marker overlay's `display' (matching
-the buffer footprint); TRAILING is hung off the line-end as an
-after-string and continues to draw the border when reveal exposes
-the source."
+line's buffer-character count, BG the optional tinted background.
+LEADING covers exactly BUFFER-WIDTH columns so it can be set as the
+marker overlay's `display' (matching the buffer footprint); TRAILING
+is hung off the line-end as an after-string and continues to draw
+the border when reveal exposes the source."
   (let* ((title-w (string-width title))
          ;; Layout: `┌─▌TITLE├─...─┐'.  Decorations occupy 5 cols
          ;; (`┌', `─', `▌', `├' after title, `┐'); the rest of the
          ;; line is the title and trailing dash fill.
          (dash-fill (max 1 (- width 5 title-w)))
          (full (concat
-                (gfm-callouts--upright "┌─▌" face)
-                (gfm-callouts--upright title face)
-                (gfm-callouts--upright "├" face)
-                (gfm-callouts--upright (make-string dash-fill ?─) face)
-                (gfm-callouts--upright "┐" face)))
+                (gfm-callouts--upright "┌─▌" face bg)
+                (gfm-callouts--upright title face bg)
+                (gfm-callouts--upright "├" face bg)
+                (gfm-callouts--upright (make-string dash-fill ?─) face bg)
+                (gfm-callouts--upright "┐" face bg)))
          (full-len (length full))
          (split-at (min buffer-width full-len)))
     (cons (substring full 0 split-at)
           (substring full split-at))))
 
-(defun gfm-callouts--bottom-string (width face)
-  "Build the bottom border string of WIDTH cols."
-  (concat (gfm-callouts--upright "└" face)
-          (gfm-callouts--upright (make-string (max 1 (- width 2)) ?─) face)
-          (gfm-callouts--upright "┘" face)))
+(defun gfm-callouts--bottom-string (width face &optional bg)
+  "Build the bottom border string of WIDTH cols, optionally tinted with BG."
+  (concat (gfm-callouts--upright "└" face bg)
+          (gfm-callouts--upright (make-string (max 1 (- width 2)) ?─) face bg)
+          (gfm-callouts--upright "┘" face bg)))
 
 ;;; Overlay registry
 
@@ -158,8 +178,9 @@ subsequent body lines (if any) can move the bottom border onto them."
       ov)))
 
 (defun gfm-callouts--apply-body-line (lbeg lend edge body-align-col
-                                           right-pipe border-face)
-  "Adorn one body line and return its right-edge overlay."
+                                           right-pipe border-face &optional bg)
+  "Adorn one body line and return its right-edge overlay.
+BG is the tinted background applied to each decoration string."
   (when (and (>= (- lend lbeg) 2)
              (eq (char-after lbeg) ?>)
              (eq (char-after (1+ lbeg)) ?\s))
@@ -168,11 +189,15 @@ subsequent body lines (if any) can move the bottom border onto them."
       (overlay-put ov 'evaporate t)
       (overlay-put ov 'display edge)
       (gfm-callouts--register ov)))
-  (let* ((after (concat
+  (let* ((align-face (let* ((spec `(:inherit ,border-face :slant normal))
+                            (spec (if bg (append spec (list :background bg))
+                                    spec)))
+                       spec))
+         (after (concat
                  (propertize " "
                              'display `(space :align-to ,body-align-col)
-                             'face `(:inherit ,border-face :slant normal))
-                 (gfm-callouts--upright " " border-face)
+                             'face align-face)
+                 (gfm-callouts--upright " " border-face bg)
                  right-pipe))
          (ov (make-overlay lbeg lend nil nil t)))
     (put-text-property 0 1 'cursor t after)
@@ -208,18 +233,21 @@ callout has no body lines)."
              (marker-line-end (save-excursion
                                 (goto-char beg) (line-end-position)))
              (marker-buf-w (- marker-line-end beg))
+             (tint (gfm-callouts--tinted-bg border-face))
              (top-split (gfm-callouts--top-strings box-width type border-face
-                                                   marker-buf-w))
-             (bottom (gfm-callouts--bottom-string box-width border-face))
-             (edge (gfm-callouts--upright "│ " border-face))
-             (right-pipe (gfm-callouts--upright "│" border-face))
+                                                   marker-buf-w tint))
+             (bottom (gfm-callouts--bottom-string box-width border-face tint))
+             (edge (gfm-callouts--upright "│ " border-face tint))
+             (right-pipe (gfm-callouts--upright "│" border-face tint))
              (trailing-ov (gfm-callouts--apply-marker-line
                            beg border-face top-split)))
-        ;; Strip `markdown-blockquote-face' across the block: callouts
-        ;; are alerts, not quotations, so render their content as
-        ;; ordinary prose.
+        ;; Strip `markdown-blockquote-face' across the block (callouts
+        ;; are alerts, not quotations) and paint the tinted backdrop
+        ;; onto the buffer chars beneath the box.
         (let ((ov (make-overlay beg end)))
-          (overlay-put ov 'face 'default)
+          (overlay-put ov 'face (if tint
+                                    `(:inherit default :background ,tint)
+                                  'default))
           (gfm-callouts--register ov))
         (save-excursion
           (goto-char marker-line-end)
@@ -228,7 +256,8 @@ callout has no body lines)."
             (let* ((lbeg (line-beginning-position))
                    (lend (line-end-position))
                    (ov (gfm-callouts--apply-body-line
-                        lbeg lend edge body-align-col right-pipe border-face)))
+                        lbeg lend edge body-align-col right-pipe border-face
+                        tint)))
               (setq trailing-ov ov))
             (forward-line 1)))
         ;; Bottom border on its own visual line, attached to the last

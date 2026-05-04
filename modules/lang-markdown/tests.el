@@ -160,14 +160,17 @@
       (should (string-match-p "\\`│ \\'" (overlay-get body   'display))))))
 
 (ert-deftest lang-markdown/gfm-callouts-overrides-blockquote-italic ()
-  "A face overlay with the `default' face covers the whole callout block."
+  "A face overlay inheriting `default' covers the whole callout block."
   (skip-unless (fboundp 'gfm-callouts-mode))
   (with-temp-buffer
     (insert "> [!NOTE]\n> Hello.\n")
     (gfm-callouts-mode 1)
     (should (cl-some (lambda (ov)
-                       (and (overlay-get ov 'gfm-callouts)
-                            (eq 'default (overlay-get ov 'face))))
+                       (let ((f (overlay-get ov 'face)))
+                         (and (overlay-get ov 'gfm-callouts)
+                              (or (eq f 'default)
+                                  (and (listp f)
+                                       (eq (plist-get f :inherit) 'default))))))
                      (overlays-in (point-min) (point-max))))))
 
 (ert-deftest lang-markdown/gfm-callouts-marker-only-callout-renders-bottom ()
