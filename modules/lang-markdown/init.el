@@ -189,6 +189,7 @@
      ("latex"         . texinfo-mode)))
 
   :config
+  (+markdown-style-header-faces)
   (+local-leader-set-key 'markdown-mode-map
     "l" '(markdown-toggle-url-hiding :wk "toggle URLs")
     "f" '(markdown-insert-footnote :wk "insert footnote")

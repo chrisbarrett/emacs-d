@@ -47,6 +47,22 @@
   "Face for overlay borders around fenced code blocks and tables."
   :group 'markdown-faces)
 
+;;;###autoload
+(defun +markdown-style-header-faces ()
+  "Set markdown header faces to bold on TTY, semi-bold on graphic frames.
+TTY fonts often lack a true semi-bold weight, so fall back to plain
+bold there to keep the headings legible."
+  (let ((spec '((((type tty)) :weight bold)
+                (t :weight semi-bold))))
+    (dolist (face '(markdown-header-face
+                    markdown-header-face-1
+                    markdown-header-face-2
+                    markdown-header-face-3
+                    markdown-header-face-4
+                    markdown-header-face-5
+                    markdown-header-face-6))
+      (face-spec-set face spec))))
+
 
 ;;;###autoload
 (defun +markdown-tab-dwim ()
