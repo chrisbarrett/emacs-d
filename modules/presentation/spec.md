@@ -117,6 +117,7 @@ consecutive slides with the same hint hit tmux exactly once. Slides without
 | `+presentation--enable-mode-in`         | Set session key + enable `+presentation-mode' |
 | `+presentation-next-slide`              | User command: advance the deck                |
 | `+presentation-previous-slide`          | User command: retreat the deck                |
+| `+presentation-quit`                    | User command: end the current session         |
 
 ## Deck model
 
@@ -180,6 +181,7 @@ can resolve back to the session.
 | :----------------- | :------------------------------- |
 | `C-n` / `C-f`      | `+presentation-next-slide`       |
 | `C-p` / `C-b`      | `+presentation-previous-slide`   |
+| `C-c q`            | `+presentation-quit`             |
 
 Navigation is bounded: `next-slide` at the last index and
 `previous-slide` at index 0 are silent no-ops. Mutation (push, replace,
@@ -320,3 +322,8 @@ into a presentation frame.
     entries.
 32. `+presentation--register-channel-capability` no-ops when the
     upstream MCP handler symbol is unbound.
+33. `+presentation-mode-map` binds `C-c q` to `+presentation-quit`.
+    The command resolves the session via the buffer-local
+    `+presentation--session-key` and calls `+presentation-end` when
+    the key references a registered session; nil keys and stale keys
+    (no entry in `+presentation--sessions`) are silent no-ops.
