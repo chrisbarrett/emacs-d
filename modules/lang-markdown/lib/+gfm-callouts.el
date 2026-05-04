@@ -126,14 +126,14 @@ marker overlay's `display' (matching the buffer footprint); TRAILING
 is hung off the line-end as an after-string and continues to draw
 the border when reveal exposes the source."
   (let* ((title-w (string-width title))
-         ;; Layout: `┌─▌TITLE├─...─┐'.  Decorations occupy 5 cols
-         ;; (`┌', `─', `▌', `├' after title, `┐'); the rest of the
+         ;; Layout: `┌─ TITLE ─...─┐'.  Decorations occupy 5 cols
+         ;; (`┌', `─', ` ', ` ' after title, `┐'); the rest of the
          ;; line is the title and trailing dash fill.
          (dash-fill (max 1 (- width 5 title-w)))
          (full (concat
-                (gfm-callouts--upright "┌─▌" face bg)
+                (gfm-callouts--upright "┌─ " face bg)
                 (gfm-callouts--upright title face bg)
-                (gfm-callouts--upright "├" face bg)
+                (gfm-callouts--upright " " face bg)
                 (gfm-callouts--upright (make-string dash-fill ?─) face bg)
                 (gfm-callouts--upright "┐" face bg)))
          (full-len (length full))
@@ -243,12 +243,22 @@ callout has no body lines)."
                            beg border-face top-split)))
         ;; Strip `markdown-blockquote-face' across the block (callouts
         ;; are alerts, not quotations) and paint the tinted backdrop
-        ;; onto the buffer chars beneath the box.
-        (let ((ov (make-overlay beg end)))
-          (overlay-put ov 'face (if tint
-                                    `(:inherit default :background ,tint)
-                                  'default))
-          (gfm-callouts--register ov))
+        ;; onto the buffer chars beneath the box.  One overlay per
+        ;; line, ending at `line-end-position' so the face doesn't
+        ;; bleed onto the trailing newline (which Emacs would render
+        ;; as a 1-col-wide stretch glyph past the box's right edge).
+        (let ((bg-face (if tint
+                           `(:inherit default :background ,tint)
+                         'default)))
+          (save-excursion
+            (goto-char beg)
+            (while (<= (point) end)
+              (let ((ov (make-overlay (line-beginning-position)
+                                      (line-end-position))))
+                (overlay-put ov 'face bg-face)
+                (gfm-callouts--register ov))
+              (when (= (forward-line 1) 1)
+                (cl-return)))))
         (save-excursion
           (goto-char marker-line-end)
           (forward-line 1)
