@@ -159,6 +159,17 @@
       (should (string-match-p "┌─ NOTE" (overlay-get marker 'display)))
       (should (string-match-p "\\`│ \\'" (overlay-get body   'display))))))
 
+(ert-deftest lang-markdown/gfm-callouts-overrides-blockquote-italic ()
+  "A face overlay with `:slant normal' covers the whole callout block."
+  (skip-unless (fboundp 'gfm-callouts-mode))
+  (with-temp-buffer
+    (insert "> [!NOTE]\n> Hello.\n")
+    (gfm-callouts-mode 1)
+    (should (cl-some (lambda (ov)
+                       (and (overlay-get ov 'gfm-callouts)
+                            (equal '(:slant normal) (overlay-get ov 'face))))
+                     (overlays-in (point-min) (point-max))))))
+
 (ert-deftest lang-markdown/gfm-callouts-marker-only-callout-renders-bottom ()
   "A callout with no body lines still gets a bottom border."
   (skip-unless (fboundp 'gfm-callouts-mode))
