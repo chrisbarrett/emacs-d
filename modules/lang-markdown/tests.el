@@ -156,7 +156,7 @@
                                        (overlay-start b)))))
            (marker (nth 0 ovs))
            (body   (nth 1 ovs)))
-      (should (string-match-p "┌─ ▪NOTE" (overlay-get marker 'display)))
+      (should (string-match-p "┌─ ▌NOTE" (overlay-get marker 'display)))
       (should (string-match-p "\\`│ \\'" (overlay-get body   'display))))))
 
 (ert-deftest lang-markdown/gfm-callouts-overrides-blockquote-italic ()
