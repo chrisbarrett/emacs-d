@@ -57,9 +57,33 @@ and `presentation-origin` parameters so the `delete-frame-functions` hook and
 | `diff`      | —                 | `path`, (`base`+`head`), `annotations`, `pane_layout`               |
 | `layout`    | `split`, `panes`  | `pane_layout`                                                       |
 
-`annotations` is `[{ line, text, position? }, …]`; `position` is `"before"` /
-`"after"` (default `"after"`). Layout `split` is `"horizontal"` / `"vertical"`;
-`panes` must be exactly two non-layout slides.
+`annotations` is `[{ line, text, kind?, severity?, position? }, …]`.
+
+| Field      | Values                                    | Default    |
+| :--------- | :---------------------------------------- | :--------- |
+| `kind`     | `inline` / `callout` / `margin`           | `inline`   |
+| `severity` | `note` / `tip` / `warning`                | `note`     |
+| `position` | depends on `kind` (see below)             | per-kind   |
+
+`position` semantics:
+
+- `inline`: `before` (BOL anchor + `before-string`) / `after` (EOL anchor +
+  `after-string`, default).
+- `callout`: must be absent — callouts always anchor between the target
+  line and its successor.
+- `margin`: `left` / `right` (default `right`); `before` / `after` are
+  accepted aliases normalised to `right`.
+
+Severity drives a face: `+presentation-annotation-{note,tip,warning}-face`,
+each inheriting from the matching `+markdown-gfm-callout-*-face` so theme
+tweaks carry over. Callouts use the severity face on their box border and
+label; inline and margin use it on the rendered text.
+
+The file-slide `:focus` highlight uses `+presentation-focus-face`, painted
+per-line from BOL to EOL — never extends to window width.
+
+Layout `split` is `"horizontal"` / `"vertical"`; `panes` must be exactly two
+non-layout slides.
 
 `pane_layout` is `"tall"` or `"wide"`. When set, the renderer reshapes the
 target tmux window before rendering: `"tall"` selects `main-horizontal` with
@@ -92,7 +116,12 @@ consecutive slides with the same hint hit tmux exactly once. Slides without
 | `+presentation--render-file`            | Renderer for `file` slides                    |
 | `+presentation--render-diff`            | Renderer for `diff` slides                    |
 | `+presentation--render-layout`          | Renderer for `layout` slides                  |
-| `+presentation--apply-annotations`      | Place annotation overlays on a buffer         |
+| `+presentation--apply-annotations`      | Dispatch annotations on `:kind` to renderers  |
+| `+presentation--render-inline-annotation`  | Renderer for inline annotations            |
+| `+presentation--render-callout-annotation` | Renderer for box-drawn callout annotations |
+| `+presentation--render-margin-annotation`  | Renderer for margin annotations            |
+| `+presentation--make-border`            | Build `┌─...─┐` / `└─...─┘` border string     |
+| `+presentation--blend-toward-fg`        | Blend hex bg toward hex fg by ratio           |
 | `+presentation--cleanup-render-state`   | Delete overlays; run restorers                |
 | `+presentation--diff-argv`              | Pure planner for `git diff` argv              |
 | `+presentation--cmd-list-panes`         | Build `tmux list-panes` shell effect          |
