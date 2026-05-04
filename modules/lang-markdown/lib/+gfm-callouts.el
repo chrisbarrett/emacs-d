@@ -8,8 +8,16 @@
 ;;   > [!IMPORTANT]
 ;;   > Lorem ipsum.
 ;;
-;; The box border picks up the same per-type face used by callout
-;; fontification (`+markdown-gfm-callout-*-face').
+;; The marker line is replaced by an evaporative, cursor-revealable
+;; display overlay that integrates the type label into the top border
+;; — `┌─ IMPORTANT ─...─┐'.  Each body line's `> ' prefix is replaced
+;; by a `│ ' display overlay using the same evaporative + revealable
+;; treatment, so editing through the prefix collapses the overlay and
+;; moving point in reveals the underlying source.  The right edge is
+;; drawn via an after-string aligned to the box width; the bottom
+;; border lives on its own visual row beneath the last body line.
+;; Border colour follows the per-type face from
+;; `gfm-callouts--type-faces'.
 
 ;;; Code:
 
@@ -32,13 +40,6 @@
     ("CAUTION"   . +markdown-gfm-callout-caution-face)
     ("CRITICAL"  . +markdown-gfm-callout-caution-face))
   "Map of callout type to face used for box border and label.")
-
-(defconst gfm-callouts--markup-re
-  (rx bol (group ">") " " (group "[") "!"
-      (or "NOTE" "TIP" "IMPORTANT" "WARNING" "CAUTION" "CRITICAL")
-      (group "]"))
-  "Regexp matching marker line markup with positional groups.
-Groups: 1=`>', 2=`[', 3=`]'.")
 
 (defconst gfm-callouts--marker-re
   (rx bol "> " "[!"
@@ -85,57 +86,108 @@ type string (e.g. \"IMPORTANT\")."
           (cl-return))))
     max-col))
 
-;;; Marker-line markup
-
-(defun gfm-callouts--decorate-markup (line-beg)
-  "Fade `[' and `]' on the marker line at LINE-BEG against the background."
-  (save-excursion
-    (save-match-data
-      (goto-char line-beg)
-      (when (looking-at gfm-callouts--markup-re)
-        (let ((quote-face (gfm-callouts--quote-face)))
-          (dolist (group '(2 3))
-            (let ((ov (make-overlay (match-beginning group) (match-end group))))
-              (overlay-put ov 'gfm-callouts t)
-              (overlay-put ov 'face quote-face))))))))
-
-(defun gfm-callouts--quote-face ()
-  "Face for `>'/`['/`]' markup, blended 10% toward the default foreground."
-  (require 'color)
-  (let* ((bg (and (boundp '+theme-default-background) +theme-default-background))
-         (fg (face-foreground 'default nil t))
-         (bg-rgb (and bg (color-name-to-rgb bg)))
-         (fg-rgb (and fg (color-name-to-rgb fg))))
-    (if (and bg-rgb fg-rgb)
-        `(:foreground
-          ,(apply #'color-rgb-to-hex
-                  (append (cl-mapcar (lambda (b f) (+ b (* 0.1 (- f b))))
-                                     bg-rgb fg-rgb)
-                          '(2))))
-      'shadow)))
-
 ;;; Box drawing
 
-(defun gfm-callouts--make-border (width corner-l corner-r border-face)
-  "Build a horizontal box border of WIDTH chars using BORDER-FACE.
-CORNER-L and CORNER-R are the corner characters."
-  (let ((fill (propertize (make-string (max 1 (- width 2)) ?─) 'face border-face)))
-    (concat (propertize (string corner-l) 'face border-face)
-            fill
-            (propertize (string corner-r) 'face border-face))))
+(defun gfm-callouts--upright (str face)
+  "Propertize STR with FACE forced upright.
+The display string sits over buffer text whose face may carry
+`:slant italic' (e.g. `markdown-blockquote-face'); unspecified
+attributes leak from the underlying face, so anchor `:slant normal'."
+  (propertize str 'face `(:inherit ,face :slant normal)))
+
+(defun gfm-callouts--top-strings (width title face buffer-width)
+  "Build (LEADING . TRAILING) for the top border.
+
+Layout: `┌─ TITLE ─...─┐'.  WIDTH is the total visual width, TITLE
+the type label, FACE the border colour, BUFFER-WIDTH the marker
+line's buffer-character count.  LEADING covers exactly BUFFER-WIDTH
+columns so it can be set as the marker overlay's `display' (matching
+the buffer footprint); TRAILING is hung off the line-end as an
+after-string and continues to draw the border when reveal exposes
+the source."
+  (let* ((title-w (string-width title))
+         (dash-fill (max 1 (- width 5 title-w)))
+         (full (concat
+                (gfm-callouts--upright "┌─ " face)
+                (gfm-callouts--upright title face)
+                (gfm-callouts--upright " " face)
+                (gfm-callouts--upright (make-string dash-fill ?─) face)
+                (gfm-callouts--upright "┐" face)))
+         (full-len (length full))
+         (split-at (min buffer-width full-len)))
+    (cons (substring full 0 split-at)
+          (substring full split-at))))
+
+(defun gfm-callouts--bottom-string (width face)
+  "Build the bottom border string of WIDTH cols."
+  (concat (gfm-callouts--upright "└" face)
+          (gfm-callouts--upright (make-string (max 1 (- width 2)) ?─) face)
+          (gfm-callouts--upright "┘" face)))
+
+;;; Overlay registry
+
+(defvar-local gfm-callouts--overlays nil
+  "All callout overlays currently in this buffer.")
+
+(defun gfm-callouts--register (ov)
+  "Tag OV as a callout overlay and remember it for bulk cleanup."
+  (overlay-put ov 'gfm-callouts t)
+  (push ov gfm-callouts--overlays)
+  ov)
+
+(defun gfm-callouts--apply-marker-line (beg border-face top-split)
+  "Adorn the marker line at BEG.
+The marker line gets a whole-line evaporative + revealable display
+overlay carrying (car TOP-SPLIT); a 0-width overlay at the line's end
+hosts (cdr TOP-SPLIT) as an after-string, which is later extended with
+the bottom border.  Returns the trailing after-string overlay so
+subsequent body lines (if any) can move the bottom border onto them."
+  (let ((line-end (save-excursion
+                    (goto-char beg) (line-end-position))))
+    (let ((ov (make-overlay beg line-end)))
+      (overlay-put ov 'gfm-callouts-revealable t)
+      (overlay-put ov 'evaporate t)
+      (overlay-put ov 'display (car top-split))
+      (gfm-callouts--register ov))
+    (let ((ov (make-overlay line-end line-end nil nil t)))
+      (overlay-put ov 'after-string (cdr top-split))
+      (gfm-callouts--register ov)
+      ov)))
+
+(defun gfm-callouts--apply-body-line (lbeg lend edge body-align-col
+                                           right-pipe border-face)
+  "Adorn one body line and return its right-edge overlay."
+  (when (and (>= (- lend lbeg) 2)
+             (eq (char-after lbeg) ?>)
+             (eq (char-after (1+ lbeg)) ?\s))
+    (let ((ov (make-overlay lbeg (+ 2 lbeg))))
+      (overlay-put ov 'gfm-callouts-revealable t)
+      (overlay-put ov 'evaporate t)
+      (overlay-put ov 'display edge)
+      (gfm-callouts--register ov)))
+  (let* ((after (concat
+                 (propertize " "
+                             'display `(space :align-to ,body-align-col)
+                             'face `(:inherit ,border-face :slant normal))
+                 (gfm-callouts--upright " " border-face)
+                 right-pipe))
+         (ov (make-overlay lbeg lend nil nil t)))
+    (put-text-property 0 1 'cursor t after)
+    (overlay-put ov 'after-string after)
+    (gfm-callouts--register ov)
+    ov))
 
 (defun gfm-callouts--apply-box-overlays ()
   "Create box overlays around each GFM callout block.
 
-Layout per row (cols 0..box-width inclusive):
-
-  col 0       : buffer `>' (faded to bg colour, outside box)
-  col 1       : box left edge — `┌'/`│'/`└'
-  cols 2..N-1 : content (label, body, or fill dashes)
-  col box-width: box right edge — `┐'/`│'/`┘'
-
-Bottom border lives on its own row, prefixed with one space so its
-corners line up with the box edges above."
+Marker line: full-line evaporative + revealable display overlay
+carrying `┌─ TITLE ─...─┐' (split into a leading display covering the
+buffer footprint and a trailing after-string for the rest).  Body
+lines: cols 0-1 (`> ') are replaced with a `│ ' display overlay; the
+right edge is drawn via after-string aligned to box-width-2.  The
+bottom border is appended to the final right-edge after-string on its
+own visual row (or to the marker's trailing after-string when the
+callout has no body lines)."
   (save-excursion
     (dolist (block (gfm-callouts--find-blocks))
       (let* ((beg (nth 0 block))
@@ -144,76 +196,76 @@ corners line up with the box edges above."
              (type-face (alist-get type gfm-callouts--type-faces
                                    nil nil #'string=))
              (border-face (or type-face 'gfm-callouts-box-face))
-             (quote-face (gfm-callouts--quote-face))
              (max-col (gfm-callouts--block-max-col beg end))
              (box-width (max 80 (+ max-col 2)))
-             (body-align-col (1- box-width))
-             (right-pipe (propertize "│" 'face border-face))
-             (bottom (gfm-callouts--make-border box-width ?└ ?┘ border-face)))
-        (goto-char beg)
-        (let ((first t)
-              last-ov)
-          (while (<= (point) end)
+             ;; `│' should land at col (box-width-1).  After
+             ;; `space :align-to N' cursor is at col N, the trailing
+             ;; space advances to N+1, then `│' renders at col N+1.
+             (body-align-col (- box-width 2))
+             (marker-line-end (save-excursion
+                                (goto-char beg) (line-end-position)))
+             (marker-buf-w (- marker-line-end beg))
+             (top-split (gfm-callouts--top-strings box-width type border-face
+                                                   marker-buf-w))
+             (bottom (gfm-callouts--bottom-string box-width border-face))
+             (edge (gfm-callouts--upright "│ " border-face))
+             (right-pipe (gfm-callouts--upright "│" border-face))
+             (trailing-ov (gfm-callouts--apply-marker-line
+                           beg border-face top-split)))
+        (save-excursion
+          (goto-char marker-line-end)
+          (forward-line 1)
+          (while (and (not (eobp)) (<= (point) end))
             (let* ((lbeg (line-beginning-position))
-                   (lend (line-end-position)))
-              ;; Fade `>' at col 0 against the background.
-              (when (and (> lend lbeg)
-                         (eq (char-after lbeg) ?>))
-                (let ((ov (make-overlay lbeg (1+ lbeg))))
-                  (overlay-put ov 'gfm-callouts t)
-                  (overlay-put ov 'gfm-callouts-box t)
-                  (overlay-put ov 'face quote-face)))
-              ;; Replace the space at col 1 with the box's left edge.
-              (when (and (>= (- lend lbeg) 2)
-                         (eq (char-after (1+ lbeg)) ?\s))
-                (let* ((edge (if first
-                                 (propertize "┌─" 'face border-face)
-                               (propertize "│ " 'face border-face)))
-                       (ov (make-overlay (1+ lbeg) (+ 2 lbeg))))
-                  (overlay-put ov 'gfm-callouts t)
-                  (overlay-put ov 'gfm-callouts-box t)
-                  (overlay-put ov 'display edge)))
-              ;; Right edge: marker uses dashes + `┐'; body uses pad + `│'.
-              (let* ((after
-                      (if first
-                          (let* ((label-width
-                                  (string-width
-                                   (buffer-substring-no-properties
-                                    (min lend (+ 2 lbeg)) lend)))
-                                 (visual-end (+ 3 label-width))
-                                 (dash-count (max 1 (- box-width visual-end))))
-                            (concat (propertize (make-string dash-count ?─)
-                                                'face border-face)
-                                    (propertize "┐" 'face border-face)))
-                        (concat (propertize " "
-                                            'display `(space :align-to ,body-align-col)
-                                            'face border-face)
-                                (propertize " " 'face border-face)
-                                right-pipe)))
-                     (ov (make-overlay lbeg lend nil nil t)))
-                (overlay-put ov 'gfm-callouts t)
-                (overlay-put ov 'gfm-callouts-box t)
-                (put-text-property 0 1 'cursor t after)
-                (overlay-put ov 'after-string after)
-                (setq last-ov ov))
-              (setq first nil))
-            (when (= (forward-line 1) 1)
-              (cl-return)))
-          ;; Bottom border on its own line, prefixed with one space so the
-          ;; corners line up under the box edges above.
-          (when last-ov
-            (let* ((existing (overlay-get last-ov 'after-string))
-                   (new-after (concat existing "\n " bottom)))
-              (put-text-property 0 1 'cursor t new-after)
-              (overlay-put last-ov 'after-string new-after))))
-        (gfm-callouts--decorate-markup beg)))))
+                   (lend (line-end-position))
+                   (ov (gfm-callouts--apply-body-line
+                        lbeg lend edge body-align-col right-pipe border-face)))
+              (setq trailing-ov ov))
+            (forward-line 1)))
+        ;; Bottom border on its own visual line, attached to the last
+        ;; right-edge after-string (or the marker's trailing piece if
+        ;; the callout has no body lines).
+        (let* ((existing (overlay-get trailing-ov 'after-string))
+               (new-after (concat existing "\n" bottom)))
+          (put-text-property 0 1 'cursor t new-after)
+          (overlay-put trailing-ov 'after-string new-after))))))
+
+;;; Cursor-driven reveal
+
+(defvar-local gfm-callouts--hidden-ovs nil
+  "Revealable overlays whose display is currently suppressed.")
+
+(defun gfm-callouts--reveal ()
+  "Suppress display on revealable overlays containing point; restore others."
+  (let ((pos (point)))
+    (setq gfm-callouts--hidden-ovs
+          (cl-loop for ov in gfm-callouts--hidden-ovs
+                   if (and (overlay-buffer ov)
+                           (>= pos (overlay-start ov))
+                           (<= pos (overlay-end ov)))
+                   collect ov
+                   else do (when (overlay-buffer ov)
+                             (overlay-put ov 'display
+                                          (overlay-get ov 'gfm-callouts-saved-display))
+                             (overlay-put ov 'gfm-callouts-saved-display nil))))
+    (dolist (ov (overlays-in pos (1+ pos)))
+      (when (and (overlay-get ov 'gfm-callouts-revealable)
+                 (overlay-get ov 'display)
+                 (not (memq ov gfm-callouts--hidden-ovs)))
+        (overlay-put ov 'gfm-callouts-saved-display
+                     (overlay-get ov 'display))
+        (overlay-put ov 'display nil)
+        (push ov gfm-callouts--hidden-ovs)))))
 
 ;;; Overlay management
 
 (defun gfm-callouts--remove-overlays (&optional beg end)
   "Remove all gfm-callouts overlays between BEG and END."
   (remove-overlays (or beg (point-min)) (or end (point-max))
-                   'gfm-callouts t))
+                   'gfm-callouts t)
+  (unless (or beg end)
+    (setq gfm-callouts--overlays nil
+          gfm-callouts--hidden-ovs nil)))
 
 (defun gfm-callouts--rebuild ()
   "Remove and recreate all gfm-callouts overlays."
@@ -249,9 +301,11 @@ Skips indirect buffers since base buffer overlays already cover them."
       (progn
         (gfm-callouts--rebuild)
         (add-hook 'after-change-functions
-                  #'gfm-callouts--schedule-rebuild nil t))
+                  #'gfm-callouts--schedule-rebuild nil t)
+        (add-hook 'post-command-hook #'gfm-callouts--reveal nil t))
     (remove-hook 'after-change-functions
                  #'gfm-callouts--schedule-rebuild t)
+    (remove-hook 'post-command-hook #'gfm-callouts--reveal t)
     (when (timerp gfm-callouts--rebuild-timer)
       (cancel-timer gfm-callouts--rebuild-timer))
     (gfm-callouts--remove-overlays)))

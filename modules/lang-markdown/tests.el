@@ -111,6 +111,85 @@
     (should-not (cl-some (lambda (ov) (overlay-get ov 'gfm-callouts))
                          (overlays-in (point-min) (point-max))))))
 
+(defun lang-markdown-tests--prefix-overlays ()
+  "Return all callout prefix overlays in the current buffer."
+  (cl-remove-if-not
+   (lambda (ov) (overlay-get ov 'gfm-callouts-revealable))
+   (overlays-in (point-min) (point-max))))
+
+(ert-deftest lang-markdown/gfm-callouts-prefix-overlays-evaporative ()
+  "Marker and body display overlays are evaporative and revealable."
+  (skip-unless (fboundp 'gfm-callouts-mode))
+  (with-temp-buffer
+    (insert "> [!NOTE]\n> Hello.\n")
+    (gfm-callouts-mode 1)
+    (let ((ovs (lang-markdown-tests--prefix-overlays)))
+      (should (= 2 (length ovs)))
+      (dolist (ov ovs)
+        (should (overlay-get ov 'evaporate))
+        (should (overlay-get ov 'gfm-callouts-revealable))
+        (should (stringp (overlay-get ov 'display)))))))
+
+(ert-deftest lang-markdown/gfm-callouts-marker-covers-whole-line ()
+  "Marker overlay covers the full marker line; body overlay covers `> '."
+  (skip-unless (fboundp 'gfm-callouts-mode))
+  (with-temp-buffer
+    (insert "> [!NOTE]\n> Hello.\n")
+    (gfm-callouts-mode 1)
+    (let* ((ovs (sort (lang-markdown-tests--prefix-overlays)
+                      (lambda (a b) (< (overlay-start a)
+                                       (overlay-start b)))))
+           (marker (nth 0 ovs))
+           (body   (nth 1 ovs)))
+      ;; `> [!NOTE]' is 9 chars.
+      (should (= 9 (- (overlay-end marker) (overlay-start marker))))
+      (should (= 2 (- (overlay-end body)   (overlay-start body)))))))
+
+(ert-deftest lang-markdown/gfm-callouts-prefix-display-marker-vs-body ()
+  "Marker displays `┌─ TITLE'; body displays the side edge `│ '."
+  (skip-unless (fboundp 'gfm-callouts-mode))
+  (with-temp-buffer
+    (insert "> [!NOTE]\n> Hello.\n")
+    (gfm-callouts-mode 1)
+    (let* ((ovs (sort (lang-markdown-tests--prefix-overlays)
+                      (lambda (a b) (< (overlay-start a)
+                                       (overlay-start b)))))
+           (marker (nth 0 ovs))
+           (body   (nth 1 ovs)))
+      (should (string-match-p "┌─ NOTE" (overlay-get marker 'display)))
+      (should (string-match-p "\\`│ \\'" (overlay-get body   'display))))))
+
+(ert-deftest lang-markdown/gfm-callouts-marker-only-callout-renders-bottom ()
+  "A callout with no body lines still gets a bottom border."
+  (skip-unless (fboundp 'gfm-callouts-mode))
+  (with-temp-buffer
+    (insert "> [!NOTE]\n\nplain.\n")
+    (gfm-callouts-mode 1)
+    (let* ((after (cl-some (lambda (ov) (overlay-get ov 'after-string))
+                           (overlays-in (point-min) (point-max)))))
+      (should (and after (string-match-p "└" after))))))
+
+(ert-deftest lang-markdown/gfm-callouts-reveal-suppresses-display-at-point ()
+  "Moving point onto the prefix temporarily clears its display."
+  (skip-unless (fboundp 'gfm-callouts-mode))
+  (with-temp-buffer
+    (insert "> [!NOTE]\n> Hello.\n")
+    (gfm-callouts-mode 1)
+    (goto-char (point-min))
+    (gfm-callouts--reveal)
+    (let ((ov (cl-find-if (lambda (o) (overlay-get o 'gfm-callouts-revealable))
+                          (overlays-at (point-min)))))
+      (should ov)
+      (should-not (overlay-get ov 'display))
+      (should (stringp (overlay-get ov 'gfm-callouts-saved-display))))
+    ;; Move off the prefix; display restores.
+    (goto-char (point-max))
+    (gfm-callouts--reveal)
+    (let ((ov (cl-find-if (lambda (o) (overlay-get o 'gfm-callouts-revealable))
+                          (overlays-at (point-min)))))
+      (should ov)
+      (should (stringp (overlay-get ov 'display))))))
+
 ;;; gfm-code-fences tests
 
 (let* ((module-dir (file-name-directory (or load-file-name buffer-file-name)))

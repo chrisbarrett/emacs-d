@@ -61,13 +61,20 @@ around callout blockquotes:
 > body...
 ```
 
-Per row, the buffer `>` (and the `[`/`]` brackets on the marker line) is faded
-toward the theme background — computed via `+theme-default-background` blended
-10% toward the default foreground — so the original markdown stays selectable
-but recedes visually. The box border is drawn to the right of the `>` column;
-the top border integrates the `[!TYPE]` label inline with `┌─...─┐`, and
-border colour follows the per-type face (`+markdown-gfm-callout-*-face`).
-Overlays rebuild debounced on buffer changes. Source: `lib/+gfm-callouts.el`.
+The marker line is replaced wholesale by an evaporative,
+cursor-revealable display overlay drawing `┌─ TITLE ─...─┐`, with the
+type label integrated into the top border (one space of padding on
+either side of the title). The box uses thin Unicode box-drawing
+chars throughout (`┌`/`┐`/`│`/`└`/`┘`). Each body line's `> ` prefix
+is replaced by a `▐ ` display overlay using the same evaporative +
+revealable treatment. Editing through any prefix collapses its overlay (via
+`evaporate`); moving point into the overlay's range reveals the
+underlying source so it remains editable in place. The right edge is
+drawn via an after-string aligned to the box width; the bottom border
+lives on its own visual row beneath the last body line. Border and
+title colour follows the per-type face
+(`+markdown-gfm-callout-*-face`). Overlays rebuild debounced on
+buffer changes. Source: `lib/+gfm-callouts.el`.
 
 ### GFM Tables
 
