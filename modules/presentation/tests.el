@@ -1368,7 +1368,7 @@ then writes the new value into `:pane-layout' after success."
                                                          (point-max))
                          "two\nthree\nfour\n")))))))
 
-(ert-deftest +presentation/render-file-focus-creates-region-overlay ()
+(ert-deftest +presentation/render-file-focus-creates-focus-overlays ()
   (let* ((+presentation--sessions (make-hash-table :test 'equal))
          (key "k-file-focus"))
     (+presentation-tests--with-temp-file
@@ -1379,9 +1379,10 @@ then writes the new value into `:pane-layout' after success."
                   key (list :kind "file" :path path :focus [2 3]))))
         (with-current-buffer buf
           (let ((ovs (cl-remove-if-not
-                      (lambda (o) (eq (overlay-get o 'face) 'region))
+                      (lambda (o) (eq (overlay-get o 'face)
+                                      '+presentation-focus-face))
                       (overlays-in (point-min) (point-max)))))
-            (should (= (length ovs) 1))))))))
+            (should (= (length ovs) 2))))))))
 
 ;;; diff slide
 
@@ -2182,6 +2183,426 @@ current do not emit channel notifications."
     (with-temp-buffer
       (should (or (null +presentation--session-key)
                   (not (equal +presentation--session-key "K1")))))))
+
+
+;;; Faces & shared primitives
+
+(ert-deftest +presentation/focus-face-defined-without-extend ()
+  "`+presentation-focus-face' is defined and does not extend to window edge."
+  (should (facep '+presentation-focus-face))
+  (should-not (eq (face-attribute '+presentation-focus-face :extend nil t)
+                  t)))
+
+(ert-deftest +presentation/annotation-severity-faces-defined ()
+  (should (facep '+presentation-annotation-note-face))
+  (should (facep '+presentation-annotation-tip-face))
+  (should (facep '+presentation-annotation-warning-face)))
+
+(ert-deftest +presentation/annotation-severity-faces-inherit-from-markdown ()
+  "Severity faces inherit from the matching markdown callout faces."
+  (should (memq '+markdown-gfm-callout-note-face
+                (let ((p (face-attribute
+                          '+presentation-annotation-note-face :inherit nil t)))
+                  (if (listp p) p (list p)))))
+  (should (memq '+markdown-gfm-callout-tip-face
+                (let ((p (face-attribute
+                          '+presentation-annotation-tip-face :inherit nil t)))
+                  (if (listp p) p (list p)))))
+  (should (memq '+markdown-gfm-callout-warning-face
+                (let ((p (face-attribute
+                          '+presentation-annotation-warning-face :inherit nil t)))
+                  (if (listp p) p (list p))))))
+
+(ert-deftest +presentation/blend-toward-fg-returns-hex ()
+  "Blend helper returns a hex string for known fg/bg."
+  (let ((out (+presentation--blend-toward-fg "#000000" "#ffffff" 0.5)))
+    (should (stringp out))
+    (should (string-match-p "^#[0-9a-f]\\{6\\}$" out))))
+
+(ert-deftest +presentation/make-border-top-shape ()
+  (let ((b (+presentation--make-border 6 ?┌ ?┐ 'shadow)))
+    (should (eq (aref b 0) ?┌))
+    (should (eq (aref (substring b -1) 0) ?┐))
+    (should (= (length b) 6))))
+
+(ert-deftest +presentation/make-border-bottom-shape ()
+  (let ((b (+presentation--make-border 5 ?└ ?┘ 'shadow)))
+    (should (eq (aref b 0) ?└))
+    (should (eq (aref (substring b -1) 0) ?┘))))
+
+
+;;; Annotation validation — kinds & severity
+
+(ert-deftest +presentation/validate-slide-annotation-kind-accepted ()
+  (should (+presentation--validate-slide
+           '(:kind "narrative" :markdown "x"
+             :annotations [(:line 1 :text "a" :kind "inline")
+                           (:line 2 :text "b" :kind "callout")
+                           (:line 3 :text "c" :kind "margin")
+                           (:line 4 :text "d")]))))
+
+(ert-deftest +presentation/validate-slide-annotation-kind-rejected ()
+  (let ((err (should-error
+              (+presentation--validate-slide
+               '(:kind "narrative" :markdown "x"
+                 :annotations [(:line 1 :text "a" :kind "banner")]))
+              :type 'user-error)))
+    (should (string-match-p "banner" (error-message-string err)))))
+
+(ert-deftest +presentation/validate-slide-annotation-severity-accepted ()
+  (should (+presentation--validate-slide
+           '(:kind "narrative" :markdown "x"
+             :annotations [(:line 1 :text "a" :severity "note")
+                           (:line 2 :text "b" :severity "tip")
+                           (:line 3 :text "c" :severity "warning")
+                           (:line 4 :text "d")]))))
+
+(ert-deftest +presentation/validate-slide-annotation-severity-rejected ()
+  (let ((err (should-error
+              (+presentation--validate-slide
+               '(:kind "narrative" :markdown "x"
+                 :annotations [(:line 1 :text "a" :severity "alarm")]))
+              :type 'user-error)))
+    (should (string-match-p "alarm" (error-message-string err)))))
+
+(ert-deftest +presentation/validate-slide-annotation-callout-rejects-position ()
+  (should-error
+   (+presentation--validate-slide
+    '(:kind "narrative" :markdown "x"
+      :annotations [(:line 1 :text "a" :kind "callout" :position "after")]))
+   :type 'user-error))
+
+(ert-deftest +presentation/validate-slide-annotation-margin-positions ()
+  (dolist (p '("left" "right" "before" "after"))
+    (should (+presentation--validate-slide
+             `(:kind "narrative" :markdown "x"
+               :annotations [(:line 1 :text "a" :kind "margin" :position ,p)])))))
+
+(ert-deftest +presentation/validate-slide-annotation-rejects-unknown-field ()
+  (should-error
+   (+presentation--validate-slide
+    '(:kind "narrative" :markdown "x"
+      :annotations [(:line 1 :text "a" :colour "red")]))
+   :type 'user-error))
+
+
+;;; Inline annotation rendering
+
+(ert-deftest +presentation/render-inline-annotation-after-anchors-eol ()
+  (let* ((+presentation--sessions (make-hash-table :test 'equal))
+         (key "k-inline-after")
+         (buf (generate-new-buffer "*inline-after*")))
+    (puthash key (list :worktree "/tmp") +presentation--sessions)
+    (unwind-protect
+        (progn
+          (with-current-buffer buf (insert "alpha\nbeta\ngamma\n"))
+          (+presentation--apply-annotations
+           key buf [(:line 2 :text "note" :kind "inline" :position "after")])
+          (let* ((rs (+presentation--session-prop key :render-state))
+                 (ov (car (plist-get rs :overlays))))
+            (should ov)
+            (with-current-buffer buf
+              (let ((eol (save-excursion (goto-char (point-min))
+                                         (forward-line 1)
+                                         (line-end-position))))
+                (should (= (overlay-start ov) eol))))
+            (should (overlay-get ov 'after-string))
+            (should (string-match-p "note" (overlay-get ov 'after-string)))
+            (should-not (overlay-get ov 'before-string))))
+      (kill-buffer buf))))
+
+(ert-deftest +presentation/render-inline-annotation-before-anchors-bol ()
+  (let* ((+presentation--sessions (make-hash-table :test 'equal))
+         (key "k-inline-before")
+         (buf (generate-new-buffer "*inline-before*")))
+    (puthash key (list :worktree "/tmp") +presentation--sessions)
+    (unwind-protect
+        (progn
+          (with-current-buffer buf (insert "alpha\nbeta\ngamma\n"))
+          (+presentation--apply-annotations
+           key buf [(:line 2 :text "B" :kind "inline" :position "before")])
+          (let* ((rs (+presentation--session-prop key :render-state))
+                 (ov (car (plist-get rs :overlays))))
+            (with-current-buffer buf
+              (let ((bol (save-excursion (goto-char (point-min))
+                                         (forward-line 1)
+                                         (line-beginning-position))))
+                (should (= (overlay-start ov) bol))))
+            (should (overlay-get ov 'before-string))
+            (should-not (overlay-get ov 'after-string))))
+      (kill-buffer buf))))
+
+(ert-deftest +presentation/render-inline-annotation-applies-severity-face ()
+  (let* ((+presentation--sessions (make-hash-table :test 'equal))
+         (key "k-inline-sev")
+         (buf (generate-new-buffer "*inline-sev*")))
+    (puthash key (list :worktree "/tmp") +presentation--sessions)
+    (unwind-protect
+        (progn
+          (with-current-buffer buf (insert "x\ny\n"))
+          (+presentation--apply-annotations
+           key buf [(:line 1 :text "T" :kind "inline" :severity "tip")])
+          (let* ((rs (+presentation--session-prop key :render-state))
+                 (ov (car (plist-get rs :overlays)))
+                 (s (or (overlay-get ov 'after-string)
+                        (overlay-get ov 'before-string))))
+            (let ((faces (get-text-property 0 'face s)))
+              (should (or (eq faces '+presentation-annotation-tip-face)
+                          (memq '+presentation-annotation-tip-face
+                                (if (listp faces) faces (list faces))))))))
+      (kill-buffer buf))))
+
+
+;;; Callout annotation rendering
+
+(ert-deftest +presentation/render-callout-annotation-box-shape ()
+  (let* ((+presentation--sessions (make-hash-table :test 'equal))
+         (key "k-callout")
+         (buf (generate-new-buffer "*callout*")))
+    (puthash key (list :worktree "/tmp") +presentation--sessions)
+    (unwind-protect
+        (progn
+          (with-current-buffer buf (insert "alpha\nbeta\n"))
+          (+presentation--apply-annotations
+           key buf [(:line 1 :text "watch out" :kind "callout"
+                     :severity "warning")])
+          (let* ((rs (+presentation--session-prop key :render-state))
+                 (ov (car (plist-get rs :overlays)))
+                 (after (overlay-get ov 'after-string)))
+            (with-current-buffer buf
+              (let ((eol (save-excursion (goto-char (point-min))
+                                         (line-end-position))))
+                (should (= (overlay-start ov) eol))))
+            (should (string-match-p "\\`\n?┌" after))
+            (should (string-match-p "┘\\'" after))
+            (let ((border-pos (string-match "┌" after)))
+              (let ((face (get-text-property border-pos 'face after)))
+                (should (or (eq face '+presentation-annotation-warning-face)
+                            (memq '+presentation-annotation-warning-face
+                                  (if (listp face) face (list face)))))))))
+      (kill-buffer buf))))
+
+(ert-deftest +presentation/render-callout-annotation-label-header ()
+  (let* ((+presentation--sessions (make-hash-table :test 'equal))
+         (key "k-callout-label")
+         (buf (generate-new-buffer "*callout-l*")))
+    (puthash key (list :worktree "/tmp") +presentation--sessions)
+    (unwind-protect
+        (progn
+          (with-current-buffer buf (insert "alpha\n"))
+          (+presentation--apply-annotations
+           key buf [(:line 1 :text "body" :kind "callout"
+                     :severity "tip")])
+          (let* ((rs (+presentation--session-prop key :render-state))
+                 (ov (car (plist-get rs :overlays)))
+                 (after (overlay-get ov 'after-string)))
+            (should (string-match-p "TIP" after))))
+      (kill-buffer buf))))
+
+(ert-deftest +presentation/render-callout-multi-line-body-wraps ()
+  (let* ((+presentation--sessions (make-hash-table :test 'equal))
+         (key "k-callout-multi")
+         (buf (generate-new-buffer "*callout-m*")))
+    (puthash key (list :worktree "/tmp") +presentation--sessions)
+    (unwind-protect
+        (progn
+          (with-current-buffer buf (insert "alpha\n"))
+          (+presentation--apply-annotations
+           key buf [(:line 1 :text "first line\nsecond line"
+                     :kind "callout" :severity "note")])
+          (let* ((rs (+presentation--session-prop key :render-state))
+                 (ov (car (plist-get rs :overlays)))
+                 (after (overlay-get ov 'after-string)))
+            (should (string-match-p "first line" after))
+            (should (string-match-p "second line" after))
+            (should (>= (cl-count ?│ after) 2))))
+      (kill-buffer buf))))
+
+
+;;; Margin annotation rendering
+
+(ert-deftest +presentation/render-margin-annotation-right ()
+  (let* ((+presentation--sessions (make-hash-table :test 'equal))
+         (key "k-margin-r")
+         (buf (generate-new-buffer "*margin-r*")))
+    (puthash key (list :worktree "/tmp") +presentation--sessions)
+    (unwind-protect
+        (progn
+          (with-current-buffer buf (insert "x\ny\n"))
+          (+presentation--apply-annotations
+           key buf [(:line 1 :text "M" :kind "margin" :position "right")])
+          (let* ((rs (+presentation--session-prop key :render-state))
+                 (ov (car (plist-get rs :overlays)))
+                 (s (or (overlay-get ov 'before-string)
+                        (overlay-get ov 'after-string))))
+            (should s)
+            (let ((display (get-text-property 0 'display s)))
+              (should (equal (car display) '(margin right-margin))))
+            (with-current-buffer buf
+              (should (>= right-margin-width 12)))))
+      (kill-buffer buf))))
+
+(ert-deftest +presentation/render-margin-annotation-left ()
+  (let* ((+presentation--sessions (make-hash-table :test 'equal))
+         (key "k-margin-l")
+         (buf (generate-new-buffer "*margin-l*")))
+    (puthash key (list :worktree "/tmp") +presentation--sessions)
+    (unwind-protect
+        (progn
+          (with-current-buffer buf (insert "x\n"))
+          (+presentation--apply-annotations
+           key buf [(:line 1 :text "L" :kind "margin" :position "left")])
+          (let* ((rs (+presentation--session-prop key :render-state))
+                 (ov (car (plist-get rs :overlays)))
+                 (s (or (overlay-get ov 'before-string)
+                        (overlay-get ov 'after-string))))
+            (let ((display (get-text-property 0 'display s)))
+              (should (equal (car display) '(margin left-margin))))
+            (with-current-buffer buf
+              (should (>= left-margin-width 12)))))
+      (kill-buffer buf))))
+
+(ert-deftest +presentation/render-margin-annotation-restorer-captures-prior ()
+  (let* ((+presentation--sessions (make-hash-table :test 'equal))
+         (key "k-margin-restore")
+         (buf (generate-new-buffer "*margin-rst*")))
+    (puthash key (list :worktree "/tmp") +presentation--sessions)
+    (unwind-protect
+        (progn
+          (with-current-buffer buf
+            (setq right-margin-width 0)
+            (insert "x\n"))
+          (+presentation--apply-annotations
+           key buf [(:line 1 :text "M" :kind "margin" :position "right")])
+          (with-current-buffer buf
+            (should (>= right-margin-width 12)))
+          (+presentation--cleanup-render-state key)
+          (with-current-buffer buf
+            (should (= right-margin-width 0))))
+      (kill-buffer buf))))
+
+(ert-deftest +presentation/render-margin-annotation-position-aliases ()
+  "`before' / `after' on a margin annotation normalise to right-margin."
+  (let* ((+presentation--sessions (make-hash-table :test 'equal))
+         (key "k-margin-alias")
+         (buf (generate-new-buffer "*margin-a*")))
+    (puthash key (list :worktree "/tmp") +presentation--sessions)
+    (unwind-protect
+        (progn
+          (with-current-buffer buf (insert "x\n"))
+          (+presentation--apply-annotations
+           key buf [(:line 1 :text "M" :kind "margin" :position "after")])
+          (let* ((rs (+presentation--session-prop key :render-state))
+                 (ov (car (plist-get rs :overlays)))
+                 (s (or (overlay-get ov 'before-string)
+                        (overlay-get ov 'after-string)))
+                 (display (get-text-property 0 'display s)))
+            (should (equal (car display) '(margin right-margin)))))
+      (kill-buffer buf))))
+
+
+;;; Focus highlight rework
+
+(ert-deftest +presentation/render-file-focus-creates-per-line-overlays ()
+  "`:focus [a b]' produces (b - a + 1) overlays, one per line."
+  (let* ((+presentation--sessions (make-hash-table :test 'equal))
+         (key "k-file-focus-perline"))
+    (+presentation-tests--with-temp-file
+        path "one\ntwo\nthree\nfour\nfive\n"
+      (puthash key (list :worktree (file-name-directory path) :frame nil)
+               +presentation--sessions)
+      (let ((buf (+presentation--render-file
+                  key (list :kind "file" :path path :focus [2 4]))))
+        (with-current-buffer buf
+          (let ((ovs (cl-remove-if-not
+                      (lambda (o) (eq (overlay-get o 'face)
+                                      '+presentation-focus-face))
+                      (overlays-in (point-min) (point-max)))))
+            (should (= (length ovs) 3))
+            (dolist (ov ovs)
+              (let ((line-bol (save-excursion
+                                (goto-char (overlay-start ov))
+                                (line-beginning-position)))
+                    (line-eol (save-excursion
+                                (goto-char (overlay-start ov))
+                                (line-end-position))))
+                (should (= (overlay-start ov) line-bol))
+                (should (= (overlay-end ov) line-eol))))))))))
+
+(ert-deftest +presentation/focus-face-no-extend-attribute ()
+  "`+presentation-focus-face' has no `:extend t' set."
+  (should-not (eq (face-attribute '+presentation-focus-face :extend nil t)
+                  t)))
+
+(ert-deftest +presentation/focus-overlays-deleted-on-cleanup ()
+  (let* ((+presentation--sessions (make-hash-table :test 'equal))
+         (key "k-focus-cleanup"))
+    (+presentation-tests--with-temp-file
+        path "one\ntwo\nthree\n"
+      (puthash key (list :worktree (file-name-directory path) :frame nil)
+               +presentation--sessions)
+      (let* ((buf (+presentation--render-file
+                   key (list :kind "file" :path path :focus [1 2])))
+             (ovs (with-current-buffer buf
+                    (cl-remove-if-not
+                     (lambda (o) (eq (overlay-get o 'face)
+                                     '+presentation-focus-face))
+                     (overlays-in (point-min) (point-max))))))
+        (should (>= (length ovs) 1))
+        (+presentation--cleanup-render-state key)
+        (dolist (ov ovs)
+          (should-not (overlay-buffer ov)))))))
+
+(ert-deftest +presentation/focus-and-annotations-coexist ()
+  "Focus + annotations coexist without overlay group interference."
+  (let* ((+presentation--sessions (make-hash-table :test 'equal))
+         (key "k-focus-ann"))
+    (+presentation-tests--with-temp-file
+        path "one\ntwo\nthree\nfour\n"
+      (puthash key (list :worktree (file-name-directory path) :frame nil)
+               +presentation--sessions)
+      (let ((buf (+presentation--render-file
+                  key (list :kind "file" :path path :focus [1 2]))))
+        (+presentation--apply-annotations
+         key buf [(:line 2 :text "ann" :kind "inline" :position "after")])
+        (with-current-buffer buf
+          (let* ((focus-ovs
+                  (cl-remove-if-not
+                   (lambda (o) (eq (overlay-get o 'face)
+                                   '+presentation-focus-face))
+                   (overlays-in (point-min) (point-max))))
+                 (ann-ovs
+                  (cl-remove-if-not
+                   (lambda (o) (overlay-get o 'after-string))
+                   (overlays-in (point-min) (point-max)))))
+            (should (>= (length focus-ovs) 2))
+            (should (= (length ann-ovs) 1))
+            (let ((eol-line2 (save-excursion (goto-char (point-min))
+                                             (forward-line 1)
+                                             (line-end-position))))
+              (should (= (overlay-start (car ann-ovs)) eol-line2)))))))))
+
+
+;;; MCP boundary & coercion
+
+(ert-deftest +presentation/coerce-slide-translates-kind-and-severity ()
+  (should (equal
+           (+presentation--coerce-slide
+            '((kind . "file") (path . "x")
+              (annotations . [((line . 1) (text . "a")
+                               (kind . "callout") (severity . "warning"))])))
+           '(:kind "file" :path "x"
+             :annotations [(:line 1 :text "a"
+                            :kind "callout" :severity "warning")]))))
+
+(ert-deftest +presentation/coerce-slide-mixed-kind-annotations-validate ()
+  (let ((slide (+presentation--coerce-slide
+                '((kind . "narrative") (markdown . "x")
+                  (annotations . [((line . 1) (text . "a") (kind . "inline"))
+                                  ((line . 2) (text . "b") (kind . "callout"))
+                                  ((line . 3) (text . "c") (kind . "margin")
+                                   (position . "right"))])))))
+    (should (+presentation--validate-slide slide))))
 
 
 ;;; tests.el ends here

@@ -91,9 +91,25 @@ Slide spec must include a `kind' field; supported kinds are `narrative',
 `pane_layout' string of `tall' (claude-code on top, presentation below)
 or `wide' (claude-code on the left, presentation on the right) that
 reshapes the tmux window before rendering; absent leaves geometry
-unchanged.  Raises a user-error on validation failure (missing required
+unchanged.
+
+`narrative', `file', and `diff' slides accept an `annotations' array of
+`{ line, text, kind?, severity?, position? }' records:
+  - `kind' (default `inline') is `inline' / `callout' / `margin'.
+    `inline' tags one line; `callout' draws a box-drawn note block
+    after the target line; `margin' renders text in the buffer margin.
+  - `severity' (default `note') is `note' / `tip' / `warning' and
+    drives the colour and label.
+  - `position' for `inline' is `before' / `after' (default `after',
+    anchored at EOL); for `margin' is `left' / `right' (default
+    `right'); `callout' annotations must omit `position'.
+
+Example: `{ line: 12, text: \"watch out\", kind: \"callout\", severity: \"warning\" }'.
+
+Raises a user-error on validation failure (missing required
 fields, nested layout, half-specified diff range, bad annotation line,
-invalid `pane_layout')."
+invalid `pane_layout', unknown `kind' / `severity', or `position' on
+the wrong kind)."
    :args
    '((:name "key" :type string :description "Session key.")
      (:name "slide" :type object :description "Slide spec object.")
@@ -112,8 +128,9 @@ invalid `pane_layout')."
 
 The user's view is dragged forward only when INDEX equals the session's
 current slide index — replacing a non-current slide updates the deck
-silently, in keeping with the user-paced flow.  Raises a user-error on
-out-of-range INDEX or when the deck is empty."
+silently, in keeping with the user-paced flow.  Slide spec accepts the
+same annotation `kind' / `severity' / `position' fields as `push_slide'.
+Raises a user-error on out-of-range INDEX or when the deck is empty."
    :args
    '((:name "key" :type string :description "Session key.")
      (:name "index" :type integer :description "Zero-based slide index.")

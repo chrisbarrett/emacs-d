@@ -15,6 +15,70 @@
   "Agent-driven presentation sessions in Emacs frames."
   :group 'tools)
 
+;;; Faces
+
+(defface +presentation-focus-face
+  '((((background dark))  :background "#2d3142")
+    (((background light)) :background "#e8e6df")
+    (t :inherit highlight))
+  "Face for the file-slide focus highlight.
+Painted per-line from BOL to EOL only; never extends to window width."
+  :group '+presentation)
+
+(defface +presentation-annotation-note-face
+  '((t :inherit (+markdown-gfm-callout-note-face)))
+  "Face for `note' severity presentation annotations."
+  :group '+presentation)
+
+(defface +presentation-annotation-tip-face
+  '((t :inherit (+markdown-gfm-callout-tip-face)))
+  "Face for `tip' severity presentation annotations."
+  :group '+presentation)
+
+(defface +presentation-annotation-warning-face
+  '((t :inherit (+markdown-gfm-callout-warning-face)))
+  "Face for `warning' severity presentation annotations."
+  :group '+presentation)
+
+(defconst +presentation--severity-faces
+  '(("note"    . +presentation-annotation-note-face)
+    ("tip"     . +presentation-annotation-tip-face)
+    ("warning" . +presentation-annotation-warning-face))
+  "Map annotation severity string to face symbol.")
+
+(defconst +presentation--severity-labels
+  '(("note" . "NOTE") ("tip" . "TIP") ("warning" . "WARNING"))
+  "Map annotation severity string to display label.")
+
+(defun +presentation--annotation-face (severity)
+  "Return face symbol for SEVERITY (defaults to `note')."
+  (alist-get (or severity "note") +presentation--severity-faces
+             '+presentation-annotation-note-face nil #'string=))
+
+(defun +presentation--severity-label (severity)
+  "Return display label for SEVERITY (defaults to `note')."
+  (alist-get (or severity "note") +presentation--severity-labels
+             "NOTE" nil #'string=))
+
+(defun +presentation--blend-toward-fg (bg fg ratio)
+  "Blend hex colour BG by RATIO toward hex FG; return hex string."
+  (require 'color)
+  (let ((bg-rgb (color-name-to-rgb bg))
+        (fg-rgb (color-name-to-rgb fg)))
+    (apply #'color-rgb-to-hex
+           (append (cl-mapcar (lambda (b f) (+ b (* ratio (- f b))))
+                              bg-rgb fg-rgb)
+                   '(2)))))
+
+(defun +presentation--make-border (width corner-l corner-r face)
+  "Build a horizontal box border of WIDTH chars using FACE.
+CORNER-L and CORNER-R are the corner characters."
+  (let ((fill (propertize (make-string (max 1 (- width 2)) ?─)
+                          'face face)))
+    (concat (propertize (string corner-l) 'face face)
+            fill
+            (propertize (string corner-r) 'face face))))
+
 (defcustom +presentation-narrative-major-mode 'gfm-mode
   "Major mode used to render `narrative' slides."
   :type 'function
@@ -517,18 +581,54 @@ expects as plists."
 
 ;;; Slide validation
 
+(defconst +presentation--annotation-allowed-keys
+  '(:line :text :position :kind :severity)
+  "Plist keys allowed on a slide annotation.")
+
 (defun +presentation--validate-annotation (ann)
   "Validate annotation plist ANN; signal `user-error' on failure."
-  (let ((line (plist-get ann :line))
-        (text (plist-get ann :text))
-        (pos (or (plist-get ann :position) "after")))
+  (let* ((line (plist-get ann :line))
+         (text (plist-get ann :text))
+         (kind (plist-get ann :kind))
+         (severity (plist-get ann :severity))
+         (pos-present (plist-member ann :position))
+         (pos (plist-get ann :position)))
     (unless (and (integerp line) (> line 0))
       (user-error "Annotation :line must be positive integer, got: %S" line))
     (unless (stringp text)
       (user-error "Annotation :text must be string, got: %S" text))
-    (unless (member pos '("before" "after"))
-      (user-error "Annotation :position must be \"before\" or \"after\", got: %S"
-                  pos))))
+    (when kind
+      (unless (member kind '("inline" "callout" "margin"))
+        (user-error
+         "Annotation :kind must be \"inline\" / \"callout\" / \"margin\", got: %S"
+         kind)))
+    (when severity
+      (unless (member severity '("note" "tip" "warning"))
+        (user-error
+         "Annotation :severity must be \"note\" / \"tip\" / \"warning\", got: %S"
+         severity)))
+    (let ((effective-kind (or kind "inline")))
+      (pcase effective-kind
+        ("inline"
+         (when pos-present
+           (unless (member pos '("before" "after"))
+             (user-error
+              "inline annotation :position must be \"before\" or \"after\", got: %S"
+              pos))))
+        ("callout"
+         (when pos-present
+           (user-error
+            "callout annotation must not have :position field, got: %S" pos)))
+        ("margin"
+         (when pos-present
+           (unless (member pos '("left" "right" "before" "after"))
+             (user-error
+              "margin annotation :position must be \"left\" / \"right\" / \"before\" / \"after\", got: %S"
+              pos))))))
+    (let ((keys (cl-loop for (k _v) on ann by #'cddr collect k)))
+      (dolist (k keys)
+        (unless (memq k +presentation--annotation-allowed-keys)
+          (user-error "Unknown annotation field: %S" k))))))
 
 ;;;###autoload
 (defun +presentation--validate-slide (slide &optional context)
@@ -860,16 +960,15 @@ buffer and restores its prior read-only state."
         (when focus
           (let* ((fs (elt focus 0))
                  (fe (elt focus 1))
-                 (p1 (save-excursion (goto-char (point-min))
-                                     (forward-line (1- fs))
-                                     (point)))
-                 (p2 (save-excursion (goto-char (point-min))
-                                     (forward-line fe)
-                                     (point)))
-                 (ov (make-overlay p1 p2)))
-            (overlay-put ov 'face 'region)
-            (+presentation--render-state-add key :overlays ov)
-            (goto-char p1)
+                 (start (+presentation--line-bol fs)))
+            (cl-loop for ln from fs to fe
+                     for bol = (+presentation--line-bol ln)
+                     for eol = (+presentation--line-eol ln)
+                     for ov = (make-overlay bol eol)
+                     do (overlay-put ov 'face '+presentation-focus-face)
+                     do (+presentation--render-state-add
+                         key :overlays ov))
+            (goto-char start)
             (condition-case _ (recenter) (error nil))))
         (setq buffer-read-only t)
         (let ((b buf))
@@ -954,31 +1053,134 @@ prior render-state — call `+presentation--render-slide' for that."
     ("layout"    (+presentation--render-layout key slide))
     (other (error "Unknown slide kind: %S" other))))
 
+(defun +presentation--line-bol (line)
+  "Return point-at-bol for LINE (1-based) in current buffer."
+  (save-excursion (goto-char (point-min))
+                  (forward-line (1- line))
+                  (line-beginning-position)))
+
+(defun +presentation--line-eol (line)
+  "Return point-at-eol for LINE (1-based) in current buffer."
+  (save-excursion (goto-char (point-min))
+                  (forward-line (1- line))
+                  (line-end-position)))
+
+(defun +presentation--render-inline-annotation (key ann)
+  "Render inline ANN in current buffer, attach overlay to session KEY."
+  (let* ((line (plist-get ann :line))
+         (text (plist-get ann :text))
+         (pos (or (plist-get ann :position) "after"))
+         (face (+presentation--annotation-face (plist-get ann :severity)))
+         (anchor (if (equal pos "before")
+                     (+presentation--line-bol line)
+                   (+presentation--line-eol line)))
+         (decorated (propertize
+                     (if (equal pos "before")
+                         (format "▸ %s\n" text)
+                       (format "  ▸ %s" text))
+                     'face face))
+         (ov (make-overlay anchor anchor)))
+    (overlay-put ov
+                 (if (equal pos "before") 'before-string 'after-string)
+                 decorated)
+    (+presentation--render-state-add key :overlays ov)))
+
+(defun +presentation--render-callout-annotation (key ann)
+  "Render callout ANN in current buffer, attach overlay to session KEY."
+  (let* ((line (plist-get ann :line))
+         (text (or (plist-get ann :text) ""))
+         (severity (plist-get ann :severity))
+         (face (+presentation--annotation-face severity))
+         (label (+presentation--severity-label severity))
+         (lines (split-string text "\n"))
+         (max-content (apply #'max
+                             (length label)
+                             (mapcar #'length lines)))
+         (box-width (max 80 (+ max-content 4)))
+         (top (+presentation--make-border box-width ?┌ ?┐ face))
+         (bot (+presentation--make-border box-width ?└ ?┘ face))
+         (label-line
+          (let ((pad (max 1 (- box-width 4 (length label)))))
+            (concat (propertize "│ " 'face face)
+                    (propertize label 'face face)
+                    (propertize (make-string pad ?\s) 'face face)
+                    (propertize " │" 'face face))))
+         (body-lines
+          (mapcar
+           (lambda (l)
+             (let ((pad (max 1 (- box-width 4 (length l)))))
+               (concat (propertize "│ " 'face face)
+                       l
+                       (propertize (make-string pad ?\s) 'face face)
+                       (propertize " │" 'face face))))
+           lines))
+         (body-block (mapconcat #'identity
+                                (cons label-line body-lines) "\n"))
+         (after (concat "\n" top "\n" body-block "\n" bot))
+         (anchor (+presentation--line-eol line))
+         (ov (make-overlay anchor anchor)))
+    (overlay-put ov 'after-string after)
+    (+presentation--render-state-add key :overlays ov)))
+
+(defun +presentation--margin-side (position)
+  "Return `left-margin' / `right-margin' symbol from POSITION string."
+  (pcase position
+    ("left" 'left-margin)
+    (_ 'right-margin)))
+
+(defun +presentation--ensure-margin-width (key buffer side)
+  "Set BUFFER's margin width on SIDE to at least 12, restorer on KEY.
+SIDE is `left-margin' or `right-margin'.  Idempotent per (buffer,side):
+the prior value is captured only on the first call."
+  (with-current-buffer buffer
+    (let* ((var (if (eq side 'left-margin)
+                    'left-margin-width
+                  'right-margin-width))
+           (cur (symbol-value var)))
+      (when (< cur 12)
+        (let ((prior cur)
+              (b buffer))
+          (set var 12)
+          (+presentation--render-state-add
+           key :restorers
+           (lambda ()
+             (when (buffer-live-p b)
+               (with-current-buffer b
+                 (set var prior)
+                 (dolist (w (get-buffer-window-list b nil t))
+                   (set-window-buffer w b)))))))
+        (dolist (w (get-buffer-window-list buffer nil t))
+          (set-window-buffer w buffer))))))
+
+(defun +presentation--render-margin-annotation (key ann)
+  "Render margin ANN in current buffer, attach overlay to session KEY."
+  (let* ((line (plist-get ann :line))
+         (text (plist-get ann :text))
+         (raw-pos (or (plist-get ann :position) "right"))
+         (side (+presentation--margin-side raw-pos))
+         (face (+presentation--annotation-face (plist-get ann :severity)))
+         (display-str (propertize text 'face face))
+         (decorated (propertize " "
+                                'display `((margin ,side) ,display-str)))
+         (anchor (+presentation--line-bol line))
+         (ov (make-overlay anchor anchor)))
+    (+presentation--ensure-margin-width key (current-buffer) side)
+    (overlay-put ov 'before-string decorated)
+    (+presentation--render-state-add key :overlays ov)))
+
 (defun +presentation--apply-annotations (key buffer annotations)
   "Place overlays on BUFFER for ANNOTATIONS of session KEY.
-ANNOTATIONS is a sequence of plists `(:line N :text S :position P)'.
+ANNOTATIONS is a sequence of plists `(:line N :text S :position P
+:kind K :severity SEV)'.  Dispatches on `:kind' (default `inline').
 Overlays are appended to session KEY's `:render-state' `:overlays'."
   (with-current-buffer buffer
     (mapc
      (lambda (ann)
-       (let* ((line (plist-get ann :line))
-              (text (plist-get ann :text))
-              (pos (or (plist-get ann :position) "after"))
-              (target (save-excursion
-                        (goto-char (point-min))
-                        (forward-line (1- line))
-                        (point)))
-              (ov (make-overlay target target))
-              (decorated
-               (propertize
-                (if (equal pos "before")
-                    (format "▸ %s\n" text)
-                  (format "\n▸ %s" text))
-                'face 'font-lock-comment-face)))
-         (overlay-put ov
-                      (if (equal pos "before") 'before-string 'after-string)
-                      decorated)
-         (+presentation--render-state-add key :overlays ov)))
+       (pcase (or (plist-get ann :kind) "inline")
+         ("inline"  (+presentation--render-inline-annotation key ann))
+         ("callout" (+presentation--render-callout-annotation key ann))
+         ("margin"  (+presentation--render-margin-annotation key ann))
+         (other (error "Unknown annotation kind: %S" other))))
      (append annotations nil))))
 
 (defun +presentation--slide-pane-layout (slide)
