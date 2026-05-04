@@ -62,7 +62,7 @@ around callout blockquotes:
 ```
 
 The marker line is replaced wholesale by an evaporative,
-cursor-revealable display overlay drawing `┌─▌TITLE ─...─┐`, with the
+cursor-revealable display overlay drawing `┌─▌TITLE▐─...─┐`, with the
 type label integrated into the top border (one space of padding on
 either side of the title). The box uses thin Unicode box-drawing
 chars throughout (`┌`/`┐`/`│`/`└`/`┘`). Each body line's `> ` prefix
