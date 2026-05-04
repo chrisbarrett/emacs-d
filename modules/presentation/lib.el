@@ -1047,6 +1047,7 @@ switches the session frame to the produced buffer."
     (define-key map (kbd "C-f") #'+presentation-next-slide)
     (define-key map (kbd "C-p") #'+presentation-previous-slide)
     (define-key map (kbd "C-b") #'+presentation-previous-slide)
+    (define-key map (kbd "C-c q") #'+presentation-quit)
     map)
   "Keymap for `+presentation-mode'.")
 
@@ -1094,6 +1095,18 @@ No-op when the session is already at slide 0.  Emits a
       (when (>= prv 0)
         (+presentation--deck-goto key prv)
         (+presentation--emit-nav-channel key cur prv)))))
+
+;;;###autoload
+(defun +presentation-quit ()
+  "End the presentation session owning the current buffer.
+Resolves the session via the buffer-local `+presentation--session-key'
+and invokes `+presentation-end'.  No-op when the key is nil or no
+session for that key is registered — typing the binding in a stale
+buffer is equivalent to \"session is already gone\"."
+  (interactive)
+  (when-let* ((key +presentation--session-key))
+    (when (gethash key +presentation--sessions)
+      (+presentation-end key))))
 
 (defun +presentation--enable-mode-in (buffer key)
   "Enable `+presentation-mode' in BUFFER tagged with session KEY.

@@ -1743,6 +1743,47 @@ then writes the new value into `:pane-layout' after success."
   (should (eq (lookup-key +presentation-mode-map (kbd "C-b"))
               '+presentation-previous-slide)))
 
+(ert-deftest +presentation/mode-keymap-binds-quit ()
+  "C-c q is bound to +presentation-quit."
+  (should (eq (lookup-key +presentation-mode-map (kbd "C-c q"))
+              '+presentation-quit)))
+
+(ert-deftest +presentation/quit-calls-end-with-buffer-key ()
+  "+presentation-quit invokes +presentation-end with the buffer-local key."
+  (let* ((+presentation--sessions (make-hash-table :test 'equal))
+         (key "k-quit")
+         (end-calls nil))
+    (puthash key (list :worktree "/tmp" :frame nil)
+             +presentation--sessions)
+    (cl-letf (((symbol-function '+presentation-end)
+               (lambda (k) (push k end-calls) 'done)))
+      (with-temp-buffer
+        (setq-local +presentation--session-key key)
+        (+presentation-quit)
+        (should (equal end-calls (list key)))))))
+
+(ert-deftest +presentation/quit-noop-when-key-nil ()
+  "+presentation-quit is a no-op when buffer-local key is nil."
+  (let* ((+presentation--sessions (make-hash-table :test 'equal))
+         (end-calls nil))
+    (cl-letf (((symbol-function '+presentation-end)
+               (lambda (k) (push k end-calls) 'done)))
+      (with-temp-buffer
+        (setq-local +presentation--session-key nil)
+        (+presentation-quit)
+        (should (null end-calls))))))
+
+(ert-deftest +presentation/quit-noop-when-session-stale ()
+  "+presentation-quit is a no-op when the buffer-local key references no session."
+  (let* ((+presentation--sessions (make-hash-table :test 'equal))
+         (end-calls nil))
+    (cl-letf (((symbol-function '+presentation-end)
+               (lambda (k) (push k end-calls) 'done)))
+      (with-temp-buffer
+        (setq-local +presentation--session-key "k-stale")
+        (+presentation-quit)
+        (should (null end-calls))))))
+
 (ert-deftest +presentation/next-slide-advances-deck ()
   (let* ((+presentation--sessions (make-hash-table :test 'equal))
          (key "k-nav-n"))
