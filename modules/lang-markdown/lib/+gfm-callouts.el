@@ -106,12 +106,12 @@ the buffer footprint); TRAILING is hung off the line-end as an
 after-string and continues to draw the border when reveal exposes
 the source."
   (let* ((title-w (string-width title))
-         ;; Layout: `┌─ ▪ TITLE ─...─┐'.  Decorations occupy 7 cols
-         ;; (`┌', `─', ` ', `▪', ` ', ` ' after title, `┐'); the rest
-         ;; of the line is the title and trailing dash fill.
-         (dash-fill (max 1 (- width 7 title-w)))
+         ;; Layout: `┌─ ▪TITLE ─...─┐'.  Decorations occupy 6 cols
+         ;; (`┌', `─', ` ', `▪', ` ' after title, `┐'); the rest of
+         ;; the line is the title and trailing dash fill.
+         (dash-fill (max 1 (- width 6 title-w)))
          (full (concat
-                (gfm-callouts--upright "┌─ ▪ " face)
+                (gfm-callouts--upright "┌─ ▪" face)
                 (gfm-callouts--upright title face)
                 (gfm-callouts--upright " " face)
                 (gfm-callouts--upright (make-string dash-fill ?─) face)
