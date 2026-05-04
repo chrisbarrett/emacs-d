@@ -1,11 +1,16 @@
 # Presentation Sessions
 
-Agent-driven presentation surface inside Emacs. Eight MCP tools let an external
+Agent-driven presentation surface inside Emacs. Nine MCP tools let an external
 agent spawn or reuse an emacsclient frame in a target tmux pane and walk the
-user through a deck of slides. Slide kinds: `narrative` (markdown), `file`
-(buffer narrowed to a range), `diff` (`git diff` in `diff-mode`), `layout`
-(two-pane split). Slides may carry inline overlay `annotations` tied to
-specific lines.
+user through a deck of slides. Slide kinds: `narrative` (markdown — either
+inline or backed by a real file on disk), `file` (buffer narrowed to a range),
+`diff` (`git diff` in `diff-mode`), `layout` (two-pane split). Slides may carry
+inline overlay `annotations` tied to specific lines.
+
+The default usage shape is **doc-first**: write one document with embedded code
+fences, then push annotated `file` slides for the sources the doc references.
+`present_document` encodes this convention in a single MCP call. Decks with
+multiple `narrative` slides are discouraged.
 
 ## Files
 
@@ -40,6 +45,7 @@ and `presentation-origin` parameters so the `delete-frame-functions` hook and
 | Tool                 | Purpose                                                  |
 | :------------------- | :------------------------------------------------------- |
 | `start_presentation` | Spawn or reuse a frame; return key                       |
+| `present_document`   | Write doc + start session with the doc as slide 0        |
 | `get_presentation`   | Inspect a session: origin, frame_live, deck position, …  |
 | `end_presentation`   | Tear down a session by key                               |
 | `push_slide`         | Append a slide; render only with `set_current: true`     |
@@ -50,12 +56,18 @@ and `presentation-origin` parameters so the `delete-frame-functions` hook and
 
 ### Slide kinds
 
-| Kind        | Required          | Optional                                                            |
-| :---------- | :---------------- | :------------------------------------------------------------------ |
-| `narrative` | `markdown`        | `annotations`, `pane_layout`                                        |
-| `file`      | `path`            | `start_line`, `end_line`, `focus`, `annotations`, `pane_layout`     |
-| `diff`      | —                 | `path`, (`base`+`head`), `annotations`, `pane_layout`               |
-| `layout`    | `split`, `panes`  | `pane_layout`                                                       |
+| Kind        | Required               | Optional                                                            |
+| :---------- | :--------------------- | :------------------------------------------------------------------ |
+| `narrative` | one of `path` `markdown` | `title`, `annotations`, `pane_layout`                              |
+| `file`      | `path`                 | `start_line`, `end_line`, `focus`, `annotations`, `pane_layout`     |
+| `diff`      | —                      | `path`, (`base`+`head`), `annotations`, `pane_layout`               |
+| `layout`    | `split`, `panes`       | `pane_layout`                                                       |
+
+A `narrative` slide carries exactly one of `path` (a worktree-relative or
+absolute path to a real file, opened via `find-file-noselect`) or `markdown`
+(an inline string rendered into the synthetic `*presentation: KEY*` buffer).
+Both-or-neither fails validation. `path` is the doc-first form; `markdown`
+remains useful for ephemeral / synthetic narratives.
 
 `annotations` is `[{ line, text, kind?, severity?, position? }, …]`.
 
@@ -113,6 +125,18 @@ consecutive slides with the same hint hit tmux exactly once. Slides without
 | `+presentation--render-slide`           | Cleanup + dispatch + display                  |
 | `+presentation--render-current`         | Render slide at current index, or splash      |
 | `+presentation--render-narrative`       | Renderer for `narrative` slides               |
+| `+presentation-present-document`        | Entry point invoked by `present_document`     |
+| `+presentation--document-path`          | Compute deterministic doc path under worktree |
+| `+presentation--validate-slug`          | Validate `present_document` slug              |
+| `+presentation--narrative-first-heading`| First markdown heading from a path            |
+| `+presentation--slide-title`            | Slide title or first-heading fallback         |
+| `+presentation--parse-slide-url`        | Parse `slide:N' URL → integer N or nil        |
+| `+presentation--parse-line-anchor-url`  | Parse `path#L<a>[-L<b>]' URL                  |
+| `+presentation--deck-find-file-slide`   | Find file slide by exact path/start/end       |
+| `+presentation--dispatch-link`          | Pure dispatch decision for a link URL         |
+| `+presentation--link-url-at-point`      | Read URL of markdown link at point            |
+| `+presentation-follow-link`             | RET command: deck-aware link follow           |
+| `+presentation--fallback-ret`           | Run RET binding without `+presentation-mode'  |
 | `+presentation--render-file`            | Renderer for `file` slides                    |
 | `+presentation--render-diff`            | Renderer for `diff` slides                    |
 | `+presentation--render-layout`          | Renderer for `layout` slides                  |
@@ -211,6 +235,7 @@ can resolve back to the session.
 | `C-n` / `C-f`      | `+presentation-next-slide`       |
 | `C-p` / `C-b`      | `+presentation-previous-slide`   |
 | `C-c q`            | `+presentation-quit`             |
+| `RET`              | `+presentation-follow-link`      |
 
 Navigation is bounded: `next-slide` at the last index and
 `previous-slide` at index 0 are silent no-ops. Mutation (push, replace,
@@ -268,6 +293,38 @@ return` advice on `claude-code-ide-mcp--handle-initialize`. An
 upstream defcustom-based extension point is the long-term durable
 solution; the advice is the v0 implementation and degrades silently
 when the upstream symbol is unbound.
+
+### Doc-first usage and link dispatch
+
+`present_document` is the preferred entry point. It writes the supplied
+`markdown` to:
+
+```
+<worktree>/.claude/presentations/<YYYY>-<MM>-<DD>T<HH>-<MM>-<slug>.md
+```
+
+(creating `<worktree>/.claude/presentations/` when absent), then drives the
+same code path as `start_presentation` with an `initial_slide` of kind
+`narrative` carrying the doc's `:path`. Any `file_slides` array is pushed in
+order via the same code path as `push_slide`. The tool returns
+`{ key, path, slide_count }` so the agent can iterate via `Edit` on the doc;
+`find-file-noselect`-backed buffers auto-revert on disk change.
+
+Inside narrative buffers (those whose major mode derives from `markdown-mode`
+AND that carry a non-nil buffer-local `+presentation--session-key`), `RET`
+intercepts markdown-link follows. Two URL forms route through the deck:
+
+- `slide:N` → `goto_slide(N)`.
+- `path#L<start>` or `path#L<start>-L<end>` → exact match against the deck
+  (path equality after `expand-file-name` against the session's worktree;
+  `:start-line` equals `<start>`; `:end-line` equals `<end>` or `<start>`
+  when no range is given). On a match, `goto_slide(<that-index>)`. On a
+  miss, fall back to `find-file` + `goto-line` with no overlays.
+
+Other URL forms (`https://`, `mailto:`, plain paths without anchors) pass
+through to `markdown-mode`'s default handler. File-, diff-, and layout-pane
+buffers do NOT carry the dispatch — when conditions don't hold, `RET`
+invokes the binding it would have without `+presentation-mode`.
 
 ### display-buffer protection
 

@@ -412,6 +412,75 @@ Return the generated session-key string."
       (+presentation--render-current key))
     key))
 
+;;; present_document
+
+(defun +presentation--document-path (worktree slug &optional time)
+  "Return the document path under WORKTREE for SLUG at TIME.
+Form: `<worktree>/.claude/presentations/<YYYY>-<MM>-<DD>T<HH>-<MM>-<slug>.md'.
+TIME defaults to `current-time'."
+  (let ((stamp (format-time-string "%Y-%m-%dT%H-%M" (or time (current-time)))))
+    (expand-file-name
+     (format "%s-%s.md" stamp slug)
+     (expand-file-name ".claude/presentations"
+                       (directory-file-name worktree)))))
+
+(defun +presentation--validate-slug (slug)
+  "Validate SLUG; signal `user-error' on empty / `/' / whitespace.
+Returns t on success."
+  (cond
+   ((not (stringp slug))
+    (user-error "slug must be a string, got: %S" slug))
+   ((string-empty-p slug)
+    (user-error "slug must not be empty"))
+   ((string-match-p "/" slug)
+    (user-error "slug must not contain `/': %S" slug))
+   ((string-match-p "[ \t\n\r\f]" slug)
+    (user-error "slug must not contain whitespace: %S" slug))
+   (t t)))
+
+;;;###autoload
+(cl-defun +presentation-present-document (&key worktree tmux-session tmux-window
+                                               slug markdown
+                                               (split 'horizontal)
+                                               file-slides socket)
+  "Write MARKDOWN to a slug-named doc under WORKTREE; start a presentation.
+Composes: create `<worktree>/.claude/presentations/' (when missing) →
+write MARKDOWN to a deterministic ISO-stamped path → call
+`+presentation-start' with an `initial-slide' of kind `narrative' and
+that path → push each FILE-SLIDES entry via `+presentation--deck-push'.
+
+Validates SLUG and FILE-SLIDES before any side effect; rejects
+non-`file' file slides.  Returns an alist with `key', `path', and
+`slide_count' equal to `1 + (length file-slides)'."
+  (unless worktree (user-error "Missing :worktree"))
+  (unless tmux-session (user-error "Missing :tmux-session"))
+  (unless tmux-window (user-error "Missing :tmux-window"))
+  (unless (stringp markdown) (user-error "Missing :markdown"))
+  (+presentation--validate-slug slug)
+  (let ((slides (append file-slides nil)))
+    (dolist (s slides)
+      (unless (equal (plist-get s :kind) "file")
+        (user-error
+         "file_slides entries must have kind=\"file\", got: %S"
+         (plist-get s :kind)))
+      (+presentation--validate-slide s))
+    (let* ((path (+presentation--document-path worktree slug))
+           (dir (file-name-directory path)))
+      (make-directory dir t)
+      (with-temp-file path (insert markdown))
+      (let ((key (+presentation-start
+                  :worktree worktree
+                  :tmux-session tmux-session
+                  :tmux-window tmux-window
+                  :split split
+                  :socket socket
+                  :initial-slide (list :kind "narrative" :path path))))
+        (dolist (s slides)
+          (+presentation--deck-push key s))
+        `((key . ,key)
+          (path . ,path)
+          (slide_count . ,(1+ (length slides))))))))
+
 ;;;###autoload
 (defun +presentation-end (key)
   "Tear down the presentation session identified by KEY.
@@ -488,6 +557,25 @@ omitted, and `started-at' is rendered as a float seconds-since-epoch."
       (slide_count . ,(length deck))
       (current_slide_index . ,cur))))
 
+(defun +presentation--narrative-first-heading (path)
+  "Return the first markdown heading text from PATH, or nil.
+Reads up to 4KB from the head of the file."
+  (when (and path (file-readable-p path))
+    (with-temp-buffer
+      (insert-file-contents path nil 0 4096)
+      (goto-char (point-min))
+      (when (re-search-forward "^#+[ \t]+\\(.+?\\)[ \t]*$" nil t)
+        (match-string-no-properties 1)))))
+
+(defun +presentation--slide-title (slide)
+  "Return display title for SLIDE, or nil.
+Falls back to the first markdown heading for narrative slides backed
+by `:path'."
+  (or (plist-get slide :title)
+      (and (equal (plist-get slide :kind) "narrative")
+           (+presentation--narrative-first-heading
+            (plist-get slide :path)))))
+
 ;;;###autoload
 (defun +presentation-deck-info (key)
   "Return a JSON-encodable snapshot of session KEY's deck.
@@ -503,7 +591,7 @@ vector of `((index . I) (kind . K) (title . T-or-nil))' alists."
                                  for i from 0
                                  collect `((index . ,i)
                                            (kind . ,(plist-get s :kind))
-                                           (title . ,(plist-get s :title)))))))))
+                                           (title . ,(+presentation--slide-title s)))))))))
 
 ;;;###autoload
 (defun +presentation--frame-deleted-h (frame)
@@ -641,8 +729,23 @@ CONTEXT may be the symbol `pane' to forbid nested layout slides."
       (user-error "Slide :kind must be a string, got: %S" kind))
     (pcase kind
       ("narrative"
-       (unless (stringp (plist-get slide :markdown))
-         (user-error "narrative slide requires string :markdown")))
+       (let ((has-md (plist-member slide :markdown))
+             (has-path (plist-member slide :path)))
+         (cond
+          ((and has-md has-path)
+           (user-error
+            "narrative slide must have :path or :markdown, not both"))
+          ((not (or has-md has-path))
+           (user-error
+            "narrative slide requires :path or :markdown"))
+          (has-path
+           (unless (stringp (plist-get slide :path))
+             (user-error "narrative :path must be string, got: %S"
+                         (plist-get slide :path))))
+          (t
+           (unless (stringp (plist-get slide :markdown))
+             (user-error "narrative :markdown must be string, got: %S"
+                         (plist-get slide :markdown)))))))
       ("file"
        (unless (stringp (plist-get slide :path))
          (user-error "file slide requires string :path"))
@@ -914,14 +1017,31 @@ missing `claude-code-ide-mcp--send-notification' silently no-op."
 ;;; Per-kind renderers
 
 (defun +presentation--render-narrative (key slide)
-  "Render the narrative SLIDE for session KEY into its narrative buffer."
-  (let ((buf (+presentation--narrative-buffer key)))
-    (with-current-buffer buf
-      (let ((inhibit-read-only t))
-        (erase-buffer)
-        (insert (or (plist-get slide :markdown) ""))
-        (when (fboundp +presentation-narrative-major-mode)
-          (funcall +presentation-narrative-major-mode))))
+  "Render the narrative SLIDE for session KEY.
+When SLIDE carries `:path', the displayed buffer is `find-file-noselect'
+on the worktree-resolved path.  Otherwise the synthetic
+`*presentation: KEY*' splash buffer is filled from `:markdown'."
+  (let* ((path (plist-get slide :path))
+         (buf
+          (cond
+           (path
+            (let* ((sess (+presentation--get-session key))
+                   (worktree (plist-get sess :worktree))
+                   (resolved (if (file-name-absolute-p path)
+                                 path
+                               (expand-file-name path worktree))))
+              (unless (file-exists-p resolved)
+                (user-error "narrative :path does not exist: %s" resolved))
+              (find-file-noselect resolved)))
+           (t
+            (let ((buf (+presentation--narrative-buffer key)))
+              (with-current-buffer buf
+                (let ((inhibit-read-only t))
+                  (erase-buffer)
+                  (insert (or (plist-get slide :markdown) ""))
+                  (when (fboundp +presentation-narrative-major-mode)
+                    (funcall +presentation-narrative-major-mode))))
+              buf)))))
     (+presentation--enable-mode-in buf key)
     buf))
 
@@ -1238,6 +1358,114 @@ switches the session frame to the produced buffer."
           (with-selected-frame frame (switch-to-buffer buf)))
         buf)))))
 
+;;; Markdown link dispatch
+
+(defun +presentation--parse-slide-url (url)
+  "Parse `slide:N' URL; return non-negative integer N, or nil."
+  (when (and (stringp url)
+             (string-match "\\`slide:\\([0-9]+\\)\\'" url))
+    (string-to-number (match-string 1 url))))
+
+(defun +presentation--parse-line-anchor-url (url)
+  "Parse `path#L<start>[-L<end>]' URL.
+Return `(PATH START . END)' (cons-list cell), or nil.  When only
+`#L<start>' is present, END equals START."
+  (when (and (stringp url)
+             (string-match
+              "\\`\\(.+?\\)#L\\([0-9]+\\)\\(?:-L\\([0-9]+\\)\\)?\\'" url))
+    (let* ((path (match-string 1 url))
+           (start (string-to-number (match-string 2 url)))
+           (end-str (match-string 3 url))
+           (end (if end-str (string-to-number end-str) start)))
+      (cons path (cons start end)))))
+
+(defun +presentation--deck-find-file-slide (key path start end)
+  "Return index of file slide in session KEY's deck matching PATH/START/END.
+PATH is resolved against the session's worktree when relative.  Returns
+nil when no exact match is present."
+  (let* ((sess (+presentation--get-session key))
+         (worktree (plist-get sess :worktree))
+         (deck (or (plist-get sess :deck) []))
+         (target (if (file-name-absolute-p path)
+                     path
+                   (expand-file-name path worktree))))
+    (cl-loop for s across deck
+             for i from 0
+             when (and (equal (plist-get s :kind) "file")
+                       (let ((sp (plist-get s :path)))
+                         (and sp
+                              (equal target
+                                     (if (file-name-absolute-p sp) sp
+                                       (expand-file-name sp worktree)))))
+                       (equal (plist-get s :start-line) start)
+                       (equal (plist-get s :end-line) end))
+             return i)))
+
+(defun +presentation--dispatch-link (url key)
+  "Decide how URL should be followed for session KEY.
+Pure: returns one of `(goto-slide INDEX)', `(find-file-fallback PATH
+LINE)', or `(pass-through)' without I/O."
+  (cond
+   ((let ((idx (+presentation--parse-slide-url url)))
+      (and idx (list 'goto-slide idx))))
+   ((let ((parsed (+presentation--parse-line-anchor-url url)))
+      (when parsed
+        (let* ((path (car parsed))
+               (start (cadr parsed))
+               (end (cddr parsed))
+               (idx (+presentation--deck-find-file-slide
+                     key path start end)))
+          (if idx
+              (list 'goto-slide idx)
+            (let* ((sess (+presentation--get-session key))
+                   (worktree (plist-get sess :worktree))
+                   (resolved (if (file-name-absolute-p path) path
+                               (expand-file-name path worktree))))
+              (list 'find-file-fallback resolved start)))))))
+   (t (list 'pass-through))))
+
+(defun +presentation--link-url-at-point ()
+  "Return URL of markdown link at point, or nil."
+  (cond
+   ((fboundp 'markdown-link-url) (markdown-link-url))
+   (t nil)))
+
+(defvar +presentation-mode)
+(defvar +presentation--session-key)
+
+(defun +presentation--fallback-ret ()
+  "Run the binding RET would have if `+presentation-mode' weren't on."
+  (let ((+presentation-mode nil))
+    (let ((cmd (key-binding (kbd "RET") t)))
+      (when (and cmd (commandp cmd))
+        (call-interactively cmd)))))
+
+;;;###autoload
+(defun +presentation-follow-link ()
+  "Intercept RET in narrative buffers to route deck-aware link follows.
+Dispatch runs only when the buffer's major mode derives from
+`markdown-mode' AND `+presentation--session-key' resolves to a live
+session.  Otherwise the binding RET would have without
+`+presentation-mode' is invoked."
+  (interactive)
+  (let* ((key +presentation--session-key)
+         (sess (and key (gethash key +presentation--sessions))))
+    (cond
+     ((and sess
+           (derived-mode-p 'markdown-mode)
+           (when-let* ((url (+presentation--link-url-at-point)))
+             (pcase (+presentation--dispatch-link url key)
+               (`(goto-slide ,idx)
+                (+presentation--deck-goto key idx) t)
+               (`(find-file-fallback ,p ,line)
+                (find-file p)
+                (goto-char (point-min))
+                (forward-line (1- line))
+                t)
+               (_ nil)))))
+     (t (+presentation--fallback-ret)))))
+
+
 ;;; +presentation-mode minor mode
 
 (defvar-local +presentation--session-key nil
@@ -1250,6 +1478,7 @@ switches the session frame to the produced buffer."
     (define-key map (kbd "C-p") #'+presentation-previous-slide)
     (define-key map (kbd "C-b") #'+presentation-previous-slide)
     (define-key map (kbd "C-c q") #'+presentation-quit)
+    (define-key map (kbd "RET") #'+presentation-follow-link)
     map)
   "Keymap for `+presentation-mode'.")
 
