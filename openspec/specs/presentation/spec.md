@@ -612,15 +612,24 @@ The system SHALL provide a buffer-local minor mode
 
 - `C-n` and `C-f` to a `next-slide` command
 - `C-p` and `C-b` to a `previous-slide` command
+- `C-c q` to a `quit` command that ends the session owning the
+  current buffer
 
 `next-slide` SHALL advance the deck by one position via the existing
 `+presentation--deck-goto` helper.  `previous-slide` SHALL retreat by
 one.  Both commands SHALL no-op (without error) when the requested
 target index is out of `[0, slide_count)`.
 
+`quit` SHALL resolve the session via the buffer-local
+`+presentation--session-key` and invoke `+presentation-end` on it.
+When the buffer-local key is `nil`, or no session for that key
+exists in the session table, `quit` SHALL no-op without error.
+
 The minor mode keymap SHALL take precedence over the buffer's major
 mode bindings for the keys it owns; other keys SHALL pass through to
-the major mode unchanged.
+the major mode unchanged.  Bindings SHALL be callable from any evil
+state (normal, insert, visual, …) — the keymap is registered via
+`evil-make-overriding-map`.
 
 #### Scenario: file-slide buffer has navigation enabled
 
@@ -657,6 +666,30 @@ the major mode unchanged.
 - **THEN** both pane buffers have `+presentation-mode` enabled
 - **AND** both have `+presentation--session-key` set to the session
   key
+
+#### Scenario: C-c q ends the session
+
+- **WHEN** point is in a presentation buffer for session `K`
+- **AND** session `K` is registered in the session table
+- **AND** the user invokes the binding for `C-c q`
+- **THEN** `+presentation-end` is called with `K`
+- **AND** session `K` is removed from the session table
+
+#### Scenario: C-c q in a stale buffer is a no-op
+
+- **WHEN** point is in a buffer whose buffer-local
+  `+presentation--session-key` references a session no longer
+  present in the session table
+- **AND** the user invokes the binding for `C-c q`
+- **THEN** no error is signalled
+- **AND** no teardown effect is run
+
+#### Scenario: C-c q is callable from evil normal state
+
+- **WHEN** point is in a presentation buffer
+- **AND** the active evil state is `normal`
+- **AND** the user types `C-c q`
+- **THEN** the `quit` command is invoked
 
 ### Requirement: User-driven navigation emits a channel notification
 
