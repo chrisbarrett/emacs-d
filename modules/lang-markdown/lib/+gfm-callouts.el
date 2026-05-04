@@ -215,10 +215,11 @@ callout has no body lines)."
              (right-pipe (gfm-callouts--upright "│" border-face))
              (trailing-ov (gfm-callouts--apply-marker-line
                            beg border-face top-split)))
-        ;; Override `markdown-blockquote-face' italic across the
-        ;; block: callouts are alerts, not quotations.
+        ;; Strip `markdown-blockquote-face' across the block: callouts
+        ;; are alerts, not quotations, so render their content as
+        ;; ordinary prose.
         (let ((ov (make-overlay beg end)))
-          (overlay-put ov 'face '(:slant normal))
+          (overlay-put ov 'face 'default)
           (gfm-callouts--register ov))
         (save-excursion
           (goto-char marker-line-end)
