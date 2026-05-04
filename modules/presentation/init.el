@@ -17,6 +17,13 @@
    :description
    "Start a presentation session in an Emacs frame served by the daemon.
 
+Prefer `present_document' for walk-throughs — that tool writes a real
+markdown doc, opens it as the first narrative slide, and pushes any
+supporting `file' slides in one call.  Use `start_presentation'
+directly only for cases that don't fit the doc-first shape (e.g. an
+ephemeral synthetic narrative slide via `:markdown', or starting an
+empty deck).
+
 Discovers an existing emacsclient frame in the target tmux window by
 joining `tmux list-panes' output against the daemon's frames.  If a
 matching frame is found it is reused (its window-configuration is
@@ -80,6 +87,11 @@ deleted as part of teardown."
    :name "push_slide"
    :description
    "Append a slide to the deck and return its integer index.
+
+Prefer `present_document' for the initial doc + supporting file slides.
+Use `push_slide' to add more annotated source views to a session that
+was opened with `present_document', not to assemble a deck out of many
+narrative slides — multi-narrative decks are discouraged.
 
 The user's currently rendered slide is left untouched by default — pushing
 slides does NOT drag the user's view forward.  Pass `set_current: true'
@@ -164,6 +176,55 @@ Raises a user-error on out-of-range INDEX."
      (:name "index" :type integer :description "Zero-based target index."))
    :function
    (lambda (key index) (+presentation--deck-goto key index)))
+
+  (claude-code-ide-make-tool
+   :name "present_document"
+   :description
+   "Write a markdown document and open it as the first (narrative) slide.
+
+Preferred entry point for walk-throughs.  Pattern: write one fat
+document with embedded code fences and links to source, then push
+annotated `file' slides for the sources the doc references.  Avoid
+pushing many `narrative' slides — the convention is one document.
+
+Path is computed, not configurable:
+
+  `<worktree>/.claude/presentations/<YYYY>-<MM>-<DD>T<HH>-<MM>-<slug>.md'
+
+The directory is created if absent.  The document path is returned so
+the agent can iterate via `Edit'; the buffer auto-reverts on disk
+change.  Inside the document, two link forms route through the deck:
+
+- `[label](slide:N)' — navigate to slide N.
+- `[label](path#L<start>-L<end>)' — navigate to the matching file
+  slide if one exists; falls back to `find-file' otherwise.
+
+Returns an object with `key' (session key), `path' (document path),
+and `slide_count' (1 + length of `file_slides')."
+   :args
+   '((:name "worktree"     :type string :description "Absolute worktree path.")
+     (:name "tmux_session" :type string :description "Tmux session name or id.")
+     (:name "tmux_window"  :type string :description "Tmux window id or index.")
+     (:name "slug"         :type string
+            :description "Kebab-case slug; no `/' or whitespace.")
+     (:name "markdown"     :type string :description "Document body.")
+     (:name "split"        :type string :optional t :enum ["horizontal" "vertical"]
+            :description "Split direction when spawning a new pane (default: horizontal).")
+     (:name "file_slides"  :type array :optional t
+            :description "Optional array of slide specs, each with kind=\"file\"."))
+   :function
+   (lambda (worktree tmux_session tmux_window slug markdown
+                     &optional split file_slides)
+     (+presentation-present-document
+      :worktree worktree
+      :tmux-session tmux_session
+      :tmux-window tmux_window
+      :slug slug
+      :markdown markdown
+      :split (pcase split ("vertical" 'vertical) (_ 'horizontal))
+      :file-slides (and file_slides
+                        (mapcar #'+presentation--coerce-slide
+                                (append file_slides nil))))))
 
   (claude-code-ide-make-tool
    :name "get_deck"

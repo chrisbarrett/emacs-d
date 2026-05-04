@@ -218,6 +218,75 @@ Results are returned in execution order."
             (should (eq major-mode 'fundamental-mode)))
         (kill-buffer buf)))))
 
+(ert-deftest +presentation/render-narrative-path-resolves-against-worktree ()
+  "Narrative slide with `:path' uses `find-file-noselect' on the
+worktree-resolved path; the returned buffer becomes the displayed buffer."
+  (let* ((+presentation--sessions (make-hash-table :test 'equal))
+         (key "k-narr-path"))
+    (let ((tmpfile (make-temp-file "narr-doc-" nil ".md" "# Doc body\n")))
+      (unwind-protect
+          (let ((dir (file-name-directory tmpfile))
+                (rel (file-name-nondirectory tmpfile)))
+            (puthash key (list :worktree dir :frame nil)
+                     +presentation--sessions)
+            (let ((buf (+presentation--render-narrative
+                        key (list :kind "narrative" :path rel))))
+              (should (bufferp buf))
+              (should (equal (buffer-file-name buf) tmpfile))
+              (with-current-buffer buf
+                (should (string-match-p "Doc body" (buffer-string))))))
+        (when (get-file-buffer tmpfile)
+          (with-current-buffer (get-file-buffer tmpfile)
+            (set-buffer-modified-p nil))
+          (kill-buffer (get-file-buffer tmpfile)))
+        (delete-file tmpfile)))))
+
+(ert-deftest +presentation/render-narrative-path-absolute-ok ()
+  "Absolute `:path' is used as-is, not joined to worktree."
+  (let* ((+presentation--sessions (make-hash-table :test 'equal))
+         (key "k-narr-abs"))
+    (let ((tmpfile (make-temp-file "narr-abs-" nil ".md" "abs body\n")))
+      (unwind-protect
+          (progn
+            (puthash key (list :worktree "/some/other/wt" :frame nil)
+                     +presentation--sessions)
+            (let ((buf (+presentation--render-narrative
+                        key (list :kind "narrative" :path tmpfile))))
+              (should (equal (buffer-file-name buf) tmpfile))))
+        (when (get-file-buffer tmpfile)
+          (with-current-buffer (get-file-buffer tmpfile)
+            (set-buffer-modified-p nil))
+          (kill-buffer (get-file-buffer tmpfile)))
+        (delete-file tmpfile)))))
+
+(ert-deftest +presentation/render-narrative-path-missing-signals-error ()
+  "Missing file at `:path' signals `user-error' naming the path."
+  (let* ((+presentation--sessions (make-hash-table :test 'equal))
+         (key "k-narr-missing"))
+    (puthash key (list :worktree "/tmp" :frame nil)
+             +presentation--sessions)
+    (let* ((bogus "/tmp/this-file-must-not-exist-xyzzy-12345.md")
+           (err (should-error
+                 (+presentation--render-narrative
+                  key (list :kind "narrative" :path bogus))
+                 :type 'user-error)))
+      (should (string-match-p "this-file-must-not-exist-xyzzy-12345"
+                              (error-message-string err))))))
+
+(ert-deftest +presentation/render-narrative-markdown-uses-synthetic-buffer ()
+  "Narrative with `:markdown' continues to use `*presentation: KEY*'."
+  (let* ((+presentation--sessions (make-hash-table :test 'equal))
+         (+presentation-narrative-major-mode 'fundamental-mode)
+         (key "k-narr-md"))
+    (puthash key (list :worktree "/tmp" :frame nil)
+             +presentation--sessions)
+    (let ((buf (+presentation--render-narrative
+                key '(:kind "narrative" :markdown "synth"))))
+      (unwind-protect
+          (should (equal (buffer-name buf)
+                         (format "*presentation: %s*" key)))
+        (kill-buffer buf)))))
+
 
 ;;; 8. Reuse path planner
 
@@ -863,8 +932,25 @@ Returns t if loaded, nil if the file or MCP package is unavailable."
   (should (+presentation--validate-slide
            '(:kind "narrative" :markdown "x"))))
 
-(ert-deftest +presentation/validate-slide-narrative-requires-markdown ()
+(ert-deftest +presentation/validate-slide-narrative-requires-path-or-markdown ()
   (should-error (+presentation--validate-slide '(:kind "narrative"))
+                :type 'user-error))
+
+(ert-deftest +presentation/validate-slide-narrative-path-only-ok ()
+  (should (+presentation--validate-slide
+           '(:kind "narrative" :path "doc.md"))))
+
+(ert-deftest +presentation/validate-slide-narrative-rejects-both-path-and-markdown ()
+  (should-error (+presentation--validate-slide
+                 '(:kind "narrative" :path "doc.md" :markdown "x"))
+                :type 'user-error))
+
+(ert-deftest +presentation/validate-slide-narrative-path-must-be-string ()
+  (should-error (+presentation--validate-slide
+                 '(:kind "narrative" :path 42))
+                :type 'user-error)
+  (should-error (+presentation--validate-slide
+                 '(:kind "narrative" :path nil))
                 :type 'user-error))
 
 (ert-deftest +presentation/validate-slide-file-ok ()
@@ -2594,6 +2680,381 @@ current do not emit channel notifications."
            '(:kind "file" :path "x"
              :annotations [(:line 1 :text "a"
                             :kind "callout" :severity "warning")]))))
+
+;;; Markdown link dispatch
+
+(ert-deftest +presentation/parse-slide-url-integer ()
+  (should (= (+presentation--parse-slide-url "slide:0") 0))
+  (should (= (+presentation--parse-slide-url "slide:42") 42)))
+
+(ert-deftest +presentation/parse-slide-url-rejects-bad ()
+  (should-not (+presentation--parse-slide-url "slide:foo"))
+  (should-not (+presentation--parse-slide-url "slide:"))
+  (should-not (+presentation--parse-slide-url "slide:1.5"))
+  (should-not (+presentation--parse-slide-url "slide:-1"))
+  (should-not (+presentation--parse-slide-url "https://x")))
+
+(ert-deftest +presentation/parse-line-anchor-url-range ()
+  (should (equal (+presentation--parse-line-anchor-url "modules/x.el#L42-L67")
+                 '("modules/x.el" 42 . 67))))
+
+(ert-deftest +presentation/parse-line-anchor-url-single ()
+  (should (equal (+presentation--parse-line-anchor-url "x.el#L7")
+                 '("x.el" 7 . 7))))
+
+(ert-deftest +presentation/parse-line-anchor-url-no-anchor ()
+  (should-not (+presentation--parse-line-anchor-url "x.el"))
+  (should-not (+presentation--parse-line-anchor-url "https://x"))
+  (should-not (+presentation--parse-line-anchor-url "slide:2")))
+
+(ert-deftest +presentation/deck-find-file-slide-exact-match ()
+  (let* ((+presentation--sessions (make-hash-table :test 'equal))
+         (key "k-find"))
+    (puthash key (list :worktree "/wt"
+                       :deck (vector
+                              '(:kind "narrative" :markdown "doc")
+                              '(:kind "file" :path "modules/auth/init.el"
+                                :start-line 42 :end-line 67)
+                              '(:kind "file" :path "/abs/lib.el"
+                                :start-line 1 :end-line 5)))
+             +presentation--sessions)
+    (should (= (+presentation--deck-find-file-slide
+                key "modules/auth/init.el" 42 67) 1))
+    (should (= (+presentation--deck-find-file-slide
+                key "/wt/modules/auth/init.el" 42 67) 1))
+    (should (= (+presentation--deck-find-file-slide
+                key "/abs/lib.el" 1 5) 2))
+    (should-not (+presentation--deck-find-file-slide
+                 key "modules/auth/init.el" 42 99))
+    (should-not (+presentation--deck-find-file-slide
+                 key "modules/other.el" 42 67))))
+
+(ert-deftest +presentation/dispatch-link-slide-url ()
+  (let* ((+presentation--sessions (make-hash-table :test 'equal))
+         (key "k-disp-s"))
+    (puthash key (list :worktree "/wt"
+                       :deck (vector '(:kind "narrative" :markdown "a")
+                                     '(:kind "file" :path "x")
+                                     '(:kind "file" :path "y")))
+             +presentation--sessions)
+    (should (equal (+presentation--dispatch-link "slide:2" key)
+                   '(goto-slide 2)))))
+
+(ert-deftest +presentation/dispatch-link-line-anchor-match ()
+  (let* ((+presentation--sessions (make-hash-table :test 'equal))
+         (key "k-disp-l"))
+    (puthash key (list :worktree "/wt"
+                       :deck (vector
+                              '(:kind "narrative" :markdown "a")
+                              '(:kind "file" :path "modules/x.el"
+                                :start-line 42 :end-line 67)))
+             +presentation--sessions)
+    (should (equal (+presentation--dispatch-link
+                    "modules/x.el#L42-L67" key)
+                   '(goto-slide 1)))))
+
+(ert-deftest +presentation/dispatch-link-line-anchor-fallback ()
+  (let* ((+presentation--sessions (make-hash-table :test 'equal))
+         (key "k-disp-fb"))
+    (puthash key (list :worktree "/wt"
+                       :deck (vector '(:kind "narrative" :markdown "a")))
+             +presentation--sessions)
+    (should (equal (+presentation--dispatch-link
+                    "modules/x.el#L42-L67" key)
+                   '(find-file-fallback "/wt/modules/x.el" 42)))))
+
+(ert-deftest +presentation/dispatch-link-passes-through-unrelated ()
+  (let* ((+presentation--sessions (make-hash-table :test 'equal))
+         (key "k-disp-pt"))
+    (puthash key (list :worktree "/wt"
+                       :deck (vector '(:kind "narrative" :markdown "a")))
+             +presentation--sessions)
+    (should (equal (+presentation--dispatch-link "https://example.com/x" key)
+                   '(pass-through)))
+    (should (equal (+presentation--dispatch-link "modules/x.el" key)
+                   '(pass-through)))
+    (should (equal (+presentation--dispatch-link "mailto:a@b" key)
+                   '(pass-through)))))
+
+(ert-deftest +presentation/follow-link-no-session-skips-dispatch ()
+  "Without a buffer-local session key, dispatch is not consulted."
+  (let ((dispatched nil))
+    (cl-letf (((symbol-function '+presentation--dispatch-link)
+               (lambda (&rest _) (setq dispatched t) '(pass-through)))
+              ((symbol-function '+presentation--link-url-at-point)
+               (lambda () "slide:0"))
+              ((symbol-function '+presentation--fallback-ret)
+               (lambda () nil)))
+      (with-temp-buffer
+        (+presentation-follow-link)
+        (should-not dispatched)))))
+
+(ert-deftest +presentation/follow-link-non-markdown-skips-dispatch ()
+  "Even with a session key, a non-markdown buffer skips dispatch."
+  (let* ((+presentation--sessions (make-hash-table :test 'equal))
+         (dispatched nil))
+    (puthash "k-fld-mode" (list :worktree "/wt") +presentation--sessions)
+    (cl-letf (((symbol-function '+presentation--dispatch-link)
+               (lambda (&rest _) (setq dispatched t) '(pass-through)))
+              ((symbol-function '+presentation--link-url-at-point)
+               (lambda () "slide:0"))
+              ((symbol-function '+presentation--fallback-ret)
+               (lambda () nil)))
+      (with-temp-buffer
+        (setq-local +presentation--session-key "k-fld-mode")
+        (fundamental-mode)
+        (+presentation-follow-link)
+        (should-not dispatched)))))
+
+(ert-deftest +presentation/follow-link-dispatches-goto-slide ()
+  "In a narrative buffer with a slide URL, dispatch runs."
+  (let* ((+presentation--sessions (make-hash-table :test 'equal))
+         (calls nil))
+    (puthash "k-fld-go"
+             (list :worktree "/wt"
+                   :deck (vector '(:kind "narrative" :markdown "a")
+                                 '(:kind "narrative" :markdown "b")))
+             +presentation--sessions)
+    (cl-letf (((symbol-function '+presentation--link-url-at-point)
+               (lambda () "slide:1"))
+              ((symbol-function '+presentation--deck-goto)
+               (lambda (k i) (push (list 'goto k i) calls))))
+      (with-temp-buffer
+        (setq-local +presentation--session-key "k-fld-go")
+        (cl-letf (((symbol-function 'derived-mode-p)
+                   (lambda (&rest modes) (memq 'markdown-mode modes))))
+          (+presentation-follow-link))
+        (should (equal calls '((goto "k-fld-go" 1))))))))
+
+(ert-deftest +presentation/mode-map-binds-RET-to-follow-link ()
+  (should (eq (lookup-key +presentation-mode-map (kbd "RET"))
+              '+presentation-follow-link)))
+
+
+;;; present_document
+
+(ert-deftest +presentation/document-path-format ()
+  "Path helper builds <wt>/.claude/presentations/<ISO>-<slug>.md."
+  (let ((time (encode-time 0 22 14 4 5 2026)))
+    (should (equal
+             (+presentation--document-path
+              "/wt" "auth-walkthrough" time)
+             "/wt/.claude/presentations/2026-05-04T14-22-auth-walkthrough.md"))))
+
+(ert-deftest +presentation/document-path-tolerates-trailing-slash ()
+  (let ((time (encode-time 0 5 9 1 1 2026)))
+    (should (equal
+             (+presentation--document-path "/wt/" "demo" time)
+             "/wt/.claude/presentations/2026-01-01T09-05-demo.md"))))
+
+(ert-deftest +presentation/validate-slug-rejects-empty ()
+  (should-error (+presentation--validate-slug "") :type 'user-error))
+
+(ert-deftest +presentation/validate-slug-rejects-slash ()
+  (should-error (+presentation--validate-slug "foo/bar") :type 'user-error))
+
+(ert-deftest +presentation/validate-slug-rejects-whitespace ()
+  (should-error (+presentation--validate-slug "foo bar") :type 'user-error)
+  (should-error (+presentation--validate-slug "foo\tbar") :type 'user-error)
+  (should-error (+presentation--validate-slug "foo\nbar") :type 'user-error))
+
+(ert-deftest +presentation/validate-slug-accepts-kebab ()
+  (should (eq (+presentation--validate-slug "auth-walkthrough") t)))
+
+(defun +presentation-tests--stub-present-document ()
+  "Return a (calls-symbol . cleanup-fn) pair stubbing start + deck-push.
+Callers cl-letf the symbol-functions and read the recorded calls list."
+  (let ((calls (cons 'calls nil)))
+    (cons calls
+          (cl-letf (((symbol-function '+presentation-start)
+                     (lambda (&rest plist)
+                       (setcdr calls
+                               (append (cdr calls)
+                                       (list (cons 'start plist))))
+                       "k-stub"))
+                    ((symbol-function '+presentation--deck-push)
+                     (lambda (k slide &rest _)
+                       (setcdr calls
+                               (append (cdr calls)
+                                       (list (list 'push k slide))))
+                       (1- (length (cdr calls))))))))))
+
+(ert-deftest +presentation/present-document-writes-file-and-composes-flow ()
+  "Tool composition: write doc → +presentation-start with narrative
+:path → +presentation--deck-push for each file slide, in order."
+  (let* ((wt (make-temp-file "pres-wt-" t))
+         (calls nil))
+    (unwind-protect
+        (cl-letf (((symbol-function '+presentation-start)
+                   (lambda (&rest plist)
+                     (push (cons 'start plist) calls) "k1"))
+                  ((symbol-function '+presentation--deck-push)
+                   (lambda (k slide &rest _)
+                     (push (list 'push k slide) calls) 0)))
+          (let ((result
+                 (+presentation-present-document
+                  :worktree wt
+                  :tmux-session "sess"
+                  :tmux-window "1"
+                  :slug "demo"
+                  :markdown "# Hello\n\nbody\n"
+                  :file-slides (list '(:kind "file" :path "a.el")
+                                     '(:kind "file" :path "b.el")))))
+            (let* ((path (alist-get 'path result))
+                   (ordered (nreverse calls)))
+              (should (file-exists-p path))
+              (should (file-directory-p
+                       (expand-file-name ".claude/presentations" wt)))
+              (should
+               (string-prefix-p
+                (file-name-as-directory
+                 (expand-file-name ".claude/presentations" wt))
+                path))
+              (should (string-match-p "demo\\.md\\'" path))
+              (with-temp-buffer
+                (insert-file-contents path)
+                (should (equal (buffer-string) "# Hello\n\nbody\n")))
+              (should (eq (caar ordered) 'start))
+              (let* ((start-plist (cdar ordered))
+                     (init (plist-get start-plist :initial-slide)))
+                (should (equal (plist-get init :kind) "narrative"))
+                (should (equal (plist-get init :path) path)))
+              (should (eq (car (nth 1 ordered)) 'push))
+              (should (equal
+                       (plist-get (nth 2 (nth 1 ordered)) :path) "a.el"))
+              (should (eq (car (nth 2 ordered)) 'push))
+              (should (equal
+                       (plist-get (nth 2 (nth 2 ordered)) :path) "b.el"))
+              (should (equal (alist-get 'key result) "k1"))
+              (should (= (alist-get 'slide_count result) 3)))))
+      (delete-directory wt t))))
+
+(ert-deftest +presentation/present-document-creates-presentations-dir ()
+  (let* ((wt (make-temp-file "pres-wt-" t))
+         (subdir (expand-file-name ".claude/presentations" wt)))
+    (unwind-protect
+        (cl-letf (((symbol-function '+presentation-start)
+                   (lambda (&rest _) "k"))
+                  ((symbol-function '+presentation--deck-push)
+                   (lambda (&rest _) 0)))
+          (should-not (file-directory-p subdir))
+          (+presentation-present-document
+           :worktree wt :tmux-session "s" :tmux-window "1"
+           :slug "x" :markdown "")
+          (should (file-directory-p subdir)))
+      (delete-directory wt t))))
+
+(ert-deftest +presentation/present-document-returns-key-path-slide-count ()
+  (let ((wt (make-temp-file "pres-wt-" t)))
+    (unwind-protect
+        (cl-letf (((symbol-function '+presentation-start)
+                   (lambda (&rest _) "kx"))
+                  ((symbol-function '+presentation--deck-push)
+                   (lambda (&rest _) 0)))
+          (let ((r (+presentation-present-document
+                    :worktree wt :tmux-session "s" :tmux-window "1"
+                    :slug "demo" :markdown ""
+                    :file-slides (list '(:kind "file" :path "a")
+                                       '(:kind "file" :path "b")
+                                       '(:kind "file" :path "c")))))
+            (should (equal (alist-get 'key r) "kx"))
+            (should (stringp (alist-get 'path r)))
+            (should (= (alist-get 'slide_count r) 4))))
+      (delete-directory wt t))))
+
+(ert-deftest +presentation/present-document-rejects-invalid-slug ()
+  "Empty / `/' / whitespace slug signals user-error before any side effect."
+  (let* ((wt (make-temp-file "pres-wt-" t))
+         (subdir (expand-file-name ".claude/presentations" wt))
+         (start-called nil))
+    (unwind-protect
+        (cl-letf (((symbol-function '+presentation-start)
+                   (lambda (&rest _) (setq start-called t) "k")))
+          (dolist (bad '("" "foo/bar" "foo bar"))
+            (should-error
+             (+presentation-present-document
+              :worktree wt :tmux-session "s" :tmux-window "1"
+              :slug bad :markdown "x")
+             :type 'user-error))
+          (should-not start-called)
+          (should-not (file-directory-p subdir)))
+      (delete-directory wt t))))
+
+(ert-deftest +presentation/present-document-rejects-non-file-file-slides ()
+  "Non-file file_slides entry signals user-error; no file written."
+  (let* ((wt (make-temp-file "pres-wt-" t))
+         (subdir (expand-file-name ".claude/presentations" wt))
+         (start-called nil))
+    (unwind-protect
+        (cl-letf (((symbol-function '+presentation-start)
+                   (lambda (&rest _) (setq start-called t) "k")))
+          (should-error
+           (+presentation-present-document
+            :worktree wt :tmux-session "s" :tmux-window "1"
+            :slug "demo" :markdown ""
+            :file-slides (list '(:kind "narrative" :markdown "x")))
+           :type 'user-error)
+          (should-not start-called)
+          (should-not (file-directory-p subdir)))
+      (delete-directory wt t))))
+
+(ert-deftest +presentation/present-document-mcp-tool-registered ()
+  "MCP server registers a `present_document' tool."
+  (skip-unless (+presentation-tests--load-init))
+  (let ((spec (+presentation-tests--tool-spec "present_document")))
+    (should spec)))
+
+(ert-deftest +presentation/deck-info-narrative-path-falls-back-to-first-heading ()
+  "When a narrative slide has `:path' but no `:title', `get_deck'
+reports the first markdown heading line."
+  (let* ((+presentation--sessions (make-hash-table :test 'equal))
+         (key "k-deck-title-fb"))
+    (let ((tmp (make-temp-file "doc-fb-" nil ".md"
+                               "# First Heading\n\nbody\n")))
+      (unwind-protect
+          (progn
+            (puthash key
+                     (list :frame nil :origin 'created :tmux-pane nil
+                           :worktree (file-name-directory tmp)
+                           :started-at 0
+                           :deck (vector
+                                  (list :kind "narrative" :path tmp))
+                           :current-slide-index 0)
+                     +presentation--sessions)
+            (let* ((info (+presentation-deck-info key))
+                   (slides (alist-get 'slides info))
+                   (s0 (aref slides 0)))
+              (should (equal (alist-get 'title s0) "First Heading"))))
+        (delete-file tmp)))))
+
+(ert-deftest +presentation/deck-info-narrative-path-respects-explicit-title ()
+  "Explicit `:title' wins over the heading fallback."
+  (let* ((+presentation--sessions (make-hash-table :test 'equal))
+         (key "k-deck-title-explicit"))
+    (let ((tmp (make-temp-file "doc-tt-" nil ".md" "# Heading\n")))
+      (unwind-protect
+          (progn
+            (puthash key
+                     (list :frame nil :origin 'created :tmux-pane nil
+                           :worktree (file-name-directory tmp)
+                           :started-at 0
+                           :deck (vector
+                                  (list :kind "narrative" :path tmp
+                                        :title "Custom"))
+                           :current-slide-index 0)
+                     +presentation--sessions)
+            (let* ((info (+presentation-deck-info key))
+                   (s0 (aref (alist-get 'slides info) 0)))
+              (should (equal (alist-get 'title s0) "Custom"))))
+        (delete-file tmp)))))
+
+
+(ert-deftest +presentation/coerce-slide-narrative-path-roundtrips ()
+  "MCP `path' field on a narrative slide arrives as `:path'."
+  (should (equal
+           (+presentation--coerce-slide
+            '((kind . "narrative") (path . "doc.md")))
+           '(:kind "narrative" :path "doc.md"))))
 
 (ert-deftest +presentation/coerce-slide-mixed-kind-annotations-validate ()
   (let ((slide (+presentation--coerce-slide
