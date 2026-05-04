@@ -15,7 +15,7 @@
   "Agent-driven presentation sessions in Emacs frames."
   :group 'tools)
 
-(defcustom +presentation-narrative-major-mode 'markdown-mode
+(defcustom +presentation-narrative-major-mode 'gfm-mode
   "Major mode used to render `narrative' slides."
   :type 'function
   :group '+presentation)
