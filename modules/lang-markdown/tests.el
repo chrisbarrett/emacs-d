@@ -617,6 +617,77 @@ is non-nil — `(url)' is composed into a single chain glyph."
       (when (get-buffer " *gfm-tables-fontify*")
         (kill-buffer " *gfm-tables-fontify*")))))
 
+(ert-deftest lang-markdown/gfm-tables-cell-link-pos-finds-inline-link ()
+  "Inline link inside a cell is locatable from the row overlay."
+  (skip-unless (and (fboundp 'gfm-tables-mode)
+                    (fboundp 'gfm-tables--cell-link-pos)
+                    (fboundp 'gfm-mode)))
+  (with-temp-buffer
+    (gfm-mode)
+    (insert "| col |\n| --- |\n| [text](https://example.com) |\n")
+    (gfm-tables-mode 1)
+    (goto-char (point-min))
+    (forward-line 2)
+    (let* ((row-ov (cl-find-if (lambda (o)
+                                 (overlay-get o 'gfm-tables-cell-bounds))
+                               (overlays-at (line-beginning-position))))
+           (pos (gfm-tables--cell-link-pos row-ov 0)))
+      (should pos)
+      (save-excursion
+        (goto-char pos)
+        (should (looking-at-p "\\[text\\](https://example\\.com)"))))))
+
+(ert-deftest lang-markdown/gfm-tables-cell-link-pos-no-link-returns-nil ()
+  "A cell with no link returns nil from `cell-link-pos'."
+  (skip-unless (and (fboundp 'gfm-tables-mode)
+                    (fboundp 'gfm-tables--cell-link-pos)
+                    (fboundp 'gfm-mode)))
+  (with-temp-buffer
+    (gfm-mode)
+    (insert "| col |\n| --- |\n| plain text |\n")
+    (gfm-tables-mode 1)
+    (goto-char (point-min))
+    (forward-line 2)
+    (let ((row-ov (cl-find-if (lambda (o)
+                                (overlay-get o 'gfm-tables-cell-bounds))
+                              (overlays-at (line-beginning-position)))))
+      (should-not (gfm-tables--cell-link-pos row-ov 0)))))
+
+(ert-deftest lang-markdown/gfm-tables-row-char-bounds-aligns-after-composition ()
+  "Cell char bounds reflect actual cell string length, not visible width.
+A cell with a composition (long source, narrow display) padded to its
+column width must still cover all its source chars in the bounds."
+  (skip-unless (fboundp 'gfm-tables--row-char-bounds))
+  (let* ((cell (copy-sequence "abcXXXXXde"))
+         (_ (compose-string cell 3 8 ?Y))
+         (bounds (gfm-tables--row-char-bounds (list cell "ok") (vector 6 2))))
+    ;; cell 0: 1 (after pipe) → 1 + 2 + 10 (raw len) + 0 (pad) = 13.
+    (should (equal (nth 0 bounds) (cons 1 13)))
+    ;; gap at 13. cell 1: 14 → 14 + 2 + 2 + 0 = 18.
+    (should (equal (nth 1 bounds) (cons 14 18)))))
+
+(ert-deftest lang-markdown/gfm-tables-row-char-bounds-end-matches-compose-row-length ()
+  "Last cell's end + 1 (closing pipe) equals `compose-row's string length."
+  (skip-unless (and (fboundp 'gfm-tables--row-char-bounds)
+                    (fboundp 'gfm-tables--compose-row)))
+  (let* ((cells '("ab" "cd" "e"))
+         (col-widths (vector 2 3 1))
+         (s (gfm-tables--compose-row cells col-widths 'body-default))
+         (bounds (gfm-tables--row-char-bounds cells col-widths)))
+    (should (= (length s) (1+ (cdr (car (last bounds))))))))
+
+(ert-deftest lang-markdown/gfm-tables-multiline-row-char-bounds-per-line ()
+  "Per-visual-line bounds reflect the wrapped cell content on each line."
+  (skip-unless (fboundp 'gfm-tables--multiline-row-char-bounds))
+  (let* ((cells '("a" "one two three"))
+         (col-widths (vector 1 5))
+         (per-line (gfm-tables--multiline-row-char-bounds cells col-widths)))
+    ;; Two visual lines (cell 1 wraps).
+    (should (>= (length per-line) 2))
+    ;; Each line's bounds list has one entry per column.
+    (dolist (cb per-line)
+      (should (= (length cb) 2)))))
+
 (ert-deftest lang-markdown/gfm-tables-compose-row-preserves-cell-faces ()
   "`compose-row' on body-alt row keeps existing markdown faces on cell text."
   (skip-unless (and (fboundp 'gfm-tables--compose-row)

@@ -472,6 +472,16 @@ pane dim track those segments automatically without any rebuild."
 Returns a string in which visual lines are joined by newlines.  All
 cells in the row are padded to the tallest cell's height with empty
 strings, so the column grid stays aligned across visual lines."
+  (mapconcat #'identity
+             (mapcar (lambda (line-cells)
+                       (gfm-tables--compose-row line-cells col-widths role))
+                     (gfm-tables--wrap-row-into-lines cells col-widths))
+             "\n"))
+
+(defun gfm-tables--wrap-row-into-lines (cells col-widths)
+  "Wrap CELLS to COL-WIDTHS, returning a list of per-visual-line cell-lists.
+Each entry is the cells used for one visual line; cells whose wrap is
+shorter than the row's height are padded with empty strings."
   (let* ((widths-list (cl-coerce col-widths 'list))
          (wrapped (cl-mapcar #'gfm-tables--wrap-cell cells widths-list))
          (height (apply #'max 1 (mapcar #'length wrapped)))
@@ -479,13 +489,39 @@ strings, so the column grid stays aligned across visual lines."
                            (append lines
                                    (make-list (- height (length lines)) "")))
                          wrapped)))
-    (mapconcat
-     (lambda (idx)
-       (gfm-tables--compose-row
-        (mapcar (lambda (cell-lines) (nth idx cell-lines)) padded)
-        col-widths role))
-     (number-sequence 0 (1- height))
-     "\n")))
+    (mapcar (lambda (idx)
+              (mapcar (lambda (cell-lines) (nth idx cell-lines)) padded))
+            (number-sequence 0 (1- height)))))
+
+(defun gfm-tables--row-char-bounds (cells col-widths)
+  "Return list of (BEG . END) char offsets per cell within `compose-row's output.
+Each range covers the cell's display segment from the leading padding
+space through the trailing padding space, exclusive of outer pipes and
+inter-cell gaps.  Bounds reflect the cell strings' actual lengths, so
+they remain accurate when cells contain compositions or other
+text-property tricks that make displayed width less than char length."
+  (let ((n (length col-widths))
+        (pos 1)
+        (bounds nil))
+    (cl-loop for i from 0 below n
+             for cell = (or (nth i cells) "")
+             for cell-w = (gfm-tables--visible-width cell)
+             for w = (aref col-widths i)
+             for pad = (max 0 (- w cell-w))
+             for seg-len = (+ 2 (length cell) pad)
+             do (push (cons pos (+ pos seg-len)) bounds)
+                (setq pos (+ pos seg-len))
+                (when (< i (1- n))
+                  (setq pos (1+ pos))))
+    (nreverse bounds)))
+
+(defun gfm-tables--multiline-row-char-bounds (cells col-widths)
+  "Per-visual-line cell char bounds for `compose-multiline-row's output.
+Returns a list with one entry per visual line; each entry is the
+`row-char-bounds' for that line's wrapped cells."
+  (mapcar (lambda (line-cells)
+            (gfm-tables--row-char-bounds line-cells col-widths))
+          (gfm-tables--wrap-row-into-lines cells col-widths)))
 
 (defun gfm-tables--rule-row (box-width)
   "Return a `├─…─┤' T-junction rule between header and body, width BOX-WIDTH."
@@ -576,6 +612,9 @@ strings, so the column grid stays aligned across visual lines."
           (overlay-put ov 'gfm-tables-cell-bounds
                        (gfm-tables--cell-bounds header-beg header-end))
           (overlay-put ov 'gfm-tables-col-widths col-widths)
+          (overlay-put ov 'gfm-tables-display-cell-bounds
+                       (gfm-tables--multiline-row-char-bounds
+                        header-cells col-widths))
           (gfm-tables--register ov))
         ;; Delimiter row → continuous rule.
         (let ((ov (make-overlay delim-beg delim-end)))
@@ -595,6 +634,9 @@ strings, so the column grid stays aligned across visual lines."
                       (overlay-put ov 'gfm-tables-cell-bounds
                                    (gfm-tables--cell-bounds lbeg lend))
                       (overlay-put ov 'gfm-tables-col-widths col-widths)
+                      (overlay-put ov 'gfm-tables-display-cell-bounds
+                                   (gfm-tables--multiline-row-char-bounds
+                                    cells col-widths))
                       (when last-p
                         (overlay-put ov 'after-string
                                      (concat "\n" bottom)))
@@ -812,6 +854,23 @@ after any after-advice on `edit-indirect-commit' (e.g. the one
         (goto-char raw-end)
         (skip-chars-backward " \t" raw-beg)
         (cons b (point))))))
+
+(defun gfm-tables--cell-link-pos (row-ov idx)
+  "Return the buffer position of the first link inside cell IDX of ROW-OV.
+Searches for inline `[text](url)', reference `[text][ref]', and bare URI
+forms within the cell's source range.  Returns nil if none is found."
+  (let* ((bounds (gfm-tables--cell-content-bounds row-ov idx))
+         (beg (car bounds))
+         (end (cdr bounds)))
+    (cl-loop for re in (list markdown-regex-link-inline
+                             markdown-regex-link-reference
+                             markdown-regex-uri
+                             markdown-regex-angle-uri)
+             for hit = (save-excursion
+                         (goto-char beg)
+                         (and (re-search-forward re end t)
+                              (match-beginning 0)))
+             when hit return hit)))
 
 (defun gfm-tables--edit-header-line (label)
   "Return a header-line string for an indirect edit buffer titled LABEL."
@@ -1039,37 +1098,34 @@ and clobber another command's message (e.g. `Copied:').")
                                 cb)
                 0)))))
 
-(defun gfm-tables--cell-display-range (col-widths idx)
-  "Return (BEG . END) char offsets for cell IDX within one composed line."
-  (let* ((widths (cl-coerce col-widths 'list))
-         (before (cl-loop for i from 0 below idx
-                          sum (+ (nth i widths) 2 1)))
-         (start (+ 1 before))
-         (end (+ start (nth idx widths) 2)))
-    (cons start end)))
-
-(defun gfm-tables--apply-cell-highlight (display col-widths idx)
+(defun gfm-tables--apply-cell-highlight (display per-line-bounds idx)
   "Return a copy of DISPLAY with cell IDX painted with the active-cell face.
-DISPLAY may contain `\\n's for wrapped rows; the highlight repeats on
-every visual line.  The first cell-beg position on the first visual
-line carries `cursor t' so the visible terminal cursor anchors there
-instead of at the right edge of the overlay's display range."
+PER-LINE-BOUNDS is the row's `gfm-tables-display-cell-bounds' value: a
+list of cell-bounds-lists, one per visual line.  The highlight repeats
+on every visual line.  The first cell-beg on the first visual line
+carries `cursor t' so the visible terminal cursor anchors there instead
+of at the right edge of the overlay's display range."
   (let* ((s (copy-sequence display))
          (n (length s))
-         (range (gfm-tables--cell-display-range col-widths idx))
          (line-start 0)
+         (line-idx 0)
+         (n-lines (length per-line-bounds))
          (first-line t))
-    (while (< line-start n)
+    (while (and (< line-start n) (< line-idx n-lines))
       (let* ((nl (or (cl-position ?\n s :start line-start) n))
-             (cell-beg (+ line-start (car range)))
-             (cell-end (min nl (+ line-start (cdr range)))))
-        (when (< cell-beg cell-end)
-          (add-face-text-property cell-beg cell-end
-                                  'gfm-tables-active-cell-face nil s)
-          (when first-line
-            (put-text-property cell-beg (1+ cell-beg) 'cursor t s)
-            (setq first-line nil)))
-        (setq line-start (1+ nl))))
+             (cb (nth line-idx per-line-bounds))
+             (range (and cb (nth idx cb))))
+        (when range
+          (let ((cell-beg (+ line-start (car range)))
+                (cell-end (min nl (+ line-start (cdr range)))))
+            (when (< cell-beg cell-end)
+              (add-face-text-property cell-beg cell-end
+                                      'gfm-tables-active-cell-face nil s)
+              (when first-line
+                (put-text-property cell-beg (1+ cell-beg) 'cursor t s)
+                (setq first-line nil)))))
+        (setq line-start (1+ nl))
+        (setq line-idx (1+ line-idx))))
     s))
 
 (defun gfm-tables--show-cell-highlight (row-ov idx)
@@ -1077,11 +1133,11 @@ instead of at the right edge of the overlay's display range."
 Also anchors the visible cursor at the cell's first buffer char."
   (let ((orig (or (overlay-get row-ov 'gfm-tables-saved-display)
                   (overlay-get row-ov 'display)))
-        (cb (overlay-get row-ov 'gfm-tables-cell-bounds)))
+        (cb (overlay-get row-ov 'gfm-tables-cell-bounds))
+        (dcb (overlay-get row-ov 'gfm-tables-display-cell-bounds)))
     (overlay-put row-ov 'gfm-tables-saved-display orig)
     (overlay-put row-ov 'display
-                 (gfm-tables--apply-cell-highlight
-                  orig (overlay-get row-ov 'gfm-tables-col-widths) idx))
+                 (gfm-tables--apply-cell-highlight orig dcb idx))
     (setq gfm-tables--highlighted-row-ov row-ov)
     (when (and cb (< idx (length cb)))
       (gfm-tables--set-cursor-anchor (car (nth idx cb))))))
@@ -1226,6 +1282,22 @@ Returns non-nil on success, nil when there is no previous table row."
       (kill-new text)
       (message "Copied: %s"
                (truncate-string-to-width text 60 nil nil t)))))
+
+(defun gfm-tables-do-at-cell ()
+  "Dispatch `markdown-do' on the active cell's contents.
+If the cell contains a link, point is moved onto it first so
+`markdown-do' follows the link instead of acting at the row's
+left edge."
+  (interactive)
+  (let ((info (gfm-tables--cell-info-at-point)))
+    (unless info
+      (user-error "Point is not in a table cell"))
+    (let* ((row-ov (car info))
+           (idx (cdr info))
+           (link-pos (gfm-tables--cell-link-pos row-ov idx))
+           (bounds (gfm-tables--cell-content-bounds row-ov idx)))
+      (goto-char (or link-pos (car bounds)))
+      (call-interactively #'markdown-do))))
 
 (defun gfm-tables--insert-new-row-after-current ()
   "Insert an empty row after the current one and put point in cell 0."
@@ -1409,6 +1481,8 @@ the symbol `snap', a post-call landing in a table snaps to cell 0."
     (define-key m (kbd "<tab>")        #'gfm-tables-cell-tab)
     (define-key m (kbd "<backtab>")    #'gfm-tables-cell-backtab)
     (define-key m (kbd "S-<tab>")      #'gfm-tables-cell-backtab)
+    (define-key m (kbd "RET")          #'gfm-tables-do-at-cell)
+    (define-key m (kbd "<return>")     #'gfm-tables-do-at-cell)
     (define-key m (kbd "M-h")          #'gfm-tables-swap-column-left)
     (define-key m (kbd "M-l")          #'gfm-tables-swap-column-right)
     (define-key m [remap evil-backward-char]       #'gfm-tables--evil-h)
