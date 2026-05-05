@@ -11,28 +11,38 @@
 ;;; Faces for GitHub Flavored Markdown callouts
 
 (defface +markdown-gfm-callout-note-face
-  '((t :inherit font-lock-operator-face :weight semibold))
-  "Face for [!NOTE] callout markers."
+  '((((background dark))  :foreground "#89b4fa" :weight semibold)
+    (((background light)) :foreground "#1e66f5" :weight semibold)
+    (t :inherit font-lock-keyword-face :weight semibold))
+  "Face for [!NOTE] callout markers (blue)."
   :group 'markdown-faces)
 
 (defface +markdown-gfm-callout-tip-face
-  '((t :inherit font-lock-keyword-face :weight semibold))
-  "Face for [!TIP] callout markers."
+  '((((background dark))  :foreground "#a6e3a1" :weight semibold)
+    (((background light)) :foreground "#40a02b" :weight semibold)
+    (t :inherit success :weight semibold))
+  "Face for [!TIP] callout markers (green)."
   :group 'markdown-faces)
 
 (defface +markdown-gfm-callout-important-face
-  '((t :inherit font-lock-warning-face :weight semibold))
-  "Face for [!IMPORTANT] callout markers."
+  '((((background dark))  :foreground "#cba6f7" :weight semibold)
+    (((background light)) :foreground "#8839ef" :weight semibold)
+    (t :inherit font-lock-keyword-face :weight semibold))
+  "Face for [!IMPORTANT] callout markers (purple)."
   :group 'markdown-faces)
 
 (defface +markdown-gfm-callout-warning-face
-  '((t :inherit warning :weight semibold))
-  "Face for [!WARNING] callout markers."
+  '((((background dark))  :foreground "#fab387" :weight semibold)
+    (((background light)) :foreground "#fe640b" :weight semibold)
+    (t :inherit warning :weight semibold))
+  "Face for [!WARNING] callout markers (orange)."
   :group 'markdown-faces)
 
 (defface +markdown-gfm-callout-caution-face
-  '((t :inherit error :weight semibold))
-  "Face for [!CAUTION] callout markers."
+  '((((background dark))  :foreground "#f38ba8" :weight semibold)
+    (((background light)) :foreground "#d20f39" :weight semibold)
+    (t :inherit error :weight semibold))
+  "Face for [!CAUTION] callout markers (red)."
   :group 'markdown-faces)
 
 (defface +markdown-prettier-ignore-comment-face
