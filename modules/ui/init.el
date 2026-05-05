@@ -322,12 +322,6 @@
              (list
               (full-frame (rx bos "CAPTURE-"))))
 
-           ;; Presentation frame: suppress all auto-popups so external
-           ;; `display-buffer' calls cannot disturb a presentation surface.
-           (list
-            (cons #'+presentation--display-buffer-suppress-p
-                  '((display-buffer-no-window) (allow-no-window . t))))
-
            ;; Top side
            (cl-labels ((top (pred &rest overrides)
                          (cons pred `((display-buffer-reuse-window display-buffer-in-side-window)

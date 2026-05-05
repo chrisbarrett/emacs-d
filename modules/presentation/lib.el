@@ -531,13 +531,6 @@ the hash entry."
     'done))
 
 ;;;###autoload
-(defun +presentation--display-buffer-suppress-p (_buffer _action)
-  "Return non-nil if the selected frame is a presentation frame.
-Used in `display-buffer-alist' to suppress auto-popups inside a
-presentation surface."
-  (frame-parameter (selected-frame) 'presentation-key))
-
-;;;###autoload
 (defun +presentation-info (key)
   "Return an alist describing the presentation session identified by KEY.
 Signals a `user-error' for unknown keys.  The returned alist is
@@ -1456,8 +1449,10 @@ session.  Otherwise the binding RET would have without
            (when-let* ((url (+presentation--link-url-at-point)))
              (pcase (+presentation--dispatch-link url key)
                (`(goto-slide ,idx)
+                (push-mark nil t)
                 (+presentation--deck-goto key idx) t)
                (`(find-file-fallback ,p ,line)
+                (push-mark nil t)
                 (find-file p)
                 (goto-char (point-min))
                 (forward-line (1- line))
@@ -1493,6 +1488,16 @@ buffer-local `+presentation--session-key' set by the renderer."
 
 (with-eval-after-load 'evil
   (evil-make-overriding-map +presentation-mode-map)
+  (dolist (binding '(("RET" . +presentation-follow-link)
+                     ("C-n" . +presentation-next-slide)
+                     ("C-f" . +presentation-next-slide)
+                     ("C-p" . +presentation-previous-slide)
+                     ("C-b" . +presentation-previous-slide)
+                     ("C-c q" . +presentation-quit)))
+    (evil-define-minor-mode-key '(normal visual motion insert)
+                                '+presentation-mode
+                                (kbd (car binding))
+                                (cdr binding)))
   (add-hook '+presentation-mode-hook
             (lambda ()
               (when (fboundp 'evil-normalize-keymaps)

@@ -35,8 +35,8 @@ executes them. Tests assert on emitted effects rather than running tmux.
 State lives in `+presentation--sessions`, a hash keyed by session-key string.
 Each entry is a plist with `:frame :origin :saved-config :tmux-pane :worktree
 :started-at`. The presentation frame additionally carries `presentation-key`
-and `presentation-origin` parameters so the `delete-frame-functions` hook and
-`display-buffer-alist` predicates can resolve frame → key cheaply.
+and `presentation-origin` parameters so the `delete-frame-functions` hook can
+resolve frame → key cheaply.
 
 ## API
 
@@ -321,16 +321,14 @@ intercepts markdown-link follows. Two URL forms route through the deck:
   when no range is given). On a match, `goto_slide(<that-index>)`. On a
   miss, fall back to `find-file` + `goto-line` with no overlays.
 
+Both actionable branches (`goto-slide` and `find-file-fallback`) call
+`push-mark` at point of click before navigating, so the standard
+mark-pop bindings (and evil's `C-o`) return to the link.
+
 Other URL forms (`https://`, `mailto:`, plain paths without anchors) pass
 through to `markdown-mode`'s default handler. File-, diff-, and layout-pane
 buffers do NOT carry the dispatch — when conditions don't hold, `RET`
 invokes the binding it would have without `+presentation-mode`.
-
-### display-buffer protection
-
-`modules/ui/init.el` includes a presentation-frame predicate that maps to
-`display-buffer-no-window` so external `display-buffer` calls cannot pop
-into a presentation frame.
 
 ## Testable Properties
 

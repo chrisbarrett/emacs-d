@@ -710,20 +710,6 @@ the frame's parameters have already been wiped)."
     (should (gethash "k-other" +presentation--sessions))))
 
 
-;;; 13. display-buffer protection
-
-(ert-deftest +presentation/display-buffer-suppress-predicate ()
-  "When the selected frame carries `presentation-key' the suppress
-predicate returns non-nil."
-  (cl-letf (((symbol-function 'frame-parameter)
-             (lambda (_f param)
-               (when (eq param 'presentation-key) "fake"))))
-    (should (+presentation--display-buffer-suppress-p (current-buffer) nil)))
-  (cl-letf (((symbol-function 'frame-parameter) (lambda (_f _p) nil)))
-    (should-not
-     (+presentation--display-buffer-suppress-p (current-buffer) nil))))
-
-
 ;;; 14. MCP tool registration
 
 (defun +presentation-tests--load-init ()
@@ -2829,6 +2815,50 @@ current do not emit channel notifications."
 (ert-deftest +presentation/mode-map-binds-RET-to-follow-link ()
   (should (eq (lookup-key +presentation-mode-map (kbd "RET"))
               '+presentation-follow-link)))
+
+(ert-deftest +presentation/follow-link-pushes-mark-before-goto-slide ()
+  "Goto-slide dispatch pushes a mark at point of click."
+  (let* ((+presentation--sessions (make-hash-table :test 'equal))
+         (events nil))
+    (puthash "k-fld-jmp"
+             (list :worktree "/wt"
+                   :deck (vector '(:kind "narrative" :markdown "a")
+                                 '(:kind "narrative" :markdown "b")))
+             +presentation--sessions)
+    (cl-letf (((symbol-function '+presentation--link-url-at-point)
+               (lambda () "slide:1"))
+              ((symbol-function 'push-mark)
+               (lambda (&rest _) (push 'mark events)))
+              ((symbol-function '+presentation--deck-goto)
+               (lambda (&rest _) (push 'goto events))))
+      (with-temp-buffer
+        (setq-local +presentation--session-key "k-fld-jmp")
+        (cl-letf (((symbol-function 'derived-mode-p)
+                   (lambda (&rest modes) (memq 'markdown-mode modes))))
+          (+presentation-follow-link))
+        (should (equal (reverse events) '(mark goto)))))))
+
+(ert-deftest +presentation/follow-link-pushes-mark-before-find-file ()
+  "Find-file fallback pushes a mark at point of click."
+  (let* ((+presentation--sessions (make-hash-table :test 'equal))
+         (events nil))
+    (puthash "k-fld-jmp-ff"
+             (list :worktree "/wt" :deck (vector))
+             +presentation--sessions)
+    (cl-letf (((symbol-function '+presentation--link-url-at-point)
+               (lambda () "ignored"))
+              ((symbol-function '+presentation--dispatch-link)
+               (lambda (&rest _) '(find-file-fallback "/tmp/p" 1)))
+              ((symbol-function 'push-mark)
+               (lambda (&rest _) (push 'mark events)))
+              ((symbol-function 'find-file)
+               (lambda (&rest _) (push 'find-file events))))
+      (with-temp-buffer
+        (setq-local +presentation--session-key "k-fld-jmp-ff")
+        (cl-letf (((symbol-function 'derived-mode-p)
+                   (lambda (&rest modes) (memq 'markdown-mode modes))))
+          (+presentation-follow-link))
+        (should (equal (reverse events) '(mark find-file)))))))
 
 
 ;;; present_document

@@ -197,20 +197,6 @@ and enabling the configured markdown major mode for fontification.
 - **THEN** the buffer's prior contents are replaced and the major
   mode is set to the configured markdown mode
 
-### Requirement: display-buffer protection for presentation frames
-
-The `display-buffer-alist` in `modules/ui/init.el` SHALL include a
-predicate that matches whenever the selected frame carries a
-non-nil `presentation-key` parameter, mapped to a
-`display-buffer-no-window` action with `(allow-no-window . t)`.
-
-#### Scenario: Pop-up suppressed in presentation frame
-
-- **WHEN** any `display-buffer` call originates from a frame with a
-  `presentation-key` parameter
-- **THEN** the call resolves to no window and does not disturb the
-  presentation layout
-
 ### Requirement: Deck mutation MCP tools
 
 The system SHALL register four additional MCP tools via
