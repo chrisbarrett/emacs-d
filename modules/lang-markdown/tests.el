@@ -588,6 +588,35 @@ Cases are restricted to modes that ship with Emacs so the test never skips."
       (setq buffer-invisibility-spec '(tag))
       (should (= 4 (gfm-tables--visible-width s))))))
 
+(ert-deftest lang-markdown/gfm-tables-visible-width-honours-composition ()
+  "`composition' property compresses visible width to that of the composed glyph.
+This is what `markdown-mode' uses to hide URLs when `markdown-hide-urls'
+is non-nil — `(url)' is composed into a single chain glyph."
+  (skip-unless (fboundp 'gfm-tables--visible-width))
+  (let ((s (copy-sequence "abcXXXXXde")))
+    (compose-string s 3 8 ?Y)
+    (should (= 6 (gfm-tables--visible-width s)))))
+
+(ert-deftest lang-markdown/gfm-tables-visible-width-link-with-hidden-url ()
+  "Fontified link cell with `markdown-hide-urls' on reports the visible-only width."
+  (skip-unless (and (fboundp 'gfm-tables--fontify-cell)
+                    (fboundp 'gfm-tables--visible-width)
+                    (fboundp 'markdown-mode)))
+  (let ((prev (default-value 'markdown-hide-urls)))
+    (unwind-protect
+        (progn
+          (setq-default markdown-hide-urls t)
+          ;; Drop any cached fontify buffer so the new default takes effect.
+          (when (get-buffer " *gfm-tables-fontify*")
+            (kill-buffer " *gfm-tables-fontify*"))
+          (let ((s (gfm-tables--fontify-cell
+                    "[label](https://example.com/very/long/path)")))
+            (should (<= (gfm-tables--visible-width s)
+                        (+ (length "label") 3)))))
+      (setq-default markdown-hide-urls prev)
+      (when (get-buffer " *gfm-tables-fontify*")
+        (kill-buffer " *gfm-tables-fontify*")))))
+
 (ert-deftest lang-markdown/gfm-tables-compose-row-preserves-cell-faces ()
   "`compose-row' on body-alt row keeps existing markdown faces on cell text."
   (skip-unless (and (fboundp 'gfm-tables--compose-row)

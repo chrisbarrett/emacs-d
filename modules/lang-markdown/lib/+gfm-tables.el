@@ -114,21 +114,31 @@ SPEC is a `buffer-invisibility-spec' value."
 
 (defun gfm-tables--visible-width (s)
   "Return on-screen width of S in the current buffer.
-Honours `display' string replacements and any `invisible' property
-that is currently hidden by `buffer-invisibility-spec'."
+Honours `display' string replacements, the `composition' text property
+\(used by `markdown-mode' to collapse hidden URLs into a single glyph),
+and any `invisible' property currently hidden by `buffer-invisibility-spec'."
   (let ((spec buffer-invisibility-spec)
         (w 0) (i 0) (n (length s)))
     (while (< i n)
-      (let* ((nd (or (next-single-property-change i 'display s) n))
-             (ni (or (next-single-property-change i 'invisible s) n))
-             (next (min nd ni))
-             (invis (get-text-property i 'invisible s))
-             (disp (get-text-property i 'display s)))
+      (let* ((invis (get-text-property i 'invisible s))
+             (disp (get-text-property i 'display s))
+             (comp (find-composition i nil s t)))
         (cond
-         ((gfm-tables--invisible-p invis spec) nil)
-         ((stringp disp) (cl-incf w (string-width disp)))
-         (t (cl-incf w (string-width (substring-no-properties s i next)))))
-        (setq i next)))
+         ((gfm-tables--invisible-p invis spec)
+          (setq i (or (next-single-property-change i 'invisible s) n)))
+         ((stringp disp)
+          (cl-incf w (string-width disp))
+          (setq i (or (next-single-property-change i 'display s) n)))
+         ((and comp (= (nth 0 comp) i))
+          (cl-incf w (or (nth 5 comp) 1))
+          (setq i (nth 1 comp)))
+         (t
+          (let* ((nd (or (next-single-property-change i 'display s) n))
+                 (ni (or (next-single-property-change i 'invisible s) n))
+                 (nc (or (next-single-property-change i 'composition s) n))
+                 (next (min nd ni nc)))
+            (cl-incf w (string-width (substring-no-properties s i next)))
+            (setq i next))))))
     w))
 
 ;;; Cell parser
