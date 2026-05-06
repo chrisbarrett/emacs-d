@@ -23,6 +23,11 @@
   (claude-code-ide-use-ide-diff nil)
   :config
   (+load "config.el")
+  ;; Claude Code CLI 2.1.129 sends `protocolVersion: "2025-11-25"` on /ide
+  ;; WebSocket initialize and disconnects when the server replies with
+  ;; the older `2024-11-05`. Upstream defconst hasn't been bumped; override
+  ;; until manzaltu/claude-code-ide.el#? lands a fix.
+  (setq claude-code-ide-mcp-version "2025-11-25")
   (claude-code-ide-emacs-tools-setup)
   (claude-code-ide-mcp-server-ensure-server))
 
