@@ -275,4 +275,23 @@ only that line, missing the multi-line matcher's anchor."
 
 
 
+;;; Workarounds
+
+(defun +markdown--clamp-extend-region (result)
+  "Filter-return advice for `markdown-syntax-propertize-extend-region'.
+Clamp the returned (NEW-START . NEW-END) cons to the buffer's accessible
+portion.  During an undo, jit-lock's after-change handler invokes the
+extender for each undone hunk; markdown's heuristic occasionally returns
+NEW-END > `point-max' (the buffer is transiently shorter mid-undo),
+which `syntax-propertize' rejects with \"Cannot syntax-propertize ...
+because of narrowing!\".  Clamping keeps the extender honest without
+changing semantics on a fully-restored buffer."
+  (when result
+    (cons (max (point-min) (car result))
+          (min (point-max) (cdr result)))))
+
+(with-eval-after-load 'markdown-mode
+  (advice-add 'markdown-syntax-propertize-extend-region
+              :filter-return #'+markdown--clamp-extend-region))
+
 ;;; lib.el ends here
