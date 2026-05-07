@@ -307,10 +307,14 @@ escapes and `|' inside backtick code spans."
   (cl-some (lambda (r) (and (>= pos (car r)) (<= pos (cdr r)))) ranges))
 
 (defvar-local gfm-tables--blocks-cache nil
-  "Pair (BUFFER-MODIFIED-TICK . BLOCKS) memoising `gfm-tables--find-blocks'.
+  "Pair (BUFFER-CHARS-MODIFIED-TICK . BLOCKS) memoising `gfm-tables--find-blocks'.
 BLOCKS is the unfiltered, full-buffer block list as returned by
 `gfm-tables--find-blocks-1'.  Stale when its tick disagrees with
-`buffer-modified-tick'.")
+`buffer-chars-modified-tick'.  We key on the chars tick rather than
+`buffer-modified-tick' because the latter increments for text-property
+changes too — including the `cursor' anchor we re-set on every cell
+crossing in `gfm-tables--update-cursor-highlight' — which would
+invalidate the cache on plain motion.")
 
 (defun gfm-tables--find-blocks-1 ()
   "Scan the buffer for GFM tables, ignoring any excluded-ranges filtering.
@@ -363,7 +367,7 @@ delimiter row falls inside any (BEG . END) range in EXCLUDED-RANGES are
 omitted.  The unfiltered scan is memoised by `buffer-modified-tick' so
 non-modifying callers (cell motion, edit dispatch) reuse a single scan
 between edits."
-  (let* ((tick (buffer-modified-tick))
+  (let* ((tick (buffer-chars-modified-tick))
          (all (cond
                ((and gfm-tables--blocks-cache
                      (= tick (car gfm-tables--blocks-cache)))
