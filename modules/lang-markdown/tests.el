@@ -1365,8 +1365,26 @@ emitted by `gfm-tables--multiline-row-char-bounds'."
     (should-not (memq 'gfm-tables--schedule-rebuild
                       window-configuration-change-hook))))
 
-(ert-deftest lang-markdown/gfm-tables-schedule-full-rebuild-noop-when-width-unchanged ()
-  "Full-rebuild scheduler is a no-op when the available width is unchanged."
+(ert-deftest lang-markdown/gfm-tables-block-visible-p ()
+  "`gfm-tables--block-visible-p' detects overlap with any window range."
+  (skip-unless (fboundp 'gfm-tables--block-visible-p))
+  (let ((block '(100 110 120 200)))
+    ;; Block fully inside a single range.
+    (should (gfm-tables--block-visible-p block '((50 . 250))))
+    ;; Range fully inside block.
+    (should (gfm-tables--block-visible-p block '((130 . 180))))
+    ;; Edge-touching counts as visible.
+    (should (gfm-tables--block-visible-p block '((50 . 100))))
+    (should (gfm-tables--block-visible-p block '((200 . 250))))
+    ;; No range overlaps.
+    (should-not (gfm-tables--block-visible-p block '((1 . 99) (201 . 300))))
+    ;; Empty list of ranges.
+    (should-not (gfm-tables--block-visible-p block nil))
+    ;; Multiple ranges; one covers it.
+    (should (gfm-tables--block-visible-p block '((1 . 50) (130 . 180))))))
+
+(ert-deftest lang-markdown/gfm-tables-schedule-full-rebuild-noop-when-window-state-unchanged ()
+  "Full-rebuild scheduler is a no-op when the window state is unchanged."
   (skip-unless (fboundp 'gfm-tables-mode))
   (with-temp-buffer
     (insert "| A | B |\n| - | - |\n| 1 | 2 |\n")
@@ -1375,12 +1393,11 @@ emitted by `gfm-tables--multiline-row-char-bounds'."
     (when (timerp gfm-tables--rebuild-timer)
       (cancel-timer gfm-tables--rebuild-timer))
     (setq gfm-tables--rebuild-timer nil)
-    ;; Same width → no timer armed.
+    ;; Same window state → no timer armed.
     (gfm-tables--schedule-full-rebuild)
     (should-not gfm-tables--rebuild-timer)
-    ;; Forge a width change → timer armed.
-    (setq gfm-tables--last-available-width
-          (1- (or gfm-tables--last-available-width 80)))
+    ;; Forge a state change → timer armed.
+    (setq gfm-tables--last-window-state (cons 'forged gfm-tables--last-window-state))
     (gfm-tables--schedule-full-rebuild)
     (should (timerp gfm-tables--rebuild-timer))
     (cancel-timer gfm-tables--rebuild-timer)))

@@ -407,16 +407,22 @@ Width = 2 (outer pipes) + Σ(col-w + 2) + (cols - 1) gaps."
 
 ;;; Width fitting
 
-(defun gfm-tables--available-width ()
-  "Return the available char width for a table in the current buffer.
-Uses `window-max-chars-per-line', which accounts for the wrap-indicator
+(defun gfm-tables--available-width (&optional window)
+  "Return the available char width for a table in WINDOW.
+WINDOW defaults to a window currently showing the buffer.  Uses
+`window-max-chars-per-line', which accounts for the wrap-indicator
 column on ttys and the fringe on graphical frames.  Falls back to
-`fill-column' or 80 when no window currently shows the buffer."
-  (let ((win (or (get-buffer-window (current-buffer))
+`fill-column' or 80 when WINDOW is nil and no window shows the buffer."
+  (let ((win (or window
+                 (get-buffer-window (current-buffer))
                  (get-buffer-window (current-buffer) t))))
     (or (and win (window-max-chars-per-line win))
         fill-column
         80)))
+
+(defun gfm-tables--display-windows ()
+  "Return windows currently displaying the buffer, for per-window rendering."
+  (get-buffer-window-list (current-buffer) nil t))
 
 (defun gfm-tables--fit-widths (natural budget)
   "Cap NATURAL column widths so their sum ≤ BUDGET.
@@ -751,16 +757,20 @@ buffer; the per-window rendering lives on display overlays."
     (push ov gfm-tables--overlays)
     ov))
 
-(defun gfm-tables--make-display (beg end display before after col-widths dcb)
-  "Create a display overlay over [BEG, END].
+(defun gfm-tables--make-display (beg end window display before after col-widths dcb)
+  "Create a display overlay over [BEG, END] for WINDOW.
 DISPLAY is the composed row text, BEFORE/AFTER the surrounding border
 strings (nil for none), COL-WIDTHS the column-width vector, and DCB
 the (N-CELLS . BOUNDS-VEC) packed pair from
 `gfm-tables--display-cell-bounds'.  Display overlays carry the visible
-rendering and never the source keymap (the anchor handles motion)."
+rendering and never the source keymap (the anchor handles motion).
+WINDOW non-nil restricts the overlay to that window only — Emacs
+renders it just there.  Pass nil for a fallback overlay applying in
+every window (used when no window currently shows the buffer)."
   (let ((ov (make-overlay beg end)))
     (overlay-put ov 'gfm-tables t)
     (overlay-put ov 'gfm-tables-display t)
+    (when window (overlay-put ov 'window window))
     (overlay-put ov 'display display)
     (when before (overlay-put ov 'before-string before))
     (when after (overlay-put ov 'after-string after))
@@ -769,10 +779,16 @@ rendering and never the source keymap (the anchor handles motion)."
     (push ov gfm-tables--overlays)
     ov))
 
-(defun gfm-tables--display-overlay-for-anchor (anchor)
-  "Return the display overlay paired with ANCHOR, or nil."
-  (cl-find-if (lambda (o) (overlay-get o 'gfm-tables-display))
-              (overlays-in (overlay-start anchor) (overlay-end anchor))))
+(defun gfm-tables--display-overlay-for-anchor (anchor &optional window)
+  "Return the display overlay paired with ANCHOR for WINDOW, or nil.
+WINDOW defaults to the selected window.  An unrestricted display
+overlay (one created without a window arg) matches any WINDOW."
+  (let ((win (or window (selected-window))))
+    (cl-find-if (lambda (o)
+                  (and (overlay-get o 'gfm-tables-display)
+                       (let ((w (overlay-get o 'window)))
+                         (or (null w) (eq w win)))))
+                (overlays-in (overlay-start anchor) (overlay-end anchor)))))
 
 (defun gfm-tables--remove-overlays-in-block (block)
   "Remove gfm-tables overlays within BLOCK and prune the cached list.
@@ -781,8 +797,64 @@ BLOCK is (HEADER-BEG DELIM-BEG BODY-BEG BODY-END)."
         (body-end (nth 3 block)))
     (gfm-tables--remove-overlays header-beg (1+ body-end))))
 
+(defun gfm-tables--apply-table-display (window header-beg header-end
+                                        delim-beg delim-end body-positions
+                                        header-cells body-rows)
+  "Build per-WINDOW display overlays for a parsed table.
+WINDOW is either a window object (overlays restrict to it) or nil
+\(unrestricted fallback).  Other args are the parse output produced by
+`gfm-tables--apply-table'."
+  (let* ((all-rows (cons header-cells body-rows))
+         (natural (gfm-tables--time-phase 'layout
+                    (gfm-tables--column-widths all-rows)))
+         (n-cols (length natural))
+         (overhead (+ (* 3 n-cols) 1))
+         (budget (max n-cols
+                      (- (gfm-tables--available-width window) overhead)))
+         (col-widths (gfm-tables--time-phase 'layout
+                       (gfm-tables--fit-widths natural budget)))
+         (box-width (gfm-tables--box-width col-widths))
+         (top (gfm-tables--top-border box-width))
+         (bottom (gfm-tables--bottom-border box-width))
+         (rule (gfm-tables--rule-row box-width))
+         (n-body (length body-rows))
+         (header-layout (gfm-tables--time-phase 'layout
+                          (gfm-tables--row-layout header-cells col-widths)))
+         (body-layouts (gfm-tables--time-phase 'layout
+                         (mapcar (lambda (cells)
+                                   (gfm-tables--row-layout cells col-widths))
+                                 body-rows))))
+    (gfm-tables--time-phase 'apply
+      (let ((header-display
+             (gfm-tables--time-phase 'compose
+               (gfm-tables--compose-row-from-layout
+                header-layout col-widths 'header))))
+        (gfm-tables--make-display
+         header-beg header-end window
+         header-display (concat top "\n") nil
+         col-widths (gfm-tables--display-cell-bounds header-layout)))
+      (gfm-tables--make-display delim-beg delim-end window
+                                rule nil nil nil nil)
+      (cl-loop for (lbeg . lend) in body-positions
+               for cells in body-rows
+               for layout in body-layouts
+               for idx from 1
+               for last-p = (= idx n-body)
+               for role = (if (cl-evenp idx) 'body-alt 'body-default)
+               for str = (gfm-tables--time-phase 'compose
+                           (gfm-tables--compose-row-from-layout
+                            layout col-widths role))
+               do (gfm-tables--make-display
+                   lbeg lend window
+                   str nil (and last-p (concat "\n" bottom))
+                   col-widths
+                   (gfm-tables--display-cell-bounds layout))))))
+
 (defun gfm-tables--apply-table (header-beg delim-beg body-beg body-end)
-  "Decorate one table identified by HEADER-BEG, DELIM-BEG, BODY-BEG, BODY-END."
+  "Decorate one table identified by HEADER-BEG, DELIM-BEG, BODY-BEG, BODY-END.
+Builds anchor overlays once per row and one display overlay per row
+*per window* currently showing the buffer.  When no window shows the
+buffer, falls back to a single unrestricted display overlay."
   (save-excursion
     (let* ((header-end (save-excursion
                          (goto-char header-beg) (line-end-position)))
@@ -808,58 +880,18 @@ BLOCK is (HEADER-BEG DELIM-BEG BODY-BEG BODY-END)."
           (forward-line 1))
         (setq body-rows (nreverse body-rows)
               body-positions (nreverse body-positions)))
-      (let* ((all-rows (cons header-cells body-rows))
-             (natural (gfm-tables--time-phase 'layout
-                        (gfm-tables--column-widths all-rows)))
-             (n-cols (length natural))
-             (overhead (+ (* 3 n-cols) 1))
-             (budget (max n-cols
-                          (- (gfm-tables--available-width) overhead)))
-             (col-widths (gfm-tables--time-phase 'layout
-                           (gfm-tables--fit-widths natural budget)))
-             (box-width (gfm-tables--box-width col-widths))
-             (top (gfm-tables--top-border box-width))
-             (bottom (gfm-tables--bottom-border box-width))
-             (rule (gfm-tables--rule-row box-width))
-             (n-body (length body-rows))
-             (header-layout (gfm-tables--time-phase 'layout
-                              (gfm-tables--row-layout header-cells col-widths)))
-             (body-layouts (gfm-tables--time-phase 'layout
-                             (mapcar (lambda (cells)
-                                       (gfm-tables--row-layout cells col-widths))
-                                     body-rows))))
-        ;; Header: anchor + display overlay; display carries top border.
-        (gfm-tables--time-phase 'apply
-          (let ((header-display
-                 (gfm-tables--time-phase 'compose
-                   (gfm-tables--compose-row-from-layout
-                    header-layout col-widths 'header))))
-            (gfm-tables--make-anchor
-             header-beg header-end
-             (gfm-tables--cell-bounds header-beg header-end))
-            (gfm-tables--make-display
-             header-beg header-end
-             header-display (concat top "\n") nil
-             col-widths (gfm-tables--display-cell-bounds header-layout)))
-          ;; Delimiter row: display only (no cells, no source keymap).
-          (gfm-tables--make-display delim-beg delim-end rule nil nil nil nil)
-          ;; Body rows: anchor + display each.
-          (cl-loop for (lbeg . lend) in body-positions
-                   for cells in body-rows
-                   for layout in body-layouts
-                   for idx from 1
-                   for last-p = (= idx n-body)
-                   for role = (if (cl-evenp idx) 'body-alt 'body-default)
-                   for str = (gfm-tables--time-phase 'compose
-                               (gfm-tables--compose-row-from-layout
-                                layout col-widths role))
-                   do (gfm-tables--make-anchor
-                       lbeg lend (gfm-tables--cell-bounds lbeg lend))
-                      (gfm-tables--make-display
-                       lbeg lend
-                       str nil (and last-p (concat "\n" bottom))
-                       col-widths
-                       (gfm-tables--display-cell-bounds layout))))))))
+      (gfm-tables--time-phase 'apply
+        (gfm-tables--make-anchor
+         header-beg header-end
+         (gfm-tables--cell-bounds header-beg header-end))
+        (cl-loop for (lbeg . lend) in body-positions
+                 do (gfm-tables--make-anchor
+                     lbeg lend (gfm-tables--cell-bounds lbeg lend))))
+      (let ((windows (or (gfm-tables--display-windows) (list nil))))
+        (dolist (win windows)
+          (gfm-tables--apply-table-display
+           win header-beg header-end delim-beg delim-end
+           body-positions header-cells body-rows))))))
 
 (defun gfm-tables--fenced-ranges ()
   "Return (BEG . END) ranges of fenced code blocks, if discoverable."
@@ -937,9 +969,21 @@ BLOCK is (HEADER-BEG DELIM-BEG BODY-BEG BODY-END)."
 
 (defvar-local gfm-tables--last-available-width nil
   "Available char width recorded on the last full rebuild.
-Compared in `gfm-tables--schedule-full-rebuild' so window-config
-changes that leave the width unchanged (minibuffer activity, focus
-shifts, scroll-margin tweaks) do not schedule a redundant rebuild.")
+Single-window legacy: kept for the regression test that pokes at it.
+Real check uses `gfm-tables--last-window-state'.")
+
+(defvar-local gfm-tables--last-window-state nil
+  "Snapshot of the windows showing the buffer at the last rebuild.
+List of (WINDOW . MAX-CHARS-PER-LINE) pairs.  Compared in
+`gfm-tables--schedule-full-rebuild' so window-config changes that
+leave every window's width unchanged (minibuffer activity, focus
+shifts) skip the rebuild, while a new or resized window — and so a
+genuinely new rendering need — triggers one.")
+
+(defun gfm-tables--window-state ()
+  "Return the (WINDOW . WIDTH) snapshot used to detect rendering drift."
+  (mapcar (lambda (w) (cons w (gfm-tables--available-width w)))
+          (gfm-tables--display-windows)))
 
 (defun gfm-tables--rebuild ()
   "Remove and recreate all gfm-tables overlays.
@@ -951,7 +995,8 @@ survives window-configuration changes and other rebuild triggers."
     (setq gfm-tables--dirty-region nil)
     (let ((n (gfm-tables--apply-overlays)))
       (gfm-tables--record-stats (float-time (time-since start)) n))
-    (setq gfm-tables--last-available-width (gfm-tables--available-width))
+    (setq gfm-tables--last-available-width (gfm-tables--available-width)
+          gfm-tables--last-window-state (gfm-tables--window-state))
     (gfm-tables--update-cursor-highlight)))
 
 (defun gfm-tables--rebuild-block (block)
@@ -1013,7 +1058,8 @@ Falls back to a full one-shot rebuild when no window shows the buffer."
         (when visible
           (gfm-tables--rebuild-blocks visible))
         (setq gfm-tables--dirty-region nil
-              gfm-tables--last-available-width (gfm-tables--available-width))
+              gfm-tables--last-available-width (gfm-tables--available-width)
+              gfm-tables--last-window-state (gfm-tables--window-state))
         (gfm-tables--update-cursor-highlight)
         (when offscreen
           (run-with-idle-timer
@@ -1126,16 +1172,18 @@ Skips indirect buffers since base buffer overlays already cover them."
     (gfm-tables--arm-rebuild-timer #'gfm-tables--rebuild-scoped)))
 
 (defun gfm-tables--schedule-full-rebuild (&rest _)
-  "Schedule a width-driven rebuild on next idle if the window width changed.
-Window-configuration-change-hook fires for many reasons unrelated to
-column-affecting size (minibuffer activity, focus, scroll-margin), so
-we compare the current `gfm-tables--available-width' against the cached
-value from the last rebuild and skip when they match.  When the width
-has changed, the prioritised rebuilder updates visible-window tables
-immediately and schedules off-screen tables for the next idle tick."
+  "Schedule a rebuild on next idle if the window state has changed.
+Window-configuration-change-hook fires for many reasons that don't
+affect rendering (minibuffer activity, focus, scroll-margin), so we
+compare the current per-window (WIN . WIDTH) snapshot against the one
+recorded on the last rebuild and skip when they're equal.  Any size
+change, new window showing the buffer, or window now no-longer-shown
+trips the comparison and triggers the prioritised rebuilder, which
+updates visible-window tables immediately and lets off-screen tables
+catch up on the following idle tick."
   (unless (buffer-base-buffer)
-    (let ((w (gfm-tables--available-width)))
-      (unless (eql w gfm-tables--last-available-width)
+    (let ((state (gfm-tables--window-state)))
+      (unless (equal state gfm-tables--last-window-state)
         (gfm-tables--arm-rebuild-timer #'gfm-tables--rebuild-prioritised)))))
 
 ;;; Minor mode
