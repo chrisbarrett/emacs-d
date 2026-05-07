@@ -1079,6 +1079,236 @@ column width must still cover all its source chars in the bounds."
   (skip-unless (boundp 'gfm-mode-hook))
   (should (memq 'gfm-tables-mode gfm-mode-hook)))
 
+;;; Per-rebuild width cache
+
+(ert-deftest lang-markdown/gfm-tables-width-cache-fast-path-matches-uncached ()
+  "Fast path returns same width as full computation for plain strings."
+  (skip-unless (fboundp 'gfm-tables--visible-width))
+  (let ((s "hello world"))
+    (let ((gfm-tables--width-cache nil))
+      (should (= (string-width s) (gfm-tables--visible-width s))))))
+
+(ert-deftest lang-markdown/gfm-tables-width-cache-honours-display-prop ()
+  "Cached width matches uncached for cells with `display' replacements."
+  (skip-unless (fboundp 'gfm-tables--visible-width))
+  (let* ((s (concat "abc" (propertize "X" 'display "yyy") "de"))
+         (uncached (let ((gfm-tables--width-cache nil))
+                     (gfm-tables--visible-width s)))
+         (cache (make-hash-table :test 'eq)))
+    (let ((gfm-tables--width-cache cache))
+      (should (= uncached (gfm-tables--visible-width s)))
+      ;; Second call hits the cache.
+      (should (= uncached (gfm-tables--visible-width s)))
+      (should (gethash s cache)))))
+
+(ert-deftest lang-markdown/gfm-tables-width-cache-honours-composition-prop ()
+  "Cached width matches uncached for cells with `composition' property."
+  (skip-unless (fboundp 'gfm-tables--visible-width))
+  (let ((s (copy-sequence "abcXXXXXde")))
+    (compose-string s 3 8 ?Y)
+    (let* ((uncached (let ((gfm-tables--width-cache nil))
+                       (gfm-tables--visible-width s)))
+           (cache (make-hash-table :test 'eq))
+           (gfm-tables--width-cache cache))
+      (should (= uncached (gfm-tables--visible-width s))))))
+
+(ert-deftest lang-markdown/gfm-tables-width-cache-honours-invisible-prop ()
+  "Cached width matches uncached for cells with hidden `invisible' segments."
+  (skip-unless (fboundp 'gfm-tables--visible-width))
+  (let* ((s (concat "abc" (propertize "HIDE" 'invisible 'gfm-test) "de"))
+         (buffer-invisibility-spec '((gfm-test . t)))
+         (uncached (let ((gfm-tables--width-cache nil))
+                     (gfm-tables--visible-width s)))
+         (cache (make-hash-table :test 'eq))
+         (gfm-tables--width-cache cache))
+    (should (= 5 uncached))
+    (should (= uncached (gfm-tables--visible-width s)))))
+
+(ert-deftest lang-markdown/gfm-tables-width-cache-not-shared-across-eq-distinct-strings ()
+  "Cache is `eq'-keyed; two equal-but-distinct strings do not share entries."
+  (skip-unless (fboundp 'gfm-tables--visible-width))
+  (let* ((cache (make-hash-table :test 'eq))
+         (gfm-tables--width-cache cache)
+         (a (copy-sequence "hello"))
+         (b (copy-sequence "hello")))
+    (gfm-tables--visible-width a)
+    (should (gethash a cache))
+    (should-not (gethash b cache))))
+
+(ert-deftest lang-markdown/gfm-tables-width-cache-substring-not-stale ()
+  "A substring of a fontified cell is measured fresh, not from the parent's hit."
+  (skip-unless (and (fboundp 'gfm-tables--fontify-cell)
+                    (fboundp 'gfm-tables--visible-width)
+                    (fboundp 'markdown-mode)))
+  (let* ((parent (gfm-tables--fontify-cell "hello world"))
+         (cache (make-hash-table :test 'eq))
+         (gfm-tables--width-cache cache)
+         (parent-w (gfm-tables--visible-width parent))
+         (sub (substring parent 0 5))
+         (sub-w (gfm-tables--visible-width sub)))
+    (should (= parent-w (gfm-tables--visible-width parent)))
+    (should (= sub-w (gfm-tables--visible-width sub)))
+    (should (= 5 sub-w))
+    (should-not (= parent-w sub-w))))
+
+;;; Shared row layout
+
+(ert-deftest lang-markdown/gfm-tables-row-layout-feeds-both-helpers ()
+  "Layout-based helpers produce strings/bounds equal to the legacy callers."
+  (skip-unless (and (fboundp 'gfm-tables--row-layout)
+                    (fboundp 'gfm-tables--compose-row-from-layout)
+                    (fboundp 'gfm-tables--compose-multiline-row)))
+  (dolist (role '(header body-default body-alt))
+    (let* ((cells '("alpha" "beta gamma" "d"))
+           (col-widths (vector 5 4 1))
+           (layout (gfm-tables--row-layout cells col-widths))
+           (composed-direct (gfm-tables--compose-multiline-row
+                             cells col-widths role))
+           (composed-via-layout (gfm-tables--compose-row-from-layout
+                                 layout col-widths role))
+           (bounds-direct (gfm-tables--multiline-row-char-bounds
+                           cells col-widths))
+           (bounds-via-layout (gfm-tables--row-layout-line-bounds layout)))
+      (should (equal composed-direct composed-via-layout))
+      (should (equal bounds-direct bounds-via-layout)))))
+
+;;; Scoped rebuild
+
+(defun gfm-tables--test-overlay-set ()
+  "Return the gfm-tables overlay objects in the current buffer as a hash set."
+  (let ((set (make-hash-table :test 'eq)))
+    (dolist (ov (overlays-in (point-min) (point-max)))
+      (when (overlay-get ov 'gfm-tables)
+        (puthash ov t set)))
+    set))
+
+(defun gfm-tables--test-block-overlays (h-beg b-end)
+  "Return gfm-tables overlays whose start lies in H-BEG..B-END."
+  (cl-remove-if-not
+   (lambda (ov)
+     (and (overlay-get ov 'gfm-tables)
+          (let ((s (overlay-start ov)))
+            (and s (<= h-beg s) (<= s b-end)))))
+   (overlays-in h-beg (1+ b-end))))
+
+(ert-deftest lang-markdown/gfm-tables-scoped-edit-inside-single-table ()
+  "Editing inside one table only rebuilds that table's overlays."
+  (skip-unless (fboundp 'gfm-tables-mode))
+  (with-temp-buffer
+    (insert "| A | B |\n| - | - |\n| 1 | 2 |\n\n"
+            "| C | D |\n| - | - |\n| 3 | 4 |\n")
+    (gfm-tables-mode 1)
+    (let* ((blocks (gfm-tables--find-blocks))
+           (b1 (nth 0 blocks))
+           (b2 (nth 1 blocks))
+           (b1-h (nth 0 b1)) (b1-e (nth 3 b1))
+           (b2-h (nth 0 b2)) (b2-e (nth 3 b2))
+           (b1-before (gfm-tables--test-block-overlays b1-h b1-e))
+           (b2-before (gfm-tables--test-block-overlays b2-h b2-e)))
+      (setq gfm-tables--dirty-region
+            (cons (1+ b1-h) (1- b1-e)))
+      (gfm-tables--rebuild-scoped)
+      (let ((b1-after (gfm-tables--test-block-overlays b1-h b1-e))
+            (b2-after (gfm-tables--test-block-overlays b2-h b2-e)))
+        (should-not (cl-intersection b1-before b1-after))
+        (should (cl-every (lambda (o) (memq o b2-after)) b2-before))
+        (should (cl-every (lambda (o) (memq o b2-before)) b2-after))))))
+
+(ert-deftest lang-markdown/gfm-tables-scoped-edit-outside-tables-noop ()
+  "Editing in a region intersecting no decorated table is a no-op."
+  (skip-unless (fboundp 'gfm-tables-mode))
+  (with-temp-buffer
+    (insert "intro line\n\n| A | B |\n| - | - |\n| 1 | 2 |\n")
+    (gfm-tables-mode 1)
+    (let ((before (gfm-tables--test-overlay-set))
+          (rebuild-count (alist-get 'rebuild-count gfm-tables--stats)))
+      (setq gfm-tables--dirty-region (cons 1 5))
+      (gfm-tables--rebuild-scoped)
+      (let ((after (gfm-tables--test-overlay-set)))
+        (should (= (hash-table-count before) (hash-table-count after)))
+        (maphash (lambda (ov _) (should (gethash ov after))) before)
+        (should (= rebuild-count
+                   (alist-get 'rebuild-count gfm-tables--stats)))))))
+
+(ert-deftest lang-markdown/gfm-tables-scoped-edit-spans-two-tables-full-rebuild ()
+  "Edit region intersecting two tables triggers a full rebuild."
+  (skip-unless (fboundp 'gfm-tables-mode))
+  (with-temp-buffer
+    (insert "| A | B |\n| - | - |\n| 1 | 2 |\n\n"
+            "| C | D |\n| - | - |\n| 3 | 4 |\n")
+    (gfm-tables-mode 1)
+    (let* ((blocks (gfm-tables--find-blocks))
+           (b1-h (nth 0 (car blocks)))
+           (b2-e (nth 3 (cadr blocks)))
+           (before (gfm-tables--test-overlay-set)))
+      (setq gfm-tables--dirty-region (cons b1-h b2-e))
+      (gfm-tables--rebuild-scoped)
+      (let ((after (gfm-tables--test-overlay-set)))
+        (should (cl-every (lambda (ov) (not (gethash ov after)))
+                          (let (xs) (maphash (lambda (k _) (push k xs)) before)
+                               xs)))))))
+
+(ert-deftest lang-markdown/gfm-tables-scoped-edit-overlapping-fence-full-rebuild ()
+  "Edit region overlapping a code-fence line triggers a full rebuild."
+  (skip-unless (and (fboundp 'gfm-tables-mode)
+                    (fboundp 'gfm-code-fences--find-blocks)))
+  (with-temp-buffer
+    (gfm-mode)
+    (insert "```\nfenced\n```\n\n| A | B |\n| - | - |\n| 1 | 2 |\n")
+    (gfm-tables-mode 1)
+    (let* ((fence (car (gfm-code-fences--find-blocks)))
+           (open-line-beg (save-excursion
+                            (goto-char (nth 0 fence)) (line-beginning-position)))
+           (open-line-end (save-excursion
+                            (goto-char (nth 0 fence)) (line-end-position)))
+           (before (gfm-tables--test-overlay-set)))
+      (setq gfm-tables--dirty-region (cons open-line-beg open-line-end))
+      (gfm-tables--rebuild-scoped)
+      (let ((after (gfm-tables--test-overlay-set)))
+        ;; Full rebuild → overlay objects are fresh.
+        (should (cl-every (lambda (ov) (not (gethash ov after)))
+                          (let (xs) (maphash (lambda (k _) (push k xs)) before)
+                               xs)))))))
+
+(ert-deftest lang-markdown/gfm-tables-window-config-change-wired-to-full-rebuild ()
+  "`window-configuration-change-hook' is wired to the full-rebuild scheduler."
+  (skip-unless (fboundp 'gfm-tables-mode))
+  (with-temp-buffer
+    (insert "| A | B |\n| - | - |\n| 1 | 2 |\n")
+    (gfm-tables-mode 1)
+    (should (memq 'gfm-tables--schedule-full-rebuild
+                  window-configuration-change-hook))
+    (should-not (memq 'gfm-tables--schedule-rebuild
+                      window-configuration-change-hook))))
+
+;;; Phase-level instrumentation
+
+(ert-deftest lang-markdown/gfm-tables-phase-totals-non-negative-and-bounded ()
+  "Phase totals are non-negative and sum to ≤ recorded total-time."
+  (skip-unless (fboundp 'gfm-tables-mode))
+  (with-temp-buffer
+    (insert "| A | B |\n| - | - |\n| 1 | 2 |\n| 3 | 4 |\n")
+    (gfm-tables-mode 1)
+    (let* ((stats gfm-tables--stats)
+           (total (alist-get 'total-time stats))
+           (phases (alist-get 'phase-totals stats)))
+      (should phases)
+      (dolist (p phases)
+        (should (>= (cdr p) 0)))
+      (let ((sum (cl-loop for p in phases sum (cdr p))))
+        ;; Allow a small fudge for clock noise between outer total and phases.
+        (should (<= sum (+ total 0.001)))))))
+
+(ert-deftest lang-markdown/gfm-tables-phase-totals-include-required-keys ()
+  "Phase totals include all five keys required by the spec."
+  (skip-unless (fboundp 'gfm-tables-mode))
+  (with-temp-buffer
+    (insert "| A |\n| - |\n| 1 |\n")
+    (gfm-tables-mode 1)
+    (let ((phases (alist-get 'phase-totals gfm-tables--stats)))
+      (dolist (k '(find-blocks parse layout compose apply))
+        (should (assq k phases))))))
+
 ;;; Reveal
 
 (provide 'lang-markdown-tests)
