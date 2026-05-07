@@ -1202,6 +1202,35 @@ Run in the indirect cell edit buffer just before commit."
     (while (re-search-forward "\\(\\`\\|[^\\\\]\\)\\(|\\)" nil t)
       (replace-match "\\1\\\\|" t nil))))
 
+(defvar-local gfm-tables--cell-edit-pending nil
+  "Non-nil between a cell-edit's before-commit and after-commit hooks.
+Set buffer-locally on the parent (markdown) buffer.  Tells
+`gfm-tables--cell-edit-after-commit' to strip the stray trailing
+newline that `markdown--edit-indirect-after-commit-function' inserts
+\(it treats every committed region as a code block, but a cell edit
+commits raw cell content with no terminating newline).")
+
+(defun gfm-tables--cell-edit-mark-pending ()
+  "Indirect-buffer before-commit hook: mark the parent for cleanup."
+  (let ((parent (and (boundp 'edit-indirect--overlay)
+                     edit-indirect--overlay
+                     (overlay-buffer edit-indirect--overlay))))
+    (when (buffer-live-p parent)
+      (with-current-buffer parent
+        (setq gfm-tables--cell-edit-pending t)))))
+
+(defun gfm-tables--cell-edit-after-commit (_beg end)
+  "Parent after-commit hook: drop a stray trailing newline if a cell-edit just committed.
+The end position is the cell-content-end marker passed to markdown's
+hook; after markdown inserts `\\n' at that position, the marker stays
+just *before* the new newline (default insertion-type), so we look at
+`char-after' rather than `char-before'."
+  (when gfm-tables--cell-edit-pending
+    (setq gfm-tables--cell-edit-pending nil)
+    (when (and (< end (point-max)) (eq (char-after end) ?\n))
+      (let ((inhibit-read-only t))
+        (delete-region end (1+ end))))))
+
 ;;;###autoload
 (defun gfm-tables-edit-cell-at-point ()
   "Open the active table cell in an indirect markdown edit buffer.
@@ -1215,6 +1244,7 @@ unescaped `|' is escaped to `\\|'."
     (let* ((row-ov (car info))
            (idx (cdr info))
            (bounds (gfm-tables--cell-content-bounds row-ov idx))
+           (src-buf (current-buffer))
            (edit-indirect-guess-mode-function
             (lambda (_parent _beg _end) (markdown-mode)))
            (buf (edit-indirect-region (car bounds) (cdr bounds) t)))
@@ -1224,7 +1254,15 @@ unescaped `|' is escaped to `\\|'."
         (setq-local header-line-format
                     (gfm-tables--edit-header-line "Edit cell"))
         (add-hook 'edit-indirect-before-commit-hook
-                  #'gfm-tables--cell-edit-sanitise nil t)))))
+                  #'gfm-tables--cell-edit-mark-pending nil t)
+        (add-hook 'edit-indirect-before-commit-hook
+                  #'gfm-tables--cell-edit-sanitise nil t))
+      (with-current-buffer src-buf
+        ;; Append so this runs *after* `markdown--edit-indirect-after-commit-function',
+        ;; which is what inserts the spurious newline we need to strip.
+        (add-hook 'edit-indirect-after-commit-functions
+                  #'gfm-tables--cell-edit-after-commit
+                  'append 'local)))))
 
 ;;;###autoload
 (defun gfm-tables-edit-table-at-point ()

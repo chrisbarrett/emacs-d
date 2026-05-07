@@ -760,6 +760,51 @@ column width must still cover all its source chars in the bounds."
 (ert-deftest lang-markdown/gfm-tables-edit-cell-command-defined ()
   (should (commandp 'gfm-tables-edit-cell-at-point)))
 
+(ert-deftest lang-markdown/gfm-tables-edit-cell-no-spurious-newline ()
+  "Committing a cell edit with no changes must not split the row.
+`markdown--edit-indirect-after-commit-function' appends \\n to the
+committed region, treating it as a code block.  For a cell edit the
+region is just cell content; the trailing newline must be stripped."
+  (skip-unless (and (fboundp 'gfm-tables-mode)
+                    (fboundp 'gfm-mode)
+                    (require 'edit-indirect nil t)))
+  (with-temp-buffer
+    (gfm-mode)
+    (insert "| A             | B   |\n| ------------- | --- |\n"
+            "| `(parameter)` | foo |\n")
+    (gfm-tables-mode 1)
+    (goto-char (point-min))
+    (forward-line 2)
+    (forward-char 4)
+    (let* ((info (gfm-tables--cell-info-at-point))
+           (row-ov (car info))
+           (idx (cdr info))
+           (bounds (gfm-tables--cell-content-bounds row-ov idx))
+           (before-line (buffer-substring-no-properties
+                         (line-beginning-position) (line-end-position)))
+           (src-buf (current-buffer))
+           (edit-indirect-guess-mode-function
+            (lambda (_p _b _e) (markdown-mode)))
+           (buf (edit-indirect-region (car bounds) (cdr bounds) nil)))
+      (with-current-buffer buf
+        (setq-local require-final-newline nil)
+        (setq-local mode-require-final-newline nil)
+        (add-hook 'edit-indirect-before-commit-hook
+                  #'gfm-tables--cell-edit-mark-pending nil t)
+        (add-hook 'edit-indirect-before-commit-hook
+                  #'gfm-tables--cell-edit-sanitise nil t))
+      (with-current-buffer src-buf
+        (add-hook 'edit-indirect-after-commit-functions
+                  #'gfm-tables--cell-edit-after-commit
+                  'append 'local))
+      (with-current-buffer buf (edit-indirect-commit))
+      (with-current-buffer src-buf
+        (goto-char (point-min))
+        (forward-line 2)
+        (let ((after-line (buffer-substring-no-properties
+                           (line-beginning-position) (line-end-position))))
+          (should (equal before-line after-line)))))))
+
 (ert-deftest lang-markdown/gfm-tables-cell-edit-sanitise-strips-newlines ()
   (skip-unless (fboundp 'gfm-tables--cell-edit-sanitise))
   (with-temp-buffer
