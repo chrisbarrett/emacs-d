@@ -1391,6 +1391,48 @@ carry a `window' restriction."
             (delete-window other)))
       (kill-buffer buf))))
 
+(ert-deftest lang-markdown/gfm-tables-reconcile-windows-touches-changed-only ()
+  "Reconciling windows replaces only the resized window's display overlays.
+Untouched windows keep their existing display-overlay objects (eq)."
+  (skip-unless (fboundp 'gfm-tables--reconcile-windows))
+  (let ((buf (generate-new-buffer "*gfm-tables-reconcile-test*")))
+    (unwind-protect
+        (progn
+          (with-current-buffer buf
+            (insert "| A | B |\n| - | - |\n| 1 | 2 |\n"))
+          (set-window-buffer (selected-window) buf)
+          (let* ((win-a (selected-window))
+                 (win-b (split-window)))
+            (set-window-buffer win-b buf)
+            (with-current-buffer buf
+              (gfm-tables-mode 1)
+              (let* ((displays-for (lambda (w)
+                                     (cl-remove-if-not
+                                      (lambda (o)
+                                        (and (overlay-get o 'gfm-tables-display)
+                                             (eq (overlay-get o 'window) w)))
+                                      gfm-tables--overlays)))
+                     (a-before (funcall displays-for win-a))
+                     (b-before (funcall displays-for win-b)))
+                ;; Forge a width change for win-a only by mutating the cached
+                ;; state; reconcile sees win-a as resized, win-b as unchanged.
+                (setq gfm-tables--last-window-state
+                      (mapcar (lambda (e)
+                                (if (eq (car e) win-a)
+                                    (cons (car e) (1- (cdr e)))
+                                  e))
+                              gfm-tables--last-window-state))
+                (gfm-tables--reconcile-windows)
+                (let ((a-after (funcall displays-for win-a))
+                      (b-after (funcall displays-for win-b)))
+                  ;; win-a's overlays were replaced with fresh ones.
+                  (should-not (cl-intersection a-before a-after))
+                  ;; win-b's overlays are untouched (same objects, same count).
+                  (should (= (length b-before) (length b-after)))
+                  (should (cl-every (lambda (o) (memq o b-after)) b-before)))))
+            (delete-window win-b)))
+      (kill-buffer buf))))
+
 (ert-deftest lang-markdown/gfm-tables-highlight-targets-selected-window ()
   "Active-cell highlight paints the selected window's display overlay only.
 Per-window display overlays let two windows render the same buffer at

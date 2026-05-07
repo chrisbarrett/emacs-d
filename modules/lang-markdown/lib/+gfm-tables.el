@@ -850,11 +850,11 @@ WINDOW is either a window object (overlays restrict to it) or nil
                    col-widths
                    (gfm-tables--display-cell-bounds layout))))))
 
-(defun gfm-tables--apply-table (header-beg delim-beg body-beg body-end)
-  "Decorate one table identified by HEADER-BEG, DELIM-BEG, BODY-BEG, BODY-END.
-Builds anchor overlays once per row and one display overlay per row
-*per window* currently showing the buffer.  When no window shows the
-buffer, falls back to a single unrestricted display overlay."
+(defun gfm-tables--parse-table (header-beg delim-beg body-beg body-end)
+  "Parse the table at HEADER-BEG..BODY-END, returning a plist.
+Keys: :header-beg :header-end :delim-beg :delim-end :body-positions
+\(list of (LBEG . LEND) per body row in source order),
+:header-cells (fontified strings), :body-rows (list of cell-lists)."
   (save-excursion
     (let* ((header-end (save-excursion
                          (goto-char header-beg) (line-end-position)))
@@ -877,21 +877,75 @@ buffer, falls back to a single unrestricted display overlay."
             (push (mapcar #'gfm-tables--fontify-cell
                           (gfm-tables--split-row line))
                   body-rows))
-          (forward-line 1))
-        (setq body-rows (nreverse body-rows)
-              body-positions (nreverse body-positions)))
-      (gfm-tables--time-phase 'apply
-        (gfm-tables--make-anchor
-         header-beg header-end
-         (gfm-tables--cell-bounds header-beg header-end))
-        (cl-loop for (lbeg . lend) in body-positions
-                 do (gfm-tables--make-anchor
-                     lbeg lend (gfm-tables--cell-bounds lbeg lend))))
-      (let ((windows (or (gfm-tables--display-windows) (list nil))))
-        (dolist (win windows)
-          (gfm-tables--apply-table-display
-           win header-beg header-end delim-beg delim-end
-           body-positions header-cells body-rows))))))
+          (forward-line 1)))
+      (list :header-beg header-beg :header-end header-end
+            :delim-beg delim-beg :delim-end delim-end
+            :body-positions (nreverse body-positions)
+            :header-cells header-cells
+            :body-rows (nreverse body-rows)))))
+
+(defun gfm-tables--apply-table-display-for-parsed (parsed window)
+  "Build display overlays for PARSED in WINDOW (or unrestricted when nil)."
+  (gfm-tables--apply-table-display
+   window
+   (plist-get parsed :header-beg) (plist-get parsed :header-end)
+   (plist-get parsed :delim-beg) (plist-get parsed :delim-end)
+   (plist-get parsed :body-positions)
+   (plist-get parsed :header-cells) (plist-get parsed :body-rows)))
+
+(defun gfm-tables--apply-table (header-beg delim-beg body-beg body-end)
+  "Decorate one table identified by HEADER-BEG, DELIM-BEG, BODY-BEG, BODY-END.
+Builds anchor overlays once per row and one display overlay per row
+*per window* currently showing the buffer.  When no window shows the
+buffer, falls back to a single unrestricted display overlay."
+  (let ((parsed (gfm-tables--parse-table header-beg delim-beg
+                                         body-beg body-end)))
+    (gfm-tables--time-phase 'apply
+      (gfm-tables--make-anchor
+       header-beg (plist-get parsed :header-end)
+       (gfm-tables--cell-bounds header-beg (plist-get parsed :header-end)))
+      (cl-loop for (lbeg . lend) in (plist-get parsed :body-positions)
+               do (gfm-tables--make-anchor
+                   lbeg lend (gfm-tables--cell-bounds lbeg lend))))
+    (let ((windows (or (gfm-tables--display-windows) (list nil))))
+      (dolist (win windows)
+        (gfm-tables--apply-table-display-for-parsed parsed win)))))
+
+(defun gfm-tables--remove-display-overlays-in-block (block window)
+  "Delete WINDOW's display overlays inside BLOCK.
+WINDOW non-nil matches only that window's overlays; nil matches every
+display overlay (used when wiping out an unrestricted fallback set)."
+  (let ((header-beg (nth 0 block))
+        (body-end (nth 3 block)))
+    (dolist (ov (overlays-in header-beg (1+ body-end)))
+      (when (and (overlay-get ov 'gfm-tables-display)
+                 (or (null window)
+                     (eq (overlay-get ov 'window) window)))
+        (delete-overlay ov))))
+  (setq gfm-tables--overlays
+        (cl-remove-if-not #'overlay-buffer gfm-tables--overlays)))
+
+(defun gfm-tables--remove-display-overlays-for-window (window)
+  "Delete every display overlay restricted to WINDOW across the buffer."
+  (dolist (ov gfm-tables--overlays)
+    (when (and (overlay-buffer ov)
+               (overlay-get ov 'gfm-tables-display)
+               (eq (overlay-get ov 'window) window))
+      (delete-overlay ov)))
+  (setq gfm-tables--overlays
+        (cl-remove-if-not #'overlay-buffer gfm-tables--overlays)))
+
+(defun gfm-tables--rebuild-block-for-window (block window)
+  "Replace WINDOW's display overlays for BLOCK with fresh ones at current width.
+Anchors and other windows' display overlays are left untouched."
+  (cl-destructuring-bind (header-beg delim-beg body-beg body-end) block
+    (let* ((gfm-tables--width-cache
+            (or gfm-tables--width-cache
+                (make-hash-table :test 'eq)))
+           (parsed (gfm-tables--parse-table header-beg delim-beg
+                                            body-beg body-end)))
+      (gfm-tables--remove-display-overlays-in-block block window)
+      (gfm-tables--apply-table-display-for-parsed parsed window))))
 
 (defun gfm-tables--fenced-ranges ()
   "Return (BEG . END) ranges of fenced code blocks, if discoverable."
@@ -1071,6 +1125,75 @@ Falls back to a full one-shot rebuild when no window shows the buffer."
                    (gfm-tables--rebuild-blocks bs)))))
            (current-buffer) offscreen)))))))
 
+(defun gfm-tables--rebuild-window-prioritised (window)
+  "Visible-first / off-screen-deferred rebuild of WINDOW's display overlays.
+Anchors and other windows' overlays are not touched.  Used by
+`gfm-tables--reconcile-windows' when WINDOW is newly showing the
+buffer or has been resized."
+  (when (window-live-p window)
+    (let* ((blocks (gfm-tables--find-blocks (gfm-tables--fenced-ranges)))
+           (vstart (window-start window))
+           (vend (window-end window t))
+           (ranges (list (cons vstart vend)))
+           (visible (cl-remove-if-not
+                     (lambda (b) (gfm-tables--block-visible-p b ranges))
+                     blocks))
+           (offscreen (cl-set-difference blocks visible))
+           (gfm-tables--width-cache (make-hash-table :test 'eq)))
+      (dolist (b visible)
+        (gfm-tables--rebuild-block-for-window b window))
+      (when offscreen
+        (run-with-idle-timer
+         0 nil
+         (lambda (buf bs win)
+           (when (and (buffer-live-p buf) (window-live-p win))
+             (with-current-buffer buf
+               (when gfm-tables-mode
+                 (let ((gfm-tables--width-cache
+                        (make-hash-table :test 'eq)))
+                   (dolist (b bs)
+                     (gfm-tables--rebuild-block-for-window b win)))))))
+         (current-buffer) offscreen window)))))
+
+(defun gfm-tables--reconcile-windows ()
+  "Reconcile display overlays with current window state.
+Compares the current `(WIN . WIDTH)' snapshot to the one cached in
+`gfm-tables--last-window-state' and acts only on the diff:
+
+- Windows now showing the buffer (added) get a prioritised rebuild
+  for that window only.
+- Windows no longer showing the buffer (removed) have their display
+  overlays deleted.
+- Windows whose width changed (resized) get a prioritised rebuild.
+
+Anchors and untouched windows' display overlays are not disturbed.
+Falls back to a full `gfm-tables--rebuild' when called for the first
+time (no prior state cached) or when an anchor is missing."
+  (cond
+   ((or (null gfm-tables--last-window-state)
+        (null (cl-some (lambda (o) (overlay-get o 'gfm-tables-anchor))
+                       gfm-tables--overlays)))
+    (gfm-tables--rebuild))
+   (t
+    (let* ((prev gfm-tables--last-window-state)
+           (curr (gfm-tables--window-state))
+           (prev-keys (mapcar #'car prev))
+           (curr-keys (mapcar #'car curr))
+           (added (cl-remove-if (lambda (e) (memq (car e) prev-keys)) curr))
+           (removed (cl-remove-if (lambda (w) (memq w curr-keys)) prev-keys))
+           (resized (cl-remove-if-not
+                     (lambda (e)
+                       (let ((old (assq (car e) prev)))
+                         (and old (not (eql (cdr e) (cdr old))))))
+                     curr)))
+      (dolist (w removed)
+        (gfm-tables--remove-display-overlays-for-window w))
+      (dolist (entry (append added resized))
+        (gfm-tables--rebuild-window-prioritised (car entry)))
+      (setq gfm-tables--last-window-state curr
+            gfm-tables--last-available-width (gfm-tables--available-width))
+      (gfm-tables--update-cursor-highlight)))))
+
 (defun gfm-tables--extend-dirty-region (beg end)
   "Extend the buffer's dirty region to cover BEG..END."
   (cond
@@ -1184,7 +1307,7 @@ catch up on the following idle tick."
   (unless (buffer-base-buffer)
     (let ((state (gfm-tables--window-state)))
       (unless (equal state gfm-tables--last-window-state)
-        (gfm-tables--arm-rebuild-timer #'gfm-tables--rebuild-prioritised)))))
+        (gfm-tables--arm-rebuild-timer #'gfm-tables--reconcile-windows)))))
 
 ;;; Minor mode
 
