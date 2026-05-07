@@ -2054,17 +2054,33 @@ neighbour column is out of range."
   (interactive)
   (gfm-tables--swap-columns 1))
 
+(defconst gfm-tables--snap-suppressing-command-re
+  (rx bos (or "isearch-" "evil-search-" "evil-ex-search-"))
+  "Regex on `this-command' name; matched commands suppress snap-to-cell.
+Search-style commands park point at an exact match position (which
+may be a column gap or border) and must not have the post-command
+snap yank point back to cell 0 — that would make the next repeat
+re-find the same match and trap isearch in an infinite loop.")
+
 (defun gfm-tables--maybe-snap-to-cell ()
   "If point is on a table row but outside any cell range, snap to cell 0.
 Idempotent when point already sits in a cell so it is safe to call
 unconditionally (e.g. from `post-command-hook').  Skipped when the
 row is invisible (e.g. inside a folded outline heading) so motion
-through hidden text does not pull point into a hidden table."
+through hidden text does not pull point into a hidden table.  Also
+skipped while `isearch-mode' is active or `this-command' is a
+search-style command so search results that land on a column gap
+or border are not rewound."
   (let* ((lbeg (line-beginning-position))
          (row-ov (cl-find-if
                   (lambda (o) (overlay-get o 'gfm-tables-cell-bounds))
                   (overlays-at lbeg))))
-    (when (and row-ov (not (invisible-p lbeg)))
+    (when (and row-ov
+               (not (invisible-p lbeg))
+               (not (bound-and-true-p isearch-mode))
+               (not (and (symbolp this-command)
+                         (string-match-p gfm-tables--snap-suppressing-command-re
+                                         (symbol-name this-command)))))
       (let* ((cb (overlay-get row-ov 'gfm-tables-cell-bounds))
              (in-cell (cl-find-if
                        (lambda (b) (and (>= (point) (car b))

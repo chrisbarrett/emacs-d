@@ -1294,6 +1294,63 @@ region is just cell content; the trailing newline must be stripped."
         (gfm-tables--maybe-snap-to-cell)
         (should (= before (point)))))))
 
+(ert-deftest lang-markdown/gfm-tables-snap-skipped-during-isearch ()
+  "Snap is a no-op while `isearch-mode' is active so isearch can park
+point on a column gap or border without being yanked back to cell 0."
+  (with-temp-buffer
+    (insert "| A | B |\n| - | - |\n| 1 | 2 |\n")
+    (gfm-tables-mode 1)
+    (goto-char (point-min))
+    (search-forward "| 1 ")
+    (goto-char (line-beginning-position)) ; on `|', not in any cell
+    (let ((before (point))
+          (isearch-mode " Isearch"))
+      (gfm-tables--maybe-snap-to-cell)
+      (should (= before (point))))))
+
+(ert-deftest lang-markdown/gfm-tables-snap-skipped-for-search-commands ()
+  "Snap is a no-op when `this-command' is a search-style command, so
+evil-search-next and friends don't have point yanked back."
+  (with-temp-buffer
+    (insert "| A | B |\n| - | - |\n| 1 | 2 |\n")
+    (gfm-tables-mode 1)
+    (goto-char (point-min))
+    (search-forward "| 1 ")
+    (goto-char (line-beginning-position))
+    (let ((before (point))
+          (this-command 'evil-search-next))
+      (gfm-tables--maybe-snap-to-cell)
+      (should (= before (point))))))
+
+(ert-deftest lang-markdown/gfm-tables-isearch-advances-when-match-ends-on-pipe ()
+  "The post-command cursor-highlight hook must not rewind point when a
+search lands point on a `|' (outside cell bounds).  Without the snap
+suppression, the hook moves point back to cell 0 and the next
+`re-search-forward' finds the same match — an infinite loop."
+  (with-temp-buffer
+    (insert "| col1 | col2 |\n")
+    (insert "|------|------|\n")
+    (insert "| foo | bar |\n")
+    (insert "| foo | qux |\n")
+    (markdown-mode)
+    (gfm-tables-mode 1)
+    (let ((gfm-tables--rebuild-timer nil)) (gfm-tables--rebuild))
+    (goto-char (point-min))
+    ;; Simulate the body of isearch's command loop: search, then run
+    ;; post-command-hook with `isearch-mode' active.  Match-end of
+    ;; "foo " lands on a `|' (outside cell bounds) — the snap, if not
+    ;; suppressed, would rewind point and trap the next search.
+    (let ((isearch-mode " Isearch")
+          points)
+      (should (re-search-forward "foo " nil t))
+      (gfm-tables--update-cursor-highlight)
+      (push (point) points)
+      (should (re-search-forward "foo " nil t))
+      (gfm-tables--update-cursor-highlight)
+      (push (point) points)
+      (setq points (nreverse points))
+      (should (< (nth 0 points) (nth 1 points))))))
+
 ;;; Evil shim
 
 (ert-deftest lang-markdown/gfm-tables-evil-edit-commands-listed ()
