@@ -385,6 +385,23 @@ Cases are restricted to modes that ship with Emacs so the test never skips."
     (insert "Some prose.\n| - | - |\nMore prose.\n")
     (should-not (gfm-tables--find-blocks))))
 
+(ert-deftest lang-markdown/gfm-tables-find-blocks-cache-invalidates-on-edit ()
+  "`gfm-tables--find-blocks' caches by `buffer-modified-tick'.
+Two calls without an intervening edit return `eq' lists; an edit
+invalidates the cache and the next call returns a fresh list reflecting
+the new buffer state."
+  (skip-unless (fboundp 'gfm-tables--find-blocks))
+  (with-temp-buffer
+    (insert "| A | B |\n| - | - |\n| 1 | 2 |\n\nintro\n")
+    (let ((first (gfm-tables--find-blocks))
+          (second (gfm-tables--find-blocks)))
+      (should (eq first second)))
+    ;; Append a second table; cache must invalidate.
+    (goto-char (point-max))
+    (insert "\n| C | D |\n| - | - |\n| 3 | 4 |\n")
+    (let ((after (gfm-tables--find-blocks)))
+      (should (= 2 (length after))))))
+
 (ert-deftest lang-markdown/gfm-tables-find-blocks-skips-fenced ()
   (skip-unless (and (fboundp 'gfm-tables--find-blocks)
                     (fboundp 'gfm-code-fences--find-blocks)))

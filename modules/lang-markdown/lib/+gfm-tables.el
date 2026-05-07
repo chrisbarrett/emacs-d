@@ -306,54 +306,77 @@ escapes and `|' inside backtick code spans."
   "Non-nil if POS lies in any (BEG . END) range in RANGES."
   (cl-some (lambda (r) (and (>= pos (car r)) (<= pos (cdr r)))) ranges))
 
-(defun gfm-tables--find-blocks (&optional excluded-ranges)
-  "Return all GFM tables in the buffer.
-Each entry is (HEADER-BEG DELIM-BEG BODY-BEG BODY-END).  Tables whose
-delimiter row falls inside any (BEG . END) range in EXCLUDED-RANGES are
-skipped."
+(defvar-local gfm-tables--blocks-cache nil
+  "Pair (BUFFER-MODIFIED-TICK . BLOCKS) memoising `gfm-tables--find-blocks'.
+BLOCKS is the unfiltered, full-buffer block list as returned by
+`gfm-tables--find-blocks-1'.  Stale when its tick disagrees with
+`buffer-modified-tick'.")
+
+(defun gfm-tables--find-blocks-1 ()
+  "Scan the buffer for GFM tables, ignoring any excluded-ranges filtering.
+Each entry is (HEADER-BEG DELIM-BEG BODY-BEG BODY-END).  Internal
+helper for `gfm-tables--find-blocks'."
   (let (blocks)
     (save-excursion
       (save-match-data
         (goto-char (point-min))
         (while (re-search-forward gfm-tables--delim-re nil t)
           (let* ((delim-beg (match-beginning 0))
-                 (delim-end (match-end 0)))
+                 (delim-end (match-end 0))
+                 (header-beg
+                  (save-excursion
+                    (goto-char delim-beg)
+                    (and (= (forward-line -1) 0)
+                         (looking-at-p "^|")
+                         (line-beginning-position)))))
             (cond
-             ((gfm-tables--in-ranges-p delim-beg excluded-ranges)
+             ((not header-beg)
               (goto-char delim-end))
              (t
-              (let ((header-beg
-                     (save-excursion
-                       (goto-char delim-beg)
-                       (and (= (forward-line -1) 0)
-                            (looking-at-p "^|")
-                            (line-beginning-position)))))
+              (let ((body-beg (save-excursion
+                                (goto-char delim-end)
+                                (forward-line 1)
+                                (line-beginning-position)))
+                    (body-end nil))
+                (save-excursion
+                  (goto-char body-beg)
+                  (let ((last body-beg)
+                        (any nil))
+                    (while (and (not (eobp))
+                                (looking-at-p "^|"))
+                      (setq any t
+                            last (line-end-position))
+                      (forward-line 1))
+                    (setq body-end (and any last))))
                 (cond
-                 ((not header-beg)
-                  (goto-char delim-end))
-                 (t
-                  (let ((body-beg (save-excursion
-                                    (goto-char delim-end)
-                                    (forward-line 1)
-                                    (line-beginning-position)))
-                        (body-end nil))
-                    (save-excursion
-                      (goto-char body-beg)
-                      (let ((last body-beg)
-                            (any nil))
-                        (while (and (not (eobp))
-                                    (looking-at-p "^|"))
-                          (setq any t
-                                last (line-end-position))
-                          (forward-line 1))
-                        (setq body-end (and any last))))
-                    (when body-end
-                      (push (list header-beg delim-beg body-beg body-end)
-                            blocks)
-                      (goto-char body-end))
-                    (unless body-end
-                      (goto-char delim-end)))))))))))) ; whew
+                 (body-end
+                  (push (list header-beg delim-beg body-beg body-end)
+                        blocks)
+                  (goto-char body-end))
+                 (t (goto-char delim-end))))))))))
     (nreverse blocks)))
+
+(defun gfm-tables--find-blocks (&optional excluded-ranges)
+  "Return all GFM tables in the buffer.
+Each entry is (HEADER-BEG DELIM-BEG BODY-BEG BODY-END).  Tables whose
+delimiter row falls inside any (BEG . END) range in EXCLUDED-RANGES are
+omitted.  The unfiltered scan is memoised by `buffer-modified-tick' so
+non-modifying callers (cell motion, edit dispatch) reuse a single scan
+between edits."
+  (let* ((tick (buffer-modified-tick))
+         (all (cond
+               ((and gfm-tables--blocks-cache
+                     (= tick (car gfm-tables--blocks-cache)))
+                (cdr gfm-tables--blocks-cache))
+               (t
+                (let ((blocks (gfm-tables--find-blocks-1)))
+                  (setq gfm-tables--blocks-cache (cons tick blocks))
+                  blocks)))))
+    (if excluded-ranges
+        (cl-remove-if (lambda (b)
+                        (gfm-tables--in-ranges-p (nth 1 b) excluded-ranges))
+                      all)
+      all)))
 
 ;;; Column widths
 
