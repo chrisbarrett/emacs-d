@@ -172,8 +172,21 @@
   :custom
   (pulsar-iterations 5)
   (pulsar-pulse-on-window-change t)
+  ;; The default behaviour walks every interned symbol via `mapatoms' to
+  ;; build alias lists, and does it on every buffer that enters
+  ;; `pulsar-mode' — ~50ms per new edit-indirect / temp buffer.  Disable
+  ;; the per-buffer resolve and run it once when `pulsar-global-mode'
+  ;; first turns on.
+  (pulsar-resolve-pulse-function-aliases nil)
   :config
   (+load "./config/+pulsar.el")
+  (add-hook 'pulsar-global-mode-hook
+            (defun +pulsar-resolve-aliases-once-h ()
+              "Resolve pulse-function aliases once, then remove this hook."
+              (when pulsar-global-mode
+                (pulsar-resolve-function-aliases))
+              (remove-hook 'pulsar-global-mode-hook
+                           #'+pulsar-resolve-aliases-once-h)))
   (with-eval-after-load 'avy
     (+load "./config/+avy+pulsar.el")))
 
