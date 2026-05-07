@@ -837,6 +837,12 @@ BLOCK is (HEADER-BEG DELIM-BEG BODY-BEG BODY-END)."
 
 ;;; Rebuild scheduler
 
+(defvar-local gfm-tables--last-available-width nil
+  "Available char width recorded on the last full rebuild.
+Compared in `gfm-tables--schedule-full-rebuild' so window-config
+changes that leave the width unchanged (minibuffer activity, focus
+shifts, scroll-margin tweaks) do not schedule a redundant rebuild.")
+
 (defun gfm-tables--rebuild ()
   "Remove and recreate all gfm-tables overlays.
 Re-applies the active-cell highlight afterwards so cell selection
@@ -847,6 +853,7 @@ survives window-configuration changes and other rebuild triggers."
     (setq gfm-tables--dirty-region nil)
     (let ((n (gfm-tables--apply-overlays)))
       (gfm-tables--record-stats (float-time (time-since start)) n))
+    (setq gfm-tables--last-available-width (gfm-tables--available-width))
     (gfm-tables--update-cursor-highlight)))
 
 (defun gfm-tables--rebuild-block (block)
@@ -960,11 +967,15 @@ Skips indirect buffers since base buffer overlays already cover them."
     (gfm-tables--arm-rebuild-timer #'gfm-tables--rebuild-scoped)))
 
 (defun gfm-tables--schedule-full-rebuild (&rest _)
-  "Schedule an unconditional full-buffer rebuild on next idle.
-Used for window-configuration changes, where column widths derive from
-the window and every table must be re-fitted."
+  "Schedule a full-buffer rebuild on next idle if the window width changed.
+Window-configuration-change-hook fires for many reasons unrelated to
+column-affecting size (minibuffer activity, focus, scroll-margin), so
+we compare the current `gfm-tables--available-width' against the cached
+value from the last rebuild and skip when they match."
   (unless (buffer-base-buffer)
-    (gfm-tables--arm-rebuild-timer #'gfm-tables--rebuild)))
+    (let ((w (gfm-tables--available-width)))
+      (unless (eql w gfm-tables--last-available-width)
+        (gfm-tables--arm-rebuild-timer #'gfm-tables--rebuild)))))
 
 ;;; Minor mode
 

@@ -1281,6 +1281,26 @@ column width must still cover all its source chars in the bounds."
     (should-not (memq 'gfm-tables--schedule-rebuild
                       window-configuration-change-hook))))
 
+(ert-deftest lang-markdown/gfm-tables-schedule-full-rebuild-noop-when-width-unchanged ()
+  "Full-rebuild scheduler is a no-op when the available width is unchanged."
+  (skip-unless (fboundp 'gfm-tables-mode))
+  (with-temp-buffer
+    (insert "| A | B |\n| - | - |\n| 1 | 2 |\n")
+    (gfm-tables-mode 1)
+    ;; Cancel any timer the mode-enable rebuild may have left running.
+    (when (timerp gfm-tables--rebuild-timer)
+      (cancel-timer gfm-tables--rebuild-timer))
+    (setq gfm-tables--rebuild-timer nil)
+    ;; Same width → no timer armed.
+    (gfm-tables--schedule-full-rebuild)
+    (should-not gfm-tables--rebuild-timer)
+    ;; Forge a width change → timer armed.
+    (setq gfm-tables--last-available-width
+          (1- (or gfm-tables--last-available-width 80)))
+    (gfm-tables--schedule-full-rebuild)
+    (should (timerp gfm-tables--rebuild-timer))
+    (cancel-timer gfm-tables--rebuild-timer)))
+
 ;;; Phase-level instrumentation
 
 (ert-deftest lang-markdown/gfm-tables-phase-totals-non-negative-and-bounded ()
