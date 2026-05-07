@@ -1354,6 +1354,76 @@ emitted by `gfm-tables--multiline-row-char-bounds'."
                           (let (xs) (maphash (lambda (k _) (push k xs)) before)
                                xs)))))))
 
+(ert-deftest lang-markdown/gfm-tables-per-window-display-overlays ()
+  "Each window showing the buffer gets its own display-overlay set.
+Anchor overlays stay shared across windows; only display overlays
+carry a `window' restriction."
+  (skip-unless (fboundp 'gfm-tables-mode))
+  (let ((buf (generate-new-buffer "*gfm-tables-test*")))
+    (unwind-protect
+        (progn
+          (with-current-buffer buf
+            (insert "| A | B |\n| - | - |\n| 1 | 2 |\n"))
+          (set-window-buffer (selected-window) buf)
+          (let ((other (split-window)))
+            (set-window-buffer other buf)
+            (with-current-buffer buf
+              (gfm-tables-mode 1)
+              (let* ((overlays (cl-remove-if-not
+                                (lambda (o) (overlay-get o 'gfm-tables))
+                                (overlays-in (point-min) (point-max))))
+                     (anchors (cl-count-if
+                               (lambda (o) (overlay-get o 'gfm-tables-anchor))
+                               overlays))
+                     (displays (cl-remove-if-not
+                                (lambda (o) (overlay-get o 'gfm-tables-display))
+                                overlays))
+                     (n-displays (length displays))
+                     (windowed (cl-count-if
+                                (lambda (o) (overlay-get o 'window))
+                                displays)))
+                ;; Header + 1 body row → 2 anchors.
+                (should (= 2 anchors))
+                ;; 2 windows × 3 visible rows (header + delim + body) = 6.
+                (should (= 6 n-displays))
+                ;; All display overlays carry a `window' property.
+                (should (= 6 windowed))))
+            (delete-window other)))
+      (kill-buffer buf))))
+
+(ert-deftest lang-markdown/gfm-tables-highlight-targets-selected-window ()
+  "Active-cell highlight paints the selected window's display overlay only.
+Per-window display overlays let two windows render the same buffer at
+different widths; the cell-edit highlight should only affect the
+window holding point."
+  (skip-unless (fboundp 'gfm-tables-mode))
+  (let ((buf (generate-new-buffer "*gfm-tables-hl-test*")))
+    (unwind-protect
+        (progn
+          (with-current-buffer buf
+            (insert "| A | B |\n| - | - |\n| 1 | 2 |\n"))
+          (set-window-buffer (selected-window) buf)
+          (let* ((win-a (selected-window))
+                 (win-b (split-window)))
+            (set-window-buffer win-b buf)
+            (with-current-buffer buf
+              (gfm-tables-mode 1)
+              (goto-char (point-min))
+              (forward-line 2)
+              (forward-char 2)
+              (with-selected-window win-a
+                (gfm-tables--update-cursor-highlight))
+              (let* ((info (gfm-tables--cell-info-at-point))
+                     (anchor (car info))
+                     (a-display (gfm-tables--display-overlay-for-anchor anchor win-a))
+                     (b-display (gfm-tables--display-overlay-for-anchor anchor win-b)))
+                ;; Selected window's overlay carries the saved-display sentinel.
+                (should (overlay-get a-display 'gfm-tables-saved-display))
+                ;; The other window's overlay does not.
+                (should-not (overlay-get b-display 'gfm-tables-saved-display))))
+            (delete-window win-b)))
+      (kill-buffer buf))))
+
 (ert-deftest lang-markdown/gfm-tables-window-config-change-wired-to-full-rebuild ()
   "`window-configuration-change-hook' is wired to the full-rebuild scheduler."
   (skip-unless (fboundp 'gfm-tables-mode))
