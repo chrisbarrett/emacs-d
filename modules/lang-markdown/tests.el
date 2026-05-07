@@ -244,6 +244,89 @@
     (should-not (cl-some (lambda (ov) (overlay-get ov 'gfm-code-fences))
                          (overlays-in (point-min) (point-max))))))
 
+(ert-deftest lang-markdown/gfm-code-fences-overlays-restricted-to-each-window ()
+  "Code-fence overlays are produced once per window and carry `'window'.
+A buffer shown in two windows has two complete overlay sets, each
+restricted to a single window via the `'window' overlay property,
+so per-window rendering and per-window reveal toggling work."
+  (skip-unless (fboundp 'gfm-code-fences-mode))
+  (let ((buf (generate-new-buffer "*gfm-code-fences-window-test*")))
+    (unwind-protect
+        (progn
+          (with-current-buffer buf
+            (insert "```\nhello\n```\n"))
+          (set-window-buffer (selected-window) buf)
+          (let* ((win-a (selected-window))
+                 (win-b (split-window)))
+            (set-window-buffer win-b buf)
+            (with-current-buffer buf
+              (gfm-code-fences-mode 1)
+              (let* ((all (cl-remove-if-not
+                           (lambda (o) (overlay-get o 'gfm-code-fences))
+                           (overlays-in (point-min) (point-max))))
+                     (windowed (cl-count-if
+                                (lambda (o) (overlay-get o 'window))
+                                all))
+                     (a-overlays (cl-count-if
+                                  (lambda (o)
+                                    (eq (overlay-get o 'window) win-a))
+                                  all))
+                     (b-overlays (cl-count-if
+                                  (lambda (o)
+                                    (eq (overlay-get o 'window) win-b))
+                                  all)))
+                ;; Every overlay carries a window restriction.
+                (should (= (length all) windowed))
+                ;; Both windows have a non-empty overlay set.
+                (should (> a-overlays 0))
+                (should (> b-overlays 0))))
+            (delete-window win-b)))
+      (kill-buffer buf))))
+
+(ert-deftest lang-markdown/gfm-code-fences-reveal-targets-selected-window ()
+  "`gfm-code-fences--reveal' only hides overlays in the selected window.
+The other window's revealable overlay must keep its `display' set so
+two windows showing the same buffer don't strobe."
+  (skip-unless (fboundp 'gfm-code-fences-mode))
+  (let ((buf (generate-new-buffer "*gfm-code-fences-reveal-test*")))
+    (unwind-protect
+        (progn
+          (with-current-buffer buf
+            (insert "```\nhello\n```\n"))
+          (set-window-buffer (selected-window) buf)
+          (let* ((win-a (selected-window))
+                 (win-b (split-window)))
+            (set-window-buffer win-b buf)
+            (with-current-buffer buf
+              (gfm-code-fences-mode 1)
+              (goto-char (point-min))
+              ;; Land point on the opening marker line so the top-leading
+              ;; revealable overlay is at point.
+              (with-selected-window win-a
+                (gfm-code-fences--reveal))
+              (let* ((revealables
+                      (cl-remove-if-not
+                       (lambda (o) (overlay-get o 'gfm-code-fences-revealable))
+                       (overlays-in (point-min) (point-max))))
+                     (a-rev (cl-find-if
+                             (lambda (o)
+                               (and (eq (overlay-get o 'window) win-a)
+                                    (overlay-get o 'gfm-code-fences-saved-display)))
+                             revealables))
+                     (b-rev (cl-find-if
+                             (lambda (o)
+                               (eq (overlay-get o 'window) win-b))
+                             revealables)))
+                ;; win-a's overlay was hidden (saved-display set, display nil).
+                (should a-rev)
+                (should-not (overlay-get a-rev 'display))
+                ;; win-b's overlay is untouched: still has display, no save.
+                (should b-rev)
+                (should (overlay-get b-rev 'display))
+                (should-not (overlay-get b-rev 'gfm-code-fences-saved-display))))
+            (delete-window win-b)))
+      (kill-buffer buf))))
+
 (ert-deftest lang-markdown/gfm-code-fences-enabled-via-gfm-mode-hook ()
   (skip-unless (boundp 'gfm-mode-hook))
   (should (memq 'gfm-code-fences-mode gfm-mode-hook)))
@@ -384,6 +467,23 @@ Cases are restricted to modes that ship with Emacs so the test never skips."
   (with-temp-buffer
     (insert "Some prose.\n| - | - |\nMore prose.\n")
     (should-not (gfm-tables--find-blocks))))
+
+(ert-deftest lang-markdown/gfm-tables-find-blocks-cache-invalidates-on-edit ()
+  "`gfm-tables--find-blocks' caches by `buffer-modified-tick'.
+Two calls without an intervening edit return `eq' lists; an edit
+invalidates the cache and the next call returns a fresh list reflecting
+the new buffer state."
+  (skip-unless (fboundp 'gfm-tables--find-blocks))
+  (with-temp-buffer
+    (insert "| A | B |\n| - | - |\n| 1 | 2 |\n\nintro\n")
+    (let ((first (gfm-tables--find-blocks))
+          (second (gfm-tables--find-blocks)))
+      (should (eq first second)))
+    ;; Append a second table; cache must invalidate.
+    (goto-char (point-max))
+    (insert "\n| C | D |\n| - | - |\n| 3 | 4 |\n")
+    (let ((after (gfm-tables--find-blocks)))
+      (should (= 2 (length after))))))
 
 (ert-deftest lang-markdown/gfm-tables-find-blocks-skips-fenced ()
   (skip-unless (and (fboundp 'gfm-tables--find-blocks)
@@ -743,6 +843,51 @@ column width must still cover all its source chars in the bounds."
 (ert-deftest lang-markdown/gfm-tables-edit-cell-command-defined ()
   (should (commandp 'gfm-tables-edit-cell-at-point)))
 
+(ert-deftest lang-markdown/gfm-tables-edit-cell-no-spurious-newline ()
+  "Committing a cell edit with no changes must not split the row.
+`markdown--edit-indirect-after-commit-function' appends \\n to the
+committed region, treating it as a code block.  For a cell edit the
+region is just cell content; the trailing newline must be stripped."
+  (skip-unless (and (fboundp 'gfm-tables-mode)
+                    (fboundp 'gfm-mode)
+                    (require 'edit-indirect nil t)))
+  (with-temp-buffer
+    (gfm-mode)
+    (insert "| A             | B   |\n| ------------- | --- |\n"
+            "| `(parameter)` | foo |\n")
+    (gfm-tables-mode 1)
+    (goto-char (point-min))
+    (forward-line 2)
+    (forward-char 4)
+    (let* ((info (gfm-tables--cell-info-at-point))
+           (row-ov (car info))
+           (idx (cdr info))
+           (bounds (gfm-tables--cell-content-bounds row-ov idx))
+           (before-line (buffer-substring-no-properties
+                         (line-beginning-position) (line-end-position)))
+           (src-buf (current-buffer))
+           (edit-indirect-guess-mode-function
+            (lambda (_p _b _e) (markdown-mode)))
+           (buf (edit-indirect-region (car bounds) (cdr bounds) nil)))
+      (with-current-buffer buf
+        (setq-local require-final-newline nil)
+        (setq-local mode-require-final-newline nil)
+        (add-hook 'edit-indirect-before-commit-hook
+                  #'gfm-tables--cell-edit-mark-pending nil t)
+        (add-hook 'edit-indirect-before-commit-hook
+                  #'gfm-tables--cell-edit-sanitise nil t))
+      (with-current-buffer src-buf
+        (add-hook 'edit-indirect-after-commit-functions
+                  #'gfm-tables--cell-edit-after-commit
+                  'append 'local))
+      (with-current-buffer buf (edit-indirect-commit))
+      (with-current-buffer src-buf
+        (goto-char (point-min))
+        (forward-line 2)
+        (let ((after-line (buffer-substring-no-properties
+                           (line-beginning-position) (line-end-position))))
+          (should (equal before-line after-line)))))))
+
 (ert-deftest lang-markdown/gfm-tables-cell-edit-sanitise-strips-newlines ()
   (skip-unless (fboundp 'gfm-tables--cell-edit-sanitise))
   (with-temp-buffer
@@ -1078,6 +1223,407 @@ column width must still cover all its source chars in the bounds."
 (ert-deftest lang-markdown/gfm-tables-enabled-via-gfm-mode-hook ()
   (skip-unless (boundp 'gfm-mode-hook))
   (should (memq 'gfm-tables-mode gfm-mode-hook)))
+
+;;; Per-rebuild width cache
+
+(ert-deftest lang-markdown/gfm-tables-width-cache-fast-path-matches-uncached ()
+  "Fast path returns same width as full computation for plain strings."
+  (skip-unless (fboundp 'gfm-tables--visible-width))
+  (let ((s "hello world"))
+    (let ((gfm-tables--width-cache nil))
+      (should (= (string-width s) (gfm-tables--visible-width s))))))
+
+(ert-deftest lang-markdown/gfm-tables-width-cache-honours-display-prop ()
+  "Cached width matches uncached for cells with `display' replacements."
+  (skip-unless (fboundp 'gfm-tables--visible-width))
+  (let* ((s (concat "abc" (propertize "X" 'display "yyy") "de"))
+         (uncached (let ((gfm-tables--width-cache nil))
+                     (gfm-tables--visible-width s)))
+         (cache (make-hash-table :test 'eq)))
+    (let ((gfm-tables--width-cache cache))
+      (should (= uncached (gfm-tables--visible-width s)))
+      ;; Second call hits the cache.
+      (should (= uncached (gfm-tables--visible-width s)))
+      (should (gethash s cache)))))
+
+(ert-deftest lang-markdown/gfm-tables-visible-width-ignores-auto-compositions ()
+  "Auto-compositions (e.g. ligatures) must not shrink visible-width.
+Overlay display strings do not run `composition-function-table', so
+counting an auto-composition would under-pad the cell."
+  (skip-unless (fboundp 'gfm-tables--visible-width))
+  (let ((s (concat (propertize "x" 'invisible 'gfm-test)
+                   "fl"))
+        (buffer-invisibility-spec '((gfm-test . t))))
+    ;; Even if `find-composition' would report a composition for "fl"
+    ;; in the current buffer, the cell string carries no `composition'
+    ;; text-property, so width must equal the underlying char widths.
+    (should (= 2 (gfm-tables--visible-width s)))))
+
+(ert-deftest lang-markdown/gfm-tables-width-cache-honours-composition-prop ()
+  "Cached width matches uncached for cells with `composition' property."
+  (skip-unless (fboundp 'gfm-tables--visible-width))
+  (let ((s (copy-sequence "abcXXXXXde")))
+    (compose-string s 3 8 ?Y)
+    (let* ((uncached (let ((gfm-tables--width-cache nil))
+                       (gfm-tables--visible-width s)))
+           (cache (make-hash-table :test 'eq))
+           (gfm-tables--width-cache cache))
+      (should (= uncached (gfm-tables--visible-width s))))))
+
+(ert-deftest lang-markdown/gfm-tables-width-cache-honours-invisible-prop ()
+  "Cached width matches uncached for cells with hidden `invisible' segments."
+  (skip-unless (fboundp 'gfm-tables--visible-width))
+  (let* ((s (concat "abc" (propertize "HIDE" 'invisible 'gfm-test) "de"))
+         (buffer-invisibility-spec '((gfm-test . t)))
+         (uncached (let ((gfm-tables--width-cache nil))
+                     (gfm-tables--visible-width s)))
+         (cache (make-hash-table :test 'eq))
+         (gfm-tables--width-cache cache))
+    (should (= 5 uncached))
+    (should (= uncached (gfm-tables--visible-width s)))))
+
+(ert-deftest lang-markdown/gfm-tables-width-cache-not-shared-across-eq-distinct-strings ()
+  "Cache is `eq'-keyed; two equal-but-distinct strings do not share entries."
+  (skip-unless (fboundp 'gfm-tables--visible-width))
+  (let* ((cache (make-hash-table :test 'eq))
+         (gfm-tables--width-cache cache)
+         (a (copy-sequence "hello"))
+         (b (copy-sequence "hello")))
+    (gfm-tables--visible-width a)
+    (should (gethash a cache))
+    (should-not (gethash b cache))))
+
+(ert-deftest lang-markdown/gfm-tables-width-cache-substring-not-stale ()
+  "A substring of a fontified cell is measured fresh, not from the parent's hit."
+  (skip-unless (and (fboundp 'gfm-tables--fontify-cell)
+                    (fboundp 'gfm-tables--visible-width)
+                    (fboundp 'markdown-mode)))
+  (let* ((parent (gfm-tables--fontify-cell "hello world"))
+         (cache (make-hash-table :test 'eq))
+         (gfm-tables--width-cache cache)
+         (parent-w (gfm-tables--visible-width parent))
+         (sub (substring parent 0 5))
+         (sub-w (gfm-tables--visible-width sub)))
+    (should (= parent-w (gfm-tables--visible-width parent)))
+    (should (= sub-w (gfm-tables--visible-width sub)))
+    (should (= 5 sub-w))
+    (should-not (= parent-w sub-w))))
+
+;;; Shared row layout
+
+(ert-deftest lang-markdown/gfm-tables-row-layout-feeds-both-helpers ()
+  "Layout-based helpers produce strings/bounds equal to the legacy callers.
+Verifies the packed bounds vector matches the legacy nested-list shape
+emitted by `gfm-tables--multiline-row-char-bounds'."
+  (skip-unless (and (fboundp 'gfm-tables--row-layout)
+                    (fboundp 'gfm-tables--compose-row-from-layout)
+                    (fboundp 'gfm-tables--compose-multiline-row)))
+  (dolist (role '(header body-default body-alt))
+    (let* ((cells '("alpha" "beta gamma" "d"))
+           (col-widths (vector 5 4 1))
+           (layout (gfm-tables--row-layout cells col-widths))
+           (composed-direct (gfm-tables--compose-multiline-row
+                             cells col-widths role))
+           (composed-via-layout (gfm-tables--compose-row-from-layout
+                                 layout col-widths role))
+           (bounds-direct (gfm-tables--multiline-row-char-bounds
+                           cells col-widths))
+           (vec (gfm-tables--row-layout-bounds-vec layout))
+           (n-cells (gfm-tables--row-layout-n-cells layout)))
+      (should (equal composed-direct composed-via-layout))
+      (cl-loop for line-cb in bounds-direct
+               for line from 0
+               do (cl-loop for cb in line-cb
+                           for cell from 0
+                           for base = (* 2 (+ (* line n-cells) cell))
+                           do (should (= (car cb) (aref vec base)))
+                              (should (= (cdr cb) (aref vec (1+ base)))))))))
+
+;;; Scoped rebuild
+
+(defun gfm-tables--test-overlay-set ()
+  "Return the gfm-tables overlay objects in the current buffer as a hash set."
+  (let ((set (make-hash-table :test 'eq)))
+    (dolist (ov (overlays-in (point-min) (point-max)))
+      (when (overlay-get ov 'gfm-tables)
+        (puthash ov t set)))
+    set))
+
+(defun gfm-tables--test-block-overlays (h-beg b-end)
+  "Return gfm-tables overlays whose start lies in H-BEG..B-END."
+  (cl-remove-if-not
+   (lambda (ov)
+     (and (overlay-get ov 'gfm-tables)
+          (let ((s (overlay-start ov)))
+            (and s (<= h-beg s) (<= s b-end)))))
+   (overlays-in h-beg (1+ b-end))))
+
+(ert-deftest lang-markdown/gfm-tables-scoped-edit-inside-single-table ()
+  "Editing inside one table only rebuilds that table's overlays."
+  (skip-unless (fboundp 'gfm-tables-mode))
+  (with-temp-buffer
+    (insert "| A | B |\n| - | - |\n| 1 | 2 |\n\n"
+            "| C | D |\n| - | - |\n| 3 | 4 |\n")
+    (gfm-tables-mode 1)
+    (let* ((blocks (gfm-tables--find-blocks))
+           (b1 (nth 0 blocks))
+           (b2 (nth 1 blocks))
+           (b1-h (nth 0 b1)) (b1-e (nth 3 b1))
+           (b2-h (nth 0 b2)) (b2-e (nth 3 b2))
+           (b1-before (gfm-tables--test-block-overlays b1-h b1-e))
+           (b2-before (gfm-tables--test-block-overlays b2-h b2-e)))
+      (setq gfm-tables--dirty-region
+            (cons (1+ b1-h) (1- b1-e)))
+      (gfm-tables--rebuild-scoped)
+      (let ((b1-after (gfm-tables--test-block-overlays b1-h b1-e))
+            (b2-after (gfm-tables--test-block-overlays b2-h b2-e)))
+        (should-not (cl-intersection b1-before b1-after))
+        (should (cl-every (lambda (o) (memq o b2-after)) b2-before))
+        (should (cl-every (lambda (o) (memq o b2-before)) b2-after))))))
+
+(ert-deftest lang-markdown/gfm-tables-scoped-edit-outside-tables-noop ()
+  "Editing in a region intersecting no decorated table is a no-op."
+  (skip-unless (fboundp 'gfm-tables-mode))
+  (with-temp-buffer
+    (insert "intro line\n\n| A | B |\n| - | - |\n| 1 | 2 |\n")
+    (gfm-tables-mode 1)
+    (let ((before (gfm-tables--test-overlay-set))
+          (rebuild-count (alist-get 'rebuild-count gfm-tables--stats)))
+      (setq gfm-tables--dirty-region (cons 1 5))
+      (gfm-tables--rebuild-scoped)
+      (let ((after (gfm-tables--test-overlay-set)))
+        (should (= (hash-table-count before) (hash-table-count after)))
+        (maphash (lambda (ov _) (should (gethash ov after))) before)
+        (should (= rebuild-count
+                   (alist-get 'rebuild-count gfm-tables--stats)))))))
+
+(ert-deftest lang-markdown/gfm-tables-scoped-edit-spans-two-tables-full-rebuild ()
+  "Edit region intersecting two tables triggers a full rebuild."
+  (skip-unless (fboundp 'gfm-tables-mode))
+  (with-temp-buffer
+    (insert "| A | B |\n| - | - |\n| 1 | 2 |\n\n"
+            "| C | D |\n| - | - |\n| 3 | 4 |\n")
+    (gfm-tables-mode 1)
+    (let* ((blocks (gfm-tables--find-blocks))
+           (b1-h (nth 0 (car blocks)))
+           (b2-e (nth 3 (cadr blocks)))
+           (before (gfm-tables--test-overlay-set)))
+      (setq gfm-tables--dirty-region (cons b1-h b2-e))
+      (gfm-tables--rebuild-scoped)
+      (let ((after (gfm-tables--test-overlay-set)))
+        (should (cl-every (lambda (ov) (not (gethash ov after)))
+                          (let (xs) (maphash (lambda (k _) (push k xs)) before)
+                               xs)))))))
+
+(ert-deftest lang-markdown/gfm-tables-scoped-edit-overlapping-fence-full-rebuild ()
+  "Edit region overlapping a code-fence line triggers a full rebuild."
+  (skip-unless (and (fboundp 'gfm-tables-mode)
+                    (fboundp 'gfm-code-fences--find-blocks)))
+  (with-temp-buffer
+    (gfm-mode)
+    (insert "```\nfenced\n```\n\n| A | B |\n| - | - |\n| 1 | 2 |\n")
+    (gfm-tables-mode 1)
+    (let* ((fence (car (gfm-code-fences--find-blocks)))
+           (open-line-beg (save-excursion
+                            (goto-char (nth 0 fence)) (line-beginning-position)))
+           (open-line-end (save-excursion
+                            (goto-char (nth 0 fence)) (line-end-position)))
+           (before (gfm-tables--test-overlay-set)))
+      (setq gfm-tables--dirty-region (cons open-line-beg open-line-end))
+      (gfm-tables--rebuild-scoped)
+      (let ((after (gfm-tables--test-overlay-set)))
+        ;; Full rebuild → overlay objects are fresh.
+        (should (cl-every (lambda (ov) (not (gethash ov after)))
+                          (let (xs) (maphash (lambda (k _) (push k xs)) before)
+                               xs)))))))
+
+(ert-deftest lang-markdown/gfm-tables-per-window-display-overlays ()
+  "Each window showing the buffer gets its own display-overlay set.
+Anchor overlays stay shared across windows; only display overlays
+carry a `window' restriction."
+  (skip-unless (fboundp 'gfm-tables-mode))
+  (let ((buf (generate-new-buffer "*gfm-tables-test*")))
+    (unwind-protect
+        (progn
+          (with-current-buffer buf
+            (insert "| A | B |\n| - | - |\n| 1 | 2 |\n"))
+          (set-window-buffer (selected-window) buf)
+          (let ((other (split-window)))
+            (set-window-buffer other buf)
+            (with-current-buffer buf
+              (gfm-tables-mode 1)
+              (let* ((overlays (cl-remove-if-not
+                                (lambda (o) (overlay-get o 'gfm-tables))
+                                (overlays-in (point-min) (point-max))))
+                     (anchors (cl-count-if
+                               (lambda (o) (overlay-get o 'gfm-tables-anchor))
+                               overlays))
+                     (displays (cl-remove-if-not
+                                (lambda (o) (overlay-get o 'gfm-tables-display))
+                                overlays))
+                     (n-displays (length displays))
+                     (windowed (cl-count-if
+                                (lambda (o) (overlay-get o 'window))
+                                displays)))
+                ;; Header + 1 body row → 2 anchors.
+                (should (= 2 anchors))
+                ;; 2 windows × 3 visible rows (header + delim + body) = 6.
+                (should (= 6 n-displays))
+                ;; All display overlays carry a `window' property.
+                (should (= 6 windowed))))
+            (delete-window other)))
+      (kill-buffer buf))))
+
+(ert-deftest lang-markdown/gfm-tables-reconcile-windows-touches-changed-only ()
+  "Reconciling windows replaces only the resized window's display overlays.
+Untouched windows keep their existing display-overlay objects (eq)."
+  (skip-unless (fboundp 'gfm-tables--reconcile-windows))
+  (let ((buf (generate-new-buffer "*gfm-tables-reconcile-test*")))
+    (unwind-protect
+        (progn
+          (with-current-buffer buf
+            (insert "| A | B |\n| - | - |\n| 1 | 2 |\n"))
+          (set-window-buffer (selected-window) buf)
+          (let* ((win-a (selected-window))
+                 (win-b (split-window)))
+            (set-window-buffer win-b buf)
+            (with-current-buffer buf
+              (gfm-tables-mode 1)
+              (let* ((displays-for (lambda (w)
+                                     (cl-remove-if-not
+                                      (lambda (o)
+                                        (and (overlay-get o 'gfm-tables-display)
+                                             (eq (overlay-get o 'window) w)))
+                                      gfm-tables--overlays)))
+                     (a-before (funcall displays-for win-a))
+                     (b-before (funcall displays-for win-b)))
+                ;; Forge a width change for win-a only by mutating the cached
+                ;; state; reconcile sees win-a as resized, win-b as unchanged.
+                (setq gfm-tables--last-window-state
+                      (mapcar (lambda (e)
+                                (if (eq (car e) win-a)
+                                    (cons (car e) (1- (cdr e)))
+                                  e))
+                              gfm-tables--last-window-state))
+                (gfm-tables--reconcile-windows)
+                (let ((a-after (funcall displays-for win-a))
+                      (b-after (funcall displays-for win-b)))
+                  ;; win-a's overlays were replaced with fresh ones.
+                  (should-not (cl-intersection a-before a-after))
+                  ;; win-b's overlays are untouched (same objects, same count).
+                  (should (= (length b-before) (length b-after)))
+                  (should (cl-every (lambda (o) (memq o b-after)) b-before)))))
+            (delete-window win-b)))
+      (kill-buffer buf))))
+
+(ert-deftest lang-markdown/gfm-tables-highlight-targets-selected-window ()
+  "Active-cell highlight paints the selected window's display overlay only.
+Per-window display overlays let two windows render the same buffer at
+different widths; the cell-edit highlight should only affect the
+window holding point."
+  (skip-unless (fboundp 'gfm-tables-mode))
+  (let ((buf (generate-new-buffer "*gfm-tables-hl-test*")))
+    (unwind-protect
+        (progn
+          (with-current-buffer buf
+            (insert "| A | B |\n| - | - |\n| 1 | 2 |\n"))
+          (set-window-buffer (selected-window) buf)
+          (let* ((win-a (selected-window))
+                 (win-b (split-window)))
+            (set-window-buffer win-b buf)
+            (with-current-buffer buf
+              (gfm-tables-mode 1)
+              (goto-char (point-min))
+              (forward-line 2)
+              (forward-char 2)
+              (with-selected-window win-a
+                (gfm-tables--update-cursor-highlight))
+              (let* ((info (gfm-tables--cell-info-at-point))
+                     (anchor (car info))
+                     (a-display (gfm-tables--display-overlay-for-anchor anchor win-a))
+                     (b-display (gfm-tables--display-overlay-for-anchor anchor win-b)))
+                ;; Selected window's overlay carries the saved-display sentinel.
+                (should (overlay-get a-display 'gfm-tables-saved-display))
+                ;; The other window's overlay does not.
+                (should-not (overlay-get b-display 'gfm-tables-saved-display))))
+            (delete-window win-b)))
+      (kill-buffer buf))))
+
+(ert-deftest lang-markdown/gfm-tables-window-config-change-wired-to-full-rebuild ()
+  "`window-configuration-change-hook' is wired to the full-rebuild scheduler."
+  (skip-unless (fboundp 'gfm-tables-mode))
+  (with-temp-buffer
+    (insert "| A | B |\n| - | - |\n| 1 | 2 |\n")
+    (gfm-tables-mode 1)
+    (should (memq 'gfm-tables--schedule-full-rebuild
+                  window-configuration-change-hook))
+    (should-not (memq 'gfm-tables--schedule-rebuild
+                      window-configuration-change-hook))))
+
+(ert-deftest lang-markdown/gfm-tables-block-visible-p ()
+  "`gfm-tables--block-visible-p' detects overlap with any window range."
+  (skip-unless (fboundp 'gfm-tables--block-visible-p))
+  (let ((block '(100 110 120 200)))
+    ;; Block fully inside a single range.
+    (should (gfm-tables--block-visible-p block '((50 . 250))))
+    ;; Range fully inside block.
+    (should (gfm-tables--block-visible-p block '((130 . 180))))
+    ;; Edge-touching counts as visible.
+    (should (gfm-tables--block-visible-p block '((50 . 100))))
+    (should (gfm-tables--block-visible-p block '((200 . 250))))
+    ;; No range overlaps.
+    (should-not (gfm-tables--block-visible-p block '((1 . 99) (201 . 300))))
+    ;; Empty list of ranges.
+    (should-not (gfm-tables--block-visible-p block nil))
+    ;; Multiple ranges; one covers it.
+    (should (gfm-tables--block-visible-p block '((1 . 50) (130 . 180))))))
+
+(ert-deftest lang-markdown/gfm-tables-schedule-full-rebuild-noop-when-window-state-unchanged ()
+  "Full-rebuild scheduler is a no-op when the window state is unchanged."
+  (skip-unless (fboundp 'gfm-tables-mode))
+  (with-temp-buffer
+    (insert "| A | B |\n| - | - |\n| 1 | 2 |\n")
+    (gfm-tables-mode 1)
+    ;; Cancel any timer the mode-enable rebuild may have left running.
+    (when (timerp gfm-tables--rebuild-timer)
+      (cancel-timer gfm-tables--rebuild-timer))
+    (setq gfm-tables--rebuild-timer nil)
+    ;; Same window state → no timer armed.
+    (gfm-tables--schedule-full-rebuild)
+    (should-not gfm-tables--rebuild-timer)
+    ;; Forge a state change → timer armed.
+    (setq gfm-tables--last-window-state (cons 'forged gfm-tables--last-window-state))
+    (gfm-tables--schedule-full-rebuild)
+    (should (timerp gfm-tables--rebuild-timer))
+    (cancel-timer gfm-tables--rebuild-timer)))
+
+;;; Phase-level instrumentation
+
+(ert-deftest lang-markdown/gfm-tables-phase-totals-non-negative-and-bounded ()
+  "Phase totals are non-negative and sum to ≤ recorded total-time."
+  (skip-unless (fboundp 'gfm-tables-mode))
+  (with-temp-buffer
+    (insert "| A | B |\n| - | - |\n| 1 | 2 |\n| 3 | 4 |\n")
+    (gfm-tables-mode 1)
+    (let* ((stats gfm-tables--stats)
+           (total (alist-get 'total-time stats))
+           (phases (alist-get 'phase-totals stats)))
+      (should phases)
+      (dolist (p phases)
+        (should (>= (cdr p) 0)))
+      (let ((sum (cl-loop for p in phases sum (cdr p))))
+        ;; Allow a small fudge for clock noise between outer total and phases.
+        (should (<= sum (+ total 0.001)))))))
+
+(ert-deftest lang-markdown/gfm-tables-phase-totals-include-required-keys ()
+  "Phase totals include all five keys required by the spec."
+  (skip-unless (fboundp 'gfm-tables-mode))
+  (with-temp-buffer
+    (insert "| A |\n| - |\n| 1 |\n")
+    (gfm-tables-mode 1)
+    (let ((phases (alist-get 'phase-totals gfm-tables--stats)))
+      (dolist (k '(find-blocks parse layout compose apply))
+        (should (assq k phases))))))
 
 ;;; Reveal
 

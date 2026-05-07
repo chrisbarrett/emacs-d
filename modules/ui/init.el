@@ -172,8 +172,21 @@
   :custom
   (pulsar-iterations 5)
   (pulsar-pulse-on-window-change t)
+  ;; The default behaviour walks every interned symbol via `mapatoms' to
+  ;; build alias lists, and does it on every buffer that enters
+  ;; `pulsar-mode' — ~50ms per new edit-indirect / temp buffer.  Disable
+  ;; the per-buffer resolve and run it once when `pulsar-global-mode'
+  ;; first turns on.
+  (pulsar-resolve-pulse-function-aliases nil)
   :config
   (+load "./config/+pulsar.el")
+  (add-hook 'pulsar-global-mode-hook
+            (defun +pulsar-resolve-aliases-once-h ()
+              "Resolve pulse-function aliases once, then remove this hook."
+              (when pulsar-global-mode
+                (pulsar-resolve-function-aliases))
+              (remove-hook 'pulsar-global-mode-hook
+                           #'+pulsar-resolve-aliases-once-h)))
   (with-eval-after-load 'avy
     (+load "./config/+avy+pulsar.el")))
 
@@ -289,7 +302,25 @@
               "Show minimal modeline in magit-status buffer, no modeline elsewhere."
               (if (eq major-mode 'magit-status-mode)
                   (doom-modeline-set-modeline 'magit)
-                (hide-mode-line-mode)))))
+                (hide-mode-line-mode))))
+
+  ;; `doom-modeline--in-git-worktree-p' walks the directory tree on every
+  ;; modeline redisplay; cache the result per buffer.  The answer is
+  ;; stable for the life of a file buffer (a worktree neither appears nor
+  ;; vanishes under an open file in normal use).
+  (defvar-local +doom-modeline--in-git-worktree-cache 'unset
+    "Memo for `doom-modeline--in-git-worktree-p'.
+The sentinel `unset' marks the cache as not yet populated; nil and t
+are valid cached answers.")
+
+  (defun +doom-modeline--memoise-in-git-worktree-p (orig)
+    "Around-advice on `doom-modeline--in-git-worktree-p' caching the result."
+    (if (eq +doom-modeline--in-git-worktree-cache 'unset)
+        (setq +doom-modeline--in-git-worktree-cache (funcall orig))
+      +doom-modeline--in-git-worktree-cache))
+
+  (advice-add 'doom-modeline--in-git-worktree-p
+              :around #'+doom-modeline--memoise-in-git-worktree-p))
 
 
 ;;; Search count (anzu)

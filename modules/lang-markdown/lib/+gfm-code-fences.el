@@ -146,21 +146,29 @@ Each block is (BLOCK-BEG BLOCK-END INDENT-WIDTH)."
 (defconst gfm-code-fences--border-face '+markdown-overlay-border-face
   "Face for the box border around pre blocks.")
 
-(defun gfm-code-fences--text-width ()
-  "Return the current window's max chars per visual line, with a sane fallback.
-Uses `window-max-chars-per-line', which already excludes the continuation
-column, so it stays stable across mode-init / window-config-change rebuilds."
-  (or (when-let* ((win (or (get-buffer-window (current-buffer))
+(defun gfm-code-fences--text-width (&optional window)
+  "Return WINDOW's max chars per visual line, with a sane fallback.
+WINDOW defaults to a window currently showing the buffer.  Uses
+`window-max-chars-per-line', which already excludes the continuation
+column, so it stays stable across mode-init / window-config-change
+rebuilds."
+  (or (when-let* ((win (or window
+                           (get-buffer-window (current-buffer))
                            (get-buffer-window (current-buffer) t))))
         (window-max-chars-per-line win))
       fill-column
       80))
 
-(defun gfm-code-fences--box-cap ()
-  "Return the maximum allowable box-width.
-One column is reserved as headroom so a fitting block's right border never
-touches the window edge; overflow lines may use the full text width."
-  (1- (gfm-code-fences--text-width)))
+(defun gfm-code-fences--box-cap (&optional window)
+  "Return the maximum allowable box-width for WINDOW.
+One column is reserved as headroom so a fitting block's right border
+never touches the window edge; overflow lines may use the full text
+width."
+  (1- (gfm-code-fences--text-width window)))
+
+(defun gfm-code-fences--display-windows ()
+  "Return windows currently displaying the buffer."
+  (get-buffer-window-list (current-buffer) nil t))
 
 (defun gfm-code-fences--max-line-width (beg end &optional indent)
   "Maximum line width between BEG and END, subtracting INDENT from each line."
@@ -268,12 +276,13 @@ See `gfm-code-fences--simulate-wrap'."
   (propertize "⋱ " 'face face))
 
 
-(defun gfm-code-fences--right-after-overflow (face line-text)
-  "After-string padding the right border to the window edge for a wrapped line.
-LINE-TEXT is the line's buffer content; the function simulates word-wrap to
-work out where the line ends visually, accounting for the wrap-prefix on
-continuation lines."
-  (let* ((text-width (gfm-code-fences--text-width))
+(defun gfm-code-fences--right-after-overflow (face line-text &optional window)
+  "After-string padding the right border to WINDOW's edge for a wrapped line.
+LINE-TEXT is the line's buffer content; the function simulates
+word-wrap to work out where the line ends visually, accounting for the
+wrap-prefix on continuation lines.  WINDOW selects which window's
+text-width is used (defaults to the current selection)."
+  (let* ((text-width (gfm-code-fences--text-width window))
          ;; +2 for the `│ ' before-string contribution to the first visual line.
          (visual-col (gfm-code-fences--last-visual-col
                       (concat "│ " line-text) text-width
@@ -291,18 +300,24 @@ continuation lines."
 (defvar-local gfm-code-fences--overlays nil
   "All fence overlays currently in this buffer.")
 
-(defun gfm-code-fences--register (ov)
-  "Tag OV as a fence overlay and remember it for bulk cleanup."
+(defun gfm-code-fences--register (ov &optional window)
+  "Tag OV as a fence overlay and remember it for bulk cleanup.
+WINDOW non-nil restricts the overlay to that window only via Emacs's
+`window' overlay property; pass nil for a buffer-wide overlay."
   (overlay-put ov 'gfm-code-fences t)
+  (when window (overlay-put ov 'window window))
   (push ov gfm-code-fences--overlays)
   ov)
 
 (defun gfm-code-fences--apply-bordered-block
-    (open-line-beg open-line-end close-line-beg close-line-end face label)
+    (open-line-beg open-line-end close-line-beg close-line-end face label window)
   "Wrap a line-bounded block in a box.
 OPEN-LINE-BEG/END mark the opening marker line, CLOSE-LINE-BEG/END the
-closing marker line. FACE colours the border. LABEL, if non-nil, is
-right-aligned in the top border.
+closing marker line.  FACE colours the border.  LABEL, if non-nil, is
+right-aligned in the top border.  WINDOW non-nil restricts every
+overlay to that window so a buffer shown in multiple windows renders
+at each window's own width and `gfm-code-fences--reveal' only toggles
+the selected window's overlays.
 
 The opening/closing marker lines are split into:
 - a leading overlay (display covers the marker chars; evaporative + revealable)
@@ -320,7 +335,7 @@ The opening/closing marker lines are split into:
                      (goto-char open-line-end) (forward-line 1) (point)))
          (body-end (max body-beg (1- close-line-beg)))
          (max-content (gfm-code-fences--max-line-width body-beg body-end))
-         (text-width (gfm-code-fences--text-width))
+         (text-width (gfm-code-fences--text-width window))
          (box-width (min text-width (max 80 (+ max-content 4))))
          (content-budget (- box-width 4))
          (open-buf-width (- open-line-end open-line-beg))
@@ -336,11 +351,11 @@ The opening/closing marker lines are split into:
       (overlay-put ov 'gfm-code-fences-revealable t)
       (overlay-put ov 'evaporate t)
       (overlay-put ov 'display (car top-split))
-      (gfm-code-fences--register ov))
+      (gfm-code-fences--register ov window))
     (let ((ov (make-overlay open-line-end open-line-end nil nil t)))
       (overlay-put ov 'gfm-code-fences-kind 'top-trailing)
       (overlay-put ov 'after-string (cdr top-split))
-      (gfm-code-fences--register ov))
+      (gfm-code-fences--register ov window))
     ;; Body lines.
     (save-excursion
       (goto-char body-beg)
@@ -354,9 +369,10 @@ The opening/closing marker lines are split into:
           (overlay-put ov 'after-string
                        (if (> (- lend lbeg) content-budget)
                            (gfm-code-fences--right-after-overflow
-                            face (buffer-substring-no-properties lbeg lend))
+                            face (buffer-substring-no-properties lbeg lend)
+                            window)
                          (gfm-code-fences--right-after box-width face)))
-          (gfm-code-fences--register ov))
+          (gfm-code-fences--register ov window))
         (forward-line 1)))
     ;; Bottom — leading on the marker line, trailing after.
     (let ((ov (make-overlay close-line-beg close-line-end)))
@@ -364,14 +380,14 @@ The opening/closing marker lines are split into:
       (overlay-put ov 'gfm-code-fences-revealable t)
       (overlay-put ov 'evaporate t)
       (overlay-put ov 'display (car bot-split))
-      (gfm-code-fences--register ov))
+      (gfm-code-fences--register ov window))
     (let ((ov (make-overlay close-line-end close-line-end nil nil t)))
       (overlay-put ov 'gfm-code-fences-kind 'bottom-trailing)
       (overlay-put ov 'after-string (cdr bot-split))
-      (gfm-code-fences--register ov))))
+      (gfm-code-fences--register ov window))))
 
-(defun gfm-code-fences--apply-fenced-block (block fenced-ranges)
-  "Adorn one fenced BLOCK and push its range onto FENCED-RANGES."
+(defun gfm-code-fences--apply-fenced-block (block fenced-ranges window)
+  "Adorn one fenced BLOCK in WINDOW and push its range onto FENCED-RANGES."
   (cl-destructuring-bind
       (open-beg _open-end close-beg close-end lang _lang-beg _lang-end) block
     (let* ((face gfm-code-fences--border-face)
@@ -385,7 +401,8 @@ The opening/closing marker lines are split into:
            (icon (and lang (gfm-code-fences--icon-for-lang lang))))
       (push (cons open-line-beg close-line-end) (cdr fenced-ranges))
       (gfm-code-fences--apply-bordered-block
-       open-line-beg open-line-end close-line-beg close-line-end face icon))))
+       open-line-beg open-line-end close-line-beg close-line-end
+       face icon window))))
 
 ;;; YAML frontmatter
 
@@ -420,8 +437,8 @@ Prefer `yaml-ts-mode' when its tree-sitter grammar is available."
          'yaml-ts-mode)
         ((fboundp 'yaml-mode) 'yaml-mode)))
 
-(defun gfm-code-fences--fontify-yaml-body (start end)
-  "Apply YAML font-lock face overlays to buffer region [START, END]."
+(defun gfm-code-fences--fontify-yaml-body (start end &optional window)
+  "Apply YAML font-lock face overlays to [START, END], restricted to WINDOW."
   (when-let* ((lang-mode (gfm-code-fences--yaml-mode))
               ((> end start)))
     (let ((string (buffer-substring-no-properties start end))
@@ -444,11 +461,11 @@ Prefer `yaml-ts-mode' when its tree-sitter grammar is available."
                                     (1- (+ start next))
                                     target-buffer)))
               (overlay-put ov 'face val)
-              (gfm-code-fences--register ov)))
+              (gfm-code-fences--register ov window)))
           (setq pos next))))))
 
-(defun gfm-code-fences--apply-yaml-helmet (fenced-ranges)
-  "Adorn leading YAML frontmatter and add its range to FENCED-RANGES."
+(defun gfm-code-fences--apply-yaml-helmet (fenced-ranges window)
+  "Adorn leading YAML frontmatter in WINDOW and push range onto FENCED-RANGES."
   (when-let* ((helmet (gfm-code-fences--find-yaml-helmet)))
     (cl-destructuring-bind (open-beg open-end close-beg close-end) helmet
       (let* ((face 'font-lock-constant-face)
@@ -465,17 +482,19 @@ Prefer `yaml-ts-mode' when its tree-sitter grammar is available."
              (body-end (max body-beg (1- close-beg))))
         (push (cons open-line-beg close-end) (cdr fenced-ranges))
         (gfm-code-fences--apply-bordered-block
-         open-line-beg open-line-end close-beg close-end face label)
-        (gfm-code-fences--fontify-yaml-body body-beg body-end)))))
+         open-line-beg open-line-end close-beg close-end face label window)
+        (gfm-code-fences--fontify-yaml-body body-beg body-end window)))))
 
-(defun gfm-code-fences--apply-indent-block (beg end indent-width)
+(defun gfm-code-fences--apply-indent-block (beg end indent-width window)
   "Adorn the indented code block at [BEG, END] with a full curved box.
-INDENT-WIDTH is the buffer indent (4 for spaces, 1 for tab)."
+INDENT-WIDTH is the buffer indent (4 for spaces, 1 for tab).  WINDOW
+restricts every overlay to that window so per-window rendering and
+per-window reveal toggling work correctly."
   (save-excursion
     (goto-char beg)
     (let* ((face gfm-code-fences--border-face)
            (max-content (gfm-code-fences--max-line-width beg end indent-width))
-           (text-width (gfm-code-fences--text-width))
+           (text-width (gfm-code-fences--text-width window))
            (box-width (min text-width (max 80 (+ max-content 4))))
            (content-budget (- box-width 4))
            ;; Indent blocks have no marker line; use a 0-width split so the
@@ -497,35 +516,46 @@ INDENT-WIDTH is the buffer indent (4 for spaces, 1 for tab)."
                (line-text (buffer-substring-no-properties cover-end lend))
                (overflow-p (> line-content-w content-budget))
                (after (if overflow-p
-                          (gfm-code-fences--right-after-overflow face line-text)
+                          (gfm-code-fences--right-after-overflow
+                           face line-text window)
                         (gfm-code-fences--right-after box-width face))))
           (overlay-put body-ov 'gfm-code-fences-kind 'indent-body)
           (overlay-put body-ov 'cursor-intangible t)
           (overlay-put body-ov 'display lhs)
           (when first
             (overlay-put body-ov 'before-string (concat top-str "\n")))
-          (gfm-code-fences--register body-ov)
+          (gfm-code-fences--register body-ov window)
           (let ((wrap-ov (make-overlay lbeg lend nil nil t)))
             (overlay-put wrap-ov 'gfm-code-fences-kind 'indent-wrap)
             (overlay-put wrap-ov 'wrap-prefix (gfm-code-fences--wrap-prefix face))
-            (gfm-code-fences--register wrap-ov))
+            (gfm-code-fences--register wrap-ov window))
           (overlay-put rhs-ov 'gfm-code-fences-kind 'indent-rhs)
           (overlay-put rhs-ov 'after-string
                        (if last-line (concat after "\n" bot-str) after))
-          (gfm-code-fences--register rhs-ov)
+          (gfm-code-fences--register rhs-ov window)
           (setq first nil))
         (forward-line 1)))))
 
-(defun gfm-code-fences--apply-overlays ()
-  "Create overlays for YAML frontmatter, fenced and indented code blocks."
+(defun gfm-code-fences--apply-overlays-for-window (window)
+  "Create the full set of fence overlays for WINDOW.
+WINDOW non-nil restricts every overlay to that window via the `window'
+overlay property; nil produces a single buffer-wide fallback set."
   (save-excursion
     (let ((fenced-ranges (cons nil nil)))
-      (gfm-code-fences--apply-yaml-helmet fenced-ranges)
+      (gfm-code-fences--apply-yaml-helmet fenced-ranges window)
       (dolist (block (gfm-code-fences--find-blocks))
-        (gfm-code-fences--apply-fenced-block block fenced-ranges))
-      (dolist (block (gfm-code-fences--find-indent-blocks (cdr fenced-ranges)))
+        (gfm-code-fences--apply-fenced-block block fenced-ranges window))
+      (dolist (block (gfm-code-fences--find-indent-blocks
+                      (cdr fenced-ranges)))
         (cl-destructuring-bind (beg end indent-width) block
-          (gfm-code-fences--apply-indent-block beg end indent-width))))))
+          (gfm-code-fences--apply-indent-block beg end indent-width window))))))
+
+(defun gfm-code-fences--apply-overlays ()
+  "Apply fence overlays, one set per window currently showing the buffer.
+With no window, fall back to a single unrestricted set."
+  (let ((windows (or (gfm-code-fences--display-windows) (list nil))))
+    (dolist (win windows)
+      (gfm-code-fences--apply-overlays-for-window win))))
 
 ;;; Cursor-driven reveal
 
@@ -533,24 +563,33 @@ INDENT-WIDTH is the buffer indent (4 for spaces, 1 for tab)."
   "Revealable overlays whose display is currently suppressed.")
 
 (defun gfm-code-fences--reveal ()
-  "Suppress display on revealable overlays containing point; restore others."
-  (let ((pos (point)))
-    ;; Restore overlays no longer at point.
+  "Suppress display on revealable overlays containing point; restore others.
+Filters by the selected window's `'window' overlay property: when the
+buffer is shown in multiple windows, the toggle affects only the
+overlays bound to the active window so the other windows do not see
+their fences strobe between rendered border and raw markdown."
+  (let ((pos (point))
+        (sel (selected-window)))
+    ;; Restore overlays no longer at point (or no longer for the selected window).
     (setq gfm-code-fences--hidden-ovs
           (cl-loop for ov in gfm-code-fences--hidden-ovs
                    if (and (overlay-buffer ov)
                            (>= pos (overlay-start ov))
-                           (<= pos (overlay-end ov)))
+                           (<= pos (overlay-end ov))
+                           (let ((w (overlay-get ov 'window)))
+                             (or (null w) (eq w sel))))
                    collect ov
                    else do (when (overlay-buffer ov)
                              (overlay-put ov 'display
                                           (overlay-get ov 'gfm-code-fences-saved-display))
                              (overlay-put ov 'gfm-code-fences-saved-display nil))))
-    ;; Hide revealable overlays at point.
+    ;; Hide revealable overlays at point that belong to the selected window.
     (dolist (ov (overlays-in pos (1+ pos)))
       (when (and (overlay-get ov 'gfm-code-fences-revealable)
                  (overlay-get ov 'display)
-                 (not (memq ov gfm-code-fences--hidden-ovs)))
+                 (not (memq ov gfm-code-fences--hidden-ovs))
+                 (let ((w (overlay-get ov 'window)))
+                   (or (null w) (eq w sel))))
         (overlay-put ov 'gfm-code-fences-saved-display
                      (overlay-get ov 'display))
         (overlay-put ov 'display nil)
@@ -567,16 +606,29 @@ INDENT-WIDTH is the buffer indent (4 for spaces, 1 for tab)."
     (setq gfm-code-fences--overlays nil
           gfm-code-fences--hidden-ovs nil)))
 
+(defvar-local gfm-code-fences--last-window-state nil
+  "Snapshot of (WINDOW . MAX-CHARS-PER-LINE) pairs from the last rebuild.
+Compared in `gfm-code-fences--schedule-window-rebuild' so window-config
+events that don't actually change a width or the set of windows
+showing the buffer skip the rebuild.")
+
+(defun gfm-code-fences--window-state ()
+  "Return current (WIN . WIDTH) pairs across windows showing this buffer."
+  (mapcar (lambda (w) (cons w (gfm-code-fences--text-width w)))
+          (gfm-code-fences--display-windows)))
+
 (defun gfm-code-fences--rebuild ()
   "Remove and recreate all gfm-code-fences overlays."
   (gfm-code-fences--remove-overlays)
-  (gfm-code-fences--apply-overlays))
+  (gfm-code-fences--apply-overlays)
+  (setq gfm-code-fences--last-window-state
+        (gfm-code-fences--window-state)))
 
 (defvar-local gfm-code-fences--rebuild-timer nil
   "Idle timer for debounced overlay rebuilds.")
 
 (defun gfm-code-fences--schedule-rebuild (&rest _)
-  "Schedule a debounced overlay rebuild."
+  "Schedule a debounced overlay rebuild after a buffer modification."
   (unless (buffer-base-buffer)
     (when (timerp gfm-code-fences--rebuild-timer)
       (cancel-timer gfm-code-fences--rebuild-timer))
@@ -589,6 +641,26 @@ INDENT-WIDTH is the buffer indent (4 for spaces, 1 for tab)."
                  (when gfm-code-fences-mode
                    (gfm-code-fences--rebuild)))))
            (current-buffer)))))
+
+(defun gfm-code-fences--schedule-window-rebuild (&rest _)
+  "Schedule a rebuild only when the windows showing the buffer have changed.
+Window-configuration-change-hook fires for many reasons unrelated to
+column-affecting size; compare the per-window (WIN . WIDTH) snapshot
+against the cached one and skip when nothing has changed."
+  (unless (buffer-base-buffer)
+    (let ((state (gfm-code-fences--window-state)))
+      (unless (equal state gfm-code-fences--last-window-state)
+        (when (timerp gfm-code-fences--rebuild-timer)
+          (cancel-timer gfm-code-fences--rebuild-timer))
+        (setq gfm-code-fences--rebuild-timer
+              (run-with-idle-timer
+               0.2 nil
+               (lambda (buf)
+                 (when (buffer-live-p buf)
+                   (with-current-buffer buf
+                     (when gfm-code-fences-mode
+                       (gfm-code-fences--rebuild)))))
+               (current-buffer)))))))
 
 ;;; Minor mode
 
@@ -603,12 +675,12 @@ INDENT-WIDTH is the buffer indent (4 for spaces, 1 for tab)."
         (add-hook 'after-change-functions
                   #'gfm-code-fences--schedule-rebuild nil t)
         (add-hook 'window-configuration-change-hook
-                  #'gfm-code-fences--schedule-rebuild nil t)
+                  #'gfm-code-fences--schedule-window-rebuild nil t)
         (add-hook 'post-command-hook #'gfm-code-fences--reveal nil t))
     (remove-hook 'after-change-functions
                  #'gfm-code-fences--schedule-rebuild t)
     (remove-hook 'window-configuration-change-hook
-                 #'gfm-code-fences--schedule-rebuild t)
+                 #'gfm-code-fences--schedule-window-rebuild t)
     (remove-hook 'post-command-hook #'gfm-code-fences--reveal t)
     (when (timerp gfm-code-fences--rebuild-timer)
       (cancel-timer gfm-code-fences--rebuild-timer))
