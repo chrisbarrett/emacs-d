@@ -289,7 +289,25 @@
               "Show minimal modeline in magit-status buffer, no modeline elsewhere."
               (if (eq major-mode 'magit-status-mode)
                   (doom-modeline-set-modeline 'magit)
-                (hide-mode-line-mode)))))
+                (hide-mode-line-mode))))
+
+  ;; `doom-modeline--in-git-worktree-p' walks the directory tree on every
+  ;; modeline redisplay; cache the result per buffer.  The answer is
+  ;; stable for the life of a file buffer (a worktree neither appears nor
+  ;; vanishes under an open file in normal use).
+  (defvar-local +doom-modeline--in-git-worktree-cache 'unset
+    "Memo for `doom-modeline--in-git-worktree-p'.
+The sentinel `unset' marks the cache as not yet populated; nil and t
+are valid cached answers.")
+
+  (defun +doom-modeline--memoise-in-git-worktree-p (orig)
+    "Around-advice on `doom-modeline--in-git-worktree-p' caching the result."
+    (if (eq +doom-modeline--in-git-worktree-cache 'unset)
+        (setq +doom-modeline--in-git-worktree-cache (funcall orig))
+      +doom-modeline--in-git-worktree-cache))
+
+  (advice-add 'doom-modeline--in-git-worktree-p
+              :around #'+doom-modeline--memoise-in-git-worktree-p))
 
 
 ;;; Search count (anzu)

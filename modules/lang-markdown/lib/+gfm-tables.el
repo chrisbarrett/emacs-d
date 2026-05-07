@@ -1216,6 +1216,11 @@ in the indirect buffer (recentering if it has scrolled off-screen)."
 (defvar-local gfm-tables--highlighted-row-ov nil
   "The row overlay whose display currently carries the cell highlight.")
 
+(defvar-local gfm-tables--current-highlight-key nil
+  "The (ROW-OV . IDX) currently rendered as the active-cell highlight.
+Compared by `equal' in `gfm-tables--update-cursor-highlight' so motion
+that lands on the same cell can skip the display repaint.")
+
 (defvar-local gfm-tables--cursor-anchor nil
   "Buffer position currently flagged with the `cursor' text property.
 Used to anchor the visible terminal cursor at the active cell's first
@@ -1407,7 +1412,8 @@ Also anchors the visible cursor at the cell's first buffer char."
       (overlay-put ov 'gfm-tables-saved-display nil)))
   (gfm-tables--clear-cursor-anchor)
   (gfm-tables--restore-cursor)
-  (setq gfm-tables--highlighted-row-ov nil))
+  (setq gfm-tables--highlighted-row-ov nil
+        gfm-tables--current-highlight-key nil))
 
 (defun gfm-tables--update-cursor-highlight ()
   "Highlight the active cell at point and hide the buffer cursor.
@@ -1418,19 +1424,24 @@ the highlight alone conveys cell selection."
   (let ((info (gfm-tables--cell-info-at-point)))
     (cond
      (info
-      (let ((row-ov (car info))
-            (idx (cdr info)))
-        (unless (eq row-ov gfm-tables--highlighted-row-ov)
-          (gfm-tables--hide-cursor-highlight))
-        (gfm-tables--show-cell-highlight row-ov idx))
+      (let* ((row-ov (car info))
+             (idx (cdr info))
+             (key (cons row-ov idx)))
+        (unless (equal key gfm-tables--current-highlight-key)
+          (unless (eq row-ov gfm-tables--highlighted-row-ov)
+            (gfm-tables--hide-cursor-highlight))
+          (gfm-tables--show-cell-highlight row-ov idx)
+          (setq gfm-tables--current-highlight-key key)))
       (gfm-tables--save-and-hide-cursor)
-      (let ((key (gfm-tables--cell-key info)))
-        (unless (equal key gfm-tables--last-hinted-cell)
+      (let ((cell-key (gfm-tables--cell-key info)))
+        (unless (equal cell-key gfm-tables--last-hinted-cell)
           (gfm-tables--echo-hints)
-          (setq gfm-tables--last-hinted-cell key))))
+          (setq gfm-tables--last-hinted-cell cell-key))))
      (t
-      (gfm-tables--hide-cursor-highlight)
-      (setq gfm-tables--last-hinted-cell nil)))))
+      (when gfm-tables--current-highlight-key
+        (gfm-tables--hide-cursor-highlight)
+        (setq gfm-tables--current-highlight-key nil
+              gfm-tables--last-hinted-cell nil))))))
 
 ;;; Cell-wise navigation
 
