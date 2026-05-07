@@ -277,6 +277,26 @@ only that line, missing the multi-line matcher's anchor."
 
 ;;; Workarounds
 
+(defvar +markdown--lang-mode-cache (make-hash-table :test 'equal)
+  "Memo for `markdown-get-lang-mode': maps LANG string → mode symbol.
+Markdown calls the lookup once per native-fontified code block per
+redisplay; on a buffer with many code blocks this dominates CPU.")
+
+(defun +markdown--memoise-lang-mode (orig lang)
+  "Around-advice on `markdown-get-lang-mode' caching results by LANG.
+ORIG is the underlying function.  Treat the absence of an entry, not a
+nil value, as the miss signal so blocks tagged with an unknown LANG
+also short-circuit on subsequent calls."
+  (let ((hit (gethash lang +markdown--lang-mode-cache 'miss)))
+    (if (eq hit 'miss)
+        (let ((mode (funcall orig lang)))
+          (puthash lang mode +markdown--lang-mode-cache)
+          mode)
+      hit)))
+
+(with-eval-after-load 'markdown-mode
+  (advice-add 'markdown-get-lang-mode :around #'+markdown--memoise-lang-mode))
+
 (defun +markdown--clamp-extend-region (result)
   "Filter-return advice for `markdown-syntax-propertize-extend-region'.
 Clamp the returned (NEW-START . NEW-END) cons to the buffer's accessible
