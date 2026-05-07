@@ -1184,7 +1184,9 @@ counting an auto-composition would under-pad the cell."
 ;;; Shared row layout
 
 (ert-deftest lang-markdown/gfm-tables-row-layout-feeds-both-helpers ()
-  "Layout-based helpers produce strings/bounds equal to the legacy callers."
+  "Layout-based helpers produce strings/bounds equal to the legacy callers.
+Verifies the packed bounds vector matches the legacy nested-list shape
+emitted by `gfm-tables--multiline-row-char-bounds'."
   (skip-unless (and (fboundp 'gfm-tables--row-layout)
                     (fboundp 'gfm-tables--compose-row-from-layout)
                     (fboundp 'gfm-tables--compose-multiline-row)))
@@ -1198,9 +1200,16 @@ counting an auto-composition would under-pad the cell."
                                  layout col-widths role))
            (bounds-direct (gfm-tables--multiline-row-char-bounds
                            cells col-widths))
-           (bounds-via-layout (gfm-tables--row-layout-line-bounds layout)))
+           (vec (gfm-tables--row-layout-bounds-vec layout))
+           (n-cells (gfm-tables--row-layout-n-cells layout)))
       (should (equal composed-direct composed-via-layout))
-      (should (equal bounds-direct bounds-via-layout)))))
+      (cl-loop for line-cb in bounds-direct
+               for line from 0
+               do (cl-loop for cb in line-cb
+                           for cell from 0
+                           for base = (* 2 (+ (* line n-cells) cell))
+                           do (should (= (car cb) (aref vec base)))
+                              (should (= (cdr cb) (aref vec (1+ base)))))))))
 
 ;;; Scoped rebuild
 

@@ -566,23 +566,50 @@ shorter than the row's height are padded with empty strings."
                (:constructor gfm-tables--make-row-layout)
                (:copier nil))
   "Pre-computed wrapping for a single source row.
-LINE-CELLS is a list of cell-lists, one per visual line.
-LINE-BOUNDS is the matching list of `gfm-tables--row-char-bounds'
-results, one per visual line."
+LINE-CELLS is a list of cell-lists, one per visual line, used by the
+display-string composer.  N-CELLS is the column count, N-LINES the
+visual-line count, and BOUNDS-VEC a flat fixnum vector of length
+\(* 2 N-CELLS N-LINES) holding (BEG . END) pairs for every cell on
+every visual line, packed in row-major order: BEG for cell IDX on
+visual line LINE lives at index `(* 2 (+ (* LINE N-CELLS) IDX))', END
+at the next slot.  Packing the bounds into a single vector turns the
+inner lookup in `gfm-tables--apply-cell-highlight' from nested
+cons-list traversal into O(1) `aref'."
   line-cells
-  line-bounds)
+  n-cells
+  n-lines
+  bounds-vec)
 
 (defun gfm-tables--row-layout (cells col-widths)
   "Return a `gfm-tables--row-layout' for CELLS at COL-WIDTHS.
 Computes wrapping and per-cell char bounds once so callers can share
 the result instead of redoing the wrap."
   (let* ((line-cells (gfm-tables--wrap-row-into-lines cells col-widths))
-         (line-bounds (mapcar (lambda (lc)
-                                (gfm-tables--row-char-bounds lc col-widths))
-                              line-cells)))
+         (n-cells (length col-widths))
+         (n-lines (length line-cells))
+         (bounds-vec (make-vector (* 2 n-cells n-lines) 0))
+         (line-idx 0))
+    (dolist (lc line-cells)
+      (let ((cell-idx 0))
+        (dolist (b (gfm-tables--row-char-bounds lc col-widths))
+          (let ((base (* 2 (+ (* line-idx n-cells) cell-idx))))
+            (aset bounds-vec base (car b))
+            (aset bounds-vec (1+ base) (cdr b)))
+          (cl-incf cell-idx)))
+      (cl-incf line-idx))
     (gfm-tables--make-row-layout
      :line-cells line-cells
-     :line-bounds line-bounds)))
+     :n-cells n-cells
+     :n-lines n-lines
+     :bounds-vec bounds-vec)))
+
+(defun gfm-tables--display-cell-bounds (layout)
+  "Return the (N-CELLS . BOUNDS-VEC) pair stored on a row's overlay.
+The pair lets `gfm-tables--apply-cell-highlight' index the packed
+bounds vector without keeping `LAYOUT' alive (the wrapped cell
+strings in `line-cells' are no longer needed after composition)."
+  (cons (gfm-tables--row-layout-n-cells layout)
+        (gfm-tables--row-layout-bounds-vec layout)))
 
 (defun gfm-tables--compose-row-from-layout (layout col-widths role)
   "Compose ROLE row's display string from pre-computed LAYOUT and COL-WIDTHS."
@@ -627,9 +654,18 @@ width less than char length."
   "Per-visual-line char bounds for CELLS wrapped to COL-WIDTHS.
 Returns a list with one entry per visual line in
 `gfm-tables--compose-multiline-row's output; each entry is the
-`gfm-tables--row-char-bounds' for that line's wrapped cells."
-  (gfm-tables--row-layout-line-bounds
-   (gfm-tables--row-layout cells col-widths)))
+`gfm-tables--row-char-bounds' for that line's wrapped cells.
+Reconstructs the legacy list-of-lists shape from the packed bounds
+vector for callers (and tests) that depend on the older API."
+  (let* ((layout (gfm-tables--row-layout cells col-widths))
+         (vec (gfm-tables--row-layout-bounds-vec layout))
+         (n-cells (gfm-tables--row-layout-n-cells layout))
+         (n-lines (gfm-tables--row-layout-n-lines layout)))
+    (cl-loop for line below n-lines
+             collect (cl-loop for cell below n-cells
+                              for base = (* 2 (+ (* line n-cells) cell))
+                              collect (cons (aref vec base)
+                                            (aref vec (1+ base)))))))
 
 (defun gfm-tables--rule-row (box-width)
   "Return a `├─…─┤' T-junction rule between header and body, width BOX-WIDTH."
@@ -764,7 +800,7 @@ BLOCK is (HEADER-BEG DELIM-BEG BODY-BEG BODY-END)."
                          (gfm-tables--cell-bounds header-beg header-end))
             (overlay-put ov 'gfm-tables-col-widths col-widths)
             (overlay-put ov 'gfm-tables-display-cell-bounds
-                         (gfm-tables--row-layout-line-bounds header-layout))
+                         (gfm-tables--display-cell-bounds header-layout))
             (gfm-tables--register ov))
           ;; Delimiter row → continuous rule.
           (let ((ov (make-overlay delim-beg delim-end)))
@@ -787,7 +823,7 @@ BLOCK is (HEADER-BEG DELIM-BEG BODY-BEG BODY-END)."
                                      (gfm-tables--cell-bounds lbeg lend))
                         (overlay-put ov 'gfm-tables-col-widths col-widths)
                         (overlay-put ov 'gfm-tables-display-cell-bounds
-                                     (gfm-tables--row-layout-line-bounds layout))
+                                     (gfm-tables--display-cell-bounds layout))
                         (when last-p
                           (overlay-put ov 'after-string
                                        (concat "\n" bottom)))
@@ -1380,32 +1416,35 @@ and clobber another command's message (e.g. `Copied:').")
                                 cb)
                 0)))))
 
-(defun gfm-tables--apply-cell-highlight (display per-line-bounds idx)
+(defun gfm-tables--apply-cell-highlight (display dcb idx)
   "Return a copy of DISPLAY with cell IDX painted with the active-cell face.
-PER-LINE-BOUNDS is the row's `gfm-tables-display-cell-bounds' value: a
-list of cell-bounds-lists, one per visual line.  The highlight repeats
-on every visual line.  The first cell-beg on the first visual line
-carries `cursor t' so the visible terminal cursor anchors there instead
-of at the right edge of the overlay's display range."
+DCB is the row's `gfm-tables-display-cell-bounds' overlay property: a
+\(N-CELLS . BOUNDS-VEC) cons where BOUNDS-VEC is a flat fixnum vector
+holding (BEG END) pairs in row-major (line, cell) order.  The highlight
+repeats on every visual line.  The first cell-beg on the first visual
+line carries `cursor t' so the visible terminal cursor anchors there
+instead of at the right edge of the overlay's display range."
   (let* ((s (copy-sequence display))
          (n (length s))
+         (n-cells (car dcb))
+         (vec (cdr dcb))
+         (n-lines (if (zerop n-cells) 0 (/ (length vec) (* 2 n-cells))))
          (line-start 0)
          (line-idx 0)
-         (n-lines (length per-line-bounds))
          (first-line t))
-    (while (and (< line-start n) (< line-idx n-lines))
+    (while (and (< line-start n) (< line-idx n-lines) (< idx n-cells))
       (let* ((nl (or (cl-position ?\n s :start line-start) n))
-             (cb (nth line-idx per-line-bounds))
-             (range (and cb (nth idx cb))))
-        (when range
-          (let ((cell-beg (+ line-start (car range)))
-                (cell-end (min nl (+ line-start (cdr range)))))
-            (when (< cell-beg cell-end)
-              (add-face-text-property cell-beg cell-end
-                                      'gfm-tables-active-cell-face nil s)
-              (when first-line
-                (put-text-property cell-beg (1+ cell-beg) 'cursor t s)
-                (setq first-line nil)))))
+             (base (* 2 (+ (* line-idx n-cells) idx)))
+             (range-beg (aref vec base))
+             (range-end (aref vec (1+ base)))
+             (cell-beg (+ line-start range-beg))
+             (cell-end (min nl (+ line-start range-end))))
+        (when (< cell-beg cell-end)
+          (add-face-text-property cell-beg cell-end
+                                  'gfm-tables-active-cell-face nil s)
+          (when first-line
+            (put-text-property cell-beg (1+ cell-beg) 'cursor t s)
+            (setq first-line nil)))
         (setq line-start (1+ nl))
         (setq line-idx (1+ line-idx))))
     s))
