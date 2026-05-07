@@ -164,7 +164,14 @@ outside one, so the cache never crosses rebuild boundaries.")
            ((stringp disp)
             (cl-incf w (string-width disp))
             (setq i (or (next-single-property-change i 'display s) n)))
-           ((and comp (= (nth 0 comp) i))
+           ;; Honour only explicit compositions (those backed by a
+           ;; `composition' text property).  Auto-compositions from
+           ;; `composition-function-table' (e.g. `fl' / `--' ligatures
+           ;; in the fontify scratch buffer) are not applied to overlay
+           ;; display strings, so counting them here under-pads the
+           ;; cell and pushes the closing border off-grid.
+           ((and comp (= (nth 0 comp) i)
+                 (get-text-property i 'composition s))
             (cl-incf w (or (nth 5 comp) 1))
             (setq i (nth 1 comp)))
            (t

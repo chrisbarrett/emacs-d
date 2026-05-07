@@ -1101,6 +1101,19 @@ column width must still cover all its source chars in the bounds."
       (should (= uncached (gfm-tables--visible-width s)))
       (should (gethash s cache)))))
 
+(ert-deftest lang-markdown/gfm-tables-visible-width-ignores-auto-compositions ()
+  "Auto-compositions (e.g. ligatures) must not shrink visible-width.
+Overlay display strings do not run `composition-function-table', so
+counting an auto-composition would under-pad the cell."
+  (skip-unless (fboundp 'gfm-tables--visible-width))
+  (let ((s (concat (propertize "x" 'invisible 'gfm-test)
+                   "fl"))
+        (buffer-invisibility-spec '((gfm-test . t))))
+    ;; Even if `find-composition' would report a composition for "fl"
+    ;; in the current buffer, the cell string carries no `composition'
+    ;; text-property, so width must equal the underlying char widths.
+    (should (= 2 (gfm-tables--visible-width s)))))
+
 (ert-deftest lang-markdown/gfm-tables-width-cache-honours-composition-prop ()
   "Cached width matches uncached for cells with `composition' property."
   (skip-unless (fboundp 'gfm-tables--visible-width))
