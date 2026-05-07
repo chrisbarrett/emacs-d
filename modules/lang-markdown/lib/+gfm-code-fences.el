@@ -34,6 +34,13 @@
   :type 'number
   :group 'gfm-code-fences)
 
+(defcustom gfm-code-fences-icon-gui-nudge 0.25
+  "Fractional columns to shift the language icon leftward on GUI frames.
+Compensates for icon-font glyphs whose pixel width exceeds the
+`string-width' cell count.  Ignored on TTY frames."
+  :type 'number
+  :group 'gfm-code-fences)
+
 (defconst gfm-code-fences--open-re
   (rx bol (* blank)
       (group "```" (* "`"))
@@ -296,10 +303,18 @@ covers the remaining decoration. ICON, if non-nil, is right-aligned."
     (cond
      (icon
       (let* ((icon-w (string-width icon))
+             (nudge (if (display-graphic-p)
+                        (max 0 (min 0.99 gfm-code-fences-icon-gui-nudge))
+                      0))
              (total-fill-w (max 1 (- width 4 icon-w)))
              (rem-fill-w (max 1 (- total-fill-w leading-dash-w)))
-             (rem-fill (propertize (make-string rem-fill-w ?─) 'face face)))
-        (cons leading (concat rem-fill gap icon gap r))))
+             (rem-fill (propertize (make-string rem-fill-w ?─) 'face face))
+             (icon-pad (propertize " " 'display
+                                   `(space :align-to ,(- width 2 icon-w nudge))
+                                   'face face))
+             (snap (propertize " " 'display `(space :align-to ,(1- width))
+                               'face face)))
+        (cons leading (concat rem-fill icon-pad icon snap r))))
      (t
       (let* ((total-fill-w (max 1 (- width 2)))
              (rem-fill-w (max 1 (- total-fill-w leading-dash-w)))
