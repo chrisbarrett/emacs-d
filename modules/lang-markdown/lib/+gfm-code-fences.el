@@ -289,12 +289,23 @@ Compatibility alias for `gfm-code-fences--available-width'."
 
 ;;; Border primitives
 
+(defun gfm-code-fences--normalised-border-face (face)
+  "Return a face spec that inherits FACE but resets text-styling attrs.
+Border glyphs share buffer regions with prose whose font-lock face
+carries `:slant italic', `:underline t', etc.  Without an explicit
+override, those attrs leak through face composition on GUI frames
+and visually slant the box edges."
+  `(:inherit ,face
+    :slant normal :weight normal
+    :underline nil :overline nil :strike-through nil :box nil))
+
 (defun gfm-code-fences--top-strings (width face buffer-width &optional icon)
   "Return (LEADING . TRAILING) split of the top border WIDTH cols wide.
 LEADING covers BUFFER-WIDTH cols (matching the marker line's char count) so
 the buffer text shows in place of LEADING when it is revealed; TRAILING
 covers the remaining decoration. ICON, if non-nil, is right-aligned."
-  (let* ((l (propertize "┌" 'face face))
+  (let* ((face (gfm-code-fences--normalised-border-face face))
+         (l (propertize "┌" 'face face))
          (r (propertize "┐" 'face face))
          (gap (propertize " " 'face face))
          (leading-dash-w (max 0 (1- buffer-width)))
@@ -324,7 +335,8 @@ covers the remaining decoration. ICON, if non-nil, is right-aligned."
 (defun gfm-code-fences--bottom-strings (width face buffer-width)
   "Return (LEADING . TRAILING) split of the bottom border WIDTH cols wide.
 LEADING covers BUFFER-WIDTH cols matching the marker line's char count."
-  (let* ((leading-dash-w (max 0 (1- buffer-width)))
+  (let* ((face (gfm-code-fences--normalised-border-face face))
+         (leading-dash-w (max 0 (1- buffer-width)))
          (leading (concat (propertize "└" 'face face)
                           (propertize (make-string leading-dash-w ?─)
                                       'face face)))
@@ -335,7 +347,8 @@ LEADING covers BUFFER-WIDTH cols matching the marker line's char count."
 
 (defun gfm-code-fences--right-after (box-width face)
   "Build the after-string that draws the right border at column BOX-WIDTH."
-  (let* ((align-col (- box-width 2))
+  (let* ((face (gfm-code-fences--normalised-border-face face))
+         (align-col (- box-width 2))
          (pad (propertize " " 'display `(space :align-to ,align-col)
                           'face face))
          (sep (propertize " " 'face face))
@@ -387,7 +400,7 @@ See `gfm-code-fences--simulate-wrap'."
 
 (defun gfm-code-fences--wrap-prefix (face)
   "Wrap-prefix string used on continuation lines."
-  (propertize "⋱ " 'face face))
+  (propertize "⋱ " 'face (gfm-code-fences--normalised-border-face face)))
 
 (defun gfm-code-fences--right-after-overflow (face line-text window)
   "After-string padding the right border to WINDOW's edge for a wrapped line.
@@ -395,7 +408,8 @@ LINE-TEXT is the line's buffer content; the function simulates word-wrap
 to work out where the line ends visually, accounting for the wrap-prefix
 on continuation lines.  WINDOW selects the width; nil falls back to a
 sane default."
-  (let* ((text-width (gfm-code-fences--available-width window))
+  (let* ((face (gfm-code-fences--normalised-border-face face))
+         (text-width (gfm-code-fences--available-width window))
          ;; +2 for the `│ ' before-string contribution to the first visual line.
          (visual-col (gfm-code-fences--last-visual-col
                       (concat "│ " line-text) text-width
@@ -617,7 +631,8 @@ the top border (icon string for fenced, `meta' for YAML, or nil)."
     ;; this overlay-creation loop, `forward-line' interacts with our
     ;; cursor-intangible / display props and can stall mid-block,
     ;; spinning on the same line forever (bisect 2026-05-08).
-    (let ((lhs (propertize "│ " 'face face))
+    (let ((lhs (propertize "│ " 'face
+                           (gfm-code-fences--normalised-border-face face)))
           (p body-beg))
       (while (< p close-line-beg)
         (let* ((lbeg p)
@@ -651,7 +666,8 @@ the top border (icon string for fenced, `meta' for YAML, or nil)."
 
 (defun gfm-code-fences--apply-indent-anchors (beg end indent-width face)
   "Build width-independent anchors for an indent block at [BEG, END]."
-  (let ((lhs (propertize "│ " 'face face))
+  (let ((lhs (propertize "│ " 'face
+                         (gfm-code-fences--normalised-border-face face)))
         (first t)
         (p beg))
     (while (<= p end)

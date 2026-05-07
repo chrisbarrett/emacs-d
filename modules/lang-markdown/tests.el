@@ -23,7 +23,6 @@
 (ert-deftest lang-markdown/gfm-mode-remap ()
   "P1: markdown-mode should be remapped to gfm-mode or markdown-ts-mode."
   ;; Skip if init.el didn't load (missing +corelib in batch mode)
-  (skip-unless (alist-get 'markdown-mode major-mode-remap-alist))
   ;; Accept gfm-mode (our config) or markdown-ts-mode (tree-sitter default)
   (should (memq (alist-get 'markdown-mode major-mode-remap-alist)
                 '(gfm-mode markdown-ts-mode))))
@@ -67,7 +66,6 @@
 
 (ert-deftest lang-markdown/gfm-callouts-find-blocks-detects-types ()
   "Each known callout type is detected with its label."
-  (skip-unless (fboundp 'gfm-callouts--find-blocks))
   (dolist (type '("NOTE" "TIP" "IMPORTANT" "WARNING" "CAUTION" "CRITICAL"))
     (with-temp-buffer
       (insert (lang-markdown-tests--callout-block type '("hello")))
@@ -77,7 +75,6 @@
 
 (ert-deftest lang-markdown/gfm-callouts-find-blocks-multiline ()
   "Block end extends through subsequent blockquote lines."
-  (skip-unless (fboundp 'gfm-callouts--find-blocks))
   (with-temp-buffer
     (insert "> [!IMPORTANT]\n> line one\n> line two\n\nplain\n")
     (let* ((blocks (gfm-callouts--find-blocks))
@@ -89,13 +86,11 @@
                         (line-beginning-position) (line-end-position)))))))
 
 (ert-deftest lang-markdown/gfm-callouts-find-blocks-ignores-plain-blockquote ()
-  (skip-unless (fboundp 'gfm-callouts--find-blocks))
   (with-temp-buffer
     (insert "> just a quote\n> with two lines\n")
     (should-not (gfm-callouts--find-blocks))))
 
 (ert-deftest lang-markdown/gfm-callouts-mode-creates-overlays ()
-  (skip-unless (fboundp 'gfm-callouts-mode))
   (with-temp-buffer
     (insert "> [!NOTE]\n> Hello.\n")
     (gfm-callouts-mode 1)
@@ -103,7 +98,6 @@
                      (overlays-in (point-min) (point-max))))))
 
 (ert-deftest lang-markdown/gfm-callouts-mode-removes-overlays ()
-  (skip-unless (fboundp 'gfm-callouts-mode))
   (with-temp-buffer
     (insert "> [!NOTE]\n> Hello.\n")
     (gfm-callouts-mode 1)
@@ -119,7 +113,6 @@
 
 (ert-deftest lang-markdown/gfm-callouts-prefix-overlays-evaporative ()
   "Marker and body display overlays are evaporative and revealable."
-  (skip-unless (fboundp 'gfm-callouts-mode))
   (with-temp-buffer
     (insert "> [!NOTE]\n> Hello.\n")
     (gfm-callouts-mode 1)
@@ -132,7 +125,6 @@
 
 (ert-deftest lang-markdown/gfm-callouts-marker-covers-whole-line ()
   "Marker overlay covers the full marker line; body overlay covers `> '."
-  (skip-unless (fboundp 'gfm-callouts-mode))
   (with-temp-buffer
     (insert "> [!NOTE]\n> Hello.\n")
     (gfm-callouts-mode 1)
@@ -147,7 +139,6 @@
 
 (ert-deftest lang-markdown/gfm-callouts-prefix-display-marker-vs-body ()
   "Marker displays `┌─ TITLE'; body displays the side edge `│ '."
-  (skip-unless (fboundp 'gfm-callouts-mode))
   (with-temp-buffer
     (insert "> [!NOTE]\n> Hello.\n")
     (gfm-callouts-mode 1)
@@ -161,7 +152,6 @@
 
 (ert-deftest lang-markdown/gfm-callouts-overrides-blockquote-italic ()
   "A face overlay inheriting `default' covers the whole callout block."
-  (skip-unless (fboundp 'gfm-callouts-mode))
   (with-temp-buffer
     (insert "> [!NOTE]\n> Hello.\n")
     (gfm-callouts-mode 1)
@@ -175,7 +165,6 @@
 
 (ert-deftest lang-markdown/gfm-callouts-marker-only-callout-renders-bottom ()
   "A callout with no body lines still gets a bottom border."
-  (skip-unless (fboundp 'gfm-callouts-mode))
   (with-temp-buffer
     (insert "> [!NOTE]\n\nplain.\n")
     (gfm-callouts-mode 1)
@@ -185,7 +174,6 @@
 
 (ert-deftest lang-markdown/gfm-callouts-reveal-suppresses-display-at-point ()
   "Moving point onto the prefix temporarily clears its display."
-  (skip-unless (fboundp 'gfm-callouts-mode))
   (with-temp-buffer
     (insert "> [!NOTE]\n> Hello.\n")
     (gfm-callouts-mode 1)
@@ -212,7 +200,6 @@
     (load fences-file nil 'nomessage)))
 
 (ert-deftest lang-markdown/gfm-code-fences-find-block ()
-  (skip-unless (fboundp 'gfm-code-fences--find-blocks))
   (with-temp-buffer
     (insert "```bash\necho hi\n```\n")
     (let ((blocks (gfm-code-fences--find-blocks)))
@@ -220,7 +207,6 @@
       (should (equal "bash" (nth 4 (car blocks)))))))
 
 (ert-deftest lang-markdown/gfm-code-fences-find-block-no-lang ()
-  (skip-unless (fboundp 'gfm-code-fences--find-blocks))
   (with-temp-buffer
     (insert "```\ntext\n```\n")
     (let ((blocks (gfm-code-fences--find-blocks)))
@@ -228,7 +214,6 @@
       (should-not (nth 4 (car blocks))))))
 
 (ert-deftest lang-markdown/gfm-code-fences-mode-creates-overlays ()
-  (skip-unless (fboundp 'gfm-code-fences-mode))
   (with-temp-buffer
     (insert "```bash\necho hi\n```\n")
     (gfm-code-fences-mode 1)
@@ -236,7 +221,6 @@
                      (overlays-in (point-min) (point-max))))))
 
 (ert-deftest lang-markdown/gfm-code-fences-mode-removes-overlays ()
-  (skip-unless (fboundp 'gfm-code-fences-mode))
   (with-temp-buffer
     (insert "```bash\necho hi\n```\n")
     (gfm-code-fences-mode 1)
@@ -245,11 +229,22 @@
                          (overlays-in (point-min) (point-max))))))
 
 (ert-deftest lang-markdown/gfm-code-fences-enabled-via-gfm-mode-hook ()
-  (skip-unless (boundp 'gfm-mode-hook))
   (should (memq 'gfm-code-fences-mode gfm-mode-hook)))
 
+(ert-deftest lang-markdown/gfm-code-fences-border-face-resets-styling ()
+  "Border face spec inherits the configured face but resets styling
+attrs that would otherwise leak from font-lock onto box edges (slant,
+weight, underline, overline, strike-through, box)."
+  (let ((spec (gfm-code-fences--normalised-border-face 'italic)))
+    (should (equal (plist-get spec :inherit) 'italic))
+    (should (eq (plist-get spec :slant) 'normal))
+    (should (eq (plist-get spec :weight) 'normal))
+    (should (null (plist-get spec :underline)))
+    (should (null (plist-get spec :overline)))
+    (should (null (plist-get spec :strike-through)))
+    (should (null (plist-get spec :box)))))
+
 (ert-deftest lang-markdown/gfm-code-fences-find-indent-block ()
-  (skip-unless (fboundp 'gfm-code-fences--find-indent-blocks))
   (with-temp-buffer
     (insert "Para.\n\n    code one\n    code two\n\nMore.\n")
     (let ((blocks (gfm-code-fences--find-indent-blocks nil)))
@@ -258,18 +253,10 @@
 
 (ert-deftest lang-markdown/gfm-code-fences-yaml-mode-prefers-treesit ()
   "Helmet language mode picks yaml-ts-mode when grammar available."
-  (skip-unless (fboundp 'gfm-code-fences--yaml-mode))
-  (skip-unless (and (fboundp 'treesit-language-available-p)
-                    (treesit-language-available-p 'yaml)))
   (should (eq 'yaml-ts-mode (gfm-code-fences--yaml-mode))))
 
 (ert-deftest lang-markdown/gfm-code-fences-yaml-helmet-fontifies-body ()
   "YAML helmet body receives face overlays from the chosen yaml mode."
-  (skip-unless (and (fboundp 'gfm-code-fences-mode)
-                    (fboundp 'gfm-code-fences--yaml-mode)
-                    (gfm-code-fences--yaml-mode)
-                    (fboundp 'treesit-language-available-p)
-                    (treesit-language-available-p 'yaml)))
   (with-temp-buffer
     (insert "---\nkey: value\n---\nbody\n")
     (gfm-code-fences-mode 1)
@@ -283,14 +270,11 @@
 
 (ert-deftest lang-markdown/gfm-code-fences-yaml-helmet-empty-body-noerror ()
   "Empty YAML helmet body does not error during rebuild."
-  (skip-unless (fboundp 'gfm-code-fences-mode))
   (with-temp-buffer
     (insert "---\n---\nbody\n")
     (should (progn (gfm-code-fences-mode 1) t))))
 
 (ert-deftest lang-markdown/gfm-code-fences-skip-indent-inside-fence ()
-  (skip-unless (and (fboundp 'gfm-code-fences--find-indent-blocks)
-                    (fboundp 'gfm-code-fences--find-blocks)))
   (with-temp-buffer
     (insert "```\n    looks indented\n```\n")
     (let* ((fenced (gfm-code-fences--find-blocks))
@@ -339,7 +323,6 @@ Cases are restricted to modes that ship with Emacs so the test never skips."
 
 (ert-deftest lang-markdown/gfm-code-fences-simulate-wrap-zero-width-terminates ()
   "`gfm-code-fences--simulate-wrap' returns rather than spinning at width 0."
-  (skip-unless (fboundp 'gfm-code-fences--simulate-wrap))
   (let ((res (with-timeout (1 'timeout)
                (gfm-code-fences--simulate-wrap "hello world" 0))))
     (should (consp res))
@@ -347,7 +330,6 @@ Cases are restricted to modes that ship with Emacs so the test never skips."
 
 (ert-deftest lang-markdown/gfm-code-fences-simulate-wrap-tiny-width-with-prefix-terminates ()
   "`gfm-code-fences--simulate-wrap' terminates when width ≤ cont-prefix-w."
-  (skip-unless (fboundp 'gfm-code-fences--simulate-wrap))
   (let ((res (with-timeout (1 'timeout)
                (gfm-code-fences--simulate-wrap "hello world" 1 2))))
     (should (consp res))
@@ -357,7 +339,6 @@ Cases are restricted to modes that ship with Emacs so the test never skips."
 
 (ert-deftest lang-markdown/gfm-code-fences-find-blocks-cache-eq-no-edit ()
   "Two `gfm-code-fences--find-blocks' calls with no edits return `eq' lists."
-  (skip-unless (fboundp 'gfm-code-fences--find-blocks))
   (with-temp-buffer
     (insert "```bash\necho hi\n```\n")
     (let ((a (gfm-code-fences--find-blocks))
@@ -366,7 +347,6 @@ Cases are restricted to modes that ship with Emacs so the test never skips."
 
 (ert-deftest lang-markdown/gfm-code-fences-find-blocks-cache-invalidates-on-edit ()
   "Edits invalidate the fenced-blocks cache."
-  (skip-unless (fboundp 'gfm-code-fences--find-blocks))
   (with-temp-buffer
     (insert "```bash\necho hi\n```\n")
     (let ((before (gfm-code-fences--find-blocks)))
@@ -378,7 +358,6 @@ Cases are restricted to modes that ship with Emacs so the test never skips."
 
 (ert-deftest lang-markdown/gfm-code-fences-yaml-helmet-cache-invalidates-on-edit ()
   "Edits invalidate the YAML-helmet cache."
-  (skip-unless (fboundp 'gfm-code-fences--find-yaml-helmet))
   (with-temp-buffer
     (insert "---\nkey: value\n---\nbody\n")
     (let ((before (gfm-code-fences--find-yaml-helmet)))
@@ -393,7 +372,6 @@ Cases are restricted to modes that ship with Emacs so the test never skips."
 
 (ert-deftest lang-markdown/gfm-code-fences-indent-blocks-cache-eq-no-edit ()
   "Two `gfm-code-fences--find-indent-blocks' calls return `eq' lists."
-  (skip-unless (fboundp 'gfm-code-fences--find-indent-blocks))
   (with-temp-buffer
     (insert "Para.\n\n    code one\n    code two\n\nMore.\n")
     (let ((a (gfm-code-fences--find-indent-blocks nil))
@@ -406,7 +384,6 @@ Cases are restricted to modes that ship with Emacs so the test never skips."
   "Buffer in two windows of different widths gets per-window display overlays.
 Anchors stay shared across windows; only display overlays carry a
 `window' restriction."
-  (skip-unless (fboundp 'gfm-code-fences-mode))
   (let ((buf (generate-new-buffer "*gfm-code-fences-test*")))
     (unwind-protect
         (progn
@@ -436,7 +413,6 @@ Anchors stay shared across windows; only display overlays carry a
 
 (ert-deftest lang-markdown/gfm-code-fences-schedule-full-rebuild-noop-when-window-state-unchanged ()
   "Full-rebuild scheduler is a no-op when window state is unchanged."
-  (skip-unless (fboundp 'gfm-code-fences-mode))
   (with-temp-buffer
     (insert "```bash\necho hi\n```\n")
     (gfm-code-fences-mode 1)
@@ -454,7 +430,6 @@ Anchors stay shared across windows; only display overlays carry a
 
 (ert-deftest lang-markdown/gfm-code-fences-reconcile-windows-touches-changed-only ()
   "Reconciling windows replaces only the resized window's display overlays."
-  (skip-unless (fboundp 'gfm-code-fences--reconcile-windows))
   (let ((buf (generate-new-buffer "*gfm-code-fences-reconcile-test*")))
     (unwind-protect
         (progn
@@ -511,7 +486,6 @@ Anchors stay shared across windows; only display overlays carry a
 
 (ert-deftest lang-markdown/gfm-code-fences-scoped-edit-inside-single-block ()
   "Editing inside one fenced block only rebuilds that block's overlays."
-  (skip-unless (fboundp 'gfm-code-fences-mode))
   (with-temp-buffer
     (insert "```bash\necho hi\n```\n\n```sh\nfoo\n```\n")
     (gfm-code-fences-mode 1)
@@ -539,7 +513,6 @@ Anchors stay shared across windows; only display overlays carry a
 
 (ert-deftest lang-markdown/gfm-code-fences-scoped-edit-on-fence-boundary-full-rebuild ()
   "Edit overlapping a fence opening line triggers a full rebuild."
-  (skip-unless (fboundp 'gfm-code-fences-mode))
   (with-temp-buffer
     (insert "```bash\necho hi\n```\n")
     (gfm-code-fences-mode 1)
@@ -560,7 +533,6 @@ Anchors stay shared across windows; only display overlays carry a
 
 (ert-deftest lang-markdown/gfm-code-fences-scoped-edit-blank-adjacent-indent-full-rebuild ()
   "Edit on a blank line adjacent to an indent block triggers full rebuild."
-  (skip-unless (fboundp 'gfm-code-fences-mode))
   (with-temp-buffer
     (insert "Para.\n\n    code line\n    next code\n\nMore.\n")
     (gfm-code-fences-mode 1)
@@ -583,7 +555,6 @@ Anchors stay shared across windows; only display overlays carry a
 
 (ert-deftest lang-markdown/gfm-code-fences-scoped-edit-outside-blocks-noop ()
   "Edit outside every decorated block is a no-op."
-  (skip-unless (fboundp 'gfm-code-fences-mode))
   (with-temp-buffer
     (insert "intro line\n\n```bash\necho hi\n```\n")
     (gfm-code-fences-mode 1)
@@ -601,7 +572,6 @@ Anchors stay shared across windows; only display overlays carry a
 
 (ert-deftest lang-markdown/gfm-code-fences-block-visible-p ()
   "`gfm-code-fences--block-visible-p' detects overlap with any window range."
-  (skip-unless (fboundp 'gfm-code-fences--block-visible-p))
   (let ((block (gfm-code-fences--make-block
                 :kind 'fenced :range (cons 100 200) :payload nil)))
     (should (gfm-code-fences--block-visible-p block '((50 . 250))))
@@ -615,7 +585,6 @@ Anchors stay shared across windows; only display overlays carry a
 
 (ert-deftest lang-markdown/gfm-code-fences-stats-increment-across-rebuilds ()
   "Stats accumulate rebuild count and total time across rebuilds."
-  (skip-unless (fboundp 'gfm-code-fences-mode))
   (with-temp-buffer
     (insert "```bash\necho hi\n```\n")
     (gfm-code-fences-mode 1)
@@ -626,7 +595,6 @@ Anchors stay shared across windows; only display overlays carry a
 
 (ert-deftest lang-markdown/gfm-code-fences-phase-totals-include-required-keys ()
   "Phase totals include the six keys required by the spec."
-  (skip-unless (fboundp 'gfm-code-fences-mode))
   (with-temp-buffer
     (insert "---\nk: v\n---\n```bash\necho hi\n```\n\nPara.\n\n    indent\n")
     (gfm-code-fences-mode 1)
@@ -645,42 +613,35 @@ Anchors stay shared across windows; only display overlays carry a
 ;;; Cell parser
 
 (ert-deftest lang-markdown/gfm-tables-split-row-simple ()
-  (skip-unless (fboundp 'gfm-tables--split-row))
   (should (equal '("a" "b" "c")
                  (gfm-tables--split-row "| a | b | c |"))))
 
 (ert-deftest lang-markdown/gfm-tables-split-row-escaped-pipe ()
-  (skip-unless (fboundp 'gfm-tables--split-row))
   (should (equal '("a | b" "c")
                  (gfm-tables--split-row "| a \\| b | c |"))))
 
 (ert-deftest lang-markdown/gfm-tables-split-row-single-tick-code ()
-  (skip-unless (fboundp 'gfm-tables--split-row))
   (should (equal '("a" "`b|c`" "d")
                  (gfm-tables--split-row "| a | `b|c` | d |"))))
 
 (ert-deftest lang-markdown/gfm-tables-split-row-double-tick-code ()
-  (skip-unless (fboundp 'gfm-tables--split-row))
   (should (equal '("a" "``b|c``" "d")
                  (gfm-tables--split-row "| a | ``b|c`` | d |"))))
 
 (ert-deftest lang-markdown/gfm-tables-split-row-unbalanced-tick ()
   "Unbalanced backtick is treated as literal text."
-  (skip-unless (fboundp 'gfm-tables--split-row))
   (should (equal '("a" "`b" "c")
                  (gfm-tables--split-row "| a | `b | c |"))))
 
 ;;; Block discovery
 
 (ert-deftest lang-markdown/gfm-tables-find-blocks-standard ()
-  (skip-unless (fboundp 'gfm-tables--find-blocks))
   (with-temp-buffer
     (insert "| A | B |\n| - | - |\n| 1 | 2 |\n| 3 | 4 |\n")
     (let ((blocks (gfm-tables--find-blocks)))
       (should (= 1 (length blocks))))))
 
 (ert-deftest lang-markdown/gfm-tables-find-blocks-rejects-lone-delim ()
-  (skip-unless (fboundp 'gfm-tables--find-blocks))
   (with-temp-buffer
     (insert "Some prose.\n| - | - |\nMore prose.\n")
     (should-not (gfm-tables--find-blocks))))
@@ -690,7 +651,6 @@ Anchors stay shared across windows; only display overlays carry a
 Two calls without an intervening edit return `eq' lists; an edit
 invalidates the cache and the next call returns a fresh list reflecting
 the new buffer state."
-  (skip-unless (fboundp 'gfm-tables--find-blocks))
   (with-temp-buffer
     (insert "| A | B |\n| - | - |\n| 1 | 2 |\n\nintro\n")
     (let ((first (gfm-tables--find-blocks))
@@ -703,8 +663,6 @@ the new buffer state."
       (should (= 2 (length after))))))
 
 (ert-deftest lang-markdown/gfm-tables-find-blocks-skips-fenced ()
-  (skip-unless (and (fboundp 'gfm-tables--find-blocks)
-                    (fboundp 'gfm-code-fences--find-blocks)))
   (with-temp-buffer
     (insert "```\n| A | B |\n| - | - |\n| 1 | 2 |\n```\n")
     (let* ((fenced (gfm-code-fences--find-blocks))
@@ -715,7 +673,6 @@ the new buffer state."
 ;;; Column widths
 
 (ert-deftest lang-markdown/gfm-tables-column-widths-unaligned ()
-  (skip-unless (fboundp 'gfm-tables--column-widths))
   (let* ((rows '(("Header" "B")
                  ("a" "longer")
                  ("xx" "y")))
@@ -724,60 +681,49 @@ the new buffer state."
     (should (equal 6 (aref widths 1)))))
 
 (ert-deftest lang-markdown/gfm-tables-box-width ()
-  (skip-unless (fboundp 'gfm-tables--box-width))
   ;; 2 cols, widths 3 and 5 → 2 + (5) + (7) + 1 = 15
   (should (= 15 (gfm-tables--box-width (vector 3 5)))))
 
 ;;; Cell wrapping
 
 (ert-deftest lang-markdown/gfm-tables-cell-tokens-splits-on-whitespace ()
-  (skip-unless (fboundp 'gfm-tables--cell-tokens))
   (should (equal '("foo" "bar" "baz")
                  (gfm-tables--cell-tokens "  foo  bar baz "))))
 
 (ert-deftest lang-markdown/gfm-tables-cell-tokens-empty-string ()
-  (skip-unless (fboundp 'gfm-tables--cell-tokens))
   (should (equal '() (gfm-tables--cell-tokens "")))
   (should (equal '() (gfm-tables--cell-tokens "   "))))
 
 (ert-deftest lang-markdown/gfm-tables-cell-tokens-preserves-properties ()
-  (skip-unless (fboundp 'gfm-tables--cell-tokens))
   (let* ((src (concat "abc " (propertize "def" 'face 'bold)))
          (tokens (gfm-tables--cell-tokens src)))
     (should (equal '("abc" "def") tokens))
     (should (eq 'bold (get-text-property 0 'face (cadr tokens))))))
 
 (ert-deftest lang-markdown/gfm-tables-slice-by-visible-width-basic ()
-  (skip-unless (fboundp 'gfm-tables--slice-by-visible-width))
   (should (equal '("abc" "de") (gfm-tables--slice-by-visible-width "abcde" 3))))
 
 (ert-deftest lang-markdown/gfm-tables-slice-by-visible-width-zero-falls-back ()
-  (skip-unless (fboundp 'gfm-tables--slice-by-visible-width))
   ;; Width 0 must still make progress (one char per slice).
   (let ((chunks (gfm-tables--slice-by-visible-width "ab" 0)))
     (should (= 2 (length chunks)))))
 
 (ert-deftest lang-markdown/gfm-tables-wrap-cell-no-wrap ()
-  (skip-unless (fboundp 'gfm-tables--wrap-cell))
   (should (equal '("hello") (gfm-tables--wrap-cell "hello" 10))))
 
 (ert-deftest lang-markdown/gfm-tables-wrap-cell-word-boundary ()
-  (skip-unless (fboundp 'gfm-tables--wrap-cell))
   (should (equal '("the quick" "brown fox")
                  (gfm-tables--wrap-cell "the quick brown fox" 9))))
 
 (ert-deftest lang-markdown/gfm-tables-wrap-cell-hard-break-long-word ()
-  (skip-unless (fboundp 'gfm-tables--wrap-cell))
   (let ((lines (gfm-tables--wrap-cell "abcdefghij" 4)))
     (should (cl-every (lambda (l) (<= (string-width l) 4)) lines))
     (should (equal "abcdefghij" (apply #'concat lines)))))
 
 (ert-deftest lang-markdown/gfm-tables-wrap-cell-empty-returns-one-empty-line ()
-  (skip-unless (fboundp 'gfm-tables--wrap-cell))
   (should (equal '("") (gfm-tables--wrap-cell "" 5))))
 
 (ert-deftest lang-markdown/gfm-tables-wrap-cell-preserves-properties ()
-  (skip-unless (fboundp 'gfm-tables--wrap-cell))
   (let* ((src (concat (propertize "abc" 'face 'bold) " def"))
          (lines (gfm-tables--wrap-cell src 3)))
     (should (eq 'bold (get-text-property 0 'face (car lines))))))
@@ -785,18 +731,15 @@ the new buffer state."
 ;;; Width fitting
 
 (ert-deftest lang-markdown/gfm-tables-fit-widths-under-budget-passthrough ()
-  (skip-unless (fboundp 'gfm-tables--fit-widths))
   (should (equal (vector 3 5) (gfm-tables--fit-widths (vector 3 5) 100))))
 
 (ert-deftest lang-markdown/gfm-tables-fit-widths-caps-widest ()
-  (skip-unless (fboundp 'gfm-tables--fit-widths))
   ;; natural sum 30, budget 20: smaller col fits naturally, widest capped.
   (let ((fitted (gfm-tables--fit-widths (vector 5 25) 20)))
     (should (= 5 (aref fitted 0)))
     (should (= 15 (aref fitted 1)))))
 
 (ert-deftest lang-markdown/gfm-tables-fit-widths-equal-distribution ()
-  (skip-unless (fboundp 'gfm-tables--fit-widths))
   ;; Equal natural widths over budget → all capped equally.
   (let ((fitted (gfm-tables--fit-widths (vector 20 20) 30)))
     (should (= (aref fitted 0) (aref fitted 1)))
@@ -804,14 +747,12 @@ the new buffer state."
 
 (ert-deftest lang-markdown/gfm-tables-fit-widths-uses-full-budget ()
   "Integer slack from binary search is distributed so sum = budget."
-  (skip-unless (fboundp 'gfm-tables--fit-widths))
   ;; Natural [15 118 57], budget 50: water cap is 17 → 15+17+17=49.
   ;; The 1 unit of slack must be redistributed so total = 50.
   (let ((fitted (gfm-tables--fit-widths (vector 15 118 57) 50)))
     (should (= 50 (cl-loop for w across fitted sum w)))))
 
 (ert-deftest lang-markdown/gfm-tables-fit-widths-floor-at-1 ()
-  (skip-unless (fboundp 'gfm-tables--fit-widths))
   ;; Tiny budget shouldn't produce zero widths.
   (let ((fitted (gfm-tables--fit-widths (vector 10 10 10) 1)))
     (should (cl-every (lambda (w) (>= w 1)) (cl-coerce fitted 'list)))))
@@ -820,14 +761,12 @@ the new buffer state."
 
 (ert-deftest lang-markdown/gfm-tables-compose-multiline-row-single-line ()
   "If no cell exceeds its width, output is a single line (no `\\n')."
-  (skip-unless (fboundp 'gfm-tables--compose-multiline-row))
   (let ((row (gfm-tables--compose-multiline-row '("a" "b") (vector 1 1)
                                                 'body-default)))
     (should-not (string-match-p "\n" row))))
 
 (ert-deftest lang-markdown/gfm-tables-compose-multiline-row-wraps-cell ()
   "A cell wider than its column wraps to multiple visual lines."
-  (skip-unless (fboundp 'gfm-tables--compose-multiline-row))
   (let* ((row (gfm-tables--compose-multiline-row
                '("a" "one two three four") (vector 1 9)
                'body-default))
@@ -837,7 +776,6 @@ the new buffer state."
 
 (ert-deftest lang-markdown/gfm-tables-compose-multiline-row-pads-short-cells ()
   "Short cells get padded with blank lines so columns stay aligned."
-  (skip-unless (fboundp 'gfm-tables--compose-multiline-row))
   (let* ((row (gfm-tables--compose-multiline-row
                '("x" "long content that wraps") (vector 1 6)
                'body-default))
@@ -854,8 +792,6 @@ the new buffer state."
 
 (ert-deftest lang-markdown/gfm-tables-fontify-cell-applies-bold-face ()
   "Bold markdown inside a cell receives `markdown-bold-face'."
-  (skip-unless (and (fboundp 'gfm-tables--fontify-cell)
-                    (fboundp 'markdown-mode)))
   (let ((s (gfm-tables--fontify-cell "**bold**")))
     (should (cl-some (lambda (i)
                        (let ((f (get-text-property i 'face s)))
@@ -865,8 +801,6 @@ the new buffer state."
 
 (ert-deftest lang-markdown/gfm-tables-fontify-cell-applies-code-face ()
   "Inline code inside a cell receives `markdown-inline-code-face'."
-  (skip-unless (and (fboundp 'gfm-tables--fontify-cell)
-                    (fboundp 'markdown-mode)))
   (let ((s (gfm-tables--fontify-cell "`code`")))
     (should (cl-some (lambda (i)
                        (let ((f (get-text-property i 'face s)))
@@ -878,9 +812,6 @@ the new buffer state."
 (ert-deftest lang-markdown/gfm-tables-fontify-cell-preserves-width ()
   "Fontified cell has the same visible width as the raw cell when
 `markdown-hide-markup' is off — i.e. markup chars remain on screen."
-  (skip-unless (and (fboundp 'gfm-tables--fontify-cell)
-                    (fboundp 'gfm-tables--visible-width)
-                    (fboundp 'markdown-mode)))
   (with-temp-buffer
     (setq buffer-invisibility-spec '(t))
     (dolist (raw '("plain" "**bold**" "*it*" "`code`" "[t](u)" ""))
@@ -890,14 +821,12 @@ the new buffer state."
 
 (ert-deftest lang-markdown/gfm-tables-visible-width-honours-display ()
   "`display' string property changes visible width."
-  (skip-unless (fboundp 'gfm-tables--visible-width))
   (let ((s (concat "abc" (propertize "X" 'display "longer") "de")))
     (should (= (+ 5 (string-width "longer"))
                (gfm-tables--visible-width s)))))
 
 (ert-deftest lang-markdown/gfm-tables-visible-width-honours-invisibility-spec ()
   "Invisible-tagged chars only shrink width when in `buffer-invisibility-spec'."
-  (skip-unless (fboundp 'gfm-tables--visible-width))
   (let ((s (concat "ab" (propertize "XX" 'invisible 'tag) "cd")))
     (with-temp-buffer
       (setq buffer-invisibility-spec nil)
@@ -909,16 +838,12 @@ the new buffer state."
   "`composition' property compresses visible width to that of the composed glyph.
 This is what `markdown-mode' uses to hide URLs when `markdown-hide-urls'
 is non-nil — `(url)' is composed into a single chain glyph."
-  (skip-unless (fboundp 'gfm-tables--visible-width))
   (let ((s (copy-sequence "abcXXXXXde")))
     (compose-string s 3 8 ?Y)
     (should (= 6 (gfm-tables--visible-width s)))))
 
 (ert-deftest lang-markdown/gfm-tables-visible-width-link-with-hidden-url ()
   "Fontified link cell with `markdown-hide-urls' on reports the visible-only width."
-  (skip-unless (and (fboundp 'gfm-tables--fontify-cell)
-                    (fboundp 'gfm-tables--visible-width)
-                    (fboundp 'markdown-mode)))
   (let ((prev (default-value 'markdown-hide-urls)))
     (unwind-protect
         (progn
@@ -936,9 +861,6 @@ is non-nil — `(url)' is composed into a single chain glyph."
 
 (ert-deftest lang-markdown/gfm-tables-cell-link-pos-finds-inline-link ()
   "Inline link inside a cell is locatable from the row overlay."
-  (skip-unless (and (fboundp 'gfm-tables-mode)
-                    (fboundp 'gfm-tables--cell-link-pos)
-                    (fboundp 'gfm-mode)))
   (with-temp-buffer
     (gfm-mode)
     (insert "| col |\n| --- |\n| [text](https://example.com) |\n")
@@ -956,9 +878,6 @@ is non-nil — `(url)' is composed into a single chain glyph."
 
 (ert-deftest lang-markdown/gfm-tables-cell-link-pos-no-link-returns-nil ()
   "A cell with no link returns nil from `cell-link-pos'."
-  (skip-unless (and (fboundp 'gfm-tables-mode)
-                    (fboundp 'gfm-tables--cell-link-pos)
-                    (fboundp 'gfm-mode)))
   (with-temp-buffer
     (gfm-mode)
     (insert "| col |\n| --- |\n| plain text |\n")
@@ -974,7 +893,6 @@ is non-nil — `(url)' is composed into a single chain glyph."
   "Cell char bounds reflect actual cell string length, not visible width.
 A cell with a composition (long source, narrow display) padded to its
 column width must still cover all its source chars in the bounds."
-  (skip-unless (fboundp 'gfm-tables--row-char-bounds))
   (let* ((cell (copy-sequence "abcXXXXXde"))
          (_ (compose-string cell 3 8 ?Y))
          (bounds (gfm-tables--row-char-bounds (list cell "ok") (vector 6 2))))
@@ -985,8 +903,6 @@ column width must still cover all its source chars in the bounds."
 
 (ert-deftest lang-markdown/gfm-tables-row-char-bounds-end-matches-compose-row-length ()
   "Last cell's end + 1 (closing pipe) equals `compose-row's string length."
-  (skip-unless (and (fboundp 'gfm-tables--row-char-bounds)
-                    (fboundp 'gfm-tables--compose-row)))
   (let* ((cells '("ab" "cd" "e"))
          (col-widths (vector 2 3 1))
          (s (gfm-tables--compose-row cells col-widths 'body-default))
@@ -995,7 +911,6 @@ column width must still cover all its source chars in the bounds."
 
 (ert-deftest lang-markdown/gfm-tables-multiline-row-char-bounds-per-line ()
   "Per-visual-line bounds reflect the wrapped cell content on each line."
-  (skip-unless (fboundp 'gfm-tables--multiline-row-char-bounds))
   (let* ((cells '("a" "one two three"))
          (col-widths (vector 1 5))
          (per-line (gfm-tables--multiline-row-char-bounds cells col-widths)))
@@ -1007,9 +922,6 @@ column width must still cover all its source chars in the bounds."
 
 (ert-deftest lang-markdown/gfm-tables-compose-row-preserves-cell-faces ()
   "`compose-row' on body-alt row keeps existing markdown faces on cell text."
-  (skip-unless (and (fboundp 'gfm-tables--compose-row)
-                    (fboundp 'gfm-tables--fontify-cell)
-                    (fboundp 'markdown-mode)))
   (let* ((cell (gfm-tables--fontify-cell "**bold**"))
          (row (gfm-tables--compose-row (list cell) (vector 8) 'body-alt)))
     (should (cl-some (lambda (i)
@@ -1026,7 +938,6 @@ column width must still cover all its source chars in the bounds."
 
 (ert-deftest lang-markdown/gfm-tables-overlays-not-evaporative ()
   "Table overlays must not evaporate when their region empties."
-  (skip-unless (fboundp 'gfm-tables-mode))
   (with-temp-buffer
     (insert "| A | B |\n| - | - |\n| 1 | 2 |\n")
     (gfm-tables-mode 1)
@@ -1037,7 +948,6 @@ column width must still cover all its source chars in the bounds."
 ;;; Indirect editing
 
 (ert-deftest lang-markdown/gfm-tables-block-at-point-inside ()
-  (skip-unless (fboundp 'gfm-tables--block-at-point))
   (with-temp-buffer
     (insert "intro\n| A | B |\n| - | - |\n| 1 | 2 |\nout\n")
     (goto-char (point-min))
@@ -1048,7 +958,6 @@ column width must still cover all its source chars in the bounds."
       (should (> (cdr bounds) (point))))))
 
 (ert-deftest lang-markdown/gfm-tables-block-at-point-outside-returns-nil ()
-  (skip-unless (fboundp 'gfm-tables--block-at-point))
   (with-temp-buffer
     (insert "intro\n| A | B |\n| - | - |\n| 1 | 2 |\nout\n")
     (goto-char (point-min))
@@ -1065,9 +974,6 @@ column width must still cover all its source chars in the bounds."
 `markdown--edit-indirect-after-commit-function' appends \\n to the
 committed region, treating it as a code block.  For a cell edit the
 region is just cell content; the trailing newline must be stripped."
-  (skip-unless (and (fboundp 'gfm-tables-mode)
-                    (fboundp 'gfm-mode)
-                    (require 'edit-indirect nil t)))
   (with-temp-buffer
     (gfm-mode)
     (insert "| A             | B   |\n| ------------- | --- |\n"
@@ -1106,28 +1012,24 @@ region is just cell content; the trailing newline must be stripped."
           (should (equal before-line after-line)))))))
 
 (ert-deftest lang-markdown/gfm-tables-cell-edit-sanitise-strips-newlines ()
-  (skip-unless (fboundp 'gfm-tables--cell-edit-sanitise))
   (with-temp-buffer
     (insert "a\nb\nc")
     (gfm-tables--cell-edit-sanitise)
     (should (equal "a b c" (buffer-string)))))
 
 (ert-deftest lang-markdown/gfm-tables-cell-edit-sanitise-escapes-pipe ()
-  (skip-unless (fboundp 'gfm-tables--cell-edit-sanitise))
   (with-temp-buffer
     (insert "a|b")
     (gfm-tables--cell-edit-sanitise)
     (should (equal "a\\|b" (buffer-string)))))
 
 (ert-deftest lang-markdown/gfm-tables-cell-edit-sanitise-keeps-existing-escape ()
-  (skip-unless (fboundp 'gfm-tables--cell-edit-sanitise))
   (with-temp-buffer
     (insert "a\\|b")
     (gfm-tables--cell-edit-sanitise)
     (should (equal "a\\|b" (buffer-string)))))
 
 (ert-deftest lang-markdown/gfm-tables-cell-edit-sanitise-leading-pipe ()
-  (skip-unless (fboundp 'gfm-tables--cell-edit-sanitise))
   (with-temp-buffer
     (insert "|a")
     (gfm-tables--cell-edit-sanitise)
@@ -1136,7 +1038,6 @@ region is just cell content; the trailing newline must be stripped."
 ;;; Cell bounds + active-cell highlight
 
 (ert-deftest lang-markdown/gfm-tables-cell-bounds-simple ()
-  (skip-unless (fboundp 'gfm-tables--cell-bounds))
   (with-temp-buffer
     (insert "| A | B |")
     (let ((cb (gfm-tables--cell-bounds (point-min) (point-max))))
@@ -1146,14 +1047,12 @@ region is just cell content; the trailing newline must be stripped."
       (should (eq ?| (char-after  (cdr (nth 0 cb))))))))
 
 (ert-deftest lang-markdown/gfm-tables-cell-bounds-honours-escape ()
-  (skip-unless (fboundp 'gfm-tables--cell-bounds))
   (with-temp-buffer
     (insert "| a \\| b | c |")
     (let ((cb (gfm-tables--cell-bounds (point-min) (point-max))))
       (should (= 2 (length cb))))))
 
 (ert-deftest lang-markdown/gfm-tables-cell-info-at-point ()
-  (skip-unless (fboundp 'gfm-tables-mode))
   (with-temp-buffer
     (insert "| A | B |\n| - | - |\n| 1 | 2 |\n")
     (gfm-tables-mode 1)
@@ -1165,7 +1064,6 @@ region is just cell content; the trailing newline must be stripped."
 
 (ert-deftest lang-markdown/gfm-tables-active-cell-highlight-applied ()
   "Display string carries the active-cell face after entering the row."
-  (skip-unless (fboundp 'gfm-tables-mode))
   (with-temp-buffer
     (insert "| A | B |\n| - | - |\n| 1 | 2 |\n")
     (gfm-tables-mode 1)
@@ -1186,7 +1084,6 @@ region is just cell content; the trailing newline must be stripped."
 
 (ert-deftest lang-markdown/gfm-tables-cursor-highlight-restores-off-row ()
   "Moving point out of a table restores the cursor and original display."
-  (skip-unless (fboundp 'gfm-tables-mode))
   (with-temp-buffer
     (insert "| A | B |\n| - | - |\n| 1 | 2 |\nout of table\n")
     (gfm-tables-mode 1)
@@ -1203,7 +1100,6 @@ region is just cell content; the trailing newline must be stripped."
 ;;; Header column reordering
 
 (ert-deftest lang-markdown/gfm-tables-swap-column-right-swaps ()
-  (skip-unless (fboundp 'gfm-tables-swap-column-right))
   (with-temp-buffer
     (insert "| A | B | C |\n| - | - | - |\n| 1 | 2 | 3 |\n")
     (gfm-tables-mode 1)
@@ -1221,7 +1117,6 @@ region is just cell content; the trailing newline must be stripped."
       (should (string-match-p "2.*1" body-line)))))
 
 (ert-deftest lang-markdown/gfm-tables-swap-column-left-edge-noop ()
-  (skip-unless (fboundp 'gfm-tables-swap-column-left))
   (with-temp-buffer
     (insert "| A | B |\n| - | - |\n| 1 | 2 |\n")
     (gfm-tables-mode 1)
@@ -1233,7 +1128,6 @@ region is just cell content; the trailing newline must be stripped."
       (should (equal (buffer-string) before)))))
 
 (ert-deftest lang-markdown/gfm-tables-swap-column-on-body-noop ()
-  (skip-unless (fboundp 'gfm-tables-swap-column-right))
   (with-temp-buffer
     (insert "| A | B |\n| - | - |\n| 1 | 2 |\n")
     (gfm-tables-mode 1)
@@ -1247,7 +1141,6 @@ region is just cell content; the trailing newline must be stripped."
 ;;; Cell-wise navigation
 
 (ert-deftest lang-markdown/gfm-tables-cell-forward-moves-cell ()
-  (skip-unless (fboundp 'gfm-tables-cell-forward))
   (with-temp-buffer
     (insert "| A | B | C |\n| - | - | - |\n| 1 | 2 | 3 |\n")
     (gfm-tables-mode 1)
@@ -1262,7 +1155,6 @@ region is just cell content; the trailing newline must be stripped."
         (should (= (1+ (cdr before)) (cdr after)))))))
 
 (ert-deftest lang-markdown/gfm-tables-cell-tab-wraps-to-next-row ()
-  (skip-unless (fboundp 'gfm-tables-cell-tab))
   (with-temp-buffer
     (insert "| A | B |\n| - | - |\n| 1 | 2 |\n| 3 | 4 |\n")
     (gfm-tables-mode 1)
@@ -1278,7 +1170,6 @@ region is just cell content; the trailing newline must be stripped."
                                                     (line-end-position)))))))
 
 (ert-deftest lang-markdown/gfm-tables-cell-tab-inserts-row-at-end ()
-  (skip-unless (fboundp 'gfm-tables-cell-tab))
   (with-temp-buffer
     (insert "| A | B |\n| - | - |\n| 1 | 2 |\n")
     (gfm-tables-mode 1)
@@ -1295,7 +1186,6 @@ region is just cell content; the trailing newline must be stripped."
                                                 (line-end-position)))))))
 
 (ert-deftest lang-markdown/gfm-tables-cell-backtab-wraps-to-prev-row ()
-  (skip-unless (fboundp 'gfm-tables-cell-backtab))
   (with-temp-buffer
     (insert "| A | B |\n| - | - |\n| 1 | 2 |\n| 3 | 4 |\n")
     (gfm-tables-mode 1)
@@ -1311,7 +1201,6 @@ region is just cell content; the trailing newline must be stripped."
                                                     (line-end-position)))))))
 
 (ert-deftest lang-markdown/gfm-tables-row-down-skips-delim ()
-  (skip-unless (fboundp 'gfm-tables-row-down))
   (with-temp-buffer
     (insert "| A | B |\n| - | - |\n| 1 | 2 |\n| 3 | 4 |\n")
     (gfm-tables-mode 1)
@@ -1328,7 +1217,6 @@ region is just cell content; the trailing newline must be stripped."
 
 (ert-deftest lang-markdown/gfm-tables-row-down-stops-at-table-edge ()
   "Moving down from the last row of a table does not jump into the next table."
-  (skip-unless (fboundp 'gfm-tables-row-down))
   (with-temp-buffer
     (insert "| A | B |\n| - | - |\n| 1 | 2 |\n\n"
             "Some prose here.\n\n"
@@ -1342,7 +1230,6 @@ region is just cell content; the trailing newline must be stripped."
 
 (ert-deftest lang-markdown/gfm-tables-row-up-stops-at-table-edge ()
   "Moving up from the first body row of a table stays at the header row."
-  (skip-unless (fboundp 'gfm-tables-row-up))
   (with-temp-buffer
     (insert "| A | B |\n| - | - |\n| 1 | 2 |\n\n"
             "Prose.\n\n"
@@ -1364,7 +1251,6 @@ region is just cell content; the trailing newline must be stripped."
 
 (ert-deftest lang-markdown/gfm-tables-snap-from-non-cell-point ()
   "Snap moves a non-cell point on a row line into the first cell."
-  (skip-unless (fboundp 'gfm-tables--maybe-snap-to-cell))
   (with-temp-buffer
     (insert "| A | B |\n| - | - |\n| 1 | 2 |\n")
     (gfm-tables-mode 1)
@@ -1382,7 +1268,6 @@ region is just cell content; the trailing newline must be stripped."
 
 (ert-deftest lang-markdown/gfm-tables-snap-noop-when-in-cell ()
   "Snap leaves point alone when already inside a cell range."
-  (skip-unless (fboundp 'gfm-tables--maybe-snap-to-cell))
   (with-temp-buffer
     (insert "| A | B |\n| - | - |\n| 1 | 2 |\n")
     (gfm-tables-mode 1)
@@ -1395,7 +1280,6 @@ region is just cell content; the trailing newline must be stripped."
 
 (ert-deftest lang-markdown/gfm-tables-snap-skips-invisible-row ()
   "Snap is a no-op when the row line is invisible."
-  (skip-unless (fboundp 'gfm-tables--maybe-snap-to-cell))
   (with-temp-buffer
     (insert "| A | B |\n| - | - |\n| 1 | 2 |\n")
     (gfm-tables-mode 1)
@@ -1421,7 +1305,6 @@ region is just cell content; the trailing newline must be stripped."
 ;;; Mode lifecycle
 
 (ert-deftest lang-markdown/gfm-tables-mode-creates-overlays ()
-  (skip-unless (fboundp 'gfm-tables-mode))
   (with-temp-buffer
     (insert "| A | B |\n| - | - |\n| 1 | 2 |\n")
     (gfm-tables-mode 1)
@@ -1429,7 +1312,6 @@ region is just cell content; the trailing newline must be stripped."
                      (overlays-in (point-min) (point-max))))))
 
 (ert-deftest lang-markdown/gfm-tables-mode-removes-overlays ()
-  (skip-unless (fboundp 'gfm-tables-mode))
   (with-temp-buffer
     (insert "| A | B |\n| - | - |\n| 1 | 2 |\n")
     (gfm-tables-mode 1)
@@ -1438,21 +1320,18 @@ region is just cell content; the trailing newline must be stripped."
                          (overlays-in (point-min) (point-max))))))
 
 (ert-deftest lang-markdown/gfm-tables-enabled-via-gfm-mode-hook ()
-  (skip-unless (boundp 'gfm-mode-hook))
   (should (memq 'gfm-tables-mode gfm-mode-hook)))
 
 ;;; Per-rebuild width cache
 
 (ert-deftest lang-markdown/gfm-tables-width-cache-fast-path-matches-uncached ()
   "Fast path returns same width as full computation for plain strings."
-  (skip-unless (fboundp 'gfm-tables--visible-width))
   (let ((s "hello world"))
     (let ((gfm-tables--width-cache nil))
       (should (= (string-width s) (gfm-tables--visible-width s))))))
 
 (ert-deftest lang-markdown/gfm-tables-width-cache-honours-display-prop ()
   "Cached width matches uncached for cells with `display' replacements."
-  (skip-unless (fboundp 'gfm-tables--visible-width))
   (let* ((s (concat "abc" (propertize "X" 'display "yyy") "de"))
          (uncached (let ((gfm-tables--width-cache nil))
                      (gfm-tables--visible-width s)))
@@ -1467,7 +1346,6 @@ region is just cell content; the trailing newline must be stripped."
   "Auto-compositions (e.g. ligatures) must not shrink visible-width.
 Overlay display strings do not run `composition-function-table', so
 counting an auto-composition would under-pad the cell."
-  (skip-unless (fboundp 'gfm-tables--visible-width))
   (let ((s (concat (propertize "x" 'invisible 'gfm-test)
                    "fl"))
         (buffer-invisibility-spec '((gfm-test . t))))
@@ -1478,7 +1356,6 @@ counting an auto-composition would under-pad the cell."
 
 (ert-deftest lang-markdown/gfm-tables-width-cache-honours-composition-prop ()
   "Cached width matches uncached for cells with `composition' property."
-  (skip-unless (fboundp 'gfm-tables--visible-width))
   (let ((s (copy-sequence "abcXXXXXde")))
     (compose-string s 3 8 ?Y)
     (let* ((uncached (let ((gfm-tables--width-cache nil))
@@ -1489,7 +1366,6 @@ counting an auto-composition would under-pad the cell."
 
 (ert-deftest lang-markdown/gfm-tables-width-cache-honours-invisible-prop ()
   "Cached width matches uncached for cells with hidden `invisible' segments."
-  (skip-unless (fboundp 'gfm-tables--visible-width))
   (let* ((s (concat "abc" (propertize "HIDE" 'invisible 'gfm-test) "de"))
          (buffer-invisibility-spec '((gfm-test . t)))
          (uncached (let ((gfm-tables--width-cache nil))
@@ -1501,7 +1377,6 @@ counting an auto-composition would under-pad the cell."
 
 (ert-deftest lang-markdown/gfm-tables-width-cache-not-shared-across-eq-distinct-strings ()
   "Cache is `eq'-keyed; two equal-but-distinct strings do not share entries."
-  (skip-unless (fboundp 'gfm-tables--visible-width))
   (let* ((cache (make-hash-table :test 'eq))
          (gfm-tables--width-cache cache)
          (a (copy-sequence "hello"))
@@ -1512,9 +1387,6 @@ counting an auto-composition would under-pad the cell."
 
 (ert-deftest lang-markdown/gfm-tables-width-cache-substring-not-stale ()
   "A substring of a fontified cell is measured fresh, not from the parent's hit."
-  (skip-unless (and (fboundp 'gfm-tables--fontify-cell)
-                    (fboundp 'gfm-tables--visible-width)
-                    (fboundp 'markdown-mode)))
   (let* ((parent (gfm-tables--fontify-cell "hello world"))
          (cache (make-hash-table :test 'eq))
          (gfm-tables--width-cache cache)
@@ -1532,9 +1404,6 @@ counting an auto-composition would under-pad the cell."
   "Layout-based helpers produce strings/bounds equal to the legacy callers.
 Verifies the packed bounds vector matches the legacy nested-list shape
 emitted by `gfm-tables--multiline-row-char-bounds'."
-  (skip-unless (and (fboundp 'gfm-tables--row-layout)
-                    (fboundp 'gfm-tables--compose-row-from-layout)
-                    (fboundp 'gfm-tables--compose-multiline-row)))
   (dolist (role '(header body-default body-alt))
     (let* ((cells '("alpha" "beta gamma" "d"))
            (col-widths (vector 5 4 1))
@@ -1577,7 +1446,6 @@ emitted by `gfm-tables--multiline-row-char-bounds'."
 
 (ert-deftest lang-markdown/gfm-tables-scoped-edit-inside-single-table ()
   "Editing inside one table only rebuilds that table's overlays."
-  (skip-unless (fboundp 'gfm-tables-mode))
   (with-temp-buffer
     (insert "| A | B |\n| - | - |\n| 1 | 2 |\n\n"
             "| C | D |\n| - | - |\n| 3 | 4 |\n")
@@ -1600,7 +1468,6 @@ emitted by `gfm-tables--multiline-row-char-bounds'."
 
 (ert-deftest lang-markdown/gfm-tables-scoped-edit-outside-tables-noop ()
   "Editing in a region intersecting no decorated table is a no-op."
-  (skip-unless (fboundp 'gfm-tables-mode))
   (with-temp-buffer
     (insert "intro line\n\n| A | B |\n| - | - |\n| 1 | 2 |\n")
     (gfm-tables-mode 1)
@@ -1616,7 +1483,6 @@ emitted by `gfm-tables--multiline-row-char-bounds'."
 
 (ert-deftest lang-markdown/gfm-tables-scoped-edit-spans-two-tables-full-rebuild ()
   "Edit region intersecting two tables triggers a full rebuild."
-  (skip-unless (fboundp 'gfm-tables-mode))
   (with-temp-buffer
     (insert "| A | B |\n| - | - |\n| 1 | 2 |\n\n"
             "| C | D |\n| - | - |\n| 3 | 4 |\n")
@@ -1634,8 +1500,6 @@ emitted by `gfm-tables--multiline-row-char-bounds'."
 
 (ert-deftest lang-markdown/gfm-tables-scoped-edit-overlapping-fence-full-rebuild ()
   "Edit region overlapping a code-fence line triggers a full rebuild."
-  (skip-unless (and (fboundp 'gfm-tables-mode)
-                    (fboundp 'gfm-code-fences--find-blocks)))
   (with-temp-buffer
     (gfm-mode)
     (insert "```\nfenced\n```\n\n| A | B |\n| - | - |\n| 1 | 2 |\n")
@@ -1658,7 +1522,6 @@ emitted by `gfm-tables--multiline-row-char-bounds'."
   "Each window showing the buffer gets its own display-overlay set.
 Anchor overlays stay shared across windows; only display overlays
 carry a `window' restriction."
-  (skip-unless (fboundp 'gfm-tables-mode))
   (let ((buf (generate-new-buffer "*gfm-tables-test*")))
     (unwind-protect
         (progn
@@ -1694,7 +1557,6 @@ carry a `window' restriction."
 (ert-deftest lang-markdown/gfm-tables-reconcile-windows-touches-changed-only ()
   "Reconciling windows replaces only the resized window's display overlays.
 Untouched windows keep their existing display-overlay objects (eq)."
-  (skip-unless (fboundp 'gfm-tables--reconcile-windows))
   (let ((buf (generate-new-buffer "*gfm-tables-reconcile-test*")))
     (unwind-protect
         (progn
@@ -1738,7 +1600,6 @@ Untouched windows keep their existing display-overlay objects (eq)."
 Per-window display overlays let two windows render the same buffer at
 different widths; the cell-edit highlight should only affect the
 window holding point."
-  (skip-unless (fboundp 'gfm-tables-mode))
   (let ((buf (generate-new-buffer "*gfm-tables-hl-test*")))
     (unwind-protect
         (progn
@@ -1768,7 +1629,6 @@ window holding point."
 
 (ert-deftest lang-markdown/gfm-tables-window-config-change-wired-to-full-rebuild ()
   "`window-configuration-change-hook' is wired to the full-rebuild scheduler."
-  (skip-unless (fboundp 'gfm-tables-mode))
   (with-temp-buffer
     (insert "| A | B |\n| - | - |\n| 1 | 2 |\n")
     (gfm-tables-mode 1)
@@ -1779,7 +1639,6 @@ window holding point."
 
 (ert-deftest lang-markdown/gfm-tables-block-visible-p ()
   "`gfm-tables--block-visible-p' detects overlap with any window range."
-  (skip-unless (fboundp 'gfm-tables--block-visible-p))
   (let ((block '(100 110 120 200)))
     ;; Block fully inside a single range.
     (should (gfm-tables--block-visible-p block '((50 . 250))))
@@ -1797,7 +1656,6 @@ window holding point."
 
 (ert-deftest lang-markdown/gfm-tables-schedule-full-rebuild-noop-when-window-state-unchanged ()
   "Full-rebuild scheduler is a no-op when the window state is unchanged."
-  (skip-unless (fboundp 'gfm-tables-mode))
   (with-temp-buffer
     (insert "| A | B |\n| - | - |\n| 1 | 2 |\n")
     (gfm-tables-mode 1)
@@ -1818,7 +1676,6 @@ window holding point."
 
 (ert-deftest lang-markdown/gfm-tables-phase-totals-non-negative-and-bounded ()
   "Phase totals are non-negative and sum to ≤ recorded total-time."
-  (skip-unless (fboundp 'gfm-tables-mode))
   (with-temp-buffer
     (insert "| A | B |\n| - | - |\n| 1 | 2 |\n| 3 | 4 |\n")
     (gfm-tables-mode 1)
@@ -1834,7 +1691,6 @@ window holding point."
 
 (ert-deftest lang-markdown/gfm-tables-phase-totals-include-required-keys ()
   "Phase totals include all five keys required by the spec."
-  (skip-unless (fboundp 'gfm-tables-mode))
   (with-temp-buffer
     (insert "| A |\n| - |\n| 1 |\n")
     (gfm-tables-mode 1)
