@@ -107,6 +107,51 @@ change.
 
 **Verification task:** reproduce the hang on a representative buffer, confirm guard alone is insufficient, confirm per-window rendering eliminates the residual storm.  Documents whether both halves of the joint fix were needed.
 
+**Verification result (2026-05-07):** Reproduced on a 364-line, 13.5KB markdown
+buffer with 20 fenced blocks (longest line 166 chars) in a 107-col tty frame.
+`C-x 3` halves the window to ~53 cols, forcing every body line through the
+overflow path.  CPU sat at ~10% (not the 100% one-core peg of a tight elisp
+loop) and `toggle-debug-on-quit` + `C-g` caught the engine inside
+`gfm-code-fences--apply-bordered-block` → `--right-after` → `propertize` —
+i.e. mid-rebuild, not stuck spinning in `--simulate-wrap`.
+
+**Conclusion (revised 2026-05-08):** Bisected by stripping rendering back
+to a minimal baseline and re-adding features one at a time.  All steps
+worked — including per-window restriction, top/bottom borders, overflow
+path, and `cursor-intangible-mode` — until the rebuild scheduler was
+wired to `window-configuration-change-hook`.  Adding a runaway-detector
+to the body-line loop revealed the actual fault: `(forward-line 1)`,
+called inside the body-overlay creation loop, was failing to advance
+the point past a specific buffer position (a 4-space-indented body line
+at position 749 in the repro buffer).  The loop spun in place,
+re-creating overlays at the same position, and the consequent redisplay
+churn produced the hang.  In a static test from the same position
+`forward-line` advanced normally — the failure was specific to the
+overlay-creation context (almost certainly an interaction with
+`cursor-intangible-mode` and our overlays' `cursor`/`display`
+text properties, which Emacs's motion code consults).
+
+**Real fix:** body-overlay loops now iterate via explicit text-position
+math (`(setq p (1+ (line-end-position)))`) instead of `forward-line`.
+Three loops were affected:
+
+- `gfm-code-fences--apply-bordered-display` body-line loop
+- `gfm-code-fences--apply-indent-anchors` body-line loop
+- `gfm-code-fences--apply-indent-display` body-line loop
+
+The `--simulate-wrap` clamp and per-window rendering remain in the
+change.  Both are correct and useful — the clamp is genuine defensive
+coding for the dormant infinite-loop class, and per-window rendering
+fixes the multi-window-different-width correctness concern.  Neither
+caused the hang.  The hang was a `forward-line` interaction that no
+amount of caching, scoped rebuild, or window-state diffing could have
+addressed; only the loop-iteration mechanism mattered.
+
+A bisect-CSI profile of a window rotate after the fix confirmed
+`gfm-code-fences--rebuild` runs at ≪1% of timer-event-handler cost —
+the fence work is no longer measurable next to the surrounding ecosystem
+(which-key, doom-modeline, redisplay).
+
 ### D7. Performance instrumentation: mirror tables, with adapted phase keys
 
 **Decision:** Add `gfm-code-fences-stats` command, per-buffer rebuild count / total / last / max time, and per-phase totals.  Phase keys named for fences' work shape:

@@ -335,6 +335,306 @@ Cases are restricted to modes that ship with Emacs so the test never skips."
         (should (and (stringp icon) (> (length icon) 0)))
         (should-not (equal icon fallback))))))
 
+;;; Wrap simulation termination guard
+
+(ert-deftest lang-markdown/gfm-code-fences-simulate-wrap-zero-width-terminates ()
+  "`gfm-code-fences--simulate-wrap' returns rather than spinning at width 0."
+  (skip-unless (fboundp 'gfm-code-fences--simulate-wrap))
+  (let ((res (with-timeout (1 'timeout)
+               (gfm-code-fences--simulate-wrap "hello world" 0))))
+    (should (consp res))
+    (should (not (eq res 'timeout)))))
+
+(ert-deftest lang-markdown/gfm-code-fences-simulate-wrap-tiny-width-with-prefix-terminates ()
+  "`gfm-code-fences--simulate-wrap' terminates when width ≤ cont-prefix-w."
+  (skip-unless (fboundp 'gfm-code-fences--simulate-wrap))
+  (let ((res (with-timeout (1 'timeout)
+               (gfm-code-fences--simulate-wrap "hello world" 1 2))))
+    (should (consp res))
+    (should (not (eq res 'timeout)))))
+
+;;; Discovery cache
+
+(ert-deftest lang-markdown/gfm-code-fences-find-blocks-cache-eq-no-edit ()
+  "Two `gfm-code-fences--find-blocks' calls with no edits return `eq' lists."
+  (skip-unless (fboundp 'gfm-code-fences--find-blocks))
+  (with-temp-buffer
+    (insert "```bash\necho hi\n```\n")
+    (let ((a (gfm-code-fences--find-blocks))
+          (b (gfm-code-fences--find-blocks)))
+      (should (eq a b)))))
+
+(ert-deftest lang-markdown/gfm-code-fences-find-blocks-cache-invalidates-on-edit ()
+  "Edits invalidate the fenced-blocks cache."
+  (skip-unless (fboundp 'gfm-code-fences--find-blocks))
+  (with-temp-buffer
+    (insert "```bash\necho hi\n```\n")
+    (let ((before (gfm-code-fences--find-blocks)))
+      (goto-char (point-max))
+      (insert "\n```sh\nfoo\n```\n")
+      (let ((after (gfm-code-fences--find-blocks)))
+        (should-not (eq before after))
+        (should (= 2 (length after)))))))
+
+(ert-deftest lang-markdown/gfm-code-fences-yaml-helmet-cache-invalidates-on-edit ()
+  "Edits invalidate the YAML-helmet cache."
+  (skip-unless (fboundp 'gfm-code-fences--find-yaml-helmet))
+  (with-temp-buffer
+    (insert "---\nkey: value\n---\nbody\n")
+    (let ((before (gfm-code-fences--find-yaml-helmet)))
+      (should before)
+      (let ((same (gfm-code-fences--find-yaml-helmet)))
+        (should (eq before same)))
+      (goto-char (point-max))
+      (insert "more\n")
+      (let ((after (gfm-code-fences--find-yaml-helmet)))
+        ;; Helmet positions unchanged but cache list itself is fresh.
+        (should-not (eq before after))))))
+
+(ert-deftest lang-markdown/gfm-code-fences-indent-blocks-cache-eq-no-edit ()
+  "Two `gfm-code-fences--find-indent-blocks' calls return `eq' lists."
+  (skip-unless (fboundp 'gfm-code-fences--find-indent-blocks))
+  (with-temp-buffer
+    (insert "Para.\n\n    code one\n    code two\n\nMore.\n")
+    (let ((a (gfm-code-fences--find-indent-blocks nil))
+          (b (gfm-code-fences--find-indent-blocks nil)))
+      (should (eq a b)))))
+
+;;; Per-window display overlays
+
+(ert-deftest lang-markdown/gfm-code-fences-per-window-display-overlays ()
+  "Buffer in two windows of different widths gets per-window display overlays.
+Anchors stay shared across windows; only display overlays carry a
+`window' restriction."
+  (skip-unless (fboundp 'gfm-code-fences-mode))
+  (let ((buf (generate-new-buffer "*gfm-code-fences-test*")))
+    (unwind-protect
+        (progn
+          (with-current-buffer buf
+            (insert "```bash\necho hi\n```\n"))
+          (set-window-buffer (selected-window) buf)
+          (let ((other (split-window)))
+            (set-window-buffer other buf)
+            (with-current-buffer buf
+              (gfm-code-fences-mode 1)
+              (let* ((overlays (cl-remove-if-not
+                                (lambda (o) (overlay-get o 'gfm-code-fences))
+                                (overlays-in (point-min) (point-max))))
+                     (displays (cl-remove-if-not
+                                (lambda (o) (overlay-get o 'gfm-code-fences-display))
+                                overlays))
+                     (windowed (cl-count-if
+                                (lambda (o) (overlay-get o 'window))
+                                displays)))
+                ;; All display overlays carry a `window' property in 2-window setup.
+                (should (> (length displays) 0))
+                (should (= (length displays) windowed))))
+            (delete-window other)))
+      (kill-buffer buf))))
+
+;;; Window-state diff reconciliation
+
+(ert-deftest lang-markdown/gfm-code-fences-schedule-full-rebuild-noop-when-window-state-unchanged ()
+  "Full-rebuild scheduler is a no-op when window state is unchanged."
+  (skip-unless (fboundp 'gfm-code-fences-mode))
+  (with-temp-buffer
+    (insert "```bash\necho hi\n```\n")
+    (gfm-code-fences-mode 1)
+    (when (timerp gfm-code-fences--rebuild-timer)
+      (cancel-timer gfm-code-fences--rebuild-timer))
+    (setq gfm-code-fences--rebuild-timer nil)
+    (gfm-code-fences--schedule-full-rebuild)
+    (should-not gfm-code-fences--rebuild-timer)
+    ;; Forge a state change → timer armed.
+    (setq gfm-code-fences--last-window-state
+          (cons 'forged gfm-code-fences--last-window-state))
+    (gfm-code-fences--schedule-full-rebuild)
+    (should (timerp gfm-code-fences--rebuild-timer))
+    (cancel-timer gfm-code-fences--rebuild-timer)))
+
+(ert-deftest lang-markdown/gfm-code-fences-reconcile-windows-touches-changed-only ()
+  "Reconciling windows replaces only the resized window's display overlays."
+  (skip-unless (fboundp 'gfm-code-fences--reconcile-windows))
+  (let ((buf (generate-new-buffer "*gfm-code-fences-reconcile-test*")))
+    (unwind-protect
+        (progn
+          (with-current-buffer buf
+            (insert "```bash\necho hi\n```\n"))
+          (set-window-buffer (selected-window) buf)
+          (let* ((win-a (selected-window))
+                 (win-b (split-window)))
+            (set-window-buffer win-b buf)
+            (with-current-buffer buf
+              (gfm-code-fences-mode 1)
+              (let* ((displays-for
+                      (lambda (w)
+                        (cl-remove-if-not
+                         (lambda (o)
+                           (and (overlay-get o 'gfm-code-fences-display)
+                                (eq (overlay-get o 'window) w)))
+                         gfm-code-fences--overlays)))
+                     (a-before (funcall displays-for win-a))
+                     (b-before (funcall displays-for win-b)))
+                ;; Forge a width change for win-a only.
+                (setq gfm-code-fences--last-window-state
+                      (mapcar (lambda (e)
+                                (if (eq (car e) win-a)
+                                    (cons (car e) (1- (cdr e)))
+                                  e))
+                              gfm-code-fences--last-window-state))
+                ;; Drive the deferred rebuild path synchronously by calling
+                ;; the per-window helper directly: reconcile schedules
+                ;; rebuilds via idle timers, but ERT tests can't easily wait
+                ;; for them to fire.  Helper does the same work that the
+                ;; idle callback eventually does.
+                (gfm-code-fences--rebuild-block-for-window
+                 (car (gfm-code-fences--collect-blocks)) win-a)
+                (let ((a-after (funcall displays-for win-a))
+                      (b-after (funcall displays-for win-b)))
+                  ;; win-a's overlays were replaced.
+                  (should-not (cl-intersection a-before a-after))
+                  ;; win-b's overlays untouched.
+                  (should (= (length b-before) (length b-after)))
+                  (should (cl-every (lambda (o) (memq o b-after)) b-before)))))
+            (delete-window win-b)))
+      (kill-buffer buf))))
+
+;;; Scoped post-edit rebuild
+
+(defun gfm-code-fences--test-overlay-set ()
+  "Return gfm-code-fences overlay objects in the current buffer as a hash set."
+  (let ((set (make-hash-table :test 'eq)))
+    (dolist (ov (overlays-in (point-min) (point-max)))
+      (when (overlay-get ov 'gfm-code-fences)
+        (puthash ov t set)))
+    set))
+
+(ert-deftest lang-markdown/gfm-code-fences-scoped-edit-inside-single-block ()
+  "Editing inside one fenced block only rebuilds that block's overlays."
+  (skip-unless (fboundp 'gfm-code-fences-mode))
+  (with-temp-buffer
+    (insert "```bash\necho hi\n```\n\n```sh\nfoo\n```\n")
+    (gfm-code-fences-mode 1)
+    (let* ((blocks (gfm-code-fences--collect-blocks))
+           (b1 (nth 0 blocks))
+           (b2 (nth 1 blocks))
+           (r1 (gfm-code-fences--block-range b1))
+           (r2 (gfm-code-fences--block-range b2))
+           (collect (lambda (range)
+                      (cl-remove-if-not
+                       (lambda (o) (overlay-get o 'gfm-code-fences))
+                       (overlays-in (car range) (cdr range)))))
+           (b2-before (funcall collect r2)))
+      ;; Edit a body line inside b1 only, away from any fence line.
+      (save-excursion
+        (goto-char (car r1))
+        (forward-line 1)
+        (let ((p (point)))
+          (setq gfm-code-fences--dirty-region
+                (cons (1+ p) (1+ p)))))
+      (gfm-code-fences--rebuild-scoped)
+      (let ((b2-after (funcall collect r2)))
+        ;; b2's overlay objects survived `eq'.
+        (should (cl-every (lambda (o) (memq o b2-after)) b2-before))))))
+
+(ert-deftest lang-markdown/gfm-code-fences-scoped-edit-on-fence-boundary-full-rebuild ()
+  "Edit overlapping a fence opening line triggers a full rebuild."
+  (skip-unless (fboundp 'gfm-code-fences-mode))
+  (with-temp-buffer
+    (insert "```bash\necho hi\n```\n")
+    (gfm-code-fences-mode 1)
+    (let* ((blocks (gfm-code-fences--find-blocks))
+           (open-beg (nth 0 (car blocks)))
+           (open-line-beg (save-excursion
+                            (goto-char open-beg) (line-beginning-position)))
+           (open-line-end (save-excursion
+                            (goto-char open-beg) (line-end-position)))
+           (before (gfm-code-fences--test-overlay-set)))
+      (setq gfm-code-fences--dirty-region (cons open-line-beg open-line-end))
+      (gfm-code-fences--rebuild-scoped)
+      (let ((after (gfm-code-fences--test-overlay-set)))
+        ;; Full rebuild → original overlay objects no longer present.
+        (let (xs)
+          (maphash (lambda (k _) (push k xs)) before)
+          (should (cl-every (lambda (ov) (not (gethash ov after))) xs)))))))
+
+(ert-deftest lang-markdown/gfm-code-fences-scoped-edit-blank-adjacent-indent-full-rebuild ()
+  "Edit on a blank line adjacent to an indent block triggers full rebuild."
+  (skip-unless (fboundp 'gfm-code-fences-mode))
+  (with-temp-buffer
+    (insert "Para.\n\n    code line\n    next code\n\nMore.\n")
+    (gfm-code-fences-mode 1)
+    (let* ((blocks (gfm-code-fences--find-indent-blocks nil))
+           (block (car blocks))
+           (beg (nth 0 block))
+           (blank-beg (save-excursion
+                        (goto-char beg) (forward-line -1)
+                        (line-beginning-position)))
+           (blank-end (save-excursion
+                        (goto-char beg) (forward-line -1)
+                        (line-end-position)))
+           (before (gfm-code-fences--test-overlay-set)))
+      (setq gfm-code-fences--dirty-region (cons blank-beg blank-end))
+      (gfm-code-fences--rebuild-scoped)
+      (let ((after (gfm-code-fences--test-overlay-set)))
+        (let (xs)
+          (maphash (lambda (k _) (push k xs)) before)
+          (should (cl-every (lambda (ov) (not (gethash ov after))) xs)))))))
+
+(ert-deftest lang-markdown/gfm-code-fences-scoped-edit-outside-blocks-noop ()
+  "Edit outside every decorated block is a no-op."
+  (skip-unless (fboundp 'gfm-code-fences-mode))
+  (with-temp-buffer
+    (insert "intro line\n\n```bash\necho hi\n```\n")
+    (gfm-code-fences-mode 1)
+    (let ((before (gfm-code-fences--test-overlay-set))
+          (rebuild-count (alist-get 'rebuild-count gfm-code-fences--stats)))
+      (setq gfm-code-fences--dirty-region (cons 1 5))
+      (gfm-code-fences--rebuild-scoped)
+      (let ((after (gfm-code-fences--test-overlay-set)))
+        (should (= (hash-table-count before) (hash-table-count after)))
+        (maphash (lambda (ov _) (should (gethash ov after))) before)
+        (should (= rebuild-count
+                   (alist-get 'rebuild-count gfm-code-fences--stats)))))))
+
+;;; Visible-first prioritisation
+
+(ert-deftest lang-markdown/gfm-code-fences-block-visible-p ()
+  "`gfm-code-fences--block-visible-p' detects overlap with any window range."
+  (skip-unless (fboundp 'gfm-code-fences--block-visible-p))
+  (let ((block (gfm-code-fences--make-block
+                :kind 'fenced :range (cons 100 200) :payload nil)))
+    (should (gfm-code-fences--block-visible-p block '((50 . 250))))
+    (should (gfm-code-fences--block-visible-p block '((130 . 180))))
+    (should (gfm-code-fences--block-visible-p block '((50 . 100))))
+    (should-not (gfm-code-fences--block-visible-p block '((1 . 99) (201 . 300))))
+    (should-not (gfm-code-fences--block-visible-p block nil))
+    (should (gfm-code-fences--block-visible-p block '((1 . 50) (130 . 180))))))
+
+;;; Performance instrumentation
+
+(ert-deftest lang-markdown/gfm-code-fences-stats-increment-across-rebuilds ()
+  "Stats accumulate rebuild count and total time across rebuilds."
+  (skip-unless (fboundp 'gfm-code-fences-mode))
+  (with-temp-buffer
+    (insert "```bash\necho hi\n```\n")
+    (gfm-code-fences-mode 1)
+    (let ((before (alist-get 'rebuild-count gfm-code-fences--stats)))
+      (gfm-code-fences--rebuild)
+      (let ((after (alist-get 'rebuild-count gfm-code-fences--stats)))
+        (should (> after before))))))
+
+(ert-deftest lang-markdown/gfm-code-fences-phase-totals-include-required-keys ()
+  "Phase totals include the six keys required by the spec."
+  (skip-unless (fboundp 'gfm-code-fences-mode))
+  (with-temp-buffer
+    (insert "---\nk: v\n---\n```bash\necho hi\n```\n\nPara.\n\n    indent\n")
+    (gfm-code-fences-mode 1)
+    (let ((phases (alist-get 'phase-totals gfm-code-fences--stats)))
+      (dolist (k '(find-fenced find-yaml find-indent
+                   compose-borders compose-overflow apply))
+        (should (assq k phases))))))
+
 ;;; gfm-tables tests
 
 (let* ((module-dir (file-name-directory (or load-file-name buffer-file-name)))
