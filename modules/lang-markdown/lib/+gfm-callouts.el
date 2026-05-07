@@ -253,8 +253,12 @@ callout has no body lines)."
           (save-excursion
             (goto-char beg)
             (while (<= (point) end)
+              ;; rear-advance so end-of-line inserts join this overlay;
+              ;; without it, a typed character at line-end shows default bg
+              ;; until the debounced rebuild fires.
               (let ((ov (make-overlay (line-beginning-position)
-                                      (line-end-position))))
+                                      (line-end-position)
+                                      nil nil t)))
                 (overlay-put ov 'face bg-face)
                 (gfm-callouts--register ov))
               (when (= (forward-line 1) 1)
