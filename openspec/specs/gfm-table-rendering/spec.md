@@ -109,6 +109,85 @@ off the box's grid.
 - **THEN** the row's closing `│` aligns with the box's right edge,
   matching the rendered visible width
 
+### Requirement: Window-fitted column widths
+
+The system SHALL cap natural column widths so the rendered box fits
+within the available character width of each window showing the
+buffer.  The available width is `window-max-chars-per-line` for the
+target window, falling back to `fill-column` and then 80 when no
+window shows the buffer.  The budget for cell content equals
+available-width minus the per-row overhead of `2` (outer pipes) +
+`2 * n-cols` (per-cell padding) + `(n-cols - 1)` (inter-cell gaps).
+
+Capping uses water-filling: columns whose natural width is at or
+below the cap stay at their natural width; columns above the cap
+are reduced to the cap.  Any integer slack remaining after capping
+is distributed `+1` at a time across capped columns until the
+budget is exhausted.  The cap floors at `1` so no column collapses
+to zero width.
+
+#### Scenario: Wide table fits a narrower window
+
+- **WHEN** a table's natural total width exceeds the window's
+  available width
+- **THEN** at least one column is reduced so that the rendered box
+  does not exceed the window's available width
+
+#### Scenario: Slack distributed to capped columns
+
+- **WHEN** capping leaves integer slack between the capped total
+  and the budget
+- **THEN** the slack is distributed `+1` to columns that were both
+  capped *and* whose natural width exceeds the cap, until exhausted
+
+#### Scenario: Narrow table preserves natural widths
+
+- **WHEN** a table's natural total width fits within the window's
+  available width
+- **THEN** every column renders at its natural max-content width
+  with no extra padding from the fit step
+
+#### Scenario: Per-window widths can differ
+
+- **WHEN** a buffer is shown in two windows of different
+  `window-max-chars-per-line`
+- **THEN** the same table may render with different per-column
+  widths in each window, each fitted to that window's budget
+
+### Requirement: Cell wrapping for capped columns
+
+The system SHALL wrap any cell whose content exceeds its column's
+fitted width across multiple visual lines.  Wrapping splits on
+whitespace runs; tokens longer than the column width are
+hard-broken at the visible-width boundary.  Text properties on the
+cell content SHALL be preserved on each wrapped piece.
+
+A row's visual height SHALL equal the tallest wrapped cell in that
+row.  Cells shorter than the row's visual height SHALL be padded
+with empty visual lines so column boundaries stay aligned across
+every visual line of the row.
+
+#### Scenario: Long cell wraps on whitespace
+
+- **WHEN** a cell contains multiple words whose combined width
+  exceeds its column's fitted width
+- **THEN** the cell renders across multiple visual lines, broken at
+  whitespace, with each visual line within the column's width
+
+#### Scenario: Long token hard-breaks
+
+- **WHEN** a cell contains a single token whose visible width
+  exceeds the column's fitted width
+- **THEN** the token is sliced into chunks each of visible-width
+  ≤ column width and rendered across the resulting visual lines
+
+#### Scenario: Row height equals tallest cell
+
+- **WHEN** one cell in a row wraps to N visual lines and other
+  cells in the same row wrap to fewer
+- **THEN** every cell in that row contributes N visual lines to
+  the rendered output, with shorter cells padded by empty lines
+
 ### Requirement: Cell-edit commit preserves the row
 
 The system SHALL preserve the surrounding table row when committing
@@ -215,22 +294,268 @@ through `customize-face`.
 - **WHEN** the active theme has `dark` background type
 - **THEN** `gfm-tables-row-alt-face` uses background `#313244` by default
 
-### Requirement: Cursor reveal
+### Requirement: Active-cell highlight
 
-The system SHALL suppress the row decoration overlay when point is
-located inside that row, exposing the underlying source for editing,
-and SHALL restore the decoration when point leaves the row.
+When point sits inside a decorated table cell, the system SHALL
+repaint the row's display overlay so the active cell's segment
+carries `gfm-tables-active-cell-face`.  The highlight SHALL track
+point: moving to a different cell repaints both the previously
+highlighted cell (restoring its original face) and the new cell.
+Leaving the table SHALL restore the original display string.
 
-#### Scenario: Entering a decorated row reveals source
+For rows that wrap to multiple visual lines, the highlight SHALL
+paint the active cell's segment on every visual line of the row,
+not just the first.
 
-- **WHEN** point moves into a row whose decoration overlay is active
-- **THEN** the overlay's display is suppressed for that row only and the
-  source line becomes visible
+The system SHALL stash the row's original `display` under
+`gfm-tables-saved-display` before painting, and SHALL restore from
+that stash on cell exit, so the restore is byte-identical to the
+pre-highlight display string.
 
-#### Scenario: Leaving a row restores decoration
+#### Scenario: Entering a cell paints it
 
-- **WHEN** point moves out of a previously-revealed row
-- **THEN** the row's decoration overlay re-applies its display
+- **WHEN** point moves into a cell of a decorated table
+- **THEN** that cell's segment of the row's display string carries
+  `gfm-tables-active-cell-face`
+
+#### Scenario: Crossing cells repaints both
+
+- **WHEN** point moves from cell A to cell B in the same row
+- **THEN** cell A's original face is restored and cell B is
+  painted with `gfm-tables-active-cell-face`, in a single repaint
+
+#### Scenario: Leaving the table restores the row
+
+- **WHEN** point moves out of every decorated table
+- **THEN** the previously highlighted row's `display` is
+  byte-identical to the value composed at the most recent rebuild
+
+#### Scenario: Highlight survives motion onto the same cell
+
+- **WHEN** a command moves point but leaves it on the same cell as
+  before
+- **THEN** no display repaint runs (the highlight key is unchanged)
+
+#### Scenario: Highlight spans every visual line of a wrapped row
+
+- **WHEN** the active cell occupies a row whose source spans
+  multiple visual lines
+- **THEN** the active-cell highlight paints each visual line of
+  that cell, not just the first
+
+### Requirement: Cursor anchoring inside cells
+
+While point is inside a decorated table cell, the system SHALL
+suppress the visible buffer cursor by setting `cursor-type` to nil
+buffer-locally, and SHALL place a `cursor` text property on the
+first character of the active cell's source range so the terminal
+cursor anchors there rather than at the right edge of the overlay's
+display range.
+
+The system SHALL stash the previous `cursor-type` value (and
+whether it was buffer-local) before suppressing, and SHALL restore
+it when point leaves every decorated table.  The active-cell face
+alone conveys cell selection while the cursor is hidden.
+
+#### Scenario: Cursor hides on entry, restores on exit
+
+- **WHEN** point moves into a decorated table cell, then later
+  moves out of every decorated table
+- **THEN** `cursor-type` is nil while inside, and on exit is
+  restored to the exact value (including local / global scope)
+  it had before entry
+
+#### Scenario: Cursor anchor moves with the active cell
+
+- **WHEN** point crosses from cell A to cell B
+- **THEN** the `cursor` text property is removed from cell A's
+  anchor position and placed on the first character of cell B's
+  source range
+
+### Requirement: Cell-entry key hints
+
+When point enters a decorated table cell, the system SHALL echo a
+single-line, transient-style summary of the cell-aware key
+bindings into the echo area.  The hint SHALL NOT be logged to
+`*Messages*` (uses `message-log-max` bound to nil).
+
+Hint groups SHALL support a `:when` predicate so a group renders
+only in contexts where its bindings apply (e.g. the column-swap
+group renders only on the header row).
+
+The hint SHALL be re-echoed only when point crosses to a different
+cell.  Motion that lands point on the same cell as before SHALL
+NOT re-echo, so the hint does not clobber a message left by another
+command (e.g. `Copied:` from cell-copy).
+
+#### Scenario: Header row shows column-swap hints
+
+- **WHEN** point enters a header-row cell
+- **THEN** the echoed hint includes the column-swap group
+
+#### Scenario: Body row hides column-swap hints
+
+- **WHEN** point enters a body-row cell
+- **THEN** the echoed hint omits the column-swap group
+
+#### Scenario: Same-cell motion does not re-echo
+
+- **WHEN** a command runs that moves point but leaves it on the
+  same cell as before
+- **THEN** the echo area is not overwritten with the hint line
+
+### Requirement: Structural cell motion
+
+Inside a decorated table, the system SHALL provide cell-wise motion
+operating on the row anchor's recorded `gfm-tables-cell-bounds`
+rather than on character positions.  Motion commands SHALL place
+point at the start of the destination cell's content range, never
+inside the column-gap or outer-pipe positions.
+
+The system SHALL provide:
+
+- forward / backward one cell within a row
+- up / down to the same column index in the adjacent row, confined
+  to the current table block (motion does not jump into a
+  neighbouring table)
+- first / last cell of the current row
+- TAB to advance to the next cell, wrapping at row end to the next
+  row's first cell, and inserting a fresh empty row when invoked
+  on the last cell of the last row
+- Shift-TAB to retreat to the previous cell, wrapping at row start
+  to the previous row's last cell
+
+#### Scenario: Cell-forward stops at row end
+
+- **WHEN** point is on the last cell of a row and the user invokes
+  cell-forward
+- **THEN** point does not move and the command returns nil
+
+#### Scenario: Row-down respects table boundary
+
+- **WHEN** point is in the last body row of one table and the user
+  invokes row-down
+- **THEN** point does not jump into a subsequent table; the command
+  returns nil
+
+#### Scenario: TAB at last cell of last row inserts a row
+
+- **WHEN** point is on the last cell of the last body row and the
+  user presses TAB
+- **THEN** a new empty row is inserted below with the same column
+  count, and point lands in its first cell
+
+### Requirement: Snap-to-cell on row entry
+
+The system SHALL move point to the start of cell 0 when point
+lands on a decorated table row but outside any cell's recorded
+bounds (e.g. on the leading `│`, a column gap, or trailing
+border).  The snap SHALL NOT fire when the row is currently
+invisible (folded outline, narrowed-out region) so motion through
+hidden text does not surface point inside hidden tables.
+
+#### Scenario: Beginning-of-line lands inside cell 0
+
+- **WHEN** the user invokes a beginning-of-line command on a
+  decorated row
+- **THEN** point lands at the first character of cell 0's content,
+  not on the leading `│`
+
+### Requirement: In-place edit commands divert to indirect editor
+
+The system SHALL divert the standard insert / append / change /
+replace / substitute / open-line family of evil commands to
+`gfm-tables-edit-table-at-point` when `evil-mode` is loaded and
+point is inside a decorated table.  The user does not type into the
+source row directly; instead the whole table opens in an indirect
+edit buffer.
+
+#### Scenario: Pressing `i` opens the indirect table editor
+
+- **WHEN** point is in a decorated table cell and the user presses
+  the key bound to `evil-insert`
+- **THEN** an indirect edit buffer opens covering the table block,
+  with `markdown-mode` and `orgtbl-mode` active, and point in the
+  indirect buffer matches the cell point was on in the source
+
+#### Scenario: Edit commands outside a table behave normally
+
+- **WHEN** point is not inside any decorated table and the user
+  invokes one of the diverted evil commands
+- **THEN** the command runs unchanged
+
+### Requirement: Cell-only indirect edit
+
+The system SHALL provide `gfm-tables-edit-cell-at-point`, which
+opens just the trimmed content of the active cell in an indirect
+edit buffer.  The indirect buffer SHALL run `markdown-mode` and
+SHALL display a header line indicating commit / abort key bindings.
+
+On commit, the system SHALL sanitise the committed content by
+replacing every embedded newline with a single space and escaping
+every unescaped `|` as `\|`, so committing cannot break the
+surrounding row's structure.
+
+#### Scenario: Newlines collapse to spaces on commit
+
+- **WHEN** the user inserts a newline inside a cell-edit buffer
+  and commits
+- **THEN** the source cell receives a single space at that position
+
+#### Scenario: Pipes are escaped on commit
+
+- **WHEN** the user types a literal `|` in a cell-edit buffer and
+  commits
+- **THEN** the source cell contains `\|`, not a structural pipe
+
+### Requirement: Whole-table indirect edit
+
+The system SHALL provide `gfm-tables-edit-table-at-point`, which
+opens the entire table block in an indirect edit buffer running
+`markdown-mode` with `orgtbl-mode` active.  Point in the indirect
+buffer SHALL start on the same cell point was on in the source.
+The committed region SHALL include the trailing newline of the last
+body row so `markdown-mode`'s edit-indirect after-commit hook does
+not append a spurious newline.
+
+After commit, point in the source buffer SHALL be moved to the cell
+point was on in the indirect buffer (matched by line offset and
+cell index).  When that point is no longer visible in the source
+window, the window SHALL recenter so the cell is on screen.
+
+#### Scenario: Point preserved across commit
+
+- **WHEN** the user moves point to a different cell inside the
+  indirect edit buffer and commits
+- **THEN** point in the source buffer lands on that same cell
+
+#### Scenario: Off-screen target recentres
+
+- **WHEN** the indirect commit's restored point lies outside the
+  source window's visible range
+- **THEN** the source window is recentred so point is visible
+
+### Requirement: Header column swap
+
+The system SHALL provide commands to swap the column at point with
+its left or right neighbour, applied symmetrically to the header
+row, the delimiter row, and every body row.  The commands SHALL be
+silent no-ops when point is not on the header row, or when the
+neighbour column index is out of range.  After swap, point SHALL
+land on the moved column's new position.
+
+#### Scenario: Swap right re-orders all rows
+
+- **WHEN** point is in column N of the header (with N+1 in range)
+  and the user invokes swap-right
+- **THEN** every row of the table has its cell N exchanged with
+  cell N+1, and point lands on the new column N+1
+
+#### Scenario: Swap on body row is a no-op
+
+- **WHEN** point is in a body row and the user invokes swap-left
+  or swap-right
+- **THEN** the table is unchanged
 
 ### Requirement: Debounced rebuild
 
