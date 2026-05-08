@@ -51,6 +51,72 @@
           ;; Should have at least 10 snippets (spec says 11)
           (should (>= count 10)))))))
 
+;;; Shared block-border lib (loaded first so consumer files can `require' it).
+
+(let* ((module-dir (file-name-directory (or load-file-name buffer-file-name)))
+       (lib-dir (expand-file-name "lib" module-dir))
+       (borders-file (expand-file-name "+gfm-block-borders.el" lib-dir)))
+  (add-to-list 'load-path lib-dir)
+  (when (file-exists-p borders-file)
+    (load borders-file nil 'nomessage)))
+
+;;; +gfm-block-borders unit tests
+
+(ert-deftest lang-markdown/gfm-block-borders-simulate-wrap-zero-width-terminates ()
+  "`gfm-block-borders--simulate-wrap' returns rather than spinning at width 0."
+  (let ((res (with-timeout (1 'timeout)
+               (gfm-block-borders--simulate-wrap "hello world" 0))))
+    (should (consp res))
+    (should (not (eq res 'timeout)))))
+
+(ert-deftest lang-markdown/gfm-block-borders-simulate-wrap-tiny-width-with-prefix-terminates ()
+  "`gfm-block-borders--simulate-wrap' terminates when width ≤ cont-prefix-w."
+  (let ((res (with-timeout (1 'timeout)
+               (gfm-block-borders--simulate-wrap "hello world" 1 2))))
+    (should (consp res))
+    (should (not (eq res 'timeout)))))
+
+(ert-deftest lang-markdown/gfm-block-borders-simulate-wrap-no-wrap-fits ()
+  "Text fitting in WIDTH does not produce wrap positions."
+  (let ((res (gfm-block-borders--simulate-wrap "hello" 80)))
+    (should (= 5 (car res)))
+    (should-not (cdr res))))
+
+(ert-deftest lang-markdown/gfm-block-borders-simulate-wrap-breaks-at-space ()
+  "Wrap chooses the last space within the line slice."
+  (let ((res (gfm-block-borders--simulate-wrap "hello world foo" 8)))
+    ;; First line takes "hello wo" -> wrap at last space (after "hello ").
+    (should (consp (cdr res)))))
+
+(ert-deftest lang-markdown/gfm-block-borders-max-line-width-respects-indent ()
+  "`gfm-block-borders--max-line-width' subtracts INDENT per line."
+  (with-temp-buffer
+    (insert "    aaaa\n    aa\n    aaaaaa\n")
+    (should (= 6 (gfm-block-borders--max-line-width
+                  (point-min) (point-max) 4)))
+    (should (= 10 (gfm-block-borders--max-line-width
+                   (point-min) (point-max))))))
+
+(ert-deftest lang-markdown/gfm-block-borders-region-overlaps-p ()
+  (should (gfm-block-borders--region-overlaps-p '(1 . 5) '(3 . 7)))
+  (should (gfm-block-borders--region-overlaps-p '(1 . 5) '(5 . 9)))
+  (should-not (gfm-block-borders--region-overlaps-p '(1 . 4) '(5 . 9))))
+
+(ert-deftest lang-markdown/gfm-block-borders-in-ranges-p ()
+  (should (gfm-block-borders--in-ranges-p 5 '((1 . 4) (5 . 9))))
+  (should-not (gfm-block-borders--in-ranges-p 12 '((1 . 4) (5 . 9)))))
+
+(ert-deftest lang-markdown/gfm-block-borders-normalised-border-face-resets-styling ()
+  "Normalised face spec resets slant/weight/underline/etc."
+  (let ((spec (gfm-block-borders--normalised-border-face 'italic)))
+    (should (equal (plist-get spec :inherit) 'italic))
+    (should (eq (plist-get spec :slant) 'normal))
+    (should (eq (plist-get spec :weight) 'normal))
+    (should (null (plist-get spec :underline)))
+    (should (null (plist-get spec :overline)))
+    (should (null (plist-get spec :strike-through)))
+    (should (null (plist-get spec :box)))))
+
 ;;; gfm-callouts tests
 
 (let* ((module-dir (file-name-directory (or load-file-name buffer-file-name)))
@@ -191,6 +257,322 @@
                           (overlays-at (point-min)))))
       (should ov)
       (should (stringp (overlay-get ov 'display))))))
+
+;;; Block-discovery cache
+
+(ert-deftest lang-markdown/gfm-callouts-find-blocks-cache-eq-no-edit ()
+  "Two `gfm-callouts--find-blocks' calls with no edits return `eq' lists."
+  (with-temp-buffer
+    (insert "> [!NOTE]\n> Hello.\n")
+    (let ((a (gfm-callouts--find-blocks))
+          (b (gfm-callouts--find-blocks)))
+      (should (eq a b)))))
+
+(ert-deftest lang-markdown/gfm-callouts-find-blocks-cache-invalidates-on-edit ()
+  "Edits invalidate the callouts blocks cache."
+  (with-temp-buffer
+    (insert "> [!NOTE]\n> Hello.\n")
+    (let ((before (gfm-callouts--find-blocks)))
+      (goto-char (point-max))
+      (insert "\n> [!TIP]\n> More.\n")
+      (let ((after (gfm-callouts--find-blocks)))
+        (should-not (eq before after))
+        (should (= 2 (length after)))))))
+
+;;; Box-width sizing
+
+(ert-deftest lang-markdown/gfm-callouts-box-width-clamps-to-narrow-window ()
+  "A 100-col-content callout in a 60-col window clamps to 60."
+  (let ((buf (generate-new-buffer "*gfm-callouts-narrow-test*")))
+    (unwind-protect
+        (with-current-buffer buf
+          (insert "> [!NOTE]\n> "
+                  (make-string 100 ?x) "\n")
+          (gfm-callouts-mode 1)
+          (let* ((rhs-overlays
+                  (cl-remove-if-not
+                   (lambda (o)
+                     (eq (overlay-get o 'gfm-callouts-kind) 'body-rhs))
+                   (overlays-in (point-min) (point-max)))))
+            ;; A body line wider than (window-max-chars-per-line - 4) takes
+            ;; the overflow path; pad string ends in `│'.
+            (should rhs-overlays)
+            (let ((after (overlay-get (car rhs-overlays) 'after-string)))
+              (should (stringp after))
+              (should (string-match-p "│" after)))))
+      (kill-buffer buf))))
+
+;;; Wrapped right-edge alignment (overflow path)
+
+(ert-deftest lang-markdown/gfm-callouts-overflow-line-uses-overflow-after-string ()
+  "A 200-col body line wraps and the right-edge `│' lands on the wrapped row.
+With wrap-prefix `│ ' (2 cols) and box-width = text-width, the closing
+`│' must appear in the right-edge after-string of the non-last body
+line (last body line's after-string also carries the bottom border)."
+  (let ((buf (generate-new-buffer "*gfm-callouts-overflow-test*")))
+    (unwind-protect
+        (with-current-buffer buf
+          (insert "> [!NOTE]\n> " (make-string 200 ?a)
+                  "\n> trailing line.\n")
+          (gfm-callouts-mode 1)
+          (let* ((rhs-overlays
+                  (cl-remove-if-not
+                   (lambda (o)
+                     (eq (overlay-get o 'gfm-callouts-kind) 'body-rhs))
+                   (overlays-in (point-min) (point-max))))
+                 ;; First body line (200 a's) takes the overflow path; its
+                 ;; right-edge after-string is just the padded `│'.
+                 (sorted (sort (copy-sequence rhs-overlays)
+                               (lambda (a b)
+                                 (< (overlay-start a) (overlay-start b)))))
+                 (first-rhs (car sorted))
+                 (after (overlay-get first-rhs 'after-string)))
+            (should after)
+            ;; Right-edge string ends in `│' (no bottom border on this row).
+            (should (string-suffix-p "│" after))))
+      (kill-buffer buf))))
+
+;;; Per-window display overlays
+
+(ert-deftest lang-markdown/gfm-callouts-per-window-display-overlays ()
+  "Buffer in two windows of different widths gets per-window display overlays."
+  (let ((buf (generate-new-buffer "*gfm-callouts-multi-window*")))
+    (unwind-protect
+        (progn
+          (with-current-buffer buf
+            (insert "> [!NOTE]\n> Hello.\n"))
+          (set-window-buffer (selected-window) buf)
+          (let ((other (split-window)))
+            (set-window-buffer other buf)
+            (with-current-buffer buf
+              (gfm-callouts-mode 1)
+              (let* ((overlays (cl-remove-if-not
+                                (lambda (o) (overlay-get o 'gfm-callouts))
+                                (overlays-in (point-min) (point-max))))
+                     (displays (cl-remove-if-not
+                                (lambda (o)
+                                  (overlay-get o 'gfm-callouts-display))
+                                overlays))
+                     (windowed (cl-count-if
+                                (lambda (o) (overlay-get o 'window))
+                                displays)))
+                (should (> (length displays) 0))
+                (should (= (length displays) windowed))))
+            (delete-window other)))
+      (kill-buffer buf))))
+
+;;; Window-state diff reconciliation
+
+(ert-deftest lang-markdown/gfm-callouts-schedule-full-rebuild-noop-when-window-state-unchanged ()
+  "Full-rebuild scheduler is a no-op when window state is unchanged."
+  (with-temp-buffer
+    (insert "> [!NOTE]\n> Hello.\n")
+    (gfm-callouts-mode 1)
+    (when (timerp gfm-callouts--rebuild-timer)
+      (cancel-timer gfm-callouts--rebuild-timer))
+    (setq gfm-callouts--rebuild-timer nil)
+    (gfm-callouts--schedule-full-rebuild)
+    (should-not gfm-callouts--rebuild-timer)
+    (setq gfm-callouts--last-window-state
+          (cons 'forged gfm-callouts--last-window-state))
+    (gfm-callouts--schedule-full-rebuild)
+    (should (timerp gfm-callouts--rebuild-timer))
+    (cancel-timer gfm-callouts--rebuild-timer)))
+
+(ert-deftest lang-markdown/gfm-callouts-reconcile-windows-touches-changed-only ()
+  "Reconcile replaces only the resized window's display overlays."
+  (let ((buf (generate-new-buffer "*gfm-callouts-reconcile-test*")))
+    (unwind-protect
+        (progn
+          (with-current-buffer buf
+            (insert "> [!NOTE]\n> Hello.\n"))
+          (set-window-buffer (selected-window) buf)
+          (let* ((win-a (selected-window))
+                 (win-b (split-window)))
+            (set-window-buffer win-b buf)
+            (with-current-buffer buf
+              (gfm-callouts-mode 1)
+              (let* ((displays-for
+                      (lambda (w)
+                        (cl-remove-if-not
+                         (lambda (o)
+                           (and (overlay-get o 'gfm-callouts-display)
+                                (eq (overlay-get o 'window) w)))
+                         gfm-callouts--overlays)))
+                     (a-before (funcall displays-for win-a))
+                     (b-before (funcall displays-for win-b)))
+                (setq gfm-callouts--last-window-state
+                      (mapcar (lambda (e)
+                                (if (eq (car e) win-a)
+                                    (cons (car e) (1- (cdr e)))
+                                  e))
+                              gfm-callouts--last-window-state))
+                (gfm-callouts--rebuild-block-for-window
+                 (car (gfm-callouts--collect-blocks)) win-a)
+                (let ((a-after (funcall displays-for win-a))
+                      (b-after (funcall displays-for win-b)))
+                  (should-not (cl-intersection a-before a-after))
+                  (should (= (length b-before) (length b-after)))
+                  (should (cl-every (lambda (o) (memq o b-after))
+                                    b-before)))))
+            (delete-window win-b)))
+      (kill-buffer buf))))
+
+;;; Visible-first prioritisation
+
+(ert-deftest lang-markdown/gfm-callouts-block-visible-p ()
+  "`gfm-callouts--block-visible-p' detects overlap with any window range."
+  (let ((block (gfm-callouts--make-block
+                :range (cons 100 200) :payload nil)))
+    (should (gfm-callouts--block-visible-p block '((50 . 250))))
+    (should (gfm-callouts--block-visible-p block '((130 . 180))))
+    (should-not (gfm-callouts--block-visible-p block '((1 . 99) (201 . 300))))
+    (should-not (gfm-callouts--block-visible-p block nil))))
+
+;;; Scoped post-edit rebuild
+
+(defun gfm-callouts--test-overlay-set ()
+  "Return gfm-callouts overlay objects in the current buffer as a hash set."
+  (let ((set (make-hash-table :test 'eq)))
+    (dolist (ov (overlays-in (point-min) (point-max)))
+      (when (overlay-get ov 'gfm-callouts)
+        (puthash ov t set)))
+    set))
+
+(ert-deftest lang-markdown/gfm-callouts-scoped-edit-inside-single-block ()
+  "Editing inside one callout's body only rebuilds that callout."
+  (with-temp-buffer
+    (insert "> [!NOTE]\n> Hello.\n\n> [!TIP]\n> Pizza.\n")
+    (gfm-callouts-mode 1)
+    (let* ((blocks (gfm-callouts--collect-blocks))
+           (b1 (nth 0 blocks))
+           (b2 (nth 1 blocks))
+           (r1 (gfm-callouts--block-range b1))
+           (r2 (gfm-callouts--block-range b2))
+           (collect (lambda (range)
+                      (cl-remove-if-not
+                       (lambda (o) (overlay-get o 'gfm-callouts))
+                       (overlays-in (car range) (cdr range)))))
+           (b2-before (funcall collect r2)))
+      ;; Edit inside b1 body (line 2 of b1 — past the marker line).
+      (save-excursion
+        (goto-char (car r1))
+        (forward-line 1)
+        (let ((p (1+ (point))))
+          (setq gfm-callouts--dirty-region (cons p p))))
+      (gfm-callouts--rebuild-scoped)
+      (let ((b2-after (funcall collect r2)))
+        (should (cl-every (lambda (o) (memq o b2-after)) b2-before))))))
+
+(ert-deftest lang-markdown/gfm-callouts-scoped-edit-on-marker-full-rebuild ()
+  "Edit on the marker line triggers a full rebuild."
+  (with-temp-buffer
+    (insert "> [!NOTE]\n> Hello.\n")
+    (gfm-callouts-mode 1)
+    (let* ((blocks (gfm-callouts--find-blocks))
+           (marker-beg (nth 0 (car blocks)))
+           (marker-line-end (save-excursion
+                              (goto-char marker-beg) (line-end-position)))
+           (before (gfm-callouts--test-overlay-set)))
+      (setq gfm-callouts--dirty-region
+            (cons marker-beg marker-line-end))
+      (gfm-callouts--rebuild-scoped)
+      (let ((after (gfm-callouts--test-overlay-set)))
+        (let (xs)
+          (maphash (lambda (k _) (push k xs)) before)
+          (should (cl-every (lambda (ov) (not (gethash ov after))) xs)))))))
+
+(ert-deftest lang-markdown/gfm-callouts-scoped-edit-adjacent-full-rebuild ()
+  "Edit on a line adjacent to a callout triggers full rebuild."
+  (with-temp-buffer
+    (insert "preamble.\n> [!NOTE]\n> Hello.\nepilogue.\n")
+    (gfm-callouts-mode 1)
+    (let* ((blocks (gfm-callouts--find-blocks))
+           (block-beg (nth 0 (car blocks)))
+           (above-beg (save-excursion
+                        (goto-char block-beg) (forward-line -1)
+                        (line-beginning-position)))
+           (above-end (save-excursion
+                        (goto-char block-beg) (forward-line -1)
+                        (line-end-position)))
+           (before (gfm-callouts--test-overlay-set)))
+      (setq gfm-callouts--dirty-region (cons above-beg above-end))
+      (gfm-callouts--rebuild-scoped)
+      (let ((after (gfm-callouts--test-overlay-set)))
+        (let (xs)
+          (maphash (lambda (k _) (push k xs)) before)
+          (should (cl-every (lambda (ov) (not (gethash ov after))) xs)))))))
+
+(ert-deftest lang-markdown/gfm-callouts-scoped-edit-outside-blocks-noop ()
+  "Edit outside every decorated callout is a no-op."
+  (with-temp-buffer
+    (insert "intro line.\n\nmore.\n\n> [!NOTE]\n> Hello.\n")
+    (gfm-callouts-mode 1)
+    (let ((before (gfm-callouts--test-overlay-set)))
+      (setq gfm-callouts--dirty-region (cons 1 5))
+      (gfm-callouts--rebuild-scoped)
+      (let ((after (gfm-callouts--test-overlay-set)))
+        (should (= (hash-table-count before) (hash-table-count after)))
+        (maphash (lambda (ov _) (should (gethash ov after))) before)))))
+
+;;; Integration: hang regression with cursor-intangible-mode active
+
+(ert-deftest lang-markdown/gfm-callouts-coexists-with-cursor-intangible-mode ()
+  "Enabling callouts in a buffer with cursor-intangible-mode must not hang.
+Reproduces the regression where `forward-line' inside the
+overlay-creation loop stalls on cursor-intangible/display props
+when both `gfm-callouts-mode' and `gfm-code-fences-mode' are active."
+  (with-temp-buffer
+    (cursor-intangible-mode 1)
+    (dotimes (i 5)
+      (insert (format "## Section %d\n\nLead.\n\n> [!IMPORTANT]\n> Body %d line a.\n> Body %d line b.\n\n    indented code line %d\n    second indent line\n\nMore text after.\n\n"
+                      i i i i)))
+    (let ((res (with-timeout (5 'timeout)
+                 (gfm-code-fences-mode 1)
+                 (gfm-callouts-mode 1)
+                 'ok)))
+      (should (eq res 'ok))
+      (should (cl-some (lambda (o) (overlay-get o 'gfm-callouts))
+                       (overlays-in (point-min) (point-max))))
+      (should (cl-some (lambda (o) (overlay-get o 'gfm-code-fences))
+                       (overlays-in (point-min) (point-max)))))))
+
+;;; Per-window cursor reveal
+
+(ert-deftest lang-markdown/gfm-callouts-reveal-respects-window-restriction ()
+  "Reveal in window A doesn't expose source via window B's overlays."
+  (let ((buf (generate-new-buffer "*gfm-callouts-reveal-test*")))
+    (unwind-protect
+        (progn
+          (with-current-buffer buf
+            (insert "> [!NOTE]\n> Hello.\n"))
+          (set-window-buffer (selected-window) buf)
+          (let* ((win-a (selected-window))
+                 (win-b (split-window)))
+            (set-window-buffer win-b buf)
+            (with-current-buffer buf
+              (gfm-callouts-mode 1)
+              (with-selected-window win-a
+                (goto-char (point-min))
+                (gfm-callouts--reveal))
+              (let* ((revealable
+                      (cl-remove-if-not
+                       (lambda (o)
+                         (and (overlay-get o 'gfm-callouts-revealable)
+                              (= (overlay-start o) (point-min))))
+                       gfm-callouts--overlays))
+                     (a-ov (cl-find-if
+                            (lambda (o) (eq (overlay-get o 'window) win-a))
+                            revealable))
+                     (b-ov (cl-find-if
+                            (lambda (o) (eq (overlay-get o 'window) win-b))
+                            revealable)))
+                (should a-ov)
+                (should b-ov)
+                (should-not (overlay-get a-ov 'display))
+                (should (stringp (overlay-get b-ov 'display)))))
+            (delete-window win-b)))
+      (kill-buffer buf))))
 
 ;;; gfm-code-fences tests
 
