@@ -1,413 +1,133 @@
-# Presentation Sessions
+# Presentation
 
-Agent-driven presentation surface inside Emacs. Nine MCP tools let an external
-agent spawn or reuse an emacsclient frame in a target tmux pane and walk the
-user through a deck of slides. Slide kinds: `narrative` (markdown — either
-inline or backed by a real file on disk), `file` (buffer narrowed to a range),
-`diff` (`git diff` in `diff-mode`), `layout` (two-pane split). Slides may carry
-inline overlay `annotations` tied to specific lines.
-
-The default usage shape is **doc-first**: write one document with embedded code
-fences, then push annotated `file` slides for the sources the doc references.
-`present_document` encodes this convention in a single MCP call. Decks with
-multiple `narrative` slides are discouraged.
+Buffer-local minor-mode walk-through over a markdown document. Top-level H1
+headings are slides; navigation narrows to the heading region containing
+point. Markdown link forms inside the document render as inline previews
+when the mode is on, with click-to-real-buffer escape hatches.
 
 ## Files
 
-| File          | Purpose                                                 |
-| :------------ | :------------------------------------------------------ |
-| `init.el`     | MCP tool registration, hook wiring, defcustoms          |
-| `lib.el`      | Pure planning, parsers, command builders, runner, state |
-| `tests.el`    | ERT tests covering planners, parsers, state, lifecycle  |
-| `packages.eld`| Empty (no external deps)                                |
+| File           | Purpose                                                 |
+| :------------- | :------------------------------------------------------ |
+| `init.el`      | Loads `lib.el`; nothing else                            |
+| `lib.el`       | Mode, navigation, link parsing/dispatch, previews       |
+| `tests.el`     | ERT tests covering helpers, mode, links, revert, render |
+| `packages.eld` | Empty (no external deps)                                |
 
 ## External Packages
 
-None. Reuses `claude-code-ide-make-tool` from the claude module.
-
-## Architecture
-
-Tmux interaction is modelled as data. Pure planning functions return lists
-of effect records (`+presentation-effect-shell` and
-`+presentation-effect-elisp`); a single runner (`+presentation--run-effects`)
-executes them. Tests assert on emitted effects rather than running tmux.
-
-State lives in `+presentation--sessions`, a hash keyed by session-key string.
-Each entry is a plist with `:frame :origin :saved-config :tmux-pane :worktree
-:started-at`. The presentation frame additionally carries `presentation-key`
-and `presentation-origin` parameters so the `delete-frame-functions` hook can
-resolve frame → key cheaply.
+None at load time. `magit` is required only at click time on a `diff:` link;
+checked via `(require 'magit nil t)` and signals `user-error` on absence.
 
 ## API
 
-### MCP Tools
+### Public elisp surface
 
-| Tool                 | Purpose                                                  |
-| :------------------- | :------------------------------------------------------- |
-| `start_presentation` | Spawn or reuse a frame; return key                       |
-| `present_document`   | Write doc + start session with the doc as slide 0        |
-| `get_presentation`   | Inspect a session: origin, frame_live, deck position, …  |
-| `end_presentation`   | Tear down a session by key                               |
-| `push_slide`         | Append a slide; render only with `set_current: true`     |
-| `replace_slide`      | Replace deck[i]; re-render only when i is current        |
-| `truncate_after`     | Drop deck[> i]; -1 clears the deck                       |
-| `goto_slide`         | Re-render deck[i] without mutating the deck              |
-| `get_deck`           | Return key, current_slide_index, slides[]                |
+| Symbol                          | Purpose                                          |
+| :------------------------------ | :----------------------------------------------- |
+| `+present-markdown FILE`        | Open FILE and enable `+presentation-mode`        |
+| `+presentation-mode`            | Buffer-local minor mode (narrows on enable)      |
+| `+presentation-next-slide`      | Advance to next H1 (silent no-op at last)        |
+| `+presentation-previous-slide`  | Retreat to prior H1 (silent no-op at first)      |
+| `+presentation-quit`            | Disable mode; bury (or kill, when owned)         |
+| `+presentation-follow-link`     | Dispatch link at point (heading / src / diff)    |
+| `+presentation-focus-face`      | Face for focus highlight in narrowed source      |
 
-### Slide kinds
+There are no MCP tools. The single agent invocation pattern is:
 
-| Kind        | Required               | Optional                                                            |
-| :---------- | :--------------------- | :------------------------------------------------------------------ |
-| `narrative` | one of `path` `markdown` | `title`, `annotations`, `pane_layout`                              |
-| `file`      | `path`                 | `start_line`, `end_line`, `focus`, `annotations`, `pane_layout`     |
-| `diff`      | —                      | `path`, (`base`+`head`), `annotations`, `pane_layout`               |
-| `layout`    | `split`, `panes`       | `pane_layout`                                                       |
+```
+emacsclient -t -e '(+present-markdown "/abs/path/doc.md")'
+```
 
-A `narrative` slide carries exactly one of `path` (a worktree-relative or
-absolute path to a real file, opened via `find-file-noselect`) or `markdown`
-(an inline string rendered into the synthetic `*presentation: KEY*` buffer).
-Both-or-neither fails validation. `path` is the doc-first form; `markdown`
-remains useful for ephemeral / synthetic narratives.
+Tmux pane geometry is the caller's concern.
 
-`annotations` is `[{ line, text, kind?, severity?, position? }, …]`.
+### Slide model
 
-| Field      | Values                                    | Default    |
-| :--------- | :---------------------------------------- | :--------- |
-| `kind`     | `inline` / `callout` / `margin`           | `inline`   |
-| `severity` | `note` / `tip` / `warning`                | `note`     |
-| `position` | depends on `kind` (see below)             | per-kind   |
+A slide is the buffer region from one `^# ` line up to (but not including)
+the next `^# ` line, or `point-max`. Sub-headings (`^##` etc.) flow inside
+the slide; HR lines (`^---`) do not break. Heading detection ignores fenced
+code blocks (delimited by `^[ \t]*\`\`\`` lines).
 
-`position` semantics:
+### Link forms
 
-- `inline`: `before` (BOL anchor + `before-string`) / `after` (EOL anchor +
-  `after-string`, default).
-- `callout`: must be absent — callouts always anchor between the target
-  line and its successor.
-- `margin`: `left` / `right` (default `right`); `before` / `after` are
-  accepted aliases normalised to `right`.
+The follow-link command (bound to `RET` and reachable from the standard
+markdown-mode click bindings) dispatches by URL form:
 
-Severity drives a face: `+presentation-annotation-{note,tip,warning}-face`,
-each inheriting from the matching `+markdown-gfm-callout-*-face` so theme
-tweaks carry over. Callouts use the severity face on their box border and
-label; inline and margin use it on the rendered text.
-
-The file-slide `:focus` highlight uses `+presentation-focus-face`, painted
-per-line from BOL to EOL — never extends to window width.
-
-Layout `split` is `"horizontal"` / `"vertical"`; `panes` must be exactly two
-non-layout slides.
-
-`pane_layout` is `"tall"` or `"wide"`. When set, the renderer reshapes the
-target tmux window before rendering: `"tall"` selects `main-horizontal` with
-`main-pane-height 25%` (claude-code on top, presentation below);
-`"wide"` selects `main-vertical` with `main-pane-width 33%` (claude-code on
-the left, presentation on the right). Geometry switching is idempotent —
-consecutive slides with the same hint hit tmux exactly once. Slides without
-`pane_layout` leave geometry untouched.
-
-### Functions
-
-| Function                                | Purpose                                       |
+| URL form                                | Action                                        |
 | :-------------------------------------- | :-------------------------------------------- |
-| `+presentation-start`                   | Entry point invoked by `start_presentation`   |
-| `+presentation-info`                    | Entry point invoked by `get_presentation`     |
-| `+presentation-end`                     | Entry point invoked by `end_presentation`     |
-| `+presentation-deck-info`               | Entry point invoked by `get_deck`             |
-| `+presentation--coerce-slide`           | Deep alist→plist conversion for MCP payloads  |
-| `+presentation--validate-slide`         | Validate a slide spec; signal `user-error`    |
-| `+presentation--deck-push`              | Append slide; render iff `:set-current`       |
-| `+presentation--emit-nav-channel`       | Send a `claude/channel` notification          |
-| `+presentation--inject-channel-capability` | Filter-return advice payload (capability)  |
-| `+presentation--register-channel-capability` | Install the capability advice            |
-| `+presentation--deck-replace`           | Replace deck[i]; re-render iff current        |
-| `+presentation--deck-truncate`          | Drop deck[> i]; -1 clears                     |
-| `+presentation--deck-goto`              | Re-render deck[i]; set current index          |
-| `+presentation--render-slide`           | Cleanup + dispatch + display                  |
-| `+presentation--render-current`         | Render slide at current index, or splash      |
-| `+presentation--render-narrative`       | Renderer for `narrative` slides               |
-| `+presentation-present-document`        | Entry point invoked by `present_document`     |
-| `+presentation--document-path`          | Compute deterministic doc path under worktree |
-| `+presentation--validate-slug`          | Validate `present_document` slug              |
-| `+presentation--narrative-first-heading`| First markdown heading from a path            |
-| `+presentation--slide-title`            | Slide title or first-heading fallback         |
-| `+presentation--parse-slide-url`        | Parse `slide:N' URL → integer N or nil        |
-| `+presentation--parse-line-anchor-url`  | Parse `path#L<a>[-L<b>]' URL                  |
-| `+presentation--deck-find-file-slide`   | Find file slide by exact path/start/end       |
-| `+presentation--dispatch-link`          | Pure dispatch decision for a link URL         |
-| `+presentation--link-url-at-point`      | Read URL of markdown link at point            |
-| `+presentation-follow-link`             | RET command: deck-aware link follow           |
-| `+presentation--fallback-ret`           | Run RET binding without `+presentation-mode'  |
-| `+presentation--render-file`            | Renderer for `file` slides                    |
-| `+presentation--render-diff`            | Renderer for `diff` slides                    |
-| `+presentation--render-layout`          | Renderer for `layout` slides                  |
-| `+presentation--apply-annotations`      | Dispatch annotations on `:kind` to renderers  |
-| `+presentation--render-inline-annotation`  | Renderer for inline annotations            |
-| `+presentation--render-callout-annotation` | Renderer for box-drawn callout annotations |
-| `+presentation--render-margin-annotation`  | Renderer for margin annotations            |
-| `+presentation--make-border`            | Build `┌─...─┐` / `└─...─┘` border string     |
-| `+presentation--blend-toward-fg`        | Blend hex bg toward hex fg by ratio           |
-| `+presentation--cleanup-render-state`   | Delete overlays; run restorers                |
-| `+presentation--diff-argv`              | Pure planner for `git diff` argv              |
-| `+presentation--cmd-list-panes`         | Build `tmux list-panes` shell effect          |
-| `+presentation--cmd-split-window`       | Build `tmux split-window` shell effect        |
-| `+presentation--cmd-kill-pane`          | Build `tmux kill-pane` shell effect           |
-| `+presentation--parse-list-panes-output`| Parse `pane_id\tpane_tty` lines               |
-| `+presentation--diff-panes`             | New panes = after \\ before                   |
-| `+presentation--run-effects`            | Execute effect list                           |
-| `+presentation--plan-reuse`             | Plan for the reuse path                       |
-| `+presentation--plan-spawn`             | Plan for the spawn path                       |
-| `+presentation--register-session`       | Insert plist + tag frame                      |
-| `+presentation--get-session`            | Hash lookup or `user-error`                   |
-| `+presentation--make-key`               | Generate fresh session key                    |
-| `+presentation--find-frame-by-tty`      | Frame whose `'tty` parameter matches          |
-| `+presentation--find-existing-frame`    | First frame matching any pane in the window   |
-| `+presentation--make-splash-buffer`     | Build the `*presentation: KEY*` splash buffer |
-| `+presentation--frame-deleted-h`        | Hook: clear hash entry on frame deletion      |
-| `+presentation--pane-layout-effects`    | Pure planner for tmux geometry effects        |
-| `+presentation--apply-pane-layout`      | Run pane-layout effects + update session slot |
-| `+presentation--cmd-window-layout`      | Build `tmux display-message #{window_layout}` |
-| `+presentation--cmd-select-layout`      | Build `tmux select-layout` shell effect       |
-| `+presentation--enable-mode-in`         | Set session key + enable `+presentation-mode' |
-| `+presentation-next-slide`              | User command: advance the deck                |
-| `+presentation-previous-slide`          | User command: retreat the deck                |
-| `+presentation-quit`                    | User command: end the current session         |
+| `#<slug>`                               | Push mark; widen + re-narrow to enclosing H1  |
+| `<path>#L<a>` / `<path>#L<a>-L<b>`      | Push mark; `find-file`; narrow + focus        |
+| `diff:<base>...<head>[#<path>]`         | Push mark; `magit-diff-range`                 |
+| Anything else                           | Pass through to markdown-mode default         |
 
-## Deck model
+Slug equality uses `+presentation--heading-slug`: lowercase, runs of
+non-alphanumeric → single hyphen, strip ends. First heading whose slug
+matches wins.
 
-Each session plist carries `:deck` (vector of slide plists),
-`:current-slide-index` (integer or nil), and `:render-state` (per-slide
-bookkeeping: overlays, narrowing/read-only restorers). Mutations are
-expressed via `+presentation--deck-*` helpers; each calls
-`+presentation--render-current` to refresh the frame.
+### Inline previews
 
-## Render dispatch
+When the mode is on, every link in the current narrowing whose URL matches
+a previewable form is covered by an overlay whose `display` property is a
+fenced code block. Source-range previews show up to 10 lines from the file
+(with a `+N more lines · click to open` footer when truncated); diff
+previews show up to 10 lines of `git diff base...head [-- path]`. Overlays
+use `display` only — saving the buffer writes the original markdown.
 
-`+presentation--render-slide` cleans up the prior slide's render-state, runs
-`+presentation--dispatch-slide` (a `pcase` on `:kind`), then applies any
-annotations and switches the session frame to the produced buffer. Layout
-slides bypass `display-buffer`: the renderer calls `delete-other-windows` +
-`split-window` + `set-window-buffer` directly inside the session frame.
+Previews refresh on slide entry only:
 
-## Behaviors
+- `+presentation-mode` enable
+- `+presentation-next-slide` / `+presentation-previous-slide`
+- Heading-text in-doc link follow
+- After-revert (auto-revert on disk change)
 
-### Frame discovery
+There are no file-watchers or idle timers.
 
-Joins parsed `tmux list-panes` output (`pane_id`, `pane_tty`) against
-daemon frames filtered on `(frame-parameter f 'tty)`. Match → reuse;
-no match → spawn.
+### Click escapes
 
-### Reuse path
+- Source-range click: `find-file` (via `pop-to-buffer`, honouring
+  `other-window-prefix`); applies a focus overlay over the requested range
+  via `+presentation--render-narrowed-source`; sets `buffer-read-only` and
+  installs a `kill-buffer-hook` restorer; `+presentation-mode` is NOT
+  enabled in the destination.
+- Diff-range click: `(require 'magit nil t)`; on failure, signal a
+  `user-error`. On success, call `magit-diff-range "B...H"` (with file-args
+  list when scoped).
 
-1. Capture `current-window-configuration` on the matching frame.
-2. Push it to register `?P` for manual recovery (`C-x r j P`).
-3. Tag the frame with `presentation-key` / `presentation-origin 'reused`.
-4. Display the splash buffer.
+### Revert resilience
 
-### Spawn path
+While `+presentation-mode` is on, buffer-local `before-revert-hook` and
+`after-revert-hook` capture / restore narrowing context.
 
-1. `tmux list-panes` (before).
-2. `tmux split-window -h|-v -- emacsclient -t -s SOCKET`.
-3. `tmux list-panes` (after); diff against before to discover new pane.
-4. Resolve frame by tty (bounded retry).
-5. Tag frame; create + display the splash buffer.
+`before-revert-hook` records into `+presentation--revert-anchor` a plist
+with `:slug` (current H1's slug), `:index` (0-based ordinal among H1s),
+`:fingerprint` (≤80 chars starting at point), and `:window-start-offset`
+(`(- (window-start) (point))`).
 
-### Tear-down
+`after-revert-hook` restores in priority order: slug match → ordinal index
+(clamped to last H1) → first H1 → leave widened. Then it searches for the
+fingerprint inside the new narrowing to restore point and `window-start`,
+falling back to start-of-narrowing on miss. Finally it rebuilds preview
+overlays.
 
-Both origins first run `tmux select-layout -t <window> <saved-layout>` when
-the session carries a non-empty `:tmux-saved-layout` (captured by
-`start_presentation` via `tmux display-message -p '#{window_layout}'`).
-This reverses any geometry reshaping the agent did during the session.
-Restore is skipped when the saved layout is `nil` or empty.
+### Reusable narrowed-source renderer
 
-`'reused` → restore window-config, drop frame parameters, drop hash entry.
-`'created` → emit `tmux kill-pane`; the resulting frame deletion fires
-`delete-frame-functions`, which clears the hash entry.
+`+presentation--render-narrowed-source BUFFER START-LINE END-LINE
+&optional FOCUS-START FOCUS-END` is the workhorse behind source-range
+clicks. It narrows the buffer, applies one focus overlay per line bounded
+to text glyphs (no `:extend t`), sets `buffer-read-only`, and installs a
+`kill-buffer-hook` restorer. Re-applying on the same buffer first runs the
+prior restorer.
 
-### User navigation
+## Keymap
 
-The renderer enables `+presentation-mode` on every produced buffer
-(narrative, file, diff, layout pane buffers, and the splash buffer) and
-sets the buffer-local `+presentation--session-key` so navigation commands
-can resolve back to the session.
+`+presentation-mode-map` (defined via `defvar-keymap`) is installed via
+`minor-mode-overriding-map-alist` so its bindings beat evil's state maps;
+additionally registered with `evil-make-overriding-map` and
+`evil-define-key*` for `(normal motion visual)`. Keys:
 
-| Key                | Command                          |
-| :----------------- | :------------------------------- |
-| `C-n` / `C-f`      | `+presentation-next-slide`       |
-| `C-p` / `C-b`      | `+presentation-previous-slide`   |
-| `C-c q`            | `+presentation-quit`             |
-| `RET`              | `+presentation-follow-link`      |
-
-Navigation is bounded: `next-slide` at the last index and
-`previous-slide` at index 0 are silent no-ops. Mutation (push, replace,
-truncate) remains agent-only.
-
-### User-paced flow
-
-`push_slide` defaults to "append, don't disrupt": the slide is added
-to the deck but the user's currently rendered slide is unchanged. The
-opt-in `set_current: true` field is reserved for "look here now"
-moments, where the agent wants to drag the user's view to a freshly
-pushed slide. `start_presentation`'s `initial_slide` always renders so
-the user sees something on session start.
-
-User-driven navigation (`C-n` / `C-p`) emits a
-`notifications/claude/channel` event so the agent learns where the
-user is without polling. Agent-driven moves (`goto_slide`,
-`push_slide` with `set_current: true`, `replace_slide` of the current
-index) do NOT emit — the agent already knows.
-
-Notification payload:
-
-```
-method: "notifications/claude/channel"
-params.source:           "presentation"
-params.content:          "User advanced to slide 3 of 7."
-params.meta.key:         "presentation-1981"
-params.meta.current_slide: "3"
-params.meta.prior_slide:   "2"
-params.meta.kind:        "file"
-params.meta.title:       "Deck mutation helpers"
-```
-
-`meta` values are always strings; `title` is omitted when the slide
-has no `:title`. Emission is best-effort: when the MCP server is
-disconnected, when channels are not supported, or when the underlying
-sender errors, navigation still succeeds and no error is signalled.
-
-### Research-preview caveats
-
-Channel notifications require:
-
-- Claude Code v2.1.80 or later.
-- claude.ai login (API-key auth not supported).
-- Launching claude with
-  `--dangerously-load-development-channels server:claude-code-ide-mcp`
-  (the registered server name).
-
-Without these, navigation still works; channel notifications are
-silently dropped.
-
-The MCP server's initialize-response capability
-`experimental.claude/channel: {}` is registered via local `:filter-
-return` advice on `claude-code-ide-mcp--handle-initialize`. An
-upstream defcustom-based extension point is the long-term durable
-solution; the advice is the v0 implementation and degrades silently
-when the upstream symbol is unbound.
-
-### Doc-first usage and link dispatch
-
-`present_document` is the preferred entry point. It writes the supplied
-`markdown` to:
-
-```
-<worktree>/.claude/presentations/<YYYY>-<MM>-<DD>T<HH>-<MM>-<slug>.md
-```
-
-(creating `<worktree>/.claude/presentations/` when absent), then drives the
-same code path as `start_presentation` with an `initial_slide` of kind
-`narrative` carrying the doc's `:path`. Any `file_slides` array is pushed in
-order via the same code path as `push_slide`. The tool returns
-`{ key, path, slide_count }` so the agent can iterate via `Edit` on the doc;
-`find-file-noselect`-backed buffers auto-revert on disk change.
-
-Inside narrative buffers (those whose major mode derives from `markdown-mode`
-AND that carry a non-nil buffer-local `+presentation--session-key`), `RET`
-intercepts markdown-link follows. Two URL forms route through the deck:
-
-- `slide:N` → `goto_slide(N)`.
-- `path#L<start>` or `path#L<start>-L<end>` → exact match against the deck
-  (path equality after `expand-file-name` against the session's worktree;
-  `:start-line` equals `<start>`; `:end-line` equals `<end>` or `<start>`
-  when no range is given). On a match, `goto_slide(<that-index>)`. On a
-  miss, fall back to `find-file` + `goto-line` with no overlays.
-
-Both actionable branches (`goto-slide` and `find-file-fallback`) call
-`push-mark` at point of click before navigating, so the standard
-mark-pop bindings (and evil's `C-o`) return to the link.
-
-Other URL forms (`https://`, `mailto:`, plain paths without anchors) pass
-through to `markdown-mode`'s default handler. File-, diff-, and layout-pane
-buffers do NOT carry the dispatch — when conditions don't hold, `RET`
-invokes the binding it would have without `+presentation-mode`.
-
-## Testable Properties
-
-1. Command builders emit exact `argv` lists.
-2. Parser turns `pane_id\tpane_tty` lines into `((pane-id . tty) ...)`.
-3. Diff returns panes in `after` not in `before`.
-4. Runner calls `process-file` for shell effects and the thunk for elisp.
-5. Make-key returns a fresh string each call.
-6. Register-session puts plist into the hash and tags the frame.
-7. Get-session signals `user-error` on unknown key.
-8. Find-frame-by-tty matches on `(frame-parameter f 'tty)`.
-9. Plan-spawn emits, in order: list-panes, split-window, poll-elisp,
-   tag-elisp.
-10. Plan-reuse emits an elisp effect that captures and stashes the
-    window-configuration.
-11. End-reused emits `set-window-configuration` and drops state.
-12. End-created emits `kill-pane` for the recorded pane id.
-13. End on unknown key signals `user-error`.
-14. Frame-deleted hook clears matching entries by `:frame` identity;
-    no-op for frames not tracked by any session.
-15. MCP tools `start_presentation`, `get_presentation`,
-    `end_presentation`, `push_slide`, `replace_slide`, `truncate_after`,
-    `goto_slide`, `get_deck` are registered.
-16. `+presentation--validate-slide` rejects unknown kinds, missing
-    required fields, nested layout, half-specified diff range, and
-    non-positive annotation lines.
-17. `+presentation--deck-push|replace|truncate|goto` mutate the deck
-    in place; out-of-range indexes signal `user-error` with no
-    mutation.
-18. `+presentation--render-slide` deletes prior overlays + runs
-    restorers before dispatching the next slide.
-19. `+presentation--render-file` narrows to `start_line..end_line`,
-    overlays the `focus` range with the `region` face, and toggles
-    `buffer-read-only` with restore-on-leave.
-20. `+presentation--diff-argv` produces correct argv for working-tree,
-    range, and path-scoped diffs; rejects half-specified ranges.
-21. `+presentation--pane-layout-effects` returns the
-    `select-layout`+`set-window-option` argv pair for `'tall`/`'wide`
-    targeted at the session's tmux window, and emits no effects when
-    the requested layout matches the session slot.
-22. `+presentation--render-slide` runs the layout effects when the
-    slide's `:pane-layout` differs from the session slot, then writes
-    the new value into `:pane-layout` after success; slides without
-    `:pane-layout` leave both slot and tmux untouched.
-23. `+presentation--plan-spawn` and `+presentation--plan-reuse` capture
-    `#{window_layout}` into the session plist as `:tmux-saved-layout`.
-24. `+presentation-end` runs `tmux select-layout -t <window>
-    <saved-layout>` before its existing teardown step; an empty / nil
-    saved layout skips the restore without error.
-25. `+presentation-mode` keymap binds `C-n`/`C-f` to
-    `+presentation-next-slide` and `C-p`/`C-b` to
-    `+presentation-previous-slide`; commands no-op at deck ends.
-26. Renderers (`narrative`, `file`, `diff`, layout pane buffers, splash)
-    set buffer-local `+presentation--session-key` and enable
-    `+presentation-mode` on the produced buffer.
-27. `+presentation--deck-push` defaults to non-disrupting: appends the
-    slide but leaves `:current-slide-index` and the rendered buffer
-    untouched. `:set-current t` advances and renders.
-28. `push_slide` MCP tool coerces snake_case `set_current` to the
-    `:set-current` keyword arg.
-29. `+presentation--emit-nav-channel` composes a forward / backward
-    `content` string and a string-valued `meta` record (`key`,
-    `current_slide`, `prior_slide`, `kind`, optional `title`) and
-    sends a `notifications/claude/channel` event via the MCP
-    transport. Emission is best-effort: a missing or signalling
-    `claude-code-ide-mcp--send-notification` returns nil without
-    re-signalling.
-30. `+presentation-next-slide` / `+presentation-previous-slide` call
-    the emitter post-render; agent-driven mutation
-    (`+presentation--deck-goto`, `+presentation--deck-push` with
-    `:set-current`, `+presentation--deck-replace`) does not.
-31. `+presentation--inject-channel-capability` splices
-    `experimental.claude/channel: :json-empty' into the MCP
-    initialize-response without clobbering existing experimental
-    entries.
-32. `+presentation--register-channel-capability` no-ops when the
-    upstream MCP handler symbol is unbound.
-33. `+presentation-mode-map` binds `C-c q` to `+presentation-quit`.
-    The command resolves the session via the buffer-local
-    `+presentation--session-key` and calls `+presentation-end` when
-    the key references a registered session; nil keys and stale keys
-    (no entry in `+presentation--sessions`) are silent no-ops.
+| Key            | Command                          |
+| :------------- | :------------------------------- |
+| `C-n` / `C-f`  | `+presentation-next-slide`       |
+| `C-p` / `C-b`  | `+presentation-previous-slide`   |
+| `C-c q`        | `+presentation-quit`             |
+| `RET`          | `+presentation-follow-link`      |

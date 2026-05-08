@@ -1,1556 +1,715 @@
-;;; lib.el --- Presentation sessions library -*- lexical-binding: t; -*-
+;;; lib.el --- Presentation library -*- lexical-binding: t; -*-
 
 ;;; Commentary:
 
-;; Pure planners, parsers, command builders, runner, and state-store for
-;; presentation sessions.  Tmux interaction is modelled as data: planners
-;; emit lists of effect records; a single runner executes them.
+;; Buffer-local minor-mode walk-through over a markdown document.  Top-
+;; level H1 headings are slides; navigation narrows to the heading
+;; region containing point.
 
 ;;; Code:
 
 (require 'cl-lib)
-(require 'subr-x)
 
-(defgroup +presentation nil
-  "Agent-driven presentation sessions in Emacs frames."
-  :group 'tools)
+;; Forward declarations for byte-compiler.
+(defvar +presentation-mode nil)
+(defvar +presentation-mode-map)
+(declare-function evil-define-key* "evil-core")
+(declare-function evil-make-overriding-map "evil-core")
+(declare-function evil-normalize-keymaps "evil-core")
+(declare-function magit-diff-range "magit-diff")
+(declare-function markdown-follow-link-at-point "markdown-mode")
+(declare-function markdown-follow-thing-at-point "markdown-mode")
 
 ;;; Faces
 
 (defface +presentation-focus-face
-  '((((background dark))  :background "#2d3142")
-    (((background light)) :background "#e8e6df")
-    (t :inherit highlight))
-  "Face for the file-slide focus highlight.
-Painted per-line from BOL to EOL only; never extends to window width."
+  '((((class color) (min-colors 89) (background dark))
+     :background "grey20")
+    (((class color) (min-colors 89) (background light))
+     :background "grey90"))
+  "Face for focus highlight in narrowed-source previews."
   :group '+presentation)
 
-(defface +presentation-annotation-note-face
-  '((t :inherit (+markdown-gfm-callout-note-face)))
-  "Face for `note' severity presentation annotations."
-  :group '+presentation)
+;;; Heading helpers
 
-(defface +presentation-annotation-tip-face
-  '((t :inherit (+markdown-gfm-callout-tip-face)))
-  "Face for `tip' severity presentation annotations."
-  :group '+presentation)
+(defconst +presentation--fence-rx
+  (rx bol (* blank) "```")
+  "Regexp matching a markdown fenced-code-block delimiter line.")
 
-(defface +presentation-annotation-warning-face
-  '((t :inherit (+markdown-gfm-callout-warning-face)))
-  "Face for `warning' severity presentation annotations."
-  :group '+presentation)
+(defconst +presentation--h1-rx
+  (rx bol "# " (group (* nonl)) eol)
+  "Regexp matching a top-level markdown heading line.")
 
-(defconst +presentation--severity-faces
-  '(("note"    . +presentation-annotation-note-face)
-    ("tip"     . +presentation-annotation-tip-face)
-    ("warning" . +presentation-annotation-warning-face))
-  "Map annotation severity string to face symbol.")
-
-(defconst +presentation--severity-labels
-  '(("note" . "NOTE") ("tip" . "TIP") ("warning" . "WARNING"))
-  "Map annotation severity string to display label.")
-
-(defun +presentation--annotation-face (severity)
-  "Return face symbol for SEVERITY (defaults to `note')."
-  (alist-get (or severity "note") +presentation--severity-faces
-             '+presentation-annotation-note-face nil #'string=))
-
-(defun +presentation--severity-label (severity)
-  "Return display label for SEVERITY (defaults to `note')."
-  (alist-get (or severity "note") +presentation--severity-labels
-             "NOTE" nil #'string=))
-
-(defun +presentation--blend-toward-fg (bg fg ratio)
-  "Blend hex colour BG by RATIO toward hex FG; return hex string."
-  (require 'color)
-  (let ((bg-rgb (color-name-to-rgb bg))
-        (fg-rgb (color-name-to-rgb fg)))
-    (apply #'color-rgb-to-hex
-           (append (cl-mapcar (lambda (b f) (+ b (* ratio (- f b))))
-                              bg-rgb fg-rgb)
-                   '(2)))))
-
-(defun +presentation--make-border (width corner-l corner-r face)
-  "Build a horizontal box border of WIDTH chars using FACE.
-CORNER-L and CORNER-R are the corner characters."
-  (let ((fill (propertize (make-string (max 1 (- width 2)) ?─)
-                          'face face)))
-    (concat (propertize (string corner-l) 'face face)
-            fill
-            (propertize (string corner-r) 'face face))))
-
-(defcustom +presentation-narrative-major-mode 'gfm-mode
-  "Major mode used to render `narrative' slides."
-  :type 'function
-  :group '+presentation)
-
-(defcustom +presentation-spawn-poll-attempts 10
-  "Maximum attempts when polling for the post-split pane."
-  :type 'integer
-  :group '+presentation)
-
-(defcustom +presentation-spawn-poll-interval 0.05
-  "Seconds to wait between post-split pane polls."
-  :type 'number
-  :group '+presentation)
-
-(defvar +presentation--sessions (make-hash-table :test 'equal)
-  "Map presentation session-key (string) to plist state.")
-
-(defvar +presentation--effect-results nil
-  "Dynamic: results accumulated by `+presentation--run-effects'.
-Each elisp thunk runs with this bound to the list of prior results
-in execution order.  Used to thread shell-output through orchestration.")
-
-;;; Effect records
-
-(cl-defstruct +presentation-effect-shell
-  "Shell command to execute.  ARGV is a list of strings (no shell quoting)."
-  argv)
-
-(cl-defstruct +presentation-effect-elisp
-  "Internal state mutation.  THUNK is a zero-arg function."
-  thunk)
-
-;;;###autoload
-(defun +presentation--run-effects (effects)
-  "Execute EFFECTS in order; return collected results.
-Shell effects are dispatched via `process-file'; elisp effects call
-their thunk.  Each elisp thunk runs with `+presentation--effect-results'
-dynamically bound to the list of prior results."
-  (let ((+presentation--effect-results nil))
-    (dolist (e effects)
-      (let ((result
-             (cond
-              ((+presentation-effect-shell-p e)
-               (let ((argv (+presentation-effect-shell-argv e)))
-                 (with-temp-buffer
-                   (apply #'process-file (car argv) nil t nil (cdr argv))
-                   (buffer-string))))
-              ((+presentation-effect-elisp-p e)
-               (funcall (+presentation-effect-elisp-thunk e)))
-              (t (error "Unknown effect: %S" e)))))
-        (setq +presentation--effect-results
-              (append +presentation--effect-results (list result)))))
-    +presentation--effect-results))
-
-;;; Tmux command builders (pure)
-
-(defun +presentation--cmd-list-panes (sess win)
-  "Build a `tmux list-panes' effect targeting SESS:WIN.
-Output format is `pane_id\\tpane_tty'."
-  (make-+presentation-effect-shell
-   :argv (list "tmux" "list-panes"
-               "-t" (format "%s:%s" sess win)
-               "-F" "#{pane_id}\t#{pane_tty}")))
-
-(defun +presentation--cmd-split-window (sess win split socket)
-  "Build a `tmux split-window' effect for SESS:WIN with SPLIT direction.
-SPLIT is the symbol `horizontal' or `vertical'.  The new pane runs
-`emacsclient -t -s SOCKET'."
-  (make-+presentation-effect-shell
-   :argv (list "tmux" "split-window"
-               (pcase split
-                 ('horizontal "-h")
-                 ('vertical "-v")
-                 (_ (error "Unknown split direction: %S" split)))
-               "-t" (format "%s:%s" sess win)
-               "--" "emacsclient" "-t" "-s" socket)))
-
-(defun +presentation--cmd-kill-pane (pane-id)
-  "Build a `tmux kill-pane' effect for PANE-ID."
-  (make-+presentation-effect-shell
-   :argv (list "tmux" "kill-pane" "-t" pane-id)))
-
-(defun +presentation--cmd-window-layout (sess win)
-  "Build a `tmux display-message -p #{window_layout}' effect for SESS:WIN."
-  (make-+presentation-effect-shell
-   :argv (list "tmux" "display-message" "-p"
-               "-t" (format "%s:%s" sess win)
-               "#{window_layout}")))
-
-(defun +presentation--cmd-select-layout (sess win layout)
-  "Build a `tmux select-layout LAYOUT' effect targeting SESS:WIN."
-  (make-+presentation-effect-shell
-   :argv (list "tmux" "select-layout"
-               "-t" (format "%s:%s" sess win)
-               layout)))
-
-(defun +presentation--pane-layout-effects (desired current tmux-session tmux-window)
-  "Return effects that reshape DESIRED on tmux TMUX-SESSION:TMUX-WINDOW.
-DESIRED and CURRENT are `tall', `wide', or nil.  Returns nil when the
-layouts already match (or DESIRED is nil)."
-  (when (and desired (not (eq desired current)))
-    (let ((target (format "%s:%s" tmux-session tmux-window)))
-      (pcase desired
-        ('tall
-         (list
-          (+presentation--cmd-select-layout tmux-session tmux-window
-                                            "main-horizontal")
-          (make-+presentation-effect-shell
-           :argv (list "tmux" "set-window-option"
-                       "-t" target "main-pane-height" "25%"))))
-        ('wide
-         (list
-          (+presentation--cmd-select-layout tmux-session tmux-window
-                                            "main-vertical")
-          (make-+presentation-effect-shell
-           :argv (list "tmux" "set-window-option"
-                       "-t" target "main-pane-width" "33%"))))
-        (_ (error "Unknown pane layout: %S" desired))))))
-
-(defun +presentation--parse-list-panes-output (output)
-  "Parse OUTPUT of `tmux list-panes -F #{pane_id}\\t#{pane_tty}'.
-Return alist `((PANE-ID . TTY) ...)' in input order."
-  (delq nil
-        (mapcar (lambda (line)
-                  (let ((parts (split-string line "\t" t)))
-                    (when (= (length parts) 2)
-                      (cons (nth 0 parts) (nth 1 parts)))))
-                (split-string (or output "") "\n" t))))
-
-(defun +presentation--diff-panes (before after)
-  "Return entries in AFTER whose pane-id is not in BEFORE.
-BEFORE and AFTER are alists `((PANE-ID . TTY) ...)'."
-  (cl-remove-if (lambda (p) (assoc (car p) before)) after))
-
-;;; State store
-
-(defun +presentation--make-key ()
-  "Return a fresh, unique session-key string."
-  (symbol-name (gensym "presentation-")))
-
-(defun +presentation--register-session (key plist)
-  "Store PLIST under KEY in `+presentation--sessions' and tag the frame.
-Sets the frame parameters `presentation-key' and `presentation-origin'."
-  (puthash key plist +presentation--sessions)
-  (when-let* ((frame (plist-get plist :frame)))
-    (when (frame-live-p frame)
-      (modify-frame-parameters
-       frame
-       `((presentation-key . ,key)
-         (presentation-origin . ,(plist-get plist :origin))))))
-  plist)
-
-(defun +presentation--get-session (key)
-  "Return the session plist for KEY or signal a `user-error'."
-  (or (gethash key +presentation--sessions)
-      (user-error "Unknown presentation session key: %s" key)))
-
-;;; Frame discovery
-
-(defun +presentation--find-frame-by-tty (tty)
-  "Return the first daemon frame whose `tty' parameter equals TTY."
-  (cl-find-if (lambda (f) (equal (frame-parameter f 'tty) tty))
-              (frame-list)))
-
-(defun +presentation--find-existing-frame (panes)
-  "Return the first frame whose tty matches a pane in PANES, or nil.
-PANES is an alist `((PANE-ID . TTY) ...)'."
-  (cl-some (lambda (p) (+presentation--find-frame-by-tty (cdr p)))
-           panes))
-
-;;; Splash buffer & rendering
-
-(defun +presentation--make-splash-buffer (key worktree)
-  "Create and return the `*presentation: KEY*' buffer.
-The buffer contains the session key, WORKTREE path, start time, and a
-placeholder line indicating no slide has yet been pushed."
-  (let ((buf (get-buffer-create (format "*presentation: %s*" key))))
-    (with-current-buffer buf
-      (let ((inhibit-read-only t))
-        (erase-buffer)
-        (insert (format "Presentation session %s\n" key))
-        (insert (format "Worktree: %s\n" worktree))
-        (insert (format-time-string "Started: %F %T\n"))
-        (insert "\nAwaiting first slide…\n")))
-    buf))
-
-(defun +presentation--narrative-buffer (key)
-  "Return (creating if needed) the per-session narrative buffer for KEY."
-  (get-buffer-create (format "*presentation: %s*" key)))
-
-;;; Reuse path planner
-
-(defun +presentation--plan-reuse (frame key worktree tmux-session tmux-window)
-  "Return effects that register a reuse-origin session keyed by KEY.
-FRAME is the matched daemon frame; WORKTREE is the start payload's
-worktree path.  TMUX-SESSION and TMUX-WINDOW are stashed on the session
-plist so subsequent renders can target the same window for geometry
-changes and teardown can restore the saved layout.  The plan captures
-`current-window-configuration', pushes it to register `?P', and stores
-it on the session plist."
-  (list
-   (+presentation--cmd-window-layout tmux-session tmux-window)
-   (make-+presentation-effect-elisp
-    :thunk
-    (lambda ()
-      (let ((wc (with-selected-frame frame
-                  (current-window-configuration)))
-            (saved-layout (string-trim
-                           (or (nth 0 +presentation--effect-results) ""))))
-        (set-register ?P (list 'window-configuration wc (point-marker)))
-        (+presentation--register-session
-         key
-         (list :frame frame
-               :origin 'reused
-               :saved-config wc
-               :tmux-pane nil
-               :tmux-session tmux-session
-               :tmux-window tmux-window
-               :tmux-saved-layout saved-layout
-               :worktree worktree
-               :started-at (float-time))))))))
-
-;;; Spawn path planner
-
-(defun +presentation--plan-spawn (key sess win split socket worktree)
-  "Return effects that spawn a new pane and register a created-origin session.
-KEY is the session key to assign.  SESS, WIN, SPLIT, SOCKET are passed
-to the tmux command builders.  WORKTREE is recorded on the session plist.
-
-Effects, in order:
-  1. `tmux display-message -p #{window_layout}' (saved-layout capture).
-  2. `tmux list-panes' (before snapshot — runner records output).
-  3. `tmux split-window'.
-  4. Elisp: poll `tmux list-panes' (after), diff to find the new pane,
-     resolve the corresponding frame.
-  5. Elisp: tag the frame, register the session including the captured
-     saved layout under `:tmux-saved-layout'."
-  (let ((discovered (list nil)))                 ; (PANE-ID . TTY) | nil
-    (list
-     (+presentation--cmd-window-layout sess win)
-     (+presentation--cmd-list-panes sess win)
-     (+presentation--cmd-split-window sess win split socket)
-     (make-+presentation-effect-elisp
-      :thunk
-      (lambda ()
-        (let* ((before-output (nth 1 +presentation--effect-results))
-               (before (+presentation--parse-list-panes-output before-output))
-               (new nil)
-               (attempts +presentation-spawn-poll-attempts))
-          (while (and (null new) (> attempts 0))
-            (let* ((after-output
-                    (car (+presentation--run-effects
-                          (list (+presentation--cmd-list-panes sess win)))))
-                   (after (+presentation--parse-list-panes-output after-output))
-                   (diff (+presentation--diff-panes before after)))
-              (when diff (setq new (car diff))))
-            (unless new
-              (sleep-for +presentation-spawn-poll-interval)
-              (cl-decf attempts)))
-          (setcar discovered new)
-          new)))
-     (make-+presentation-effect-elisp
-      :thunk
-      (lambda ()
-        (let* ((new (car discovered))
-               (pane-id (car-safe new))
-               (tty (cdr-safe new))
-               (frame nil)
-               (attempts +presentation-spawn-poll-attempts))
-          (unless new
-            (error "Spawn: no new pane discovered after split"))
-          (while (and (null frame) (> attempts 0))
-            (setq frame (+presentation--find-frame-by-tty tty))
-            (unless frame
-              (sleep-for +presentation-spawn-poll-interval)
-              (cl-decf attempts)))
-          (unless frame
-            (error "Spawn: no frame appeared for tty %s" tty))
-          (+presentation--register-session
-           key
-           (list :frame frame
-                 :origin 'created
-                 :saved-config nil
-                 :tmux-pane pane-id
-                 :tmux-session sess
-                 :tmux-window win
-                 :tmux-saved-layout
-                 (string-trim
-                  (or (nth 0 +presentation--effect-results) ""))
-                 :worktree worktree
-                 :started-at (float-time)))))))))
-
-;;; Top-level orchestration
-
-;;;###autoload
-(cl-defun +presentation-start (&key worktree tmux-session tmux-window
-                                    (split 'horizontal) initial-slide socket)
-  "Start a presentation session.
-Discover an emacsclient frame in TMUX-SESSION:TMUX-WINDOW (joining
-`tmux list-panes' against `(frame-parameter f \\='tty)') and either
-reuse it or spawn a new pane via `tmux split-window' with SPLIT
-direction (`horizontal' or `vertical').  WORKTREE is the originating
-worktree path.  INITIAL-SLIDE, when non-nil, is a slide plist rendered
-into the splash buffer before the frame is shown.  SOCKET overrides the
-emacsclient socket path; defaults to `server-socket-dir'/`server-name'.
-
-Return the generated session-key string."
-  (unless worktree (user-error "Missing :worktree"))
-  (unless tmux-session (user-error "Missing :tmux-session"))
-  (unless tmux-window (user-error "Missing :tmux-window"))
-  (let* ((key (+presentation--make-key))
-         (sock (or socket (+presentation--default-socket)))
-         (panes-out
-          (car (+presentation--run-effects
-                (list (+presentation--cmd-list-panes
-                       tmux-session tmux-window)))))
-         (panes (+presentation--parse-list-panes-output panes-out))
-         (existing (+presentation--find-existing-frame panes)))
-    (if existing
-        (+presentation--run-effects
-         (+presentation--plan-reuse existing key worktree
-                                    tmux-session tmux-window))
-      (+presentation--run-effects
-       (+presentation--plan-spawn key tmux-session tmux-window
-                                  split sock worktree)))
-    (+presentation--session-set key :deck [])
-    (+presentation--session-set key :current-slide-index nil)
-    (if initial-slide
-        (+presentation--deck-push key initial-slide :set-current t)
-      (+presentation--render-current key))
-    key))
-
-;;; present_document
-
-(defun +presentation--document-path (worktree slug &optional time)
-  "Return the document path under WORKTREE for SLUG at TIME.
-Form: `<worktree>/.claude/presentations/<YYYY>-<MM>-<DD>T<HH>-<MM>-<slug>.md'.
-TIME defaults to `current-time'."
-  (let ((stamp (format-time-string "%Y-%m-%dT%H-%M" (or time (current-time)))))
-    (expand-file-name
-     (format "%s-%s.md" stamp slug)
-     (expand-file-name ".claude/presentations"
-                       (directory-file-name worktree)))))
-
-(defun +presentation--validate-slug (slug)
-  "Validate SLUG; signal `user-error' on empty / `/' / whitespace.
-Returns t on success."
-  (cond
-   ((not (stringp slug))
-    (user-error "slug must be a string, got: %S" slug))
-   ((string-empty-p slug)
-    (user-error "slug must not be empty"))
-   ((string-match-p "/" slug)
-    (user-error "slug must not contain `/': %S" slug))
-   ((string-match-p "[ \t\n\r\f]" slug)
-    (user-error "slug must not contain whitespace: %S" slug))
-   (t t)))
-
-;;;###autoload
-(cl-defun +presentation-present-document (&key worktree tmux-session tmux-window
-                                               slug markdown
-                                               (split 'horizontal)
-                                               file-slides socket)
-  "Write MARKDOWN to a slug-named doc under WORKTREE; start a presentation.
-Composes: create `<worktree>/.claude/presentations/' (when missing) →
-write MARKDOWN to a deterministic ISO-stamped path → call
-`+presentation-start' with an `initial-slide' of kind `narrative' and
-that path → push each FILE-SLIDES entry via `+presentation--deck-push'.
-
-Validates SLUG and FILE-SLIDES before any side effect; rejects
-non-`file' file slides.  Returns an alist with `key', `path', and
-`slide_count' equal to `1 + (length file-slides)'."
-  (unless worktree (user-error "Missing :worktree"))
-  (unless tmux-session (user-error "Missing :tmux-session"))
-  (unless tmux-window (user-error "Missing :tmux-window"))
-  (unless (stringp markdown) (user-error "Missing :markdown"))
-  (+presentation--validate-slug slug)
-  (let ((slides (append file-slides nil)))
-    (dolist (s slides)
-      (unless (equal (plist-get s :kind) "file")
-        (user-error
-         "file_slides entries must have kind=\"file\", got: %S"
-         (plist-get s :kind)))
-      (+presentation--validate-slide s))
-    (let* ((path (+presentation--document-path worktree slug))
-           (dir (file-name-directory path)))
-      (make-directory dir t)
-      (with-temp-file path (insert markdown))
-      (let ((key (+presentation-start
-                  :worktree worktree
-                  :tmux-session tmux-session
-                  :tmux-window tmux-window
-                  :split split
-                  :socket socket
-                  :initial-slide (list :kind "narrative" :path path))))
-        (dolist (s slides)
-          (+presentation--deck-push key s))
-        `((key . ,key)
-          (path . ,path)
-          (slide_count . ,(1+ (length slides))))))))
-
-;;;###autoload
-(defun +presentation-end (key)
-  "Tear down the presentation session identified by KEY.
-For `reused'-origin sessions: restore the saved window-configuration,
-remove the frame parameters, and drop the hash entry.  For `created'-
-origin sessions: emit a `tmux kill-pane' for the recorded pane id; the
-resulting frame deletion fires `delete-frame-functions' which removes
-the hash entry."
-  (let* ((session (+presentation--get-session key))
-         (origin (plist-get session :origin))
-         (frame (plist-get session :frame))
-         (saved-layout (plist-get session :tmux-saved-layout))
-         (tmux-session (plist-get session :tmux-session))
-         (tmux-window (plist-get session :tmux-window))
-         (restore-effects
-          (when (and saved-layout
-                     (stringp saved-layout)
-                     (not (string-empty-p saved-layout))
-                     tmux-session tmux-window)
-            (list (+presentation--cmd-select-layout
-                   tmux-session tmux-window saved-layout)))))
-    (+presentation--cleanup-render-state key)
-    (pcase origin
-      ('reused
-       (+presentation--run-effects
-        (append
-         restore-effects
-         (list
-          (make-+presentation-effect-elisp
-           :thunk
-           (lambda ()
-             (when (frame-live-p frame)
-               (with-selected-frame frame
-                 (set-window-configuration
-                  (plist-get session :saved-config)))
-               (modify-frame-parameters
-                frame
-                '((presentation-key . nil)
-                  (presentation-origin . nil))))
-             (remhash key +presentation--sessions)))))))
-      ('created
-       (+presentation--run-effects
-        (append
-         restore-effects
-         (list (+presentation--cmd-kill-pane
-                (plist-get session :tmux-pane))))))
-      (other (error "Unknown session origin: %S" other)))
-    'done))
-
-;;;###autoload
-(defun +presentation-info (key)
-  "Return an alist describing the presentation session identified by KEY.
-Signals a `user-error' for unknown keys.  The returned alist is
-JSON-encodable: booleans use `t' / `:json-false', the frame value is
-omitted, and `started-at' is rendered as a float seconds-since-epoch."
-  (let* ((session (+presentation--get-session key))
-         (frame (plist-get session :frame))
-         (origin (plist-get session :origin))
-         (deck (or (plist-get session :deck) []))
-         (cur (plist-get session :current-slide-index)))
-    `((key . ,key)
-      (origin . ,(when origin (symbol-name origin)))
-      (frame_live . ,(if (and frame (frame-live-p frame)) t :json-false))
-      (tmux_pane . ,(plist-get session :tmux-pane))
-      (worktree . ,(plist-get session :worktree))
-      (started_at . ,(plist-get session :started-at))
-      (slide_count . ,(length deck))
-      (current_slide_index . ,cur))))
-
-(defun +presentation--narrative-first-heading (path)
-  "Return the first markdown heading text from PATH, or nil.
-Reads up to 4KB from the head of the file."
-  (when (and path (file-readable-p path))
-    (with-temp-buffer
-      (insert-file-contents path nil 0 4096)
+(defun +presentation--all-h1-positions ()
+  "Return buffer positions of every top-level H1 line.
+Lines inside fenced code blocks are excluded.  Positions are line
+beginnings, in document order."
+  (save-excursion
+    (save-restriction
+      (widen)
       (goto-char (point-min))
-      (when (re-search-forward "^#+[ \t]+\\(.+?\\)[ \t]*$" nil t)
-        (match-string-no-properties 1)))))
-
-(defun +presentation--slide-title (slide)
-  "Return display title for SLIDE, or nil.
-Falls back to the first markdown heading for narrative slides backed
-by `:path'."
-  (or (plist-get slide :title)
-      (and (equal (plist-get slide :kind) "narrative")
-           (+presentation--narrative-first-heading
-            (plist-get slide :path)))))
-
-;;;###autoload
-(defun +presentation-deck-info (key)
-  "Return a JSON-encodable snapshot of session KEY's deck.
-Result has fields `key', `current_slide_index', and `slides' — a
-vector of `((index . I) (kind . K) (title . T-or-nil))' alists."
-  (let* ((sess (+presentation--get-session key))
-         (deck (or (plist-get sess :deck) []))
-         (cur (plist-get sess :current-slide-index)))
-    `((key . ,key)
-      (current_slide_index . ,cur)
-      (slides . ,(apply #'vector
-                        (cl-loop for s across deck
-                                 for i from 0
-                                 collect `((index . ,i)
-                                           (kind . ,(plist-get s :kind))
-                                           (title . ,(+presentation--slide-title s)))))))))
-
-;;;###autoload
-(defun +presentation--frame-deleted-h (frame)
-  "Remove the session entry whose `:frame' is FRAME.
-By the time `delete-frame-functions' fires for a tty-client
-disconnect the frame is already dead and its parameters are gone, so
-matching by `frame-parameter' is unreliable.  Match on identity
-against the `:frame' value stored on the session plist instead."
-  (let (matched-key)
-    (maphash (lambda (k plist)
-               (when (eq (plist-get plist :frame) frame)
-                 (setq matched-key k)))
-             +presentation--sessions)
-    (when matched-key
-      (remhash matched-key +presentation--sessions))))
-
-;;;###autoload
-(defun +presentation--alist-to-plist (alist)
-  "Convert ALIST with symbol or string keys to a plist with `:'-prefixed keys.
-Underscores in non-keyword keys are translated to hyphens so that JSON
-fields like `start_line' / `pane_layout' arrive as `:start-line' /
-`:pane-layout'."
-  (let (acc)
-    (dolist (cell alist (nreverse acc))
-      (let* ((k (car cell))
-             (v (cdr cell))
-             (name (cond ((keywordp k) nil)
-                         ((symbolp k) (symbol-name k))
-                         ((stringp k) k)
-                         (t (error "Unsupported alist key: %S" k))))
-             (sym (if name
-                      (intern (concat ":" (replace-regexp-in-string
-                                           "_" "-" name)))
-                    k)))
-        (push sym acc)
-        (push v acc)))))
-
-(defun +presentation--default-socket ()
-  "Return the running daemon's socket path."
-  (when (and (boundp 'server-name) server-name)
-    (expand-file-name server-name
-                      (or (and (boundp 'server-socket-dir) server-socket-dir)
-                          temporary-file-directory))))
-
-
-;;; Slide-spec coercion (deep alist→plist for MCP payloads)
-
-(defun +presentation--alistp (val)
-  "Return non-nil when VAL is an alist of `(SYM . _)' pairs.
-Symbol keys are non-keyword to disambiguate from plists."
-  (and (consp val)
-       (consp (car val))
-       (let ((k (caar val)))
-         (and k (symbolp k) (not (keywordp k))))))
-
-;;;###autoload
-(defun +presentation--coerce-slide (input)
-  "Recursively normalise an MCP slide spec INPUT.
-Converts symbol-keyed alists to keyword-keyed plists, walks vectors,
-leaves scalars untouched.  Used at the MCP boundary because
-`json-parse-string' returns nested alists/vectors that the renderer
-expects as plists."
-  (cond
-   ((vectorp input)
-    (apply #'vector
-           (mapcar #'+presentation--coerce-slide (append input nil))))
-   ((+presentation--alistp input)
-    (+presentation--alist-to-plist
-     (mapcar (lambda (cell)
-               (cons (car cell)
-                     (+presentation--coerce-slide (cdr cell))))
-             input)))
-   (t input)))
-
-
-;;; Slide validation
-
-(defconst +presentation--annotation-allowed-keys
-  '(:line :text :position :kind :severity)
-  "Plist keys allowed on a slide annotation.")
-
-(defun +presentation--validate-annotation (ann)
-  "Validate annotation plist ANN; signal `user-error' on failure."
-  (let* ((line (plist-get ann :line))
-         (text (plist-get ann :text))
-         (kind (plist-get ann :kind))
-         (severity (plist-get ann :severity))
-         (pos-present (plist-member ann :position))
-         (pos (plist-get ann :position)))
-    (unless (and (integerp line) (> line 0))
-      (user-error "Annotation :line must be positive integer, got: %S" line))
-    (unless (stringp text)
-      (user-error "Annotation :text must be string, got: %S" text))
-    (when kind
-      (unless (member kind '("inline" "callout" "margin"))
-        (user-error
-         "Annotation :kind must be \"inline\" / \"callout\" / \"margin\", got: %S"
-         kind)))
-    (when severity
-      (unless (member severity '("note" "tip" "warning"))
-        (user-error
-         "Annotation :severity must be \"note\" / \"tip\" / \"warning\", got: %S"
-         severity)))
-    (let ((effective-kind (or kind "inline")))
-      (pcase effective-kind
-        ("inline"
-         (when pos-present
-           (unless (member pos '("before" "after"))
-             (user-error
-              "inline annotation :position must be \"before\" or \"after\", got: %S"
-              pos))))
-        ("callout"
-         (when pos-present
-           (user-error
-            "callout annotation must not have :position field, got: %S" pos)))
-        ("margin"
-         (when pos-present
-           (unless (member pos '("left" "right" "before" "after"))
-             (user-error
-              "margin annotation :position must be \"left\" / \"right\" / \"before\" / \"after\", got: %S"
-              pos))))))
-    (let ((keys (cl-loop for (k _v) on ann by #'cddr collect k)))
-      (dolist (k keys)
-        (unless (memq k +presentation--annotation-allowed-keys)
-          (user-error "Unknown annotation field: %S" k))))))
-
-;;;###autoload
-(defun +presentation--validate-slide (slide &optional context)
-  "Validate SLIDE; signal `user-error' on failure, return SLIDE on success.
-CONTEXT may be the symbol `pane' to forbid nested layout slides."
-  (unless (and slide (listp slide))
-    (user-error "Slide must be a plist, got: %S" slide))
-  (let ((kind (plist-get slide :kind)))
-    (unless (stringp kind)
-      (user-error "Slide :kind must be a string, got: %S" kind))
-    (pcase kind
-      ("narrative"
-       (let ((has-md (plist-member slide :markdown))
-             (has-path (plist-member slide :path)))
-         (cond
-          ((and has-md has-path)
-           (user-error
-            "narrative slide must have :path or :markdown, not both"))
-          ((not (or has-md has-path))
-           (user-error
-            "narrative slide requires :path or :markdown"))
-          (has-path
-           (unless (stringp (plist-get slide :path))
-             (user-error "narrative :path must be string, got: %S"
-                         (plist-get slide :path))))
-          (t
-           (unless (stringp (plist-get slide :markdown))
-             (user-error "narrative :markdown must be string, got: %S"
-                         (plist-get slide :markdown)))))))
-      ("file"
-       (unless (stringp (plist-get slide :path))
-         (user-error "file slide requires string :path"))
-       (let ((sl (plist-get slide :start-line))
-             (el (plist-get slide :end-line)))
-         (when sl
-           (unless (and (integerp sl) (> sl 0))
-             (user-error "file :start-line must be positive integer")))
-         (when el
-           (unless (and (integerp el) (> el 0))
-             (user-error "file :end-line must be positive integer"))))
-       (when-let* ((focus (plist-get slide :focus)))
-         (unless (and (sequencep focus)
-                      (= (length focus) 2)
-                      (cl-every #'integerp (append focus nil)))
-           (user-error "file :focus must be a 2-element integer range"))))
-      ("diff"
-       (let ((b (plist-get slide :base))
-             (h (plist-get slide :head)))
-         (when (or (and b (not h)) (and h (not b)))
-           (user-error
-            "diff slide requires both :base and :head, or neither"))))
-      ("layout"
-       (when (eq context 'pane)
-         (user-error "layout slide may not be nested inside another layout"))
-       (let ((split (plist-get slide :split)))
-         (unless (member split '("horizontal" "vertical"))
-           (user-error
-            "layout :split must be \"horizontal\" or \"vertical\"")))
-       (let ((panes (plist-get slide :panes)))
-         (unless (and (sequencep panes) (= (length panes) 2))
-           (user-error "layout :panes must contain exactly 2 slides"))
-         (mapc (lambda (p) (+presentation--validate-slide p 'pane))
-               (append panes nil))))
-      (other (user-error "Unknown slide kind: %S" other)))
-    (when (member kind '("narrative" "file" "diff"))
-      (when-let* ((anns (plist-get slide :annotations)))
-        (mapc #'+presentation--validate-annotation (append anns nil))))
-    (when (plist-member slide :pane-layout)
-      (let ((pl (plist-get slide :pane-layout)))
-        (unless (member pl '("tall" "wide"))
-          (user-error
-           "Slide :pane-layout must be \"tall\" or \"wide\", got: %S" pl))))
-    slide))
-
-
-;;; Session plist helpers
-
-(defun +presentation--session-set (key prop val)
-  "Set PROP to VAL on session KEY; persist back to the store."
-  (let ((sess (+presentation--get-session key)))
-    (puthash key (plist-put sess prop val) +presentation--sessions)))
-
-(defun +presentation--session-prop (key prop)
-  "Return PROP from session KEY's plist."
-  (plist-get (+presentation--get-session key) prop))
-
-
-;;; Deck mutation helpers
-
-(defun +presentation--deck (key)
-  "Return the deck vector for session KEY (defaults to empty)."
-  (or (+presentation--session-prop key :deck) []))
-
-;;;###autoload
-(cl-defun +presentation--deck-push (key slide &key set-current)
-  "Append SLIDE to session KEY's deck and return the new slide's index.
-Default appends without changing the session's current slide index or
-rendering.  When SET-CURRENT is non-nil, the session's current slide
-index is set to the new index and the slide is rendered."
-  (+presentation--validate-slide slide)
-  (let* ((deck (+presentation--deck key))
-         (new-deck (vconcat deck (vector slide)))
-         (new-idx (1- (length new-deck))))
-    (+presentation--session-set key :deck new-deck)
-    (when set-current
-      (+presentation--session-set key :current-slide-index new-idx)
-      (+presentation--render-current key))
-    new-idx))
-
-;;;###autoload
-(defun +presentation--deck-replace (key index slide)
-  "Replace SLIDE at INDEX in session KEY's deck.
-Re-renders only when INDEX matches the current slide index.  Signals
-`user-error' on out-of-range INDEX or empty deck."
-  (+presentation--validate-slide slide)
-  (let ((deck (+presentation--deck key)))
-    (when (zerop (length deck))
-      (user-error "Cannot replace slide on empty deck"))
-    (unless (and (integerp index) (>= index 0) (< index (length deck)))
-      (user-error "Slide index %S out of range [0,%d)" index (length deck)))
-    (let ((new-deck (copy-sequence deck)))
-      (aset new-deck index slide)
-      (+presentation--session-set key :deck new-deck))
-    (when (equal index (+presentation--session-prop key :current-slide-index))
-      (+presentation--render-current key))
-    index))
-
-;;;###autoload
-(defun +presentation--deck-truncate (key index)
-  "Drop slides past INDEX in session KEY's deck.
-INDEX of -1 clears the deck entirely.  When the prior current slide
-index is greater than INDEX, the current slide index becomes INDEX and
-that slide is re-rendered.  Signals `user-error' when INDEX is out of
-range."
-  (let* ((deck (+presentation--deck key))
-         (len (length deck))
-         (cur (+presentation--session-prop key :current-slide-index)))
-    (unless (and (integerp index) (>= index -1) (< index len))
-      (user-error "Truncate index %S out of range [-1,%d)" index len))
-    (let ((new-deck (if (= index -1) []
-                      (substring deck 0 (1+ index)))))
-      (+presentation--session-set key :deck new-deck)
-      (cond
-       ((= index -1)
-        (+presentation--session-set key :current-slide-index nil)
-        (+presentation--render-current key))
-       ((and cur (> cur index))
-        (+presentation--session-set key :current-slide-index index)
-        (+presentation--render-current key))))
-    index))
-
-(defun +presentation--save-current-point (key)
-  "Stash point of session KEY's current slide into `:slide-points'.
-Reads the point of the frame's selected window so the value reflects
-the user's cursor when leaving the slide.  No-op when there is no
-current index, no live frame, or no live window."
-  (let* ((sess (+presentation--get-session key))
-         (cur (plist-get sess :current-slide-index))
-         (frame (plist-get sess :frame)))
-    (when (and (integerp cur) (frame-live-p frame))
-      (let ((win (frame-selected-window frame)))
-        (when (window-live-p win)
-          (let ((pt (window-point win))
-                (alist (copy-alist (plist-get sess :slide-points))))
-            (setf (alist-get cur alist) pt)
-            (+presentation--session-set key :slide-points alist)))))))
-
-(defun +presentation--restore-saved-point (key)
-  "Restore point for session KEY's current slide from `:slide-points'.
-Clamps to the destination buffer's `point-max' so a stale position
-from a shorter post-edit buffer still lands inside bounds.  No-op
-when no entry is saved for the current index."
-  (let* ((sess (+presentation--get-session key))
-         (cur (plist-get sess :current-slide-index))
-         (frame (plist-get sess :frame))
-         (alist (plist-get sess :slide-points))
-         (pt (alist-get cur alist)))
-    (when (and pt (integerp cur) (frame-live-p frame))
-      (let ((win (frame-selected-window frame)))
-        (when (window-live-p win)
-          (let* ((buf (window-buffer win))
-                 (clamped (with-current-buffer buf (min pt (point-max)))))
-            (set-window-point win clamped)))))))
-
-;;;###autoload
-(defun +presentation--deck-goto (key index)
-  "Render slide at INDEX in session KEY's deck and set it as current.
-Saves the prior slide's cursor position into `:slide-points' before
-flipping the index, and restores any previously-saved cursor position
-for the destination slide after rendering.  Signals `user-error' on
-out-of-range INDEX."
-  (let* ((deck (+presentation--deck key))
-         (len (length deck)))
-    (unless (and (integerp index) (>= index 0) (< index len))
-      (user-error "Goto index %S out of range [0,%d)" index len))
-    (+presentation--save-current-point key)
-    (+presentation--session-set key :current-slide-index index)
-    (+presentation--render-current key)
-    (+presentation--restore-saved-point key)
-    index))
-
-
-;;; Channel capability registration
-
-;;;###autoload
-(defun +presentation--inject-channel-capability (response)
-  "Splice `experimental.claude/channel: {}' into RESPONSE.
-RESPONSE is the alist returned by
-`claude-code-ide-mcp--handle-initialize'.  Used as `:filter-return'
-advice so the MCP server's initialize-response advertises the
-channel capability without requiring an upstream patch.  Returns the
-mutated RESPONSE."
-  (let* ((result (alist-get 'result response))
-         (caps (alist-get 'capabilities result))
-         (exp (or (alist-get 'experimental caps) '())))
-    (when caps
-      (setf (alist-get 'claude/channel exp) :json-empty)
-      (setf (alist-get 'experimental caps) exp)
-      (setf (alist-get 'capabilities result) caps)
-      (setf (alist-get 'result response) result)))
-  response)
-
-;;;###autoload
-(defun +presentation--register-channel-capability (&optional fn)
-  "Install `:filter-return' advice on the MCP initialize handler.
-FN defaults to `claude-code-ide-mcp--handle-initialize'.  When FN is
-unbound, registration silently no-ops and returns nil.  Otherwise
-returns the symbol that was advised."
-  (let ((sym (or fn 'claude-code-ide-mcp--handle-initialize)))
-    (when (fboundp sym)
-      (advice-add sym :filter-return
-                  #'+presentation--inject-channel-capability)
-      sym)))
-
-
-;;; Channel notification emission
-
-;;;###autoload
-(defun +presentation--emit-nav-channel (key prior current)
-  "Send a `notifications/claude/channel' event for session KEY.
-PRIOR and CURRENT are integer indices into the session's deck.
-Composes a human-readable advance / retreat content string and a
-string-valued meta record.  Emission is best-effort: errors and a
-missing `claude-code-ide-mcp--send-notification' silently no-op."
-  (condition-case _err
-      (when (fboundp 'claude-code-ide-mcp--send-notification)
-        (let* ((sess (+presentation--get-session key))
-               (deck (or (plist-get sess :deck) []))
-               (count (length deck))
-               (slide (and (integerp current)
-                           (>= current 0)
-                           (< current count)
-                           (aref deck current)))
-               (kind (plist-get slide :kind))
-               (title (plist-get slide :title))
-               (verb (if (and (integerp prior) (integerp current)
-                              (< prior current))
-                         "advanced" "retreated"))
-               (content (format "User %s to slide %d of %d."
-                                verb current count))
-               (meta (list (cons 'key key)
-                           (cons 'current_slide (number-to-string current))
-                           (cons 'prior_slide (number-to-string prior))
-                           (cons 'kind (or kind "")))))
-          (when (and title (stringp title) (not (string-empty-p title)))
-            (setq meta (append meta (list (cons 'title title)))))
-          (funcall #'claude-code-ide-mcp--send-notification
-                   "notifications/claude/channel"
-                   `((source . "presentation")
-                     (content . ,content)
-                     (meta . ,meta)))
-          nil))
-    (error nil)))
-
-
-;;; Render-state cleanup
-
-(defun +presentation--cleanup-render-state (key)
-  "Delete overlays and run restorers from session KEY's `:render-state'."
-  (let* ((sess (+presentation--get-session key))
-         (rs (plist-get sess :render-state)))
-    (when rs
-      (dolist (ov (plist-get rs :overlays))
-        (when (and (overlayp ov) (overlay-buffer ov))
-          (delete-overlay ov)))
-      (dolist (fn (plist-get rs :restorers))
-        (condition-case _ (funcall fn) (error nil))))
-    (+presentation--session-set key :render-state nil)))
-
-(defun +presentation--render-state-add (key prop val)
-  "Cons VAL onto PROP of session KEY's `:render-state' plist."
-  (let* ((rs (or (+presentation--session-prop key :render-state) '()))
-         (cur (plist-get rs prop)))
-    (+presentation--session-set
-     key :render-state (plist-put rs prop (cons val cur)))))
-
-
-;;; Per-kind renderers
-
-(defun +presentation--render-narrative (key slide)
-  "Render the narrative SLIDE for session KEY.
-When SLIDE carries `:path', the displayed buffer is `find-file-noselect'
-on the worktree-resolved path.  Otherwise the synthetic
-`*presentation: KEY*' splash buffer is filled from `:markdown'."
-  (let* ((path (plist-get slide :path))
-         (buf
+      (let ((positions nil)
+            (in-fence nil))
+        (while (not (eobp))
           (cond
-           (path
-            (let* ((sess (+presentation--get-session key))
-                   (worktree (plist-get sess :worktree))
-                   (resolved (if (file-name-absolute-p path)
-                                 path
-                               (expand-file-name path worktree))))
-              (unless (file-exists-p resolved)
-                (user-error "narrative :path does not exist: %s" resolved))
-              (find-file-noselect resolved)))
-           (t
-            (let ((buf (+presentation--narrative-buffer key)))
-              (with-current-buffer buf
-                (let ((inhibit-read-only t))
-                  (erase-buffer)
-                  (insert (or (plist-get slide :markdown) ""))
-                  (when (fboundp +presentation-narrative-major-mode)
-                    (funcall +presentation-narrative-major-mode))))
-              buf)))))
-    (+presentation--enable-mode-in buf key)
-    buf))
+           ((looking-at +presentation--fence-rx)
+            (setq in-fence (not in-fence)))
+           ((and (not in-fence) (looking-at +presentation--h1-rx))
+            (push (line-beginning-position) positions)))
+          (forward-line 1))
+        (nreverse positions)))))
 
+(defun +presentation--heading-region (pos)
+  "Return (START . END) of the H1 region containing POS, or nil.
+START is the beginning of the H1 line; END is either the beginning
+of the next H1 line or `point-max'."
+  (let* ((positions (+presentation--all-h1-positions))
+         (preceding (cl-loop for p in positions while (<= p pos) collect p))
+         (start (car (last preceding))))
+    (when start
+      (let* ((rest (cdr (member start positions)))
+             (end (or (car rest) (point-max))))
+        (cons start end)))))
 
-(defun +presentation--render-file (key slide)
-  "Render the file SLIDE for session KEY via `find-file-noselect'.
-Honours `:start-line'/`:end-line' (narrowing), `:focus' (region
-overlay + recenter), and stashes restorers so cleanup widens the
-buffer and restores its prior read-only state."
-  (let* ((sess (+presentation--get-session key))
-         (worktree (plist-get sess :worktree))
-         (path (plist-get slide :path))
-         (resolved (if (file-name-absolute-p path)
-                       path
-                     (expand-file-name path worktree)))
-         (buf (find-file-noselect resolved))
-         (start-line (plist-get slide :start-line))
-         (end-line (plist-get slide :end-line))
-         (focus (plist-get slide :focus)))
-    (with-current-buffer buf
-      (let ((prev-ro buffer-read-only))
-        (when (or start-line end-line)
-          (let ((p1 (save-excursion
-                      (goto-char (point-min))
-                      (when start-line (forward-line (1- start-line)))
-                      (point)))
-                (p2 (save-excursion
-                      (goto-char (point-min))
-                      (if end-line (progn (forward-line end-line) (point))
-                        (point-max)))))
-            (narrow-to-region p1 p2)
-            (let ((b buf))
-              (+presentation--render-state-add
-               key :restorers
-               (lambda () (with-current-buffer b (widen)))))))
-        (when focus
-          (let* ((fs (elt focus 0))
-                 (fe (elt focus 1))
-                 (start (+presentation--line-bol fs)))
-            (cl-loop for ln from fs to fe
-                     for bol = (+presentation--line-bol ln)
-                     for eol = (+presentation--line-eol ln)
-                     for ov = (make-overlay bol eol)
-                     do (overlay-put ov 'face '+presentation-focus-face)
-                     do (+presentation--render-state-add
-                         key :overlays ov))
-            (goto-char start)
-            (condition-case _ (recenter) (error nil))))
-        (setq buffer-read-only t)
-        (let ((b buf))
-          (+presentation--render-state-add
-           key :restorers
-           (lambda () (with-current-buffer b
-                        (setq buffer-read-only prev-ro)))))))
-    (+presentation--enable-mode-in buf key)
-    buf))
+(defun +presentation--heading-slug (text)
+  "Return TEXT slugified.
+Downcase, collapse runs of non-alphanumeric characters to a single
+hyphen, then strip leading and trailing hyphens."
+  (let* ((s (downcase (or text "")))
+         (s (replace-regexp-in-string
+             (rx (one-or-more (not (any alnum)))) "-" s))
+         (s (replace-regexp-in-string
+             (rx (or (: bos (one-or-more "-"))
+                     (: (one-or-more "-") eos)))
+             "" s)))
+    s))
 
-
-(defun +presentation--diff-argv (worktree base head &optional path)
-  "Build argv for `git -C WORKTREE diff [BASE..HEAD] [-- PATH]'.
-Signals `user-error' when exactly one of BASE and HEAD is supplied."
-  (when (or (and base (not head)) (and head (not base)))
-    (user-error "diff slide requires both :base and :head, or neither"))
-  (let ((argv (list "git" "-C" worktree "diff")))
-    (when (and base head)
-      (setq argv (append argv (list (format "%s..%s" base head)))))
-    (when path
-      (setq argv (append argv (list "--" path))))
-    argv))
-
-(defun +presentation--render-diff (key slide)
-  "Render the diff SLIDE for session KEY.
-Runs `git diff' via the effect runner, inserts output into
-`*presentation-diff: KEY*' in `diff-mode'."
-  (require 'diff-mode)
-  (let* ((sess (+presentation--get-session key))
-         (worktree (plist-get sess :worktree))
-         (argv (+presentation--diff-argv
-                worktree
-                (plist-get slide :base)
-                (plist-get slide :head)
-                (plist-get slide :path)))
-         (output (car (+presentation--run-effects
-                       (list (make-+presentation-effect-shell :argv argv)))))
-         (buf (get-buffer-create (format "*presentation-diff: %s*" key))))
-    (with-current-buffer buf
-      (let ((inhibit-read-only t))
-        (erase-buffer)
-        (insert (or output ""))
-        (when (fboundp 'diff-mode) (diff-mode))
-        (setq buffer-read-only t)))
-    (+presentation--enable-mode-in buf key)
-    buf))
-
-
-(defun +presentation--render-layout (key slide)
-  "Render the layout SLIDE for session KEY by composing two pane buffers."
-  (let* ((split (plist-get slide :split))
-         (panes (append (plist-get slide :panes) nil))
-         (buf1 (+presentation--dispatch-slide key (nth 0 panes)))
-         (buf2 (+presentation--dispatch-slide key (nth 1 panes)))
-         (frame (+presentation--session-prop key :frame)))
-    (+presentation--enable-mode-in buf1 key)
-    (+presentation--enable-mode-in buf2 key)
-    (when (and frame (frame-live-p frame))
-      (with-selected-frame frame
-        (delete-other-windows)
-        (let* ((side (pcase split
-                       ("horizontal" 'right)
-                       ("vertical"   'below)
-                       (_ (error "Unknown split: %S" split))))
-               (win1 (selected-window))
-               (win2 (split-window win1 nil side)))
-          (set-window-buffer win1 buf1)
-          (set-window-buffer win2 buf2))))
-    (list :layout split buf1 buf2)))
-
-
-;;; Render dispatch
-
-(defun +presentation--dispatch-slide (key slide)
-  "Dispatch SLIDE to its per-kind renderer for session KEY.
-Returns the buffer (or composite) the slide produced.  Does NOT clear
-prior render-state — call `+presentation--render-slide' for that."
-  (pcase (plist-get slide :kind)
-    ("narrative" (+presentation--render-narrative key slide))
-    ("file"      (+presentation--render-file key slide))
-    ("diff"      (+presentation--render-diff key slide))
-    ("layout"    (+presentation--render-layout key slide))
-    (other (error "Unknown slide kind: %S" other))))
-
-(defun +presentation--line-bol (line)
-  "Return point-at-bol for LINE (1-based) in current buffer."
-  (save-excursion (goto-char (point-min))
-                  (forward-line (1- line))
-                  (line-beginning-position)))
-
-(defun +presentation--line-eol (line)
-  "Return point-at-eol for LINE (1-based) in current buffer."
-  (save-excursion (goto-char (point-min))
-                  (forward-line (1- line))
-                  (line-end-position)))
-
-(defun +presentation--render-inline-annotation (key ann)
-  "Render inline ANN in current buffer, attach overlay to session KEY."
-  (let* ((line (plist-get ann :line))
-         (text (plist-get ann :text))
-         (pos (or (plist-get ann :position) "after"))
-         (face (+presentation--annotation-face (plist-get ann :severity)))
-         (anchor (if (equal pos "before")
-                     (+presentation--line-bol line)
-                   (+presentation--line-eol line)))
-         (decorated (propertize
-                     (if (equal pos "before")
-                         (format "▸ %s\n" text)
-                       (format "  ▸ %s" text))
-                     'face face))
-         (ov (make-overlay anchor anchor)))
-    (overlay-put ov
-                 (if (equal pos "before") 'before-string 'after-string)
-                 decorated)
-    (+presentation--render-state-add key :overlays ov)))
-
-(defun +presentation--render-callout-annotation (key ann)
-  "Render callout ANN in current buffer, attach overlay to session KEY."
-  (let* ((line (plist-get ann :line))
-         (text (or (plist-get ann :text) ""))
-         (severity (plist-get ann :severity))
-         (face (+presentation--annotation-face severity))
-         (label (+presentation--severity-label severity))
-         (lines (split-string text "\n"))
-         (max-content (apply #'max
-                             (length label)
-                             (mapcar #'length lines)))
-         (box-width (max 80 (+ max-content 4)))
-         (top (+presentation--make-border box-width ?┌ ?┐ face))
-         (bot (+presentation--make-border box-width ?└ ?┘ face))
-         (label-line
-          (let ((pad (max 1 (- box-width 4 (length label)))))
-            (concat (propertize "│ " 'face face)
-                    (propertize label 'face face)
-                    (propertize (make-string pad ?\s) 'face face)
-                    (propertize " │" 'face face))))
-         (body-lines
-          (mapcar
-           (lambda (l)
-             (let ((pad (max 1 (- box-width 4 (length l)))))
-               (concat (propertize "│ " 'face face)
-                       l
-                       (propertize (make-string pad ?\s) 'face face)
-                       (propertize " │" 'face face))))
-           lines))
-         (body-block (mapconcat #'identity
-                                (cons label-line body-lines) "\n"))
-         (after (concat "\n" top "\n" body-block "\n" bot))
-         (anchor (+presentation--line-eol line))
-         (ov (make-overlay anchor anchor)))
-    (overlay-put ov 'after-string after)
-    (+presentation--render-state-add key :overlays ov)))
-
-(defun +presentation--margin-side (position)
-  "Return `left-margin' / `right-margin' symbol from POSITION string."
-  (pcase position
-    ("left" 'left-margin)
-    (_ 'right-margin)))
-
-(defun +presentation--ensure-margin-width (key buffer side)
-  "Set BUFFER's margin width on SIDE to at least 12, restorer on KEY.
-SIDE is `left-margin' or `right-margin'.  Idempotent per (buffer,side):
-the prior value is captured only on the first call."
-  (with-current-buffer buffer
-    (let* ((var (if (eq side 'left-margin)
-                    'left-margin-width
-                  'right-margin-width))
-           (cur (symbol-value var)))
-      (when (< cur 12)
-        (let ((prior cur)
-              (b buffer))
-          (set var 12)
-          (+presentation--render-state-add
-           key :restorers
-           (lambda ()
-             (when (buffer-live-p b)
-               (with-current-buffer b
-                 (set var prior)
-                 (dolist (w (get-buffer-window-list b nil t))
-                   (set-window-buffer w b)))))))
-        (dolist (w (get-buffer-window-list buffer nil t))
-          (set-window-buffer w buffer))))))
-
-(defun +presentation--render-margin-annotation (key ann)
-  "Render margin ANN in current buffer, attach overlay to session KEY."
-  (let* ((line (plist-get ann :line))
-         (text (plist-get ann :text))
-         (raw-pos (or (plist-get ann :position) "right"))
-         (side (+presentation--margin-side raw-pos))
-         (face (+presentation--annotation-face (plist-get ann :severity)))
-         (display-str (propertize text 'face face))
-         (decorated (propertize " "
-                                'display `((margin ,side) ,display-str)))
-         (anchor (+presentation--line-bol line))
-         (ov (make-overlay anchor anchor)))
-    (+presentation--ensure-margin-width key (current-buffer) side)
-    (overlay-put ov 'before-string decorated)
-    (+presentation--render-state-add key :overlays ov)))
-
-(defun +presentation--apply-annotations (key buffer annotations)
-  "Place overlays on BUFFER for ANNOTATIONS of session KEY.
-ANNOTATIONS is a sequence of plists `(:line N :text S :position P
-:kind K :severity SEV)'.  Dispatches on `:kind' (default `inline').
-Overlays are appended to session KEY's `:render-state' `:overlays'."
-  (with-current-buffer buffer
-    (mapc
-     (lambda (ann)
-       (pcase (or (plist-get ann :kind) "inline")
-         ("inline"  (+presentation--render-inline-annotation key ann))
-         ("callout" (+presentation--render-callout-annotation key ann))
-         ("margin"  (+presentation--render-margin-annotation key ann))
-         (other (error "Unknown annotation kind: %S" other))))
-     (append annotations nil))))
-
-(defun +presentation--slide-pane-layout (slide)
-  "Return SLIDE's `:pane-layout' coerced to a symbol, or nil."
-  (when-let* ((s (plist-get slide :pane-layout)))
-    (and (stringp s) (not (string-empty-p s)) (intern s))))
-
-(defun +presentation--apply-pane-layout (key slide)
-  "Apply SLIDE's pane-layout hint to session KEY.
-Compares the slide's `:pane-layout' to the session's `:pane-layout'
-slot.  When they differ, runs the geometry effects via
-`+presentation--run-effects' and updates the slot to the new value."
-  (let* ((sess (+presentation--get-session key))
-         (desired (+presentation--slide-pane-layout slide))
-         (current (plist-get sess :pane-layout))
-         (tmux-session (plist-get sess :tmux-session))
-         (tmux-window (plist-get sess :tmux-window))
-         (effects (+presentation--pane-layout-effects
-                   desired current tmux-session tmux-window)))
-    (when effects
-      (+presentation--run-effects effects)
-      (+presentation--session-set key :pane-layout desired))))
-
-(defun +presentation--render-slide (key slide)
-  "Render SLIDE as the visible slide for session KEY.
-Cleans up any prior `:render-state', applies the slide's pane-layout
-hint, dispatches to the per-kind renderer, applies annotations, and
-switches the session frame to the produced buffer."
-  (+presentation--cleanup-render-state key)
-  (+presentation--apply-pane-layout key slide)
-  (let* ((buf (+presentation--dispatch-slide key slide))
-         (frame (+presentation--session-prop key :frame))
-         (anns (plist-get slide :annotations)))
-    (when (and anns (bufferp buf))
-      (+presentation--apply-annotations key buf anns))
-    (when (and (bufferp buf) (frame-live-p frame))
-      (with-selected-frame frame (switch-to-buffer buf)))
-    buf))
-
-(defun +presentation--render-current (key)
-  "Render the slide at session KEY's current index, or the splash buffer."
-  (let* ((sess (+presentation--get-session key))
-         (deck (or (plist-get sess :deck) []))
-         (cur (plist-get sess :current-slide-index))
-         (frame (plist-get sess :frame)))
+(defun +presentation--narrow-to-heading-at (pos)
+  "Widen, then narrow to the H1 region containing POS.
+When POS is before the first H1, narrow to the first H1's region.
+When the document has no H1s, leave the buffer widened."
+  (widen)
+  (let ((region (+presentation--heading-region pos)))
     (cond
-     ((and cur (< cur (length deck)))
-      (+presentation--render-slide key (aref deck cur)))
+     (region
+      (narrow-to-region (car region) (cdr region)))
      (t
-      (+presentation--cleanup-render-state key)
-      (let ((buf (+presentation--make-splash-buffer
-                  key (plist-get sess :worktree))))
-        (+presentation--enable-mode-in buf key)
-        (when (and (bufferp buf) (frame-live-p frame))
-          (with-selected-frame frame (switch-to-buffer buf)))
-        buf)))))
+      (let ((positions (+presentation--all-h1-positions)))
+        (when positions
+          (let* ((first (car positions))
+                 (next (cadr positions))
+                 (end (or next (point-max))))
+            (narrow-to-region first end))))))))
 
-;;; Markdown link dispatch
+;;; Navigation commands
 
-(defun +presentation--parse-slide-url (url)
-  "Parse `slide:N' URL; return non-negative integer N, or nil."
+(defun +presentation--current-h1-start ()
+  "Return the buffer position of the H1 enclosing point, or nil."
+  (save-restriction
+    (widen)
+    (car-safe (+presentation--heading-region (point)))))
+
+(defun +presentation-next-slide ()
+  "Advance to the next H1 and narrow there.  Silent no-op at last slide."
+  (interactive)
+  (let* ((positions (save-restriction
+                      (widen)
+                      (+presentation--all-h1-positions)))
+         (current (+presentation--current-h1-start))
+         (next (if current
+                   (cadr (member current positions))
+                 (car positions))))
+    (when next
+      (+presentation--narrow-to-heading-at next)
+      (goto-char (point-min))
+      (when +presentation-mode
+        (+presentation--render-link-previews)))))
+
+(defun +presentation-previous-slide ()
+  "Retreat to the previous H1 and narrow there.  Silent no-op at first."
+  (interactive)
+  (let* ((positions (save-restriction
+                      (widen)
+                      (+presentation--all-h1-positions)))
+         (current (+presentation--current-h1-start))
+         (prev (when current
+                 (cadr (member current (reverse positions))))))
+    (when prev
+      (+presentation--narrow-to-heading-at prev)
+      (goto-char (point-min))
+      (when +presentation-mode
+        (+presentation--render-link-previews)))))
+
+;;; Link parsing + dispatch
+
+(defconst +presentation--heading-link-rx
+  (rx bos "#" (group (+ (not (any "/" "?" "#" " ")))) eos)
+  "Regexp matching `#<slug>'-form link URLs.")
+
+(defconst +presentation--any-heading-rx
+  (rx bol (+ "#") " " (group (* nonl)) eol)
+  "Regexp matching any markdown heading line.")
+
+(defun +presentation--parse-heading-link (url)
+  "Return the slug from URL of form `#<slug>', or nil."
   (when (and (stringp url)
-             (string-match "\\`slide:\\([0-9]+\\)\\'" url))
-    (string-to-number (match-string 1 url))))
+             (string-match +presentation--heading-link-rx url))
+    (match-string 1 url)))
 
-(defun +presentation--parse-line-anchor-url (url)
-  "Parse `path#L<start>[-L<end>]' URL.
-Return `(PATH START . END)' (cons-list cell), or nil.  When only
-`#L<start>' is present, END equals START."
-  (when (and (stringp url)
-             (string-match
-              "\\`\\(.+?\\)#L\\([0-9]+\\)\\(?:-L\\([0-9]+\\)\\)?\\'" url))
-    (let* ((path (match-string 1 url))
-           (start (string-to-number (match-string 2 url)))
-           (end-str (match-string 3 url))
-           (end (if end-str (string-to-number end-str) start)))
-      (cons path (cons start end)))))
+(defun +presentation--dispatch-heading-link (slug)
+  "Locate the first heading whose slug equals SLUG.
+On match, return (HEADING-POS . (REGION-START . REGION-END)) where
+the region encloses the H1 containing the matched heading.  When
+no match, return the symbol `pass-through'."
+  (save-excursion
+    (save-restriction
+      (widen)
+      (goto-char (point-min))
+      (let ((found nil)
+            (in-fence nil))
+        (while (and (not found) (not (eobp)))
+          (cond
+           ((looking-at +presentation--fence-rx)
+            (setq in-fence (not in-fence)))
+           ((and (not in-fence) (looking-at +presentation--any-heading-rx))
+            (let ((this-slug (+presentation--heading-slug
+                              (match-string-no-properties 1))))
+              (when (equal this-slug slug)
+                (setq found (line-beginning-position))))))
+          (forward-line 1))
+        (if found
+            (cons found (+presentation--heading-region found))
+          'pass-through)))))
 
-(defun +presentation--deck-find-file-slide (key path start end)
-  "Return index of file slide in session KEY's deck matching PATH/START/END.
-PATH is resolved against the session's worktree when relative.  Returns
-nil when no exact match is present."
-  (let* ((sess (+presentation--get-session key))
-         (worktree (plist-get sess :worktree))
-         (deck (or (plist-get sess :deck) []))
-         (target (if (file-name-absolute-p path)
-                     path
-                   (expand-file-name path worktree))))
-    (cl-loop for s across deck
-             for i from 0
-             when (and (equal (plist-get s :kind) "file")
-                       (let ((sp (plist-get s :path)))
-                         (and sp
-                              (equal target
-                                     (if (file-name-absolute-p sp) sp
-                                       (expand-file-name sp worktree)))))
-                       (equal (plist-get s :start-line) start)
-                       (equal (plist-get s :end-line) end))
-             return i)))
-
-(defun +presentation--dispatch-link (url key)
-  "Decide how URL should be followed for session KEY.
-Pure: returns one of `(goto-slide INDEX)', `(find-file-fallback PATH
-LINE)', or `(pass-through)' without I/O."
-  (cond
-   ((let ((idx (+presentation--parse-slide-url url)))
-      (and idx (list 'goto-slide idx))))
-   ((let ((parsed (+presentation--parse-line-anchor-url url)))
-      (when parsed
-        (let* ((path (car parsed))
-               (start (cadr parsed))
-               (end (cddr parsed))
-               (idx (+presentation--deck-find-file-slide
-                     key path start end)))
-          (if idx
-              (list 'goto-slide idx)
-            (let* ((sess (+presentation--get-session key))
-                   (worktree (plist-get sess :worktree))
-                   (resolved (if (file-name-absolute-p path) path
-                               (expand-file-name path worktree))))
-              (list 'find-file-fallback resolved start)))))))
-   (t (list 'pass-through))))
+(defconst +presentation--md-link-rx
+  (rx "[" (group (* (not (any "[" "]" "\n")))) "]"
+      "(" (group (* (not (any ")" "\n")))) ")")
+  "Regexp matching a markdown `[label](url)' link.")
 
 (defun +presentation--link-url-at-point ()
-  "Return URL of markdown link at point, or nil."
+  "Return the URL of the markdown link at point, or nil."
+  (save-excursion
+    (let ((p (point))
+          (eol (line-end-position))
+          (bol (line-beginning-position))
+          found)
+      (goto-char bol)
+      (while (and (not found) (re-search-forward +presentation--md-link-rx eol t))
+        (when (and (<= (match-beginning 0) p) (<= p (match-end 0)))
+          (setq found (match-string-no-properties 2))))
+      found)))
+
+(defun +presentation--follow-link-fallback ()
+  "Delegate link follow to `markdown-mode's default handler."
   (cond
-   ((fboundp 'markdown-link-url) (markdown-link-url))
-   (t nil)))
+   ((fboundp 'markdown-follow-link-at-point)
+    (call-interactively #'markdown-follow-link-at-point))
+   ((fboundp 'markdown-follow-thing-at-point)
+    (call-interactively #'markdown-follow-thing-at-point))))
 
-(defvar +presentation-mode)
-(defvar +presentation--session-key)
+(defun +presentation--follow-source-link (path start end)
+  "Open PATH narrowed to lines START..END, with focus overlay."
+  (let* ((resolved (if (file-name-absolute-p path) path
+                     (expand-file-name path default-directory)))
+         (buf (find-file-noselect resolved)))
+    (pop-to-buffer buf)
+    (+presentation--render-narrowed-source buf start end start end)))
 
-(defun +presentation--fallback-ret ()
-  "Run the binding RET would have if `+presentation-mode' weren't on."
-  (let ((+presentation-mode nil))
-    (let ((cmd (key-binding (kbd "RET") t)))
-      (when (and cmd (commandp cmd))
-        (call-interactively cmd)))))
+(defun +presentation--follow-diff-link (parsed)
+  "Open the magit diff range described by PARSED plist (§10)."
+  (let ((base (plist-get parsed :base))
+        (head (plist-get parsed :head))
+        (path (plist-get parsed :path)))
+    (unless (require 'magit nil t)
+      (user-error "magit is required to follow diff links"))
+    (when (fboundp 'magit-diff-range)
+      (if path
+          (magit-diff-range (format "%s...%s" base head) nil (list path))
+        (magit-diff-range (format "%s...%s" base head))))))
 
-;;;###autoload
 (defun +presentation-follow-link ()
-  "Intercept RET in narrative buffers to route deck-aware link follows.
-Dispatch runs only when the buffer's major mode derives from
-`markdown-mode' AND `+presentation--session-key' resolves to a live
-session.  Otherwise the binding RET would have without
-`+presentation-mode' is invoked."
+  "Follow the markdown link at point.
+Dispatches by URL form: heading slug, source-range, diff-range, or
+pass-through to the markdown major mode default handler."
   (interactive)
-  (let* ((key +presentation--session-key)
-         (sess (and key (gethash key +presentation--sessions))))
+  (let* ((url (+presentation--link-url-at-point))
+         (slug (and url (+presentation--parse-heading-link url)))
+         (source (and url (not slug)
+                      (+presentation--parse-source-link url)))
+         (diff (and url (not slug) (not source)
+                    (+presentation--parse-diff-link url))))
     (cond
-     ((and sess
-           (derived-mode-p 'markdown-mode)
-           (when-let* ((url (+presentation--link-url-at-point)))
-             (pcase (+presentation--dispatch-link url key)
-               (`(goto-slide ,idx)
-                (push-mark nil t)
-                (+presentation--deck-goto key idx) t)
-               (`(find-file-fallback ,p ,line)
-                (push-mark nil t)
-                (find-file p)
-                (goto-char (point-min))
-                (forward-line (1- line))
-                t)
-               (_ nil)))))
-     (t (+presentation--fallback-ret)))))
+     (slug
+      (let ((result (+presentation--dispatch-heading-link slug)))
+        (cond
+         ((eq result 'pass-through)
+          (+presentation--follow-link-fallback))
+         (t
+          (push-mark (point) t)
+          (let ((heading-pos (car result))
+                (region (cdr result)))
+            (widen)
+            (narrow-to-region (car region) (cdr region))
+            (goto-char heading-pos)
+            (when +presentation-mode
+              (+presentation--render-link-previews)))))))
+     (source
+      (push-mark (point) t)
+      (+presentation--follow-source-link
+       (car source) (cadr source) (cddr source)))
+     (diff
+      ;; §10
+      (push-mark (point) t)
+      (+presentation--follow-diff-link diff))
+     (t
+      (+presentation--follow-link-fallback)))))
 
 
-;;; +presentation-mode minor mode
+;;; Source-range link parsing + preview
 
-(defvar-local +presentation--session-key nil
-  "Buffer-local session key consulted by `+presentation-mode' commands.")
+(defconst +presentation--source-link-rx
+  (rx bos (group (+ (not (any "#"))))
+      "#L" (group (+ digit))
+      (? "-L" (group (+ digit)))
+      eos)
+  "Regexp matching a `path#L<start>[-L<end>]'-form link URL.")
 
-(defvar +presentation-mode-map
-  (let ((map (make-sparse-keymap)))
-    (define-key map (kbd "C-n") #'+presentation-next-slide)
-    (define-key map (kbd "C-f") #'+presentation-next-slide)
-    (define-key map (kbd "C-p") #'+presentation-previous-slide)
-    (define-key map (kbd "C-b") #'+presentation-previous-slide)
-    (define-key map (kbd "C-c q") #'+presentation-quit)
-    (define-key map (kbd "RET") #'+presentation-follow-link)
-    map)
-  "Keymap for `+presentation-mode'.")
+(defun +presentation--parse-source-link (url)
+  "Return (PATH . (START . END)) for source-range URL, or nil."
+  (when (and (stringp url)
+             (string-match +presentation--source-link-rx url))
+    (let* ((path (match-string 1 url))
+           (start (string-to-number (match-string 2 url)))
+           (end-s (match-string 3 url))
+           (end (if end-s (string-to-number end-s) start)))
+      (cons path (cons start end)))))
 
-;;;###autoload
-(define-minor-mode +presentation-mode
-  "Minor mode for navigating presentation slides.
-Bindings advance / retreat the session's current slide via
-`+presentation--deck-goto'.  The session is resolved from the
-buffer-local `+presentation--session-key' set by the renderer."
-  :lighter " Pres"
-  :keymap +presentation-mode-map)
+(defconst +presentation--ext-to-lang
+  '(("rs" . "rust") ("el" . "elisp") ("py" . "python")
+    ("ts" . "typescript") ("tsx" . "typescript")
+    ("js" . "javascript") ("jsx" . "javascript")
+    ("go" . "go") ("md" . "markdown") ("c" . "c") ("h" . "c")
+    ("cpp" . "cpp") ("hpp" . "cpp") ("cc" . "cpp")
+    ("rb" . "ruby") ("java" . "java") ("kt" . "kotlin")
+    ("swift" . "swift") ("hs" . "haskell")
+    ("sh" . "bash") ("nix" . "nix"))
+  "Alist of file extension (lowercase) to fence language name.")
+
+(defun +presentation--language-from-extension (path)
+  "Return the fence language for PATH's extension, defaulting to \"text\"."
+  (let ((ext (and path (file-name-extension path))))
+    (or (and ext (cdr (assoc (downcase ext) +presentation--ext-to-lang)))
+        "text")))
+
+(defconst +presentation--preview-cap 10
+  "Maximum number of lines to include in a preview fence body.")
+
+(defun +presentation--read-line-range (path start end)
+  "Read PATH lines START..END (1-based, inclusive).
+Return (LINES . EXTRA) where LINES is up to 10 strings (no
+newlines) and EXTRA is the count of additional lines past the cap.
+Return symbol `file-not-found' or `invalid-range' on error."
+  (cond
+   ((not (and path (file-readable-p path))) 'file-not-found)
+   ((or (not (integerp start)) (not (integerp end))
+        (< start 1) (< end start))
+    'invalid-range)
+   (t
+    (catch 'result
+      (with-temp-buffer
+        (insert-file-contents path)
+        (goto-char (point-min))
+        (when (> (forward-line (1- start)) 0)
+          (throw 'result 'invalid-range))
+        (when (eobp)
+          (throw 'result 'invalid-range))
+        (let* ((requested (1+ (- end start)))
+               (cap +presentation--preview-cap)
+               (take (min requested cap))
+               (extra (max 0 (- requested cap)))
+               (lines nil))
+          (dotimes (_ take)
+            (unless (eobp)
+              (push (buffer-substring-no-properties
+                     (line-beginning-position) (line-end-position))
+                    lines)
+              (forward-line 1)))
+          (cons (nreverse lines) extra)))))))
+
+(defun +presentation--build-preview-fence (lang label path start end body extra)
+  "Compose a fenced code-block string for a link preview.
+Header is ``\\=`\\=`\\=`LANG LABEL · PATH:START-END\".  BODY is the
+body (already a string with newline separators).  When EXTRA > 0,
+append a footer line `+EXTRA more lines · click to open'."
+  (let ((header (format "```%s %s · %s:%d-%d" lang label path start end)))
+    (concat header "\n"
+            body "\n"
+            "```"
+            (when (and extra (> extra 0))
+              (format "\n+%d more lines · click to open" extra)))))
+
+(defun +presentation--source-preview-fence (path start end label)
+  "Build the preview fence string for source-range link PATH#L<start>-L<end>."
+  (let* ((lang (+presentation--language-from-extension path))
+         (result (+presentation--read-line-range path start end)))
+    (cond
+     ((eq result 'file-not-found)
+      (+presentation--build-preview-fence
+       "text" label path start end (format "(file not found: %s)" path) 0))
+     ((eq result 'invalid-range)
+      (+presentation--build-preview-fence
+       "text" label path start end "(invalid range)" 0))
+     (t
+      (let ((body (mapconcat #'identity (car result) "\n"))
+            (extra (cdr result)))
+        (+presentation--build-preview-fence
+         lang label path start end body extra))))))
+
+(defvar-local +presentation--preview-overlays nil
+  "List of preview overlays created in this buffer.
+See `+presentation--render-link-previews'.")
+
+(defun +presentation--clear-link-previews ()
+  "Delete all preview overlays in the current buffer."
+  (mapc #'delete-overlay +presentation--preview-overlays)
+  (setq +presentation--preview-overlays nil))
+
+(defun +presentation--make-preview-overlay (link-start link-end fence)
+  "Create a preview overlay covering LINK-START..LINK-END showing FENCE."
+  (let ((ov (make-overlay link-start link-end)))
+    (overlay-put ov 'display fence)
+    (overlay-put ov '+presentation t)
+    (push ov +presentation--preview-overlays)
+    ov))
+
+;;; Diff-range link parsing + preview
+
+(defun +presentation--parse-diff-link (url)
+  "Parse `diff:<base>...<head>[#<path>]'.
+Returns (:base BASE :head HEAD :path PATH-OR-NIL) or nil."
+  (when (and (stringp url) (string-prefix-p "diff:" url))
+    (let* ((rest (substring url 5))
+           (sep (string-match-p "\\.\\.\\." rest)))
+      (when sep
+        (let* ((base (substring rest 0 sep))
+               (after (substring rest (+ sep 3)))
+               (hash (string-match-p "#" after))
+               (head (if hash (substring after 0 hash) after))
+               (path (and hash (substring after (1+ hash)))))
+          (when (and (> (length base) 0) (> (length head) 0))
+            (list :base base :head head :path path)))))))
+
+(defun +presentation--diff-preview-argv (worktree base head &optional path)
+  "Build argv for `git -C WORKTREE diff B...H [-- P]'."
+  (let ((argv (list "git" "-C" worktree "diff"
+                    (format "%s...%s" base head))))
+    (if path
+        (append argv (list "--" path))
+      argv)))
+
+(defun +presentation--run-diff-preview (worktree base head &optional path)
+  "Run `git diff B...H [-- P]' from WORKTREE.
+Return a plist (:status STATUS :body BODY :extra EXTRA) where STATUS is
+`ok', `no-changes', or `error'."
+  (let* ((argv (+presentation--diff-preview-argv worktree base head path))
+         (cap +presentation--preview-cap)
+         (output nil)
+         (exit nil))
+    (with-temp-buffer
+      (setq exit (apply #'call-process (car argv) nil t nil (cdr argv)))
+      (setq output (buffer-string)))
+    (cond
+     ((not (zerop exit))
+      (let ((first-line (car (split-string output "\n" t))))
+        (list :status 'error :body (or first-line "git error") :extra 0)))
+     ((zerop (length (string-trim output)))
+      (list :status 'no-changes :body "(no changes)" :extra 0))
+     (t
+      (let* ((all-lines (split-string output "\n"))
+             (lines (if (and all-lines
+                             (string-empty-p (car (last all-lines))))
+                        (butlast all-lines)
+                      all-lines))
+             (n (length lines))
+             (take (min cap n))
+             (head-lines (cl-subseq lines 0 take))
+             (extra (max 0 (- n cap))))
+        (list :status 'ok
+              :body (mapconcat #'identity head-lines "\n")
+              :extra extra))))))
+
+(defun +presentation--diff-preview-fence (worktree base head path label)
+  "Build the preview fence string for diff link."
+  (let* ((result (+presentation--run-diff-preview worktree base head path))
+         (status (plist-get result :status))
+         (body (plist-get result :body))
+         (extra (plist-get result :extra))
+         (header (concat (format "```diff %s · %s...%s" label base head)
+                         (if path (format " -- %s" path) "")))
+         (body-text (if (eq status 'error)
+                        (format "(git error: %s)" body)
+                      body)))
+    (concat header "\n"
+            body-text "\n"
+            "```"
+            (when (and extra (> extra 0))
+              (format "\n+%d more lines · click to open" extra)))))
+
+(defun +presentation--render-link-previews ()
+  "Scan the current narrowing and render preview overlays for known link forms.
+Source-range links (`path#L<a>-L<b>') get a fenced source preview;
+diff links (`diff:B...H[#P]') get a fenced diff preview."
+  (+presentation--clear-link-previews)
+  (let ((wt default-directory))
+    (save-excursion
+      (goto-char (point-min))
+      (while (re-search-forward +presentation--md-link-rx nil t)
+        (let* ((label (match-string-no-properties 1))
+               (url (match-string-no-properties 2))
+               (link-start (match-beginning 0))
+               (link-end (match-end 0))
+               (source (+presentation--parse-source-link url))
+               (diff (and (not source) (+presentation--parse-diff-link url))))
+          (cond
+           (source
+            (let* ((path (car source))
+                   (start (cadr source))
+                   (end (cddr source))
+                   (resolved (if (file-name-absolute-p path) path
+                               (expand-file-name path default-directory)))
+                   (fence (+presentation--source-preview-fence
+                           resolved start end label)))
+              (+presentation--make-preview-overlay link-start link-end fence)))
+           (diff
+            (let ((fence (+presentation--diff-preview-fence
+                          wt
+                          (plist-get diff :base)
+                          (plist-get diff :head)
+                          (plist-get diff :path)
+                          label)))
+              (+presentation--make-preview-overlay
+               link-start link-end fence)))))))))
+
+
+;;; Detached narrowed-source renderer (§13)
+
+(defvar-local +presentation--source-overlays nil
+  "Buffer-local overlays applied by `+presentation--render-narrowed-source'.")
+
+(defvar-local +presentation--source-restorer nil
+  "Buffer-local thunk that reverts the state set up by the source renderer.")
+
+(defun +presentation--cleanup-source-render ()
+  "Run the buffer-local restorer (if any) and clear source overlays."
+  (mapc #'delete-overlay +presentation--source-overlays)
+  (setq +presentation--source-overlays nil)
+  (when (functionp +presentation--source-restorer)
+    (funcall +presentation--source-restorer))
+  (setq +presentation--source-restorer nil)
+  (remove-hook 'kill-buffer-hook #'+presentation--cleanup-source-render t))
+
+(defun +presentation--render-narrowed-source (buffer start-line end-line
+                                                     &optional focus-start focus-end)
+  "Narrow BUFFER to lines START-LINE..END-LINE and apply focus overlays.
+Sets BUFFER read-only and registers a `kill-buffer-hook' restorer.
+When FOCUS-START..FOCUS-END is given, paints `+presentation-focus-face'
+one overlay per line from `point-at-bol' to `point-at-eol'."
+  (with-current-buffer buffer
+    (+presentation--cleanup-source-render)
+    (let ((prev-ro buffer-read-only)
+          start-pos end-pos)
+      (save-restriction
+        (widen)
+        (save-excursion
+          (goto-char (point-min))
+          (forward-line (1- start-line))
+          (setq start-pos (point))
+          (goto-char (point-min))
+          (forward-line end-line)
+          (setq end-pos (point))))
+      (widen)
+      (narrow-to-region start-pos end-pos)
+      (when (and focus-start focus-end)
+        (save-excursion
+          (cl-loop for ln from focus-start to focus-end
+                   do (progn
+                        (goto-char (point-min))
+                        (forward-line (- ln start-line))
+                        (let* ((bol (line-beginning-position))
+                               (eol (line-end-position))
+                               (ov (make-overlay bol eol)))
+                          (overlay-put ov 'face '+presentation-focus-face)
+                          (overlay-put ov '+presentation-source t)
+                          (push ov +presentation--source-overlays))))))
+      (setq buffer-read-only t)
+      (setq +presentation--source-restorer
+            (let ((ro prev-ro))
+              (lambda ()
+                (let ((inhibit-read-only t)) (widen))
+                (setq buffer-read-only ro))))
+      (add-hook 'kill-buffer-hook
+                #'+presentation--cleanup-source-render nil t)
+      buffer)))
+
+;;; Minor mode
+
+(defvar-local +presentation--owned-buffer nil
+  "Non-nil when the current buffer was opened solely by `+present-markdown'.")
+
+(defvar-keymap +presentation-mode-map
+  :doc "Keymap for `+presentation-mode'."
+  "C-n"   #'+presentation-next-slide
+  "C-f"   #'+presentation-next-slide
+  "C-p"   #'+presentation-previous-slide
+  "C-b"   #'+presentation-previous-slide
+  "C-c q" #'+presentation-quit
+  "RET"   #'+presentation-follow-link)
 
 (with-eval-after-load 'evil
-  (evil-make-overriding-map +presentation-mode-map)
-  (dolist (binding '(("RET" . +presentation-follow-link)
-                     ("C-n" . +presentation-next-slide)
-                     ("C-f" . +presentation-next-slide)
-                     ("C-p" . +presentation-previous-slide)
-                     ("C-b" . +presentation-previous-slide)
-                     ("C-c q" . +presentation-quit)))
-    (evil-define-minor-mode-key '(normal visual motion insert)
-                                '+presentation-mode
-                                (kbd (car binding))
-                                (cdr binding)))
-  (add-hook '+presentation-mode-hook
-            (lambda ()
-              (when (fboundp 'evil-normalize-keymaps)
-                (evil-normalize-keymaps)))))
+  (when (fboundp 'evil-make-overriding-map)
+    (evil-make-overriding-map +presentation-mode-map 'normal))
+  (when (fboundp 'evil-define-key*)
+    (evil-define-key* '(normal motion visual) +presentation-mode-map
+                      (kbd "C-n")   #'+presentation-next-slide
+                      (kbd "C-f")   #'+presentation-next-slide
+                      (kbd "C-p")   #'+presentation-previous-slide
+                      (kbd "C-b")   #'+presentation-previous-slide
+                      (kbd "C-c q") #'+presentation-quit
+                      (kbd "RET")   #'+presentation-follow-link)))
+
+(define-minor-mode +presentation-mode
+  "Buffer-local presentation mode for a markdown document.
+Enabling narrows to the H1 region containing point; disabling
+widens.  The keymap is installed via `minor-mode-overriding-map-alist'
+so it takes precedence over evil-state bindings."
+  :lighter " Pres"
+  :keymap +presentation-mode-map
+  (cond
+   (+presentation-mode
+    (setq-local minor-mode-overriding-map-alist
+                (cons (cons '+presentation-mode +presentation-mode-map)
+                      (assq-delete-all '+presentation-mode
+                                       minor-mode-overriding-map-alist)))
+    (when (fboundp 'evil-normalize-keymaps) (evil-normalize-keymaps))
+    (add-hook 'before-revert-hook #'+presentation--remember-position nil t)
+    (add-hook 'after-revert-hook #'+presentation--restore-position nil t)
+    (+presentation--narrow-to-heading-at (point))
+    (+presentation--render-link-previews))
+   (t
+    (setq minor-mode-overriding-map-alist
+          (assq-delete-all '+presentation-mode
+                           minor-mode-overriding-map-alist))
+    (when (fboundp 'evil-normalize-keymaps) (evil-normalize-keymaps))
+    (remove-hook 'before-revert-hook #'+presentation--remember-position t)
+    (remove-hook 'after-revert-hook #'+presentation--restore-position t)
+    (+presentation--clear-link-previews)
+    (widen))))
 
 ;;;###autoload
-(defun +presentation-next-slide ()
-  "Advance the current presentation session by one slide.
-No-op when the session is already at the last slide.  Emits a
-`claude/channel' notification post-render."
-  (interactive)
-  (when-let* ((key +presentation--session-key)
-              (sess (+presentation--get-session key))
-              (deck (or (plist-get sess :deck) []))
-              (cur (plist-get sess :current-slide-index)))
-    (let ((nxt (1+ cur)))
-      (when (< nxt (length deck))
-        (+presentation--deck-goto key nxt)
-        (+presentation--emit-nav-channel key cur nxt)))))
+(defun +present-markdown (file)
+  "Open FILE and enable `+presentation-mode' in the visiting buffer.
+Signals a `user-error' when FILE is not a readable regular file."
+  (interactive "fMarkdown file: ")
+  (unless (and file (file-readable-p file) (file-regular-p file))
+    (user-error "+present-markdown: not a readable file: %s" file))
+  (let ((existing (get-file-buffer (expand-file-name file))))
+    (find-file file)
+    (unless existing
+      (setq-local +presentation--owned-buffer t))
+    (+presentation-mode 1)))
 
-;;;###autoload
-(defun +presentation-previous-slide ()
-  "Retreat the current presentation session by one slide.
-No-op when the session is already at slide 0.  Emits a
-`claude/channel' notification post-render."
-  (interactive)
-  (when-let* ((key +presentation--session-key)
-              (sess (+presentation--get-session key))
-              (cur (plist-get sess :current-slide-index)))
-    (let ((prv (1- cur)))
-      (when (>= prv 0)
-        (+presentation--deck-goto key prv)
-        (+presentation--emit-nav-channel key cur prv)))))
-
-;;;###autoload
 (defun +presentation-quit ()
-  "End the presentation session owning the current buffer.
-Resolves the session via the buffer-local `+presentation--session-key'
-and invokes `+presentation-end'.  No-op when the key is nil or no
-session for that key is registered — typing the binding in a stale
-buffer is equivalent to \"session is already gone\"."
+  "End the presentation in the current buffer.
+Disables `+presentation-mode' (which widens) and buries the buffer.
+Kills the buffer instead when it was opened solely by `+present-markdown'."
   (interactive)
-  (when-let* ((key +presentation--session-key))
-    (when (gethash key +presentation--sessions)
-      (+presentation-end key))))
+  (let ((owned +presentation--owned-buffer)
+        (buf (current-buffer)))
+    (when +presentation-mode (+presentation-mode -1))
+    (if owned
+        (kill-buffer buf)
+      (bury-buffer buf))))
 
-(defun +presentation--enable-mode-in (buffer key)
-  "Enable `+presentation-mode' in BUFFER tagged with session KEY.
-Sets the buffer-local `+presentation--session-key' before activating
-the mode so its bindings can resolve the session."
-  (when (bufferp buffer)
-    (with-current-buffer buffer
-      (setq-local +presentation--session-key key)
-      (+presentation-mode 1))))
+
+;;; Revert resilience (§12)
+
+(defvar-local +presentation--revert-anchor nil
+  "Plist captured before buffer revert.
+Keys: :slug :index :fingerprint :window-start-offset.")
+
+(defconst +presentation--fingerprint-cap 80
+  "Maximum number of characters captured for the revert fingerprint.")
+
+(defun +presentation--h1-text-at (pos)
+  "Return the heading text of the H1 line beginning at POS, or nil."
+  (save-excursion
+    (save-restriction
+      (widen)
+      (goto-char pos)
+      (when (looking-at +presentation--h1-rx)
+        (match-string-no-properties 1)))))
+
+(defun +presentation--remember-position ()
+  "Capture narrowing context into `+presentation--revert-anchor'."
+  (let* ((pt (point))
+         (positions (save-restriction (widen)
+                                      (+presentation--all-h1-positions)))
+         (current-h1 (+presentation--current-h1-start))
+         (slug-text (and current-h1 (+presentation--h1-text-at current-h1)))
+         (slug (and slug-text (+presentation--heading-slug slug-text)))
+         (index (and current-h1
+                     (cl-position current-h1 positions :test #'=)))
+         (fingerprint
+          (save-restriction
+            (widen)
+            (let ((available (- (point-max) pt)))
+              (when (> available 0)
+                (buffer-substring-no-properties
+                 pt (+ pt (min +presentation--fingerprint-cap available)))))))
+         (win (get-buffer-window (current-buffer)))
+         (offset (if win (- (window-start win) pt) 0)))
+    (setq +presentation--revert-anchor
+          (list :slug slug :index index
+                :fingerprint fingerprint
+                :window-start-offset offset))))
+
+(defun +presentation--find-h1-by-slug (slug)
+  "Return the H1 position whose slug equals SLUG, or nil."
+  (cl-loop for pos in (save-restriction (widen)
+                                        (+presentation--all-h1-positions))
+           for text = (+presentation--h1-text-at pos)
+           for s = (and text (+presentation--heading-slug text))
+           when (equal s slug) return pos))
+
+(defun +presentation--restore-position ()
+  "Re-narrow and restore point + scroll using `+presentation--revert-anchor'."
+  (when +presentation--revert-anchor
+    (let* ((anchor +presentation--revert-anchor)
+           (slug (plist-get anchor :slug))
+           (index (plist-get anchor :index))
+           (fingerprint (plist-get anchor :fingerprint))
+           (offset (or (plist-get anchor :window-start-offset) 0))
+           (positions (save-restriction (widen)
+                                        (+presentation--all-h1-positions)))
+           (target (or (and slug (+presentation--find-h1-by-slug slug))
+                       (and index positions
+                            (nth (min index (1- (length positions)))
+                                 positions))
+                       (car positions))))
+      (widen)
+      (when target
+        (+presentation--narrow-to-heading-at target)
+        (goto-char (point-min)))
+      (when (and fingerprint (> (length fingerprint) 0))
+        (goto-char (point-min))
+        (when (search-forward fingerprint nil t)
+          (goto-char (match-beginning 0))
+          (let ((win (get-buffer-window (current-buffer))))
+            (when win
+              (set-window-start
+               win (max (point-min) (+ (point) offset)))))))
+      (setq +presentation--revert-anchor nil)
+      (when +presentation-mode
+        (+presentation--render-link-previews)))))
 
 ;;; lib.el ends here
