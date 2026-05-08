@@ -14,7 +14,7 @@
 - [x] 2.2 Add `(require '+gfm-block-borders)` to `+gfm-code-fences.el`.
 - [x] 2.3 Plumb the fences-specific overlay-registry symbol and timer symbol through the shared scheduler.
 - [x] 2.4 Run `make test` and verify the fences spec tests still pass bit-identically.
-- [ ] 2.5 Manual smoke: open `openspec/changes/gfm-callouts-per-window-rendering/proposal.md`, split window 3 ways, resize, edit; confirm fences still render correctly.
+- [x] 2.5 Manual smoke: open `openspec/changes/gfm-callouts-per-window-rendering/proposal.md`, split window 3 ways, resize, edit; confirm fences still render correctly.
 
 ## 3. Rewrite `+gfm-callouts.el` core decoration on the shared lib
 
