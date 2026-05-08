@@ -3,5 +3,7 @@ files:
     - elpaca
     - site
     - var
+    - .envrc
+    - .direnv
   copy:
     - lisp/+autoloads.el
