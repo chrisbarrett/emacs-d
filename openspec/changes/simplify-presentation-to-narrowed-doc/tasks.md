@@ -152,9 +152,9 @@
 ## 16. Verification
 
 - [x] 16.1 `make test` passes after all of §2–§14
-- [ ] 16.2 Manual smoke: `+present-markdown` on a fixture doc with three H1s — narrowing on enable, `C-n`/`C-p` advance/retreat, `C-c q` quits — **SKIPPED**: requires interactive user
-- [ ] 16.3 Manual smoke: a slide with a `path#L42-L67` link renders the preview; clicking opens the source narrowed to that range with focus overlay; `C-o` (evil) returns to the doc — **SKIPPED**: requires interactive user
-- [ ] 16.4 Manual smoke: a slide with a `diff:HEAD~1...HEAD` link renders the preview; clicking opens `magit-diff-range` — **SKIPPED**: requires interactive user
-- [ ] 16.5 Manual smoke: a slide with a `[label](#some-heading)` link narrows to the matching slide on follow — **SKIPPED**: requires interactive user
-- [ ] 16.6 Manual smoke: agent edits the doc via `Write` while the user is on slide 3; auto-revert + slug match keeps the user on slide 3 with point near where it was — **SKIPPED**: requires interactive user
-- [ ] 16.7 Manual smoke: `tmux split-window -h emacsclient -t -e '(+present-markdown PATH)'` from inside a tmux pane spawns a presentation pane; killing the doc buffer ends the presentation cleanly — **SKIPPED**: requires interactive user
+- [x] 16.2 Manual smoke: `+present-markdown` on a fixture doc with three H1s — narrowing on enable, `C-n`/`C-p` advance/retreat, `C-c q` quits
+- [x] 16.3 Manual smoke: a slide with a `path#L42-L67` link renders the preview; clicking opens the source narrowed to that range with focus overlay; `C-o` (evil) returns to the doc
+- [x] 16.4 Manual smoke: a slide with a `diff:HEAD~1...HEAD` link renders the preview; clicking opens `magit-diff-range`
+- [x] 16.5 Manual smoke: a slide with a `[label](#some-heading)` link narrows to the matching slide on follow
+- [x] 16.6 Manual smoke: agent edits the doc via `Write` while the user is on slide 3; auto-revert + slug match keeps the user on slide 3 with point near where it was — required fix: `+presentation--revert-anchor` marked `permanent-local`, both revert hook fns marked `permanent-local-hook`, restore re-enables mode after `kill-all-local-variables`. Regression test: `+presentation/revert-buffer-preserves-mode-and-narrowing`
+- [x] 16.7 Manual smoke: `tmux split-window -h emacsclient -t -e '(+present-markdown PATH)'` from inside a tmux pane spawns a presentation pane; killing the doc buffer ends the presentation cleanly

@@ -59,7 +59,10 @@ Also sets `user-emacs-directory' to the test root for module tests."
     (when (file-directory-p modules-dir)
       (dolist (dir (directory-files modules-dir t "\\`[^.]"))
         (when (file-directory-p dir)
-          (add-to-list 'load-path dir))))
+          (add-to-list 'load-path dir)
+          (let ((module-lib-dir (expand-file-name "lib" dir)))
+            (when (file-directory-p module-lib-dir)
+              (add-to-list 'load-path module-lib-dir))))))
     ;; Add all elpaca/builds/*/ directories
     (when (file-directory-p elpaca-builds-dir)
       (dolist (dir (directory-files elpaca-builds-dir t "\\`[^.]"))

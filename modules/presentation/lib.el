@@ -636,6 +636,7 @@ Kills the buffer instead when it was opened solely by `+present-markdown'."
 (defvar-local +presentation--revert-anchor nil
   "Plist captured before buffer revert.
 Keys: :slug :index :fingerprint :window-start-offset.")
+(put '+presentation--revert-anchor 'permanent-local t)
 
 (defconst +presentation--fingerprint-cap 80
   "Maximum number of characters captured for the revert fingerprint.")
@@ -682,7 +683,10 @@ Keys: :slug :index :fingerprint :window-start-offset.")
            when (equal s slug) return pos))
 
 (defun +presentation--restore-position ()
-  "Re-narrow and restore point + scroll using `+presentation--revert-anchor'."
+  "Re-narrow and restore point + scroll using `+presentation--revert-anchor'.
+When `kill-all-local-variables' has cleared `+presentation-mode' during
+the revert cycle, re-enable the mode so the buffer ends up in the same
+state as before."
   (when +presentation--revert-anchor
     (let* ((anchor +presentation--revert-anchor)
            (slug (plist-get anchor :slug))
@@ -698,18 +702,23 @@ Keys: :slug :index :fingerprint :window-start-offset.")
                        (car positions))))
       (widen)
       (when target
-        (+presentation--narrow-to-heading-at target)
-        (goto-char (point-min)))
+        (goto-char target))
       (when (and fingerprint (> (length fingerprint) 0))
-        (goto-char (point-min))
-        (when (search-forward fingerprint nil t)
-          (goto-char (match-beginning 0))
-          (let ((win (get-buffer-window (current-buffer))))
-            (when win
-              (set-window-start
-               win (max (point-min) (+ (point) offset)))))))
+        (let ((from (or target (point-min))))
+          (goto-char from)
+          (when (search-forward fingerprint nil t)
+            (goto-char (match-beginning 0)))))
       (setq +presentation--revert-anchor nil)
+      (unless +presentation-mode
+        (+presentation-mode 1))
       (when +presentation-mode
-        (+presentation--render-link-previews)))))
+        (+presentation--render-link-previews))
+      (let ((win (get-buffer-window (current-buffer))))
+        (when (and win fingerprint (> (length fingerprint) 0))
+          (set-window-start
+           win (max (point-min) (+ (point) offset))))))))
+
+(put '+presentation--remember-position 'permanent-local-hook t)
+(put '+presentation--restore-position 'permanent-local-hook t)
 
 ;;; lib.el ends here

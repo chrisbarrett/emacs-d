@@ -35,7 +35,10 @@
 (when (file-directory-p +modules-directory)
   (dolist (dir (directory-files +modules-directory t "\\`[^.]"))
     (when (+module-directory-p dir)
-      (add-to-list 'load-path dir))))
+      (add-to-list 'load-path dir)
+      (let ((lib-dir (file-name-concat dir "lib")))
+        (when (file-directory-p lib-dir)
+          (add-to-list 'load-path lib-dir))))))
 
 (setq package-enable-at-startup nil)
 

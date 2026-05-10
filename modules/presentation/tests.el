@@ -920,6 +920,32 @@ mode is enabled, and BODY can call `+presentation-follow-link'."
     (should-not (memq #'+presentation--remember-position before-revert-hook))
     (should-not (memq #'+presentation--restore-position after-revert-hook))))
 
+(ert-deftest +presentation/revert-buffer-preserves-mode-and-narrowing ()
+  "End-to-end: real `revert-buffer' must keep mode on and re-narrow to the
+same slug.  `kill-all-local-variables' otherwise clears the anchor, the
+buffer-local revert hooks, and the minor-mode flag before
+`after-revert-hook' runs."
+  (+presentation-tests--with-temp-md
+      "# One\nbody one\n# Two\nfingerprint-two\n# Three\nbody three\n" tmp
+    (find-file tmp)
+    (unwind-protect
+        (progn
+          (+presentation-mode 1)
+          (+presentation-next-slide)
+          (search-forward "fingerprint-two")
+          (backward-char (length "fingerprint-two"))
+          (let ((coding-system-for-write 'utf-8))
+            (write-region
+             "# One\nbody one\n# Two\nfingerprint-two changed\n# Three\nbody three\n"
+             nil tmp))
+          (revert-buffer t t)
+          (should +presentation-mode)
+          (should (buffer-narrowed-p))
+          (save-excursion
+            (goto-char (point-min))
+            (should (looking-at "# Two"))))
+      (let ((kill-buffer-query-functions nil)) (kill-buffer)))))
+
 
 ;;; §14 Module-level cleanup
 
