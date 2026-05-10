@@ -46,32 +46,12 @@
 ;; Load module system to collect packages for installation.
 (require '+modules)
 
-;; Install all packages before elpaca-wait:
-;; 1. Extra packages (bootstrap packages not in any module)
-;; 2. Module packages (from modules/*/packages.eld)
-
-(defun +install-packages ()
-  "Install all packages declared in the module system.
-
-Packages are sourced from `+extra-packages-file' and the `packages.eld'
-files in each module."
-  (interactive)
-  (+modules-install-packages (+modules-collect-packages)))
-
 (+install-packages)
 
 ;; Block until all packages are installed.
 (elpaca-wait)
 
 ;; Register autoloads so module functions are available before loading.
-
-(defun +autoloads-rebuild ()
-  "Rebuild autoloads file from module libs."
-  (interactive)
-  (let ((autoloads (+modules-collect-autoloads)))
-    (+modules-register-autoloads autoloads)
-    (+modules-write-autoloads autoloads)))
-
 (+autoloads-rebuild)
 
 ;;; Configure Bootstrap Packages
@@ -198,11 +178,8 @@ files in each module."
 
 ;;; Module init files
 
-;; Load module init.el files after all autoloads are registered.
-(+modules-load-inits (+modules-collect-init-files))
-
-;; Trust module srcs for flymake.
-(mapc #'+modules-register-trusted-content (+modules-discover))
+;; Load module init.el files and register module dirs as trusted content.
+(+modules-load-all)
 
 ;;; Load site/**.el
 

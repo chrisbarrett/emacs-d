@@ -19,7 +19,7 @@
               ((string-prefix-p modules-dir file))
               ((or (string-suffix-p "/lib.el" file)
                    (string-match-p "/lib/[^/]+\\.el\\'" file))))
-    (+modules-regenerate-autoloads)))
+    (+autoloads-rebuild)))
 
 (add-hook! 'emacs-config-mode-hook
   (add-hook 'after-save-hook #'+elisp-maybe-regenerate-autoloads-h nil t))

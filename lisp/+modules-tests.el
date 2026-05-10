@@ -143,13 +143,13 @@
           (should (+modules--valid-module-p temp-dir)))
       (delete-directory temp-dir t))))
 
-;;; Tests for +modules-read-packages
+;;; Tests for +modules--read-packages
 
 (ert-deftest modules--read-packages--returns-nil-when-no-file ()
   "Reading packages returns nil when packages.eld doesn't exist."
   (let ((temp-dir (make-temp-file "module-" t)))
     (unwind-protect
-        (should (null (+modules-read-packages temp-dir)))
+        (should (null (+modules--read-packages temp-dir)))
       (delete-directory temp-dir t))))
 
 (ert-deftest modules--read-packages--reads-single-package ()
@@ -158,7 +158,7 @@
     (unwind-protect
         (let ((packages-file (expand-file-name "packages.eld" temp-dir)))
           (write-region "((evil-collection))" nil packages-file)
-          (let ((result (+modules-read-packages temp-dir)))
+          (let ((result (+modules--read-packages temp-dir)))
             (should (equal '((evil-collection)) result))))
       (delete-directory temp-dir t))))
 
@@ -169,7 +169,7 @@
         (let ((packages-file (expand-file-name "packages.eld" temp-dir)))
           (write-region "((evil :host github :repo \"emacs-evil/evil\")\n (evil-collection))"
                         nil packages-file)
-          (let ((result (+modules-read-packages temp-dir)))
+          (let ((result (+modules--read-packages temp-dir)))
             (should (= 2 (length result)))
             (should (equal '(evil :host github :repo "emacs-evil/evil") (car result)))
             (should (equal '(evil-collection) (cadr result)))))
@@ -181,7 +181,7 @@
     (unwind-protect
         (let ((packages-file (expand-file-name "packages.eld" temp-dir)))
           (write-region ";; -*- lisp-data -*-\n((consult))" nil packages-file)
-          (let ((result (+modules-read-packages temp-dir)))
+          (let ((result (+modules--read-packages temp-dir)))
             (should (equal '((consult)) result))))
       (delete-directory temp-dir t))))
 
@@ -191,7 +191,7 @@
     (unwind-protect
         (let ((packages-file (expand-file-name "packages.eld" temp-dir)))
           (write-region "" nil packages-file)
-          (should (null (+modules-read-packages temp-dir))))
+          (should (null (+modules--read-packages temp-dir))))
       (delete-directory temp-dir t))))
 
 (ert-deftest modules--read-packages--returns-nil-for-comment-only ()
@@ -200,15 +200,15 @@
     (unwind-protect
         (let ((packages-file (expand-file-name "packages.eld" temp-dir)))
           (write-region ";; -*- lisp-data -*-\n;; No packages yet" nil packages-file)
-          (should (null (+modules-read-packages temp-dir))))
+          (should (null (+modules--read-packages temp-dir))))
       (delete-directory temp-dir t))))
 
-;;; Tests for +modules-collect-packages
+;;; Tests for +modules--collect-packages
 
 (ert-deftest modules--collect-packages--returns-empty-when-no-modules ()
   "Collecting packages returns nil when no modules exist."
   (let ((+modules-directory (make-temp-name "/tmp/nonexistent-")))
-    (should (null (+modules-collect-packages)))))
+    (should (null (+modules--collect-packages)))))
 
 (ert-deftest modules--collect-packages--aggregates-from-multiple-modules ()
   "Collecting packages aggregates specs from all modules."
@@ -220,7 +220,7 @@
           (make-directory module-b)
           (write-region "((evil))" nil (expand-file-name "packages.eld" module-a))
           (write-region "((consult) (vertico))" nil (expand-file-name "packages.eld" module-b))
-          (let ((result (+modules-collect-packages)))
+          (let ((result (+modules--collect-packages)))
             (should (= 3 (length result)))
             (should (member '(evil) result))
             (should (member '(consult) result))
@@ -237,11 +237,11 @@
           (make-directory without-packages)
           (write-region "((evil))" nil (expand-file-name "packages.eld" with-packages))
           (write-region "" nil (expand-file-name "init.el" without-packages))
-          (let ((result (+modules-collect-packages)))
+          (let ((result (+modules--collect-packages)))
             (should (equal '((evil)) result))))
       (delete-directory +modules-directory t))))
 
-;;; Tests for +modules-install-packages
+;;; Tests for +modules--install-packages
 
 (ert-deftest modules--install-packages--no-op-when-elpaca-unavailable ()
   "Installing packages is a no-op when elpaca is not available."
@@ -251,7 +251,7 @@
       (fmakunbound 'elpaca))
     (unwind-protect
         ;; Should not error, just return nil
-        (should-not (+modules-install-packages '((some-package))))
+        (should-not (+modules--install-packages '((some-package))))
       ;; Restore elpaca if it was bound
       (when elpaca-was-bound
         ;; Note: We can't easily restore the original function, so we skip
@@ -260,7 +260,7 @@
 
 (ert-deftest modules--install-packages--calls-elpaca-for-each-spec ()
   "Installing packages evaluates elpaca form for each spec."
-  ;; This test verifies that +modules-install-packages calls eval with
+  ;; This test verifies that +modules--install-packages calls eval with
   ;; the correct elpaca forms. We intercept eval to record the forms
   ;; and skip actual evaluation of elpaca forms to avoid side effects.
   (let ((eval-calls '())
@@ -275,7 +275,7 @@
       ;; Ensure elpaca appears bound for the fboundp check
       (unless (fboundp 'elpaca)
         (fset 'elpaca (lambda (&rest _) nil)))
-      (+modules-install-packages '((pkg-a) (pkg-b :host github :repo "user/pkg-b")))
+      (+modules--install-packages '((pkg-a) (pkg-b :host github :repo "user/pkg-b")))
       ;; Should have called eval with elpaca forms for each spec
       (should (= 2 (length eval-calls)))
       (should (member '(elpaca (pkg-a)) eval-calls))
@@ -286,9 +286,9 @@
   (let ((elpaca-called nil))
     (cl-letf (((symbol-function 'elpaca)
                (lambda (_spec) (setq elpaca-called t))))
-      (+modules-install-packages nil)
+      (+modules--install-packages nil)
       (should-not elpaca-called)
-      (+modules-install-packages '())
+      (+modules--install-packages '())
       (should-not elpaca-called))))
 
 
@@ -425,7 +425,7 @@
     (should (null (+modules--autoload-form form "/path/lib.el")))))
 
 
-;;; Tests for +modules-collect-autoloads
+;;; Tests for +modules--collect-autoloads
 
 (ert-deftest modules--collect-autoloads--collects-from-modules ()
   "Collects autoloads from all discovered modules."
@@ -435,7 +435,7 @@
           (make-directory module-dir)
           (write-region ";;;###autoload\n(defun my-func () nil)"
                         nil (expand-file-name "lib.el" module-dir))
-          (let ((result (+modules-collect-autoloads)))
+          (let ((result (+modules--collect-autoloads)))
             (should (= 1 (length result)))
             (should (eq 'my-func (cadr (car (car result)))))))
       (delete-directory +modules-directory t))))
@@ -448,11 +448,11 @@
           (make-directory module-dir)
           (write-region "(defun not-autoloaded () nil)"
                         nil (expand-file-name "lib.el" module-dir))
-          (should (null (+modules-collect-autoloads))))
+          (should (null (+modules--collect-autoloads))))
       (delete-directory +modules-directory t))))
 
 
-;;; Tests for +modules-register-autoloads
+;;; Tests for +modules--register-autoloads
 
 (ert-deftest modules--register-autoloads--makes-symbol-fboundp ()
   "Registering autoloads makes symbol fboundp."
@@ -467,7 +467,7 @@
           (should-not (fboundp sym))
           ;; Create autoload entry
           (let ((entries `(((defun ,sym () "Test." nil) . ,temp-file))))
-            (+modules-register-autoloads entries))
+            (+modules--register-autoloads entries))
           ;; Symbol should now be fboundp (as autoload)
           (should (fboundp sym))
           (should (autoloadp (symbol-function sym))))
@@ -477,14 +477,14 @@
 
 (ert-deftest modules--register-autoloads--handles-empty-list ()
   "Handles empty autoload list without error."
-  (+modules-register-autoloads nil)
-  (+modules-register-autoloads '()))
+  (+modules--register-autoloads nil)
+  (+modules--register-autoloads '()))
 
 (ert-deftest modules--register-autoloads--skips-unknown-forms ()
   "Skips forms that can't be converted to autoloads."
   (let ((entries '(((setq foo 'bar) . "/path/lib.el"))))
     ;; Should not error
-    (+modules-register-autoloads entries)))
+    (+modules--register-autoloads entries)))
 
 ;;; Tests for +modules--find-init-file
 
@@ -505,12 +505,12 @@
       (delete-directory temp-dir t))))
 
 
-;;; Tests for +modules-collect-init-files
+;;; Tests for +modules--collect-init-files
 
 (ert-deftest modules--collect-init-files--returns-empty-when-no-modules ()
   "Returns nil when no modules exist."
   (let ((+modules-directory (make-temp-name "/tmp/nonexistent-")))
-    (should (null (+modules-collect-init-files)))))
+    (should (null (+modules--collect-init-files)))))
 
 (ert-deftest modules--collect-init-files--finds-init-files ()
   "Finds init.el files from discovered modules."
@@ -522,7 +522,7 @@
           (make-directory module-b)
           (write-region "" nil (expand-file-name "init.el" module-a))
           (write-region "" nil (expand-file-name "init.el" module-b))
-          (let ((result (+modules-collect-init-files)))
+          (let ((result (+modules--collect-init-files)))
             (should (= 2 (length result)))
             (should (cl-every (lambda (f) (string-suffix-p "init.el" f)) result))))
       (delete-directory +modules-directory t))))
@@ -537,13 +537,13 @@
           (make-directory without-init)
           (write-region "" nil (expand-file-name "init.el" with-init))
           (write-region "" nil (expand-file-name "lib.el" without-init))
-          (let ((result (+modules-collect-init-files)))
+          (let ((result (+modules--collect-init-files)))
             (should (= 1 (length result)))
             (should (string-match-p "with-init" (car result)))))
       (delete-directory +modules-directory t))))
 
 
-;;; Tests for +modules-load-inits
+;;; Tests for +modules--load-inits
 
 (ert-deftest modules--load-inits--loads-init-files ()
   "Loading inits evaluates init.el contents."
@@ -557,7 +557,7 @@
           ;; Write init.el that sets the var
           (write-region (format "(setq %s t)" test-var-sym) nil init-file)
           ;; Load the init
-          (+modules-load-inits (list init-file))
+          (+modules--load-inits (list init-file))
           ;; Check the var was set
           (should (symbol-value test-var-sym)))
       (makunbound test-var-sym)
@@ -574,15 +574,15 @@
           (set counter-sym 0)
           (write-region (format "(setq %s (1+ %s))" counter-sym counter-sym) nil init-a)
           (write-region (format "(setq %s (1+ %s))" counter-sym counter-sym) nil init-b)
-          (+modules-load-inits (list init-a init-b))
+          (+modules--load-inits (list init-a init-b))
           (should (= 2 (symbol-value counter-sym))))
       (makunbound counter-sym)
       (delete-directory temp-dir t))))
 
 (ert-deftest modules--load-inits--handles-empty-list ()
   "Handles empty init file list without error."
-  (+modules-load-inits nil)
-  (+modules-load-inits '()))
+  (+modules--load-inits nil)
+  (+modules--load-inits '()))
 
 (ert-deftest modules--load-inits--side-effects-visible ()
   "Init side-effects are visible after loading."
@@ -598,14 +598,14 @@
            (format "(setq %s 'initialized-from-module)" marker-sym)
            nil (expand-file-name "init.el" module-dir))
           ;; Full workflow: collect and load
-          (let ((init-files (+modules-collect-init-files)))
-            (+modules-load-inits init-files))
+          (let ((init-files (+modules--collect-init-files)))
+            (+modules--load-inits init-files))
           ;; Verify side effect
           (should (eq 'initialized-from-module (symbol-value marker-sym))))
       (makunbound marker-sym)
       (delete-directory +modules-directory t))))
 
-;;; Tests for +modules-register-trusted-content
+;;; Tests for +modules--register-trusted-content
 
 (ert-deftest modules--register-trusted-content--adds-base-and-lib ()
   "Adds module base dir and lib/ subdir to `trusted-content'."
@@ -613,7 +613,7 @@
         (trusted-content nil))
     (unwind-protect
         (progn
-          (+modules-register-trusted-content temp-dir)
+          (+modules--register-trusted-content temp-dir)
           (should (member (file-name-as-directory temp-dir) trusted-content))
           (should (member (file-name-as-directory
                            (expand-file-name "lib" temp-dir))
@@ -626,8 +626,8 @@
         (trusted-content nil))
     (unwind-protect
         (progn
-          (+modules-register-trusted-content temp-dir)
-          (+modules-register-trusted-content temp-dir)
+          (+modules--register-trusted-content temp-dir)
+          (+modules--register-trusted-content temp-dir)
           (should (= 1 (cl-count (file-name-as-directory temp-dir)
                                  trusted-content :test #'equal)))
           (should (= 1 (cl-count (file-name-as-directory
@@ -641,7 +641,7 @@
         (trusted-content nil))
     (unwind-protect
         (progn
-          (+modules-register-trusted-content temp-dir)
+          (+modules--register-trusted-content temp-dir)
           (dolist (entry trusted-content)
             (should (directory-name-p entry))))
       (delete-directory temp-dir t))))

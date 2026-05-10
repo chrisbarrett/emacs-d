@@ -20,7 +20,7 @@ lisp/+autoloads.el: $(MODULE_LIB_FILES)
 	@emacs -Q --batch \
 		--eval "(add-to-list 'load-path \"$(CURDIR)/lisp\")" \
 		--eval "(require '+modules)" \
-		--eval "(+modules-write-autoloads (+modules-collect-autoloads))"
+		--eval "(+autoloads-rebuild)"
 
 test: setup-hooks lisp/+autoloads.el
 	./scripts/run-tests.sh
