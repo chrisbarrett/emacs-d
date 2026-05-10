@@ -1,1 +1,0 @@
-../specs/040-lang-terraform.md

@@ -1,1 +1,0 @@
-../../specs/008-theme.md

@@ -1,1 +1,0 @@
-../modules/lang-text/spec.md

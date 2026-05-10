@@ -1,1 +1,0 @@
-../../specs/046-lang-shscript.md

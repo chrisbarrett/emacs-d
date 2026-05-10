@@ -1,1 +1,0 @@
-../../specs/030-input-methods.md

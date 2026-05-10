@@ -1,1 +1,0 @@
-../../specs/047-lang-erlang.md

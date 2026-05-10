@@ -1,1 +1,0 @@
-../../specs/006-completion.md

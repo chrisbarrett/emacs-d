@@ -1,1 +1,0 @@
-../../specs/007-leader.md
