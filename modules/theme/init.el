@@ -21,6 +21,11 @@
                         '(iedit-occurrence ((t (:inherit query-replace))))
                         ;; Dim delimiters like commas, semicolons, etc.
                         '(font-lock-delimiter-face ((t (:inherit shadow))))
+                        ;; Lift doc-string colour off comment colour (catppuccin
+                        ;; renders them indistinguishably). Value lifted from
+                        ;; doom-one's `doc-comments': base5 lightened 0.25.
+                        '(font-lock-doc-face ((((background dark))
+                                               (:foreground "#84898e"))))
                         ;; Drop the pre/code-block background on light themes;
                         ;; the gfm-code-fences border replaces it visually.
                         '(markdown-pre-face ((((background light))

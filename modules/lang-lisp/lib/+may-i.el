@@ -23,22 +23,22 @@
 (defconst may-i-constants '("else" "*"))
 
 (defface may-i-allow-face
-  '((t :inherit success :weight normal :slant normal))
+  '((t :inherit success :weight semibold :slant normal))
   "Face for `(allow …)' decision verbs in may-i configs."
   :group 'may-i)
 
 (defface may-i-ask-face
-  '((t :inherit warning :weight normal :slant normal))
+  '((t :inherit warning :weight semibold :slant normal))
   "Face for `(ask …)' decision verbs in may-i configs."
   :group 'may-i)
 
 (defface may-i-deny-face
-  '((t :inherit error :weight normal :slant normal))
+  '((t :inherit error :weight semibold :slant normal))
   "Face for `(deny …)' decision verbs in may-i configs."
   :group 'may-i)
 
 (defface may-i-reason-face
-  '((t :inherit font-lock-doc-face :slant normal))
+  '((t :inherit font-lock-doc-face :slant italic))
   "Face for the reason string of `(allow|ask|deny …)' verbs."
   :group 'may-i)
 
@@ -49,6 +49,61 @@
 (defun may-i--symbol-rx (symbols)
   "Match SYMBOLS as a standalone symbol. Capture group 1 is the symbol."
   (rx-to-string `(seq symbol-start (group (or ,@symbols)) symbol-end)))
+
+(defun may-i--inside-check-p (pos)
+  "Non-nil if POS is inside a `(check …)' form at any nesting depth."
+  (save-excursion
+    (catch 'found
+      (dolist (open (nth 9 (syntax-ppss pos)))
+        (goto-char (1+ open))
+        (when (looking-at-p (rx "check" symbol-end))
+          (throw 'found t))))))
+
+(defconst may-i--reason-rx
+  (rx "(" (or "allow" "ask" "deny") symbol-end
+      (* whitespace)
+      (group "\""
+             (* (or (not (any "\"" "\\"))
+                    (seq "\\" anychar)))
+             "\"")))
+
+(defun may-i--reason-matcher (limit)
+  "Font-lock MATCHER for reason strings outside `(check …)' forms.
+`syntax-ppss' mutates match data, hence `save-match-data'."
+  (let (hit)
+    (while (and (not hit) (re-search-forward may-i--reason-rx limit t))
+      (unless (save-match-data (may-i--inside-check-p (match-beginning 0)))
+        (setq hit t)))
+    hit))
+
+(defconst may-i--decision-rx
+  (rx "(" (group (or "allow" "ask" "deny")) symbol-end))
+
+(defun may-i--inside-check-decision-matcher (limit)
+  "Font-lock MATCHER for decision verbs inside `(check …)' forms."
+  (let (hit)
+    (while (and (not hit) (re-search-forward may-i--decision-rx limit t))
+      (when (save-match-data (may-i--inside-check-p (match-beginning 0)))
+        (setq hit t)))
+    hit))
+
+(defun may-i--rule-prog-limit ()
+  "PRE-MATCH-FORM for `(rule …)' head fontification.
+Skip whitespace after the matched `(rule', then return the end of the
+first argument — either a bare string or an `(or …)' form."
+  (skip-syntax-forward " >")
+  (when (memq (char-after) '(?\" ?\())
+    (save-excursion (ignore-errors (forward-sexp)) (point))))
+
+(defconst may-i--string-rx
+  (rx "\""
+      (* (or (not (any "\"" "\\"))
+             (seq "\\" anychar)))
+      "\""))
+
+(defun may-i--string-matcher (limit)
+  "Anchored MATCHER for the next string literal up to LIMIT."
+  (re-search-forward may-i--string-rx limit t))
 
 (defconst may-i-font-lock-keywords
   `(;; Def forms: head + name being defined.
@@ -63,6 +118,14 @@
     (,(may-i--head-rx may-i-top-level-forms)
      (1 font-lock-keyword-face))
 
+    ;; `(rule …)' PROG: a bare string or `(or "x" "y" …)'. Fontify each
+    ;; string as a function name.
+    (,(rx "(" "rule" symbol-end)
+     (may-i--string-matcher
+      (may-i--rule-prog-limit)
+      nil
+      (0 'font-lock-function-name-face t)))
+
     ;; Control flow / logical combinators (call position only — `else'
     ;; below covers the cond-clause use of a bare symbol).
     (,(may-i--head-rx may-i-control-keywords)
@@ -73,14 +136,14 @@
     (,(may-i--head-rx '("ask"))   (1 'may-i-ask-face))
     (,(may-i--head-rx '("deny"))  (1 'may-i-deny-face))
 
-    ;; Reason string immediately following a decision verb.
-    (,(rx "(" (or "allow" "ask" "deny") symbol-end
-          (* whitespace)
-          (group "\""
-                 (* (or (not (any "\"" "\\"))
-                        (seq "\\" anychar)))
-                 "\""))
-     (1 'may-i-reason-face t))
+    ;; Inside `(check …)' the verbs are claims, not decisions — drop
+    ;; the bold weight, keep the colour.
+    (may-i--inside-check-decision-matcher
+     (1 '(:weight normal) prepend))
+
+    ;; Reason string immediately following a decision verb, except
+    ;; inside `(check …)' where it's a command-line under test.
+    (may-i--reason-matcher (1 'may-i-reason-face t))
 
     ;; Recursion + regex stay as builtins.
     (,(may-i--head-rx '("authorise" "regex"))
