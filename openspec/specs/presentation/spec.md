@@ -2,1087 +2,630 @@
 
 ## Purpose
 
-The `presentation` capability enables a Claude Code agent (acting as
-presenter) to drive a live, slide-paced demonstration in the user's
-running Emacs daemon over MCP.  A session attaches to a tmux window,
-either reusing an existing emacsclient frame or spawning a fresh one,
-maintains an ordered deck of slides of several kinds (narrative, file,
-diff, layout), supports per-slide annotation overlays, and lets the
-user step through slides at their own pace while the agent observes
-their progress via channel notifications.
+The `presentation` capability lets a Claude Code agent and the user
+walk through a single markdown document slide-by-slide.  The agent
+authors a markdown file and invokes `(+present-markdown PATH)` via
+`emacsclient -e`; Emacs enables a buffer-local minor mode
+(`+presentation-mode`) that narrows the buffer to the H1 region
+containing point and binds keys for stepping through headings.
+
+There is no deck data structure: the document is the deck and
+narrowing is the navigator.  There is no session registry: per-
+presentation state lives buffer-local on the document buffer.  There
+are no MCP tools and no channel back-signal.  Tmux geometry is the
+caller's problem.
+
+Inside the narrowed region, two link forms render as fenced previews
+without modifying buffer text: `<path>#L<start>-L<end>` shows a
+source-range preview, and `diff:<base>...<head>[#<path>]` shows a
+git-diff preview.  Following a preview link pushes a mark and escapes
+to a real source buffer (or a magit diff buffer) so the user retains
+their standard back-jump bindings.
 
 ## Requirements
 
-### Requirement: Session lifecycle MCP tools
+### Requirement: Public entry point `+present-markdown`
 
-The system SHALL register three MCP tools via
-`claude-code-ide-make-tool`: `start_presentation`, `get_presentation`,
-and `end_presentation`.
+The system SHALL expose a single public function
+`+present-markdown FILE`, autoloaded, that opens FILE via `find-file`
+and enables `+presentation-mode` in the resulting buffer.  The
+function SHALL accept FILE as a string path (absolute or relative to
+`default-directory` at call time) and SHALL signal a `user-error`
+when FILE does not exist or cannot be opened as a regular file.
 
-`start_presentation` SHALL accept the following arguments:
+The function SHALL be the only public elisp entry point for starting
+a presentation.  The presentation module SHALL NOT register any MCP
+tools.
 
-| Name            | Type   | Optional | Notes                              |
-| :-------------- | :----- | :------- | :--------------------------------- |
-| `worktree`      | string | no       | Absolute path                      |
-| `tmux_session`  | string | no       | tmux session name                  |
-| `tmux_window`   | string | no       | tmux window id or index            |
-| `split`         | string | yes      | `"horizontal"` (default), `"vertical"` |
-| `initial_slide` | object | yes      | Slide spec, `{ kind, ... }`        |
+#### Scenario: emacsclient invocation enables the mode
 
-`start_presentation` SHALL return a string session key.  When
-`initial_slide` is provided, it SHALL be stored as deck entry 0 and
-rendered as the current slide; otherwise the deck SHALL begin empty
-with current slide index `nil`.
+- **WHEN** a caller evaluates `(+present-markdown "/abs/path/doc.md")`
+- **AND** the file exists and is readable
+- **THEN** the buffer visiting `/abs/path/doc.md` becomes the current
+  buffer
+- **AND** `+presentation-mode` is enabled in that buffer
+- **AND** the buffer is narrowed to the first H1 region (or remains
+  widened if the document has no H1 headings)
 
-`end_presentation` SHALL accept a single `key` string argument and
-return a status indicator.  Tear-down SHALL include deletion of all
-overlays attached to slides in the deck.
+#### Scenario: missing file rejected
 
-`get_presentation` SHALL accept a single `key` string argument and
-return an alist with `key`, `origin` (string), `frame_live` (boolean),
-`tmux_pane` (string or nil), `worktree` (string), `started_at`
-(float seconds-since-epoch), `slide_count` (integer), and
-`current_slide_index` (integer or nil).  Unknown keys SHALL signal a
-user-error.
+- **WHEN** `+present-markdown` is called with a path that does not
+  exist
+- **THEN** a `user-error` is signalled whose message names the path
+- **AND** no buffer is created
+- **AND** `+presentation-mode` is not enabled
 
-#### Scenario: Tools are registered at module init
+#### Scenario: no MCP tools registered
 
 - **WHEN** the `presentation` module is initialised
-- **THEN** `claude-code-ide-mcp-server-tools` contains entries whose
-  `:name` fields are `"start_presentation"`, `"get_presentation"`, and
-  `"end_presentation"`
+- **THEN** no entry whose `:name` is `start_presentation`,
+  `present_document`, `get_presentation`, `end_presentation`,
+  `push_slide`, `replace_slide`, `truncate_after`, `goto_slide`, or
+  `get_deck` is added to `claude-code-ide-mcp-server-tools`
 
-#### Scenario: end_presentation with unknown key
+### Requirement: `+presentation-mode` buffer-local minor mode
 
-- **WHEN** `end_presentation` is called with a key not present in the
-  session store
-- **THEN** the system signals a user-error and does not mutate any state
+The system SHALL define `+presentation-mode` as a buffer-local minor
+mode.  Enabling the mode SHALL narrow the buffer to the H1 region
+containing point (or the first H1 region when point is before the
+first H1, or the last H1 region when point is after the last H1).
+Disabling the mode SHALL widen the buffer.
 
-#### Scenario: get_presentation reports deck state
+The mode keymap SHALL bind:
 
-- **WHEN** `get_presentation` is called on a session that has had two
-  slides pushed
-- **THEN** the returned alist's `slide_count` is 2
-- **AND** `current_slide_index` is 1
+| Key            | Command                          |
+| :------------- | :------------------------------- |
+| `C-n` / `C-f`  | `+presentation-next-slide`       |
+| `C-p` / `C-b`  | `+presentation-previous-slide`   |
+| `C-c q`        | `+presentation-quit`             |
+| `RET`          | `+presentation-follow-link`      |
 
-### Requirement: Frame reuse via tty match
+The keymap SHALL take precedence over the buffer's major-mode
+bindings for the keys it owns.  Bindings SHALL be callable from any
+evil state.
 
-The system SHALL determine whether to reuse or create a presentation
-frame by joining `tmux list-panes` output (`pane_tty` field) against
-the daemon's frames (filtered on `(frame-parameter f 'tty)`).
+#### Scenario: enabling narrows to first heading
 
-#### Scenario: Existing emacsclient frame in target window
+- **WHEN** `+presentation-mode` is enabled in a buffer containing
+  three H1 headings and point is at `point-min`
+- **THEN** the buffer is narrowed to the region from the first H1's
+  beginning to the second H1's beginning (exclusive)
 
-- **WHEN** the target tmux window contains a pane whose `pane_tty`
-  matches the `'tty` parameter of an existing daemon frame
-- **THEN** the system reuses that frame, captures
-  `current-window-configuration` into the session state with
-  `:origin` `'reused`, and additionally pushes the configuration into
-  register `?P`
+#### Scenario: enabling narrows to enclosing heading when point is mid-slide
 
-#### Scenario: No existing emacsclient frame
+- **WHEN** point is on a line inside the second H1's region
+- **AND** `+presentation-mode` is enabled
+- **THEN** the buffer is narrowed to the second H1's region
 
-- **WHEN** no daemon frame's `'tty` parameter matches any pane in the
-  target window
-- **THEN** the system spawns a new pane via
-  `tmux split-window -t SESS:WIN [-h|-v] -- emacsclient -t -s SOCK`,
-  identifies the resulting pane and tty by diffing `list-panes`
-  before-and-after, locates the corresponding new frame, and tags
-  it with `presentation-key` and `presentation-origin 'created`
+#### Scenario: disabling widens
 
-### Requirement: Effect-interpreter for tmux interaction
+- **WHEN** `+presentation-mode` is enabled and the buffer is
+  narrowed
+- **AND** the user disables the mode
+- **THEN** the buffer is widened
 
-The system SHALL model all tmux interaction as data via
-`+presentation-effect-shell` and `+presentation-effect-elisp`
-records, with a single runner (`+presentation--run-effects`) responsible
-for execution.
+#### Scenario: keymap is callable from evil normal state
 
-#### Scenario: Planner emits commands as data
-
-- **WHEN** the spawn path is planned for given session/window/split inputs
-- **THEN** the planner returns a list of effect records whose `argv`
-  fields equal the expected tmux invocations, without executing them
-
-#### Scenario: Tests assert on argv
-
-- **WHEN** unit tests exercise the planner
-- **THEN** they assert directly on emitted `argv` lists; no live `tmux`
-  process is invoked
-
-### Requirement: Session state book-keeping
-
-The system SHALL maintain a hash table `+presentation--sessions`
-mapping each session key to a plist with at least
-`:frame :origin :saved-config :tmux-pane :worktree :started-at`.
-
-The presentation frame SHALL also carry frame parameters
-`presentation-key` and `presentation-origin`.
-
-#### Scenario: Created session has tmux-pane and no saved-config
-
-- **WHEN** a session is created via the spawn path
-- **THEN** its plist has `:origin 'created`, a non-nil `:tmux-pane`,
-  and a nil `:saved-config`
-
-#### Scenario: Reused session has saved-config and no tmux-pane
-
-- **WHEN** a session is created via the reuse path
-- **THEN** its plist has `:origin 'reused`, a non-nil `:saved-config`,
-  and a nil `:tmux-pane`
-
-### Requirement: Tear-down by origin
-
-The system SHALL tear down sessions according to their origin.
-
-#### Scenario: Reused-origin tear-down
-
-- **WHEN** `end_presentation` is called on a `'reused` session
-- **THEN** the system calls `set-window-configuration` with the
-  saved configuration on the session's frame, removes the
-  `presentation-key` and `presentation-origin` frame parameters,
-  and removes the hash entry; the frame remains alive
-
-#### Scenario: Created-origin tear-down
-
-- **WHEN** `end_presentation` is called on a `'created` session
-- **THEN** the system emits a `tmux kill-pane -t PANE_ID` effect for
-  the recorded pane id, the resulting frame deletion fires
-  `delete-frame-functions`, and the hash entry is removed by the hook
-
-### Requirement: Mid-session frame deletion cleanup
-
-The system SHALL clear session state when a presentation frame is
-deleted by any means via a `delete-frame-functions` hook.  The hook
-SHALL match sessions by `:frame` identity (not by `frame-parameter`),
-because tty-client disconnects fire `delete-frame-functions` after the
-frame's parameters have already been wiped.
-
-#### Scenario: User closes the frame manually
-
-- **WHEN** the user deletes a frame whose object identity matches the
-  `:frame` value of a session in `+presentation--sessions`
-- **THEN** the matching hash entry is removed
-- **AND** a subsequent `end_presentation` call with that key signals
-  a user-error
-
-### Requirement: Splash buffer
-
-The system SHALL display a buffer named `*presentation: <key>*` in
-the presentation frame, containing at least the session key, the
-worktree path, and a placeholder line indicating no slide has yet
-been pushed.
-
-#### Scenario: No initial slide
-
-- **WHEN** `start_presentation` is called without `initial_slide`
-- **THEN** the splash buffer contains the placeholder line
-
-#### Scenario: With initial slide
-
-- **WHEN** `start_presentation` is called with an `initial_slide`
-  of kind `"narrative"` and a `markdown` field
-- **THEN** the splash buffer is created with the rendered slide
-  contents in place of the placeholder, before being shown to the
-  user
-
-### Requirement: Narrative slide rendering
-
-The system SHALL render slides whose `kind` is `"narrative"` from
-either an inline `:markdown` string or a `:path` to a file on disk,
-exactly one of which SHALL be present.
-
-When `:markdown` is given, the renderer SHALL insert the string into
-the splash buffer (`*presentation: <key>*`) and enable the configured
-markdown major mode for fontification.
-
-When `:path` is given, the renderer SHALL resolve the path against
-the session's worktree (when relative) and call
-`find-file-noselect` on the result; the returned buffer SHALL become
-the displayed buffer.  The renderer SHALL signal a `user-error`
-when the path does not exist.
-
-#### Scenario: render replaces buffer contents atomically (markdown)
-
-- **WHEN** a narrative slide with `:markdown` is rendered
-- **THEN** the splash buffer's prior contents are replaced
-- **AND** the major mode is set to the configured markdown mode
-
-#### Scenario: render attaches a real file buffer (path)
-
-- **WHEN** a narrative slide with `:path` is rendered
-- **AND** the resolved file exists
-- **THEN** the displayed buffer is the buffer returned by
-  `find-file-noselect` for that path
-- **AND** the buffer's `default-directory` matches the file's
-  containing directory (so claude-code-ide's project lookup
-  routes selections to the project's session)
-
-#### Scenario: render rejects missing path
-
-- **WHEN** a narrative slide with `:path` is rendered
-- **AND** the resolved file does not exist
-- **THEN** a `user-error` is signalled whose message names the
-  missing path
-- **AND** no buffer is created and the deck is unchanged
-
-### Requirement: Deck mutation MCP tools
-
-The system SHALL register four additional MCP tools via
-`claude-code-ide-make-tool`: `push_slide`, `replace_slide`,
-`truncate_after`, and `goto_slide`.  Each tool SHALL operate against
-the session identified by a required `key` argument and SHALL signal a
-user-error for unknown keys without mutating any state.
-
-`push_slide` SHALL accept `key` and `slide` (a slide spec object),
-append the slide to the session's deck, and return the new slide's
-integer index.  Its render and current-slide behaviour is governed by
-the `push_slide tool semantics` requirement.
-
-`replace_slide` SHALL accept `key`, `index` (integer), and `slide`,
-replace the slide at `index` in place, re-render only when `index`
-equals the current slide index, and signal a user-error when `index`
-is out of range or when the deck is empty.
-
-`truncate_after` SHALL accept `key` and `index` (integer), drop all
-slides whose position is greater than `index`, and — when the prior
-current slide index was greater than `index` — set the current slide
-index to `index` and re-render that slide.  `index` of `-1` SHALL be
-permitted as "drop the entire deck".
-
-`goto_slide` SHALL accept `key` and `index` (integer), re-render the
-slide at `index`, set the current slide index, and signal a
-user-error when `index` is out of range.
-
-#### Scenario: replace_slide on current index re-renders
-
-- **WHEN** `replace_slide` is invoked with an index equal to the
-  session's current slide index
-- **THEN** the deck entry at that index is replaced
-- **AND** the slide is re-rendered into the presentation frame
-
-#### Scenario: replace_slide on non-current index does not re-render
-
-- **WHEN** `replace_slide` is invoked with an index different from the
-  session's current slide index
-- **THEN** the deck entry is replaced
-- **AND** the presentation frame's displayed slide is unchanged
-
-#### Scenario: truncate_after drops trailing slides
-
-- **WHEN** `truncate_after` is invoked with an index `i` on a deck of
-  length `N > i + 1`
-- **THEN** the deck length becomes `i + 1`
-- **AND** if the prior current slide index was greater than `i`, the
-  current slide index becomes `i` and that slide is re-rendered
-
-#### Scenario: goto_slide re-renders without mutating the deck
-
-- **WHEN** `goto_slide` is invoked with a valid index
-- **THEN** the deck contents are unchanged
-- **AND** the slide at that index is rendered as the current slide
-- **AND** the session's current slide index is updated
-
-#### Scenario: Out-of-range index signals user-error
-
-- **WHEN** any deck mutation tool is invoked with an `index` outside
-  `[0, slide_count - 1]` (or `[-1, slide_count - 1]` for
-  `truncate_after`)
-- **THEN** the system signals a user-error
-- **AND** the deck and current slide index are unchanged
-
-### Requirement: push_slide tool semantics
-
-`push_slide` SHALL accept `key` (string), `slide` (slide spec
-object), and an optional `set_current` (boolean, default `false`).
-The tool SHALL append the slide to the session's deck and return
-the new slide's integer index.
-
-When `set_current` is `false` or absent, the session's current
-slide index and rendered frame SHALL be unchanged.  When
-`set_current` is `true`, the session's current slide index SHALL be
-set to the new slide's index and the slide SHALL be rendered as the
-current view.
-
-`push_slide` SHALL signal a `user-error` for unknown keys without
-mutating any state, and SHALL run the same validation as
-`+presentation--validate-slide` against the `slide` argument.
-
-#### Scenario: push_slide returns appended index
-
-- **WHEN** `push_slide` is invoked on a session whose deck has
-  length N
-- **THEN** the slide is stored at index N
-- **AND** the tool returns the integer N
-
-#### Scenario: default push leaves view unchanged
-
-- **WHEN** `push_slide` is invoked without `set_current` while the
-  user is viewing slide `i`
-- **THEN** the user continues to see slide `i` after the call
-  returns
-- **AND** no render is performed
-
-#### Scenario: set_current true advances and renders
-
-- **WHEN** `push_slide` is invoked with `set_current: true` on a
-  session whose deck has length `N`
-- **THEN** the slide is appended at index `N`
-- **AND** the session's current slide index becomes `N`
-- **AND** the slide at index `N` is rendered
-
-### Requirement: Deck recovery via get_deck
-
-The system SHALL register an MCP tool `get_deck` that accepts a
-session `key` and returns an object containing `key`,
-`current_slide_index` (integer or null), and `slides`: an ordered
-array of `{ index, kind, title }` records, one per deck entry.
-`title` SHALL be the slide spec's `title` field when present, else
-null.  Slide bodies (markdown, file content, annotations) SHALL NOT be
-echoed back.
-
-#### Scenario: Empty deck returns empty slides array
-
-- **WHEN** `get_deck` is called on a session whose deck is empty
-- **THEN** the returned `slides` array is empty
-- **AND** `current_slide_index` is null
-
-#### Scenario: Non-empty deck returns one record per slide
-
-- **WHEN** `get_deck` is called on a session with N slides
-- **THEN** the returned `slides` array has N records
-- **AND** each record has fields `index`, `kind`, and `title`
-- **AND** indexes are contiguous starting at 0 in array order
-
-### Requirement: present_document MCP tool
-
-The system SHALL register an MCP tool `present_document` via
-`claude-code-ide-make-tool`.
-
-`present_document` SHALL accept the following arguments:
-
-| Name           | Type    | Optional | Notes                                  |
-| :------------- | :------ | :------- | :------------------------------------- |
-| `worktree`     | string  | no       | Absolute path                          |
-| `tmux_session` | string  | no       | tmux session name                      |
-| `tmux_window`  | string  | no       | tmux window id or index                |
-| `slug`         | string  | no       | Kebab-case identifier; no `/` or whitespace |
-| `markdown`     | string  | no       | Document body                          |
-| `split`        | string  | yes      | `"horizontal"` (default), `"vertical"` |
-| `file_slides`  | array   | yes      | Array of slide specs, each `kind: "file"` |
-
-The tool SHALL compute the document path as
-
-```
-<worktree>/.claude/presentations/<YYYY>-<MM>-<DD>T<HH>-<MM>-<slug>.md
-```
-
-using the current local time at minute precision, creating
-`<worktree>/.claude/presentations/` when absent.
-
-The tool SHALL write `markdown` to the computed path, then invoke
-the same code path as `start_presentation` with an `initial_slide`
-of `{ kind: "narrative", path: <computed-path> }`, then push each
-entry in `file_slides` (in order) via the same code path as
-`push_slide`.
-
-The tool SHALL return an alist with keys `key` (session key),
-`path` (the computed document path), and `slide_count` (integer
-equal to `1 + (length file_slides)`).
-
-The tool SHALL signal a `user-error` without writing any file or
-creating any session when:
-
-- `slug` is empty, contains `/`, or contains whitespace.
-- Any entry in `file_slides` is not a valid file slide per
-  `+presentation--validate-slide`.
-
-#### Scenario: tool registration
-
-- **WHEN** the `presentation` module is initialised
-- **THEN** `claude-code-ide-mcp-server-tools` contains an entry
-  whose `:name` field is `"present_document"`
-
-#### Scenario: tool composes write + start + pushes
-
-- **WHEN** `present_document` is invoked with two `file_slides`
-- **THEN** the effect plan includes (in order) creation of
-  `<worktree>/.claude/presentations/` if absent, a write of the
-  document body to the computed path, a `start_presentation`
-  invocation with `initial_slide` of kind `narrative` and `:path`
-  matching the computed path, and two `push_slide` invocations
-
-#### Scenario: tool returns key, path, slide_count
-
-- **WHEN** `present_document` succeeds with `N` `file_slides`
-- **THEN** the returned alist has `key` (string), `path` (string),
-  and `slide_count` equal to `1 + N`
-
-#### Scenario: invalid slug rejected
-
-- **WHEN** `present_document` is invoked with `slug` of `""`,
-  `"foo/bar"`, or `"foo bar"`
-- **THEN** a `user-error` is signalled
-- **AND** no file is written
-- **AND** no session is created
-
-#### Scenario: non-file file_slide rejected
-
-- **WHEN** `present_document` is invoked with a `file_slides`
-  entry whose `kind` is not `"file"`
-- **THEN** a `user-error` is signalled
-- **AND** no file is written
-- **AND** no session is created
-
-### Requirement: file slide kind
-
-The system SHALL render slides whose `kind` is `"file"` by opening the
-slide's `path` (resolved against the session's worktree when
-relative) via `find-file-noselect`, narrowing the visible region to
-`[start_line, end_line]` when both are provided, and highlighting the
-sub-range given by `focus` (a two-element `[start, end]` line range)
-when provided.  The buffer SHALL be set read-only for the duration of
-the slide and restored to its prior read-only state when the slide is
-left.
-
-#### Scenario: file slide narrows to range
-
-- **WHEN** a `file` slide with `start_line` and `end_line` is rendered
-- **THEN** the displayed buffer is narrowed to the inclusive line range
-- **AND** the major mode chosen by `auto-mode-alist` is active
-
-#### Scenario: file slide focus highlights sub-range
-
-- **WHEN** a `file` slide with a `focus` field is rendered
-- **THEN** point is placed at the start of the focus range
-- **AND** an overlay with the `region` face spans the focus range
-
-### Requirement: diff slide kind
-
-The system SHALL render slides whose `kind` is `"diff"` by invoking
-`git -C WORKTREE diff [BASE..HEAD] [-- PATH]` via the effect runner
-and inserting the output into a per-session diff buffer named
-`*presentation-diff: KEY*` in `diff-mode`.  When `base` is provided
-without `head`, or `head` without `base`, the system SHALL signal a
-user-error.  When neither is provided, the working-tree diff SHALL be
-shown.
-
-#### Scenario: working-tree diff
-
-- **WHEN** a `diff` slide is rendered with neither `base` nor `head`
-- **THEN** the effect runner is invoked with argv
-  `("git" "-C" WORKTREE "diff")`
-- **AND** the output is shown in `*presentation-diff: KEY*` in
-  `diff-mode`
-
-#### Scenario: range diff with path scope
-
-- **WHEN** a `diff` slide is rendered with `base=B`, `head=H`, and
-  `path=P`
-- **THEN** the effect runner is invoked with argv
-  `("git" "-C" WORKTREE "diff" "B..H" "--" "P")`
-
-#### Scenario: half-specified range is rejected
-
-- **WHEN** a `diff` slide is rendered with exactly one of `base` and
-  `head`
-- **THEN** the system signals a user-error
-- **AND** no git process is spawned
-
-### Requirement: layout slide kind
-
-The system SHALL render slides whose `kind` is `"layout"` by rendering
-each child slide in `panes` to its target buffer and then composing
-them in the presentation frame via `split-window`, with `split` of
-`"horizontal"` producing a side-by-side layout and `"vertical"` a
-stacked layout.  `panes` SHALL contain exactly two slide specs; layout
-slides SHALL NOT contain layout slides as children.
-
-#### Scenario: horizontal split places panes side-by-side
-
-- **WHEN** a `layout` slide with `split="horizontal"` and two panes is
-  rendered
-- **THEN** the presentation frame contains two windows positioned
-  side-by-side, each displaying the buffer for one pane
-
-#### Scenario: nested layout is rejected
-
-- **WHEN** a `layout` slide whose `panes` array contains a slide of
-  `kind="layout"` is pushed
-- **THEN** the system signals a user-error
-- **AND** the deck is unchanged
-
-#### Scenario: wrong pane count is rejected
-
-- **WHEN** a `layout` slide whose `panes` array does not have length 2
-  is pushed
-- **THEN** the system signals a user-error
-- **AND** the deck is unchanged
-
-### Requirement: Per-slide annotation overlays
-
-Slides of kind `narrative`, `file`, and `diff` SHALL accept an
-optional `annotations` array of records `{ line, text, position }`
-where `line` is a positive integer line number into the slide's
-displayed buffer, `text` is the annotation string, and `position` is
-either `"before"` or `"after"` (default `"after"`).  The system SHALL
-render annotations as Emacs overlays on the slide's buffer using
-`before-string` or `after-string` accordingly, and SHALL delete those
-overlays when the slide is left (a different slide becomes current,
-the slide is replaced via `replace_slide`, the deck is truncated past
-this slide, or the session ends).
-
-#### Scenario: annotation overlay attached at given line
-
-- **WHEN** a slide with an annotation `{ line: 5, text: "T", position:
-  "after" }` is rendered
-- **THEN** an overlay exists on the slide's buffer at line 5 with an
-  `after-string` containing `"T"`
-
-#### Scenario: overlays cleared on slide change
-
-- **WHEN** a slide with annotations is the current slide
-- **AND** any of `goto_slide`, `push_slide`, or
-  `replace_slide` (when the replacement targets the current slide)
-  is invoked
-- **THEN** every overlay created by the prior slide's annotations is
-  deleted before the next slide is rendered
-
-#### Scenario: invalid line number rejected at validation
-
-- **WHEN** a slide with an annotation whose `line` is not a positive
-  integer is pushed
-- **THEN** the system signals a user-error
-- **AND** the deck is unchanged
-
-### Requirement: Slide validation
-
-`+presentation--validate-slide` SHALL signal `user-error` for each of
-the following invalid inputs without mutating any state:
-
-- Unknown `:kind` value (anything outside `narrative`, `file`,
-  `diff`, `layout`).
-- A `narrative` slide that has neither `:path` nor `:markdown`, or
-  that has both.  When `:markdown` is present it SHALL be a string;
-  when `:path` is present it SHALL be a string.
-- A `file` slide missing `:path` or whose `:path` is not a string.
-  When `:start-line` and `:end-line` are both present, both SHALL be
-  positive integers with `start <= end`.  When `:focus` is present
-  it SHALL be a 2-element list of positive integers.
-- A `diff` slide where exactly one of `:base` and `:head` is
-  supplied.
-- A `layout` slide whose `:split` is not `"horizontal"` or
-  `"vertical"`, whose `:panes` is not a 2-element sequence, or whose
-  panes contain a nested `layout`.
-- An annotation whose `:line` is not a positive integer or whose
-  `:position` (when present) is not `"before"` / `"after"`.
-- A `:pane-layout` field whose value is not `"tall"` or `"wide"`
-  (case-sensitive string compare after the standard alist→plist
-  coercion).
-
-#### Scenario: narrative with neither path nor markdown rejected
-
-- **WHEN** `+presentation--validate-slide` is called with a
-  narrative slide carrying neither `:path` nor `:markdown`
-- **THEN** a `user-error` is signalled
-
-#### Scenario: narrative with both path and markdown rejected
-
-- **WHEN** `+presentation--validate-slide` is called with a
-  narrative slide carrying both `:path` and `:markdown`
-- **THEN** a `user-error` is signalled
-
-#### Scenario: unknown kind rejected
-
-- **WHEN** `+presentation--validate-slide` is called with `:kind` of
-  `frobnicator`
-- **THEN** a `user-error` is signalled whose message names the
-  unknown kind
-
-#### Scenario: nested layout rejected
-
-- **WHEN** a `layout` slide's `:panes` contains another `layout` slide
-- **THEN** a `user-error` is signalled
-
-#### Scenario: half-specified diff range rejected
-
-- **WHEN** a `diff` slide has `:base` but no `:head` (or vice versa)
-- **THEN** a `user-error` is signalled
-
-#### Scenario: invalid pane_layout rejected
-
-- **WHEN** a slide carries `:pane-layout` of `huge`
-- **THEN** a `user-error` is signalled whose message names the
-  offending value
-
-### Requirement: Slide pane_layout hint
-
-Every slide spec SHALL accept an optional `pane_layout` field.  When
-present, its value SHALL be either `"tall"` or `"wide"`; any other
-value SHALL be rejected at validation time with a `user-error`.
-
-When a slide is rendered (via `push_slide`, `goto_slide`,
-`replace_slide` whose index equals current, or user-driven
-navigation), the renderer SHALL compare the slide's `pane_layout` to
-the session's currently-applied layout.  When they differ, the
-renderer SHALL emit tmux effects that reshape the window:
-
-- `"tall"`: claude-code pane on top at ~25% height, presentation pane
-  below filling the remainder.
-- `"wide"`: claude-code pane on the left at ~33% width, presentation
-  pane on the right at ~66% width.
-
-After the effects run successfully, the session plist's
-`:pane-layout` slot SHALL be updated to the new value.  When the
-hint matches the current session layout, the renderer SHALL NOT
-invoke tmux.
-
-When a slide has no `pane_layout` field, the renderer SHALL leave the
-tmux geometry unchanged.
-
-#### Scenario: tall hint reshapes a side-by-side window
-
-- **WHEN** a slide with `pane_layout: "tall"` is rendered
-- **AND** the session's `:pane-layout` is `'wide` or `nil`
-- **THEN** tmux receives `select-layout main-horizontal` followed by
-  `set-window-option main-pane-height 25%`
-- **AND** the session's `:pane-layout` becomes `'tall`
-
-#### Scenario: wide hint reshapes a stacked window
-
-- **WHEN** a slide with `pane_layout: "wide"` is rendered
-- **AND** the session's `:pane-layout` is `'tall` or `nil`
-- **THEN** tmux receives `select-layout main-vertical` followed by
-  `set-window-option main-pane-width 33%`
-- **AND** the session's `:pane-layout` becomes `'wide`
-
-#### Scenario: matching hint is idempotent
-
-- **WHEN** a slide with `pane_layout: "tall"` is rendered
-- **AND** the session's `:pane-layout` is already `'tall`
-- **THEN** no tmux effect is emitted
-- **AND** the session's `:pane-layout` remains `'tall`
-
-#### Scenario: missing hint leaves geometry alone
-
-- **WHEN** a slide without a `pane_layout` field is rendered
-- **THEN** no tmux effect is emitted regardless of the session's
-  current `:pane-layout`
-- **AND** the session's `:pane-layout` is unchanged
-
-#### Scenario: invalid value rejected at validation
-
-- **WHEN** a slide spec carries `pane_layout: "huge"` is pushed
-- **THEN** `+presentation--validate-slide` signals a `user-error`
-  whose message names the offending value
-- **AND** the deck is not mutated
-
-### Requirement: Tmux window-layout save and restore around session lifetime
-
-`start_presentation` SHALL capture the target tmux window's layout
-string (`#{window_layout}`) before splitting any new panes and SHALL
-stash it on the session plist as `:tmux-saved-layout`.
-
-`end_presentation` SHALL apply that saved layout via
-`tmux select-layout` before its existing teardown step (kill-pane for
-`'created` origin, restore-window-config for `'reused` origin).  When
-`:tmux-saved-layout` is absent or empty, the restore step SHALL be
-skipped without error.
-
-#### Scenario: saved layout restored on end_presentation
-
-- **WHEN** `start_presentation` runs against a window with layout
-  string `L0`
-- **AND** the agent later pushes slides with mixed `pane_layout`
-  hints
-- **AND** `end_presentation` is called
-- **THEN** tmux receives `select-layout L0` before the kill-pane (or
-  restore-window-config) effect
-
-#### Scenario: missing saved layout is tolerated
-
-- **WHEN** `end_presentation` is called on a session whose
-  `:tmux-saved-layout` is `nil`
-- **THEN** no `select-layout` effect is emitted
-- **AND** the existing teardown effects run normally
-
-### Requirement: +presentation-mode minor mode on rendered buffers
-
-The system SHALL provide a buffer-local minor mode
-`+presentation-mode`.  Every render path
-(`+presentation--render-narrative`, `+presentation--render-file`,
-`+presentation--render-diff`, and the per-pane buffers produced by
-`+presentation--render-layout`) SHALL set a buffer-local
-`+presentation--session-key` to the active session key and enable
-`+presentation-mode` on the produced buffer before it is displayed.
-
-`+presentation-mode` SHALL define a keymap binding:
-
-- `C-n` and `C-f` to a `next-slide` command
-- `C-p` and `C-b` to a `previous-slide` command
-- `C-c q` to a `quit` command that ends the session owning the
-  current buffer
-
-`next-slide` SHALL advance the deck by one position via the existing
-`+presentation--deck-goto` helper.  `previous-slide` SHALL retreat by
-one.  Both commands SHALL no-op (without error) when the requested
-target index is out of `[0, slide_count)`.
-
-`quit` SHALL resolve the session via the buffer-local
-`+presentation--session-key` and invoke `+presentation-end` on it.
-When the buffer-local key is `nil`, or no session for that key
-exists in the session table, `quit` SHALL no-op without error.
-
-The minor mode keymap SHALL take precedence over the buffer's major
-mode bindings for the keys it owns; other keys SHALL pass through to
-the major mode unchanged.  Bindings SHALL be callable from any evil
-state (normal, insert, visual, …) — the keymap is registered via
-`evil-make-overriding-map`.
-
-#### Scenario: file-slide buffer has navigation enabled
-
-- **WHEN** a `file` slide is rendered for session `K`
-- **THEN** the resulting file buffer has `+presentation-mode`
-  enabled
-- **AND** `+presentation--session-key` is buffer-locally bound to `K`
-
-#### Scenario: C-n advances the deck
-
-- **WHEN** point is in a presentation buffer for session `K`
-- **AND** the session's current slide index is `i` with `i + 1 <
-  slide_count`
-- **AND** the user invokes the binding for `C-n`
-- **THEN** the session's current slide index becomes `i + 1`
-- **AND** the slide at index `i + 1` is rendered
-
-#### Scenario: C-n at the last slide is a no-op
-
-- **WHEN** the user invokes `C-n` while the current slide index
-  equals `slide_count - 1`
-- **THEN** the current slide index is unchanged
-- **AND** no render is performed
-
-#### Scenario: C-p at index 0 is a no-op
-
-- **WHEN** the user invokes `C-p` while the current slide index is `0`
-- **THEN** the current slide index remains `0`
-- **AND** no render is performed
-
-#### Scenario: layout panes both carry the minor mode
-
-- **WHEN** a `layout` slide is rendered
-- **THEN** both pane buffers have `+presentation-mode` enabled
-- **AND** both have `+presentation--session-key` set to the session
-  key
-
-#### Scenario: C-c q ends the session
-
-- **WHEN** point is in a presentation buffer for session `K`
-- **AND** session `K` is registered in the session table
-- **AND** the user invokes the binding for `C-c q`
-- **THEN** `+presentation-end` is called with `K`
-- **AND** session `K` is removed from the session table
-
-#### Scenario: C-c q in a stale buffer is a no-op
-
-- **WHEN** point is in a buffer whose buffer-local
-  `+presentation--session-key` references a session no longer
-  present in the session table
-- **AND** the user invokes the binding for `C-c q`
-- **THEN** no error is signalled
-- **AND** no teardown effect is run
-
-#### Scenario: C-c q is callable from evil normal state
-
-- **WHEN** point is in a presentation buffer
+- **WHEN** point is in a `+presentation-mode` buffer
 - **AND** the active evil state is `normal`
-- **AND** the user types `C-c q`
-- **THEN** the `quit` command is invoked
-
-### Requirement: Markdown link dispatch in narrative buffers
-
-The system SHALL intercept markdown-link follows in narrative
-buffers (those whose major mode is `markdown-mode` AND that carry a
-non-nil buffer-local `+presentation--session-key`) and dispatch URLs
-to deck navigation when their form indicates a deck reference.
-
-Two URL forms SHALL be intercepted:
-
-- `slide:N` (where `N` is a non-negative integer) SHALL invoke
-  `goto_slide` with index `N` against the active session.  Indices
-  outside `[0, slide_count - 1]` SHALL signal a `user-error`
-  through the existing `goto_slide` validation.
-- `<path>#L<start>` or `<path>#L<start>-L<end>` SHALL be looked up
-  in the active session's deck.  A match is a slide whose `:kind`
-  is `"file"`, whose `:path` (resolved against the session's
-  worktree) equals the link's path, whose `:start-line` equals
-  `<start>`, and whose `:end-line` equals `<end>` (or `<start>`
-  when no range was given).  On a match, the system SHALL invoke
-  `goto_slide` with the matched index.  On a miss, the system
-  SHALL fall back to plain `find-file` of the resolved path
-  followed by `goto-line` of `<start>`, with no overlays applied.
-
-All other URL forms (e.g. `https://`, `mailto:`, plain paths
-without anchors) SHALL pass through to `markdown-mode`'s default
-link-following behaviour unchanged.
-
-The dispatch SHALL be active only when the buffer's major mode is
-`markdown-mode` AND `+presentation--session-key` is non-nil.
-File-kind, diff-kind, and layout-pane buffers SHALL NOT carry the
-dispatch.
-
-#### Scenario: slide:N dispatches to goto_slide
-
-- **WHEN** the user follows a markdown link with URL `slide:2` in
-  a narrative buffer for a session whose deck has length 3
-- **THEN** `goto_slide` is invoked with index 2
-- **AND** the slide at index 2 is rendered as the current slide
-
-#### Scenario: exact path-and-range match dispatches to goto_slide
-
-- **WHEN** the deck contains a file slide with `:path
-  modules/auth/init.el`, `:start-line 42`, `:end-line 67`
-- **AND** the user follows a markdown link with URL
-  `modules/auth/init.el#L42-L67` in the narrative buffer
-- **THEN** `goto_slide` is invoked with that slide's index
-
-#### Scenario: non-match falls back to find-file
-
-- **WHEN** the user follows a markdown link with URL
-  `modules/auth/init.el#L42-L67`
-- **AND** the deck contains no file slide with that exact path and
-  range
-- **THEN** the system invokes `find-file` on the resolved path
-  followed by `goto-line` of 42
-- **AND** no presentation overlays are applied to the buffer
-
-#### Scenario: plain URL passes through
-
-- **WHEN** the user follows a markdown link with URL
-  `https://example.com/foo` or `modules/auth/init.el` (no anchor)
-- **THEN** the link is followed by `markdown-mode`'s default
-  handler with no presentation-side dispatch
-
-#### Scenario: dispatch inactive in non-presentation markdown buffers
-
-- **WHEN** a markdown buffer has no buffer-local
-  `+presentation--session-key`
-- **AND** the user follows a `slide:0` link in that buffer
-- **THEN** the link is followed by `markdown-mode`'s default
-  handler with no presentation-side dispatch
-
-### Requirement: User-driven navigation emits a channel notification
-
-The system SHALL emit a `notifications/claude/channel` notification
-via the MCP transport whenever the current slide index changes due
-to user-driven navigation (`+presentation-next-slide` /
-`+presentation-previous-slide`).
-
-The notification's `content` SHALL be a human-readable English
-sentence describing the move (e.g. `"User advanced to slide 3 of
-7."` for forward navigation; `"User retreated to slide 2 of 7."`
-for backward).
-
-The notification's `meta` SHALL carry these string-valued keys:
-
-- `key`: the session key.
-- `current_slide`: the new index, decimal string.
-- `prior_slide`: the old index, decimal string.
-- `kind`: the slide kind at the new index (`narrative` / `file` /
-  `diff` / `layout`).
-- `title`: the slide's title when present; key SHALL be omitted
-  otherwise.
-
-When the MCP server is not connected, when channels are not
-supported by the connected client, or when the notification call
-errors for any reason, navigation SHALL succeed and the failure
-SHALL be silently swallowed.
-
-#### Scenario: forward navigation emits channel event
-
-- **WHEN** the user invokes `+presentation-next-slide` from slide
-  index 2 to index 3 in a session of 7 slides
-- **THEN** an MCP notification with method
-  `notifications/claude/channel` is emitted
-- **AND** its `params.content` reads
-  `"User advanced to slide 3 of 7."`
-- **AND** its `params.meta.current_slide` is `"3"`
-- **AND** its `params.meta.prior_slide` is `"2"`
-- **AND** its `params.meta.key` matches the session key
-
-#### Scenario: backward navigation emits channel event
-
-- **WHEN** the user invokes `+presentation-previous-slide` from
-  slide index 3 to index 2
-- **THEN** the emitted notification's `content` reads
-  `"User retreated to slide 2 of 7."`
-
-#### Scenario: agent-driven mutation does not emit
-
-- **WHEN** `goto_slide` is invoked
-- **OR** `push_slide` is invoked with `set_current: true`
-- **OR** `replace_slide` is invoked with an index equal to the
-  current slide index
-- **THEN** no `notifications/claude/channel` notification is emitted
-
-#### Scenario: notification suppressed when MCP unavailable
-
-- **WHEN** user-driven navigation occurs while the MCP transport is
-  disconnected
-- **THEN** the navigation completes successfully
-- **AND** no error is signalled to the user
-
-#### Scenario: title meta key omitted when slide has no title
-
-- **WHEN** the user navigates to a slide whose plist has no `:title`
-- **THEN** the emitted notification's `meta` SHALL NOT include a
-  `title` key
-
-### Requirement: Channel capability declared by MCP server
-
-The system SHALL ensure the MCP server's initialize-response
-declares `experimental.claude/channel: {}` so that Claude Code
-registers a channel notification listener for the presentation
-session.
-
-The implementation MAY achieve this via an upstream patch to
-`claude-code-ide-mcp.el` that exposes an additional-capabilities
-extension point, or via local `advice` on the initialize-response
-handler.  Either approach SHALL produce the same wire output.
-
-When the underlying MCP package version does not support either
-mechanism, the capability SHALL silently not be declared, and
-navigation notifications (still emitted by the elisp side) SHALL be
-ignored by the client.
-
-#### Scenario: capability appears in initialize response
-
-- **WHEN** the MCP server handles an `initialize` request after
-  module load
-- **THEN** the response's `result.capabilities.experimental` object
-  contains the key `claude/channel` with an empty-object value
-
-### Requirement: Annotation kinds
-
-Slide annotations SHALL accept an optional `:kind` field whose value
-is one of `"inline"` (default), `"callout"`, or `"margin"`.  Each
-kind dispatches to a distinct rendering primitive.
-
-`"inline"` annotations SHALL render as `before-string` (when
-`:position` is `"before"`) or `after-string` (when `:position` is
-`"after"`, the default) on an overlay anchored at point-at-bol or
-point-at-eol of the target line, respectively.
-
-`"callout"` annotations SHALL render as a multi-line box drawn after
-the target line, using border characters
-`┌` `─` `┐` `│` `└` `┘`.  The box width SHALL be `max(80, content
-+ 2)`.  The box SHALL carry a label header naming the severity
-(`NOTE` / `TIP` / `WARNING`).  Callouts SHALL NOT accept a
-`:position` field; supplying one SHALL signal a `user-error`.
-
-`"margin"` annotations SHALL render in the buffer's left or right
-margin via a `display` property of the form
-`(margin <side> <text>)`.  `:position` SHALL be `"left"` or
-`"right"` (default `"right"`); the values `"before"` and `"after"`
-SHALL be normalised to `"right"`.  When any margin annotation is
-present on a slide, the renderer SHALL ensure
-`left-margin-width` (for left-side annotations) or
-`right-margin-width` (for right-side) is at least 12 columns,
-saving the prior value as a restorer in the slide's
-`:render-state`.
-
-#### Scenario: inline annotation with position "after" anchors at EOL
-
-- **WHEN** an `inline` annotation with `:position` `"after"` is
-  applied at line N
-- **THEN** the resulting overlay's start position equals
-  point-at-eol of line N
-- **AND** the overlay carries an `after-string` containing the
-  annotation text
-
-#### Scenario: inline annotation with position "before" anchors at BOL
-
-- **WHEN** an `inline` annotation with `:position` `"before"` is
-  applied at line N
-- **THEN** the resulting overlay's start position equals
-  point-at-bol of line N
-- **AND** the overlay carries a `before-string` containing the
-  annotation text
-
-#### Scenario: callout annotation rendered as a box
-
-- **WHEN** a `callout` annotation with severity `"warning"` and
-  body `"watch out"` is applied at line N
-- **THEN** an overlay anchored at point-at-eol of line N carries an
-  `after-string` whose first character is `┌` and whose last line
-  ends with `┘`
-- **AND** the box's border characters carry the warning severity face
-
-#### Scenario: callout rejects :position
-
-- **WHEN** a slide spec includes a `callout` annotation with any
-  `:position` value
-- **THEN** `+presentation--validate-slide` signals a `user-error`
-  whose message names the kind and the offending field
-
-#### Scenario: margin annotation lives in the right margin
-
-- **WHEN** a `margin` annotation with `:position` `"right"` is
-  applied at line N
-- **THEN** the resulting overlay carries a `display` property whose
-  value is `(margin right-margin <text>)`
-- **AND** the buffer's `right-margin-width` is at least 12
-
-#### Scenario: margin restores prior margin width on cleanup
-
-- **WHEN** a slide with margin annotations is rendered against a
-  buffer with `right-margin-width` of 0
-- **AND** the slide is later left (`+presentation--cleanup-render-state`)
-- **THEN** the buffer's `right-margin-width` is restored to 0
-
-### Requirement: Annotation severity
-
-Slide annotations SHALL accept an optional `:severity` field whose
-value is one of `"note"` (default), `"tip"`, or `"warning"`.
-Severity SHALL drive the face used for the annotation's primary
-visual element (border for callouts, text face for inline,
-margin-string face for margin).
-
-The system SHALL define three faces:
-- `+presentation-annotation-note-face`, inheriting from
-  `+markdown-gfm-callout-note-face` when available.
-- `+presentation-annotation-tip-face`, inheriting from
-  `+markdown-gfm-callout-tip-face` when available.
-- `+presentation-annotation-warning-face`, inheriting from
-  `+markdown-gfm-callout-warning-face` when available.
-
-When the inherited face is unavailable, each face SHALL fall back
-to a sensible default (`shadow` for note, `success` for tip,
-`warning` for warning).
-
-#### Scenario: severity selects matching face
-
-- **WHEN** a `callout` annotation with severity `"tip"` is rendered
-- **THEN** the box border characters carry
-  `+presentation-annotation-tip-face`
-
-#### Scenario: severity defaults to note
-
-- **WHEN** an annotation omits `:severity`
-- **THEN** the rendered face is `+presentation-annotation-note-face`
-
-#### Scenario: invalid severity rejected at validation
-
-- **WHEN** a slide annotation carries `:severity` `"alarm"`
-- **THEN** `+presentation--validate-slide` signals a `user-error`
-  whose message names the offending value
+- **AND** the user types `C-n`
+- **THEN** `+presentation-next-slide` is invoked
+
+### Requirement: Heading-narrowed slide model
+
+A slide SHALL be defined as the buffer region from the beginning of
+one top-level heading line (matching `^# `) up to (but not including)
+the next top-level heading line, or `point-max` for the last slide.
+Sub-headings (`^##`, `^###`, etc.) SHALL flow within the slide and
+SHALL NOT cause additional slide breaks.  HR lines (`^---$`) SHALL
+NOT cause slide breaks.
+
+Heading detection SHALL ignore lines inside fenced code blocks.
+
+#### Scenario: H2 inside slide does not break
+
+- **WHEN** a slide region contains both `^# Auth` and `^## Tokens`
+- **THEN** the slide region extends from `^# Auth` until the next
+  `^# ` line (or `point-max`)
+- **AND** the H2 line is part of the slide
+
+#### Scenario: HR inside slide does not break
+
+- **WHEN** a slide region contains `^---` between paragraphs
+- **THEN** the slide region is unaffected by the HR
+
+#### Scenario: H1 inside fenced block ignored
+
+- **WHEN** a fenced code block contains a line beginning with `# `
+- **THEN** that line is not treated as a slide boundary
+
+### Requirement: Heading navigation commands
+
+`+presentation-next-slide` SHALL widen the buffer, locate the H1
+that follows the current narrowing's H1, and re-narrow to that H1's
+region.  Calling the command at the last slide SHALL be a silent
+no-op.
+
+`+presentation-previous-slide` SHALL widen the buffer, locate the
+H1 that precedes the current narrowing's H1, and re-narrow to that
+H1's region.  Calling the command at the first slide SHALL be a
+silent no-op.
+
+After re-narrowing, both commands SHALL place point at the start of
+the new narrowing.
+
+#### Scenario: next-slide advances narrowing
+
+- **WHEN** the buffer is narrowed to slide N (0-based)
+- **AND** the document has more than N+1 H1 headings
+- **AND** the user invokes `+presentation-next-slide`
+- **THEN** the buffer is narrowed to slide N+1
+
+#### Scenario: next-slide at last slide is a no-op
+
+- **WHEN** the buffer is narrowed to the last H1's region
+- **AND** the user invokes `+presentation-next-slide`
+- **THEN** the narrowing is unchanged
+- **AND** no error is signalled
+
+#### Scenario: previous-slide retreats narrowing
+
+- **WHEN** the buffer is narrowed to slide N (N >= 1)
+- **AND** the user invokes `+presentation-previous-slide`
+- **THEN** the buffer is narrowed to slide N-1
+
+#### Scenario: previous-slide at first slide is a no-op
+
+- **WHEN** the buffer is narrowed to slide 0
+- **AND** the user invokes `+presentation-previous-slide`
+- **THEN** the narrowing is unchanged
+- **AND** no error is signalled
+
+### Requirement: Quit command
+
+`+presentation-quit` SHALL disable `+presentation-mode` in the
+current buffer (which widens it) and SHALL bury the buffer.  When the
+buffer was created by `+present-markdown` with no prior visit (i.e.
+the buffer-local `+presentation--owned-buffer` flag is non-nil), the
+command SHALL kill the buffer instead of burying it.
+
+#### Scenario: quit widens and buries
+
+- **WHEN** the user invokes `+presentation-quit` in a buffer that
+  was already visiting the file before `+present-markdown` ran
+- **THEN** `+presentation-mode` is disabled in that buffer
+- **AND** the buffer is widened
+- **AND** the buffer is buried (not killed)
+
+#### Scenario: quit kills owned buffer
+
+- **WHEN** the user invokes `+presentation-quit` in a buffer that
+  was opened solely by `+present-markdown`
+- **THEN** the buffer is killed
+
+### Requirement: Heading-text in-doc link follow
+
+The system SHALL resolve in-doc heading links by slug match against
+the document's headings.
+
+When the follow-link command is invoked on a markdown link of the
+form `[label](#<slug>)`, the system SHALL search the (widened)
+document for an H1, H2, H3, etc. heading whose slugified text matches
+`<slug>`, push a mark at the click site, then re-narrow to the
+enclosing H1 of the matched heading and place point at the matched
+heading.
+
+When no heading matches `<slug>`, the system SHALL fall through to
+the markdown major mode's default link handler.
+
+#### Scenario: link to H1 narrows to that slide
+
+- **WHEN** the document has H1 `# Token validation`
+- **AND** the user follows a link with URL `#token-validation`
+- **THEN** a mark is pushed at the click site
+- **AND** the buffer is narrowed to the `Token validation` H1's region
+- **AND** point is at the start of the heading line
+
+#### Scenario: link to H2 narrows to enclosing H1
+
+- **WHEN** the document has H1 `# Auth flow` containing H2
+  `## Refresh tokens`
+- **AND** the user follows a link with URL `#refresh-tokens`
+- **THEN** a mark is pushed at the click site
+- **AND** the buffer is narrowed to the `Auth flow` H1's region
+- **AND** point is at the start of the `Refresh tokens` heading line
+
+#### Scenario: missing slug falls through
+
+- **WHEN** the user follows a link whose `#<slug>` matches no
+  heading
+- **THEN** the narrowing is unchanged
+- **AND** `markdown-mode`'s default link handler is invoked
+
+### Requirement: Heading slug normalisation
+
+The system SHALL slugify heading text by lowercasing it, replacing
+each run of non-alphanumeric characters with a single hyphen, and
+stripping leading and trailing hyphens.  In-doc link targets and
+heading texts SHALL be compared via this slugifier.
+
+#### Scenario: punctuation collapses to hyphen
+
+- **WHEN** the heading text is `# Auth & Tokens (v2)`
+- **THEN** its slug is `auth-tokens-v2`
+
+#### Scenario: leading and trailing punctuation stripped
+
+- **WHEN** the heading text is `# !! Setup !!`
+- **THEN** its slug is `setup`
+
+### Requirement: Source-range link preview overlay
+
+The system SHALL render fenced source previews for source-range
+links inside the current slide narrowing.
+
+For each link whose URL matches `<path>#L<start>` or
+`<path>#L<start>-L<end>`, the system SHALL place an overlay on the
+link's full markdown expression (`[label](url)`) whose `display`
+property renders as a fenced code block.  The fence SHALL contain at most 10 lines from the file at
+`<path>` (resolved relative to the buffer's `default-directory` when
+not absolute), starting at line `<start>`.  When `<end>` is omitted,
+the range SHALL be `<start>` to `<start>` (single line).
+
+The fence info-string SHALL include the link's label and a
+`<path>:<start>-<end>` reference.  The fence's language SHALL be
+derived from the file extension via a small alist (`.rs` → `rust`,
+`.el` → `elisp`, `.py` → `python`, `.ts` → `typescript`, `.js` →
+`javascript`, `.go` → `go`, `.md` → `markdown`, default `text`).
+
+When the requested range exceeds 10 lines, the fence body SHALL
+contain the first 10 lines from `<start>` and a footer line
+`+N more lines · click to open` (where N is `(end - start + 1) -
+10`).  When the file does not exist or the range is invalid (e.g.
+`<start>` exceeds the file's line count), the fence body SHALL be
+a single line `(file not found: <path>)` or `(invalid range)`.
+
+The underlying buffer text SHALL NOT be modified — overlays use
+`display` properties only, so saving the buffer writes the original
+markdown source.
+
+#### Scenario: small range renders without footer
+
+- **WHEN** a link `[fn](modules/auth.rs#L42-L48)` is inside the
+  current narrowing
+- **AND** lines 42-48 of `modules/auth.rs` are 7 lines of code
+- **THEN** an overlay covers the link's region
+- **AND** the overlay's `display` string contains a fence with the
+  7 source lines
+- **AND** no `+N more lines` footer is present
+
+#### Scenario: oversized range renders head-only with footer
+
+- **WHEN** a link `[fn](modules/auth.rs#L42-L80)` is inside the
+  current narrowing
+- **AND** lines 42-80 exist in the file
+- **THEN** the overlay's fence body contains lines 42-51 (the first
+  10 lines of the range)
+- **AND** the fence is followed by `+29 more lines · click to open`
+
+#### Scenario: missing file renders error fence
+
+- **WHEN** a link to `nonexistent.rs#L1-L10` is inside the current
+  narrowing
+- **THEN** the overlay's `display` string contains a single-line
+  fence with body `(file not found: nonexistent.rs)`
+
+#### Scenario: original buffer text unchanged
+
+- **WHEN** preview overlays are rendered on a slide
+- **AND** the buffer is saved to disk
+- **THEN** the on-disk file contains the original markdown link
+  syntax `[label](url)` with no fence content
+
+### Requirement: Diff-range link preview overlay
+
+The system SHALL render fenced diff previews for diff-range links
+inside the current slide narrowing.
+
+For each link whose URL matches `diff:<base>...<head>` (with optional
+`#<path>` fragment) inside the current narrowing, the system SHALL
+place an overlay on the link's full markdown expression whose
+`display` property renders as a fenced ```diff block containing the
+first 10 lines of `git diff <base>...<head> [-- <path>]` executed
+from the buffer's worktree.
+
+The fence info-string SHALL be `diff <label> · <base>...<head>`
+(plus ` -- <path>` when scoped).  When the diff exceeds 10 lines,
+the fence body SHALL include the first 10 lines and a footer
+`+N more lines · click to open`.  When `git diff` produces no
+output, the fence body SHALL be `(no changes)`.  When `git`
+exits non-zero, the fence body SHALL contain the first error line
+prefixed with `(git error: …)`.
+
+#### Scenario: diff link renders fenced preview
+
+- **WHEN** a link `[change](diff:HEAD~1...HEAD#auth.rs)` is inside
+  the current narrowing
+- **AND** `git diff HEAD~1...HEAD -- auth.rs` produces 6 lines of
+  output
+- **THEN** an overlay covers the link's region
+- **AND** the overlay's `display` string contains a `diff` fence
+  with those 6 lines
+
+#### Scenario: empty diff renders sentinel
+
+- **WHEN** a diff link's `git diff` invocation produces no output
+- **THEN** the fence body is `(no changes)`
+
+### Requirement: Preview refresh on slide entry
+
+The system SHALL clear all preview overlays in the buffer
+(`delete-overlay` on each member of
+`+presentation--preview-overlays`) and rebuild them by scanning the
+new narrowed region whenever the narrowing changes via any of:
+
+- `+presentation-mode` enable.
+- `+presentation-next-slide` / `+presentation-previous-slide`.
+- Heading-text in-doc link follow.
+- Buffer revert (post-`after-revert-hook`).
+
+The system SHALL NOT install file-system watchers, idle timers, or
+any other passive refresh mechanism for preview overlays.
+
+#### Scenario: navigating rebuilds overlays
+
+- **WHEN** the user invokes `+presentation-next-slide`
+- **THEN** every overlay in `+presentation--preview-overlays` is
+  deleted
+- **AND** previews are rebuilt by scanning the new slide's region
+
+#### Scenario: source file change between visits is reflected
+
+- **WHEN** a slide contains a `path#L42-L48` preview
+- **AND** the file at `path` changes on disk between two visits to
+  the slide
+- **THEN** the preview rebuilt on the second visit reflects the
+  current contents of the file
+
+### Requirement: Source-range link click action
+
+The system SHALL escape to a real source buffer when a source-range
+link is followed.
+
+The follow-link command invoked on a `<path>#L<a>-L<b>` link SHALL
+push a mark at the click site, then `find-file` the path (resolved
+against the buffer's `default-directory`).  The destination
+buffer SHALL be narrowed to lines `<a>` through `<b>` (or `<a>` only
+when no range was given) and SHALL be displayed via `display-buffer`,
+honouring `other-window-prefix` for split control.  A focus overlay
+covering the requested range SHALL be applied via the existing
+file-render machinery, and the buffer SHALL be made read-only with a
+restorer that runs on buffer kill.  `+presentation-mode` SHALL NOT
+be enabled in the destination buffer.
+
+#### Scenario: click opens narrowed file with focus overlay
+
+- **WHEN** the user clicks a `[fn](modules/auth.rs#L42-L67)` link
+- **THEN** a mark is pushed at the click site
+- **AND** the file `modules/auth.rs` is opened
+- **AND** the buffer is narrowed to lines 42-67
+- **AND** a focus overlay spans the range
+- **AND** the buffer is read-only
+
+#### Scenario: other-window-prefix splits
+
+- **WHEN** the user invokes `other-window-prefix` then clicks a
+  `path#L` link
+- **THEN** the destination buffer opens in a split window per
+  `other-window-prefix` semantics
+
+#### Scenario: back-jump returns to click site
+
+- **WHEN** the user clicks a `path#L` link
+- **AND** then invokes the standard back-mark binding (e.g. evil
+  `C-o` or `C-x C-SPC`)
+- **THEN** point returns to the link site in the doc buffer
+
+### Requirement: Diff-range link click action
+
+The system SHALL escape to a magit diff buffer when a diff-range
+link is followed.
+
+The follow-link command invoked on a `diff:<base>...<head>` link
+(optionally scoped via `#<path>`) SHALL push a mark at the click
+site, then call `magit-diff-range` with arguments
+`(format "%s...%s" base head)` and a file-args list containing
+`<path>` when given.  The destination buffer SHALL be displayed via
+`display-buffer`, honouring `other-window-prefix`.
+
+When `magit` is not loaded and `(require 'magit nil t)` returns nil,
+the system SHALL signal a `user-error` whose message indicates that
+magit is required.
+
+#### Scenario: click opens magit diff
+
+- **WHEN** the user clicks a `[change](diff:main...HEAD)` link
+- **AND** magit is available
+- **THEN** a mark is pushed at the click site
+- **AND** `magit-diff-range` is invoked with range `"main...HEAD"`
+
+#### Scenario: scoped diff passes path
+
+- **WHEN** the user clicks a `[change](diff:main...HEAD#auth.rs)`
+  link
+- **THEN** `magit-diff-range` receives a file-args list containing
+  `"auth.rs"`
+
+#### Scenario: missing magit signals user-error
+
+- **WHEN** the user clicks a diff link
+- **AND** magit is not loaded and cannot be required
+- **THEN** a `user-error` is signalled
+- **AND** no buffer is opened
+
+### Requirement: Other link forms pass through
+
+The system SHALL delegate unrecognised link URLs to the markdown
+major mode's default link handler.
+
+When the follow-link command is invoked on a markdown link whose
+URL is not one of `#<slug>`, `<path>#L<a>[-L<b>]`, or
+`diff:<base>...<head>[#<path>]`, the system SHALL invoke
+the markdown major mode's default link-following behaviour with no
+presentation-side dispatch.
+
+#### Scenario: http link passes through
+
+- **WHEN** the user follows a `[example](https://example.com)` link
+  in a `+presentation-mode` buffer
+- **THEN** `markdown-mode`'s default link handler runs
+- **AND** no narrowing change occurs in the doc buffer
+
+#### Scenario: plain path passes through
+
+- **WHEN** the user follows a `[file](modules/auth.rs)` link (no
+  `#L` anchor) in a `+presentation-mode` buffer
+- **THEN** `markdown-mode`'s default link handler runs
+
+### Requirement: Document revert resilience
+
+The system SHALL install buffer-local hooks on `before-revert-hook`
+and `after-revert-hook` while `+presentation-mode` is enabled.
+
+The `before-revert-hook` handler SHALL capture, into a buffer-local
+plist `+presentation--revert-anchor`:
+
+- `:slug` — slugified text of the H1 currently containing the
+  narrowing.
+- `:index` — ordinal of that H1 among all H1s in the (widened)
+  document, 0-based.
+- `:fingerprint` — a substring of up to 80 characters starting at
+  point.
+- `:window-start-offset` — `(- (window-start) (point))` for the
+  selected window showing the buffer, or 0 when not displayed.
+
+The `after-revert-hook` handler SHALL widen the buffer, then narrow
+according to the captured anchor:
+
+1. Search for an H1 whose slug equals `:slug`; if found, narrow to
+   its region.
+2. Else, narrow to the H1 at ordinal `:index` if one exists.  When
+   the document has fewer H1s than `:index + 1`, narrow to the last
+   H1.
+3. Else, narrow to the first H1 if any exist.  Otherwise, leave the
+   buffer widened.
+
+After narrowing, the handler SHALL search for `:fingerprint` inside
+the new narrowing.  If found, it SHALL set point to the match start
+and call `set-window-start` with `(+ point :window-start-offset)`.
+Otherwise, point SHALL be left at the start of the narrowing.
+
+After point and scroll restore, preview overlays SHALL be rebuilt as
+specified in `Preview refresh on slide entry`.
+
+#### Scenario: slug match restores narrowing across rename-elsewhere
+
+- **WHEN** the user is narrowed to slide `# Auth flow`
+- **AND** the agent edits the doc to insert a new slide `# Setup`
+  before it
+- **AND** auto-revert reloads the buffer
+- **THEN** the buffer is narrowed to the `# Auth flow` slide
+- **AND** the slide's ordinal index has changed but the user's view
+  of `Auth flow` is preserved
+
+#### Scenario: index fallback when slug renamed
+
+- **WHEN** the user is narrowed to slide N
+- **AND** the agent renames that slide's heading from
+  `# Auth flow` to `# Authorization`
+- **AND** auto-revert reloads the buffer
+- **THEN** the buffer is narrowed to slide N (the renamed
+  `Authorization` slide)
+
+#### Scenario: fingerprint restores point
+
+- **WHEN** point is on a unique 80-character substring inside slide
+  3 before revert
+- **AND** revert keeps that substring intact
+- **THEN** after revert, point is at the start of that substring
+
+#### Scenario: window scroll restored
+
+- **WHEN** before revert, `(- (window-start) (point))` is `-200`
+- **AND** fingerprint matching succeeds after revert
+- **THEN** the post-revert window-start is `(+ (point) -200)`
+
+### Requirement: Click escape preserves back-jump
+
+The system SHALL push a mark at the click site before initiating
+any link navigation that leaves the current buffer or changes the
+narrowing.
+
+For every follow-link action that navigates away from the current
+buffer (heading-text in-doc, source-range, diff-range), the system
+SHALL call `push-mark` at the click site (without activating the
+region) before initiating the navigation.
+
+#### Scenario: heading link pushes mark
+
+- **WHEN** the user follows a `[label](#some-heading)` link in the
+  doc
+- **THEN** the mark ring contains a mark at the click site
+
+#### Scenario: path link pushes mark
+
+- **WHEN** the user follows a `[label](path#L42)` link
+- **THEN** the mark ring contains a mark at the click site
+
+#### Scenario: diff link pushes mark
+
+- **WHEN** the user follows a `[label](diff:main...HEAD)` link
+- **THEN** the mark ring contains a mark at the click site
+
+### Requirement: Reusable narrowed-source renderer
+
+The system SHALL retain a reusable function that takes a buffer, a
+line range, and an optional focus sub-range, and:
+
+- Narrows the buffer to the line range.
+- Applies a focus overlay over the focus sub-range when given,
+  using `+presentation-focus-face` (one overlay per line covering
+  exactly `point-at-bol` to `point-at-eol`; the face SHALL NOT
+  use `:extend t`).
+- Sets `buffer-read-only` to t and registers a restorer that
+  reverts read-only state when the buffer is killed or when the
+  function is invoked again on the same buffer.
+
+This renderer SHALL be the implementation behind `path#L` link
+clicks.
+
+#### Scenario: short focus line not extended to window width
+
+- **WHEN** the renderer is applied to a buffer with focus on a line
+  whose content is 10 characters wide
+- **AND** the window is 100 columns wide
+- **THEN** the focus overlay on that line ends at column 10
+- **AND** columns 11..100 carry the default background
+
+#### Scenario: read-only state restored on kill
+
+- **WHEN** the renderer is applied to a buffer that was previously
+  not read-only
+- **AND** the buffer is killed
+- **THEN** if the same file is reopened later, the new buffer is
+  not read-only
 
 ### Requirement: Focus highlight bounded to text glyphs
 
-The `file` slide focus highlight SHALL be implemented as one
+The system SHALL paint focus highlights only over real text glyphs
+in the narrowed-source view that opens when a source-range preview
+link is clicked.
+
+The narrowed-source view SHALL implement focus highlight as one
 overlay per line covered by the focus range, each spanning exactly
-the line's `point-at-bol` to `point-at-eol`.  The overlays SHALL
-carry `+presentation-focus-face`, which SHALL NOT use `:extend t`
-and SHALL use a theme-aware muted background colour.
+the line's `point-at-bol` to `point-at-eol`.  The overlays SHALL carry
+`+presentation-focus-face`, which SHALL NOT use `:extend t` and
+SHALL use a theme-aware muted background colour.
 
 The face SHALL paint only over real text glyphs; lines shorter than
 the window width SHALL NOT have their trailing whitespace painted
@@ -1090,56 +633,9 @@ to the window edge.
 
 #### Scenario: short focus line not extended to window width
 
-- **WHEN** a `file` slide's `:focus` covers a line whose content is
-  10 characters wide
+- **WHEN** a click on a `path#L42-L67` link narrows a buffer
+- **AND** the focus range covers a line whose content is 10
+  characters wide
 - **AND** the window is 100 columns wide
 - **THEN** the focus overlay on that line ends at column 10
 - **AND** columns 11..100 of that line carry the default background
-
-#### Scenario: focus face does not collide with annotation faces
-
-- **WHEN** a `file` slide has both a `:focus` covering line N and
-  an annotation on line N
-- **THEN** the annotation's overlay placement is unaffected by the
-  focus overlay
-- **AND** the annotation text is readable against the focus
-  background (severity face foreground contrasts with focus bg)
-
-### Requirement: Annotation validation
-
-`+presentation--validate-annotation` SHALL signal `user-error` for:
-
-- `:line` not a positive integer.
-- `:text` (when present) not a string.
-- `:kind` (when present) not one of `"inline"` / `"callout"` /
-  `"margin"`.
-- `:severity` (when present) not one of `"note"` / `"tip"` /
-  `"warning"`.
-- `:position` accepted values dependent on `:kind`:
-  - `inline`: must be one of `"before"` / `"after"` / absent.
-  - `callout`: must be absent.
-  - `margin`: must be one of `"left"` / `"right"` / `"before"` /
-    `"after"` / absent.
-- Any unknown field on the annotation plist (strict for
-  forward-compatibility).
-
-#### Scenario: unknown kind rejected
-
-- **WHEN** a slide annotation carries `:kind` `"banner"`
-- **THEN** validation signals a `user-error` whose message names
-  `"banner"` and lists the accepted values
-
-#### Scenario: position on callout rejected
-
-- **WHEN** a callout annotation includes `:position` `"after"`
-- **THEN** validation signals a `user-error`
-
-#### Scenario: missing kind defaults to inline at validation
-
-- **WHEN** a slide annotation has no `:kind` field
-- **AND** has `:position` `"after"`
-- **THEN** validation accepts the annotation
-- **AND** at render time the annotation is treated as
-  `kind: "inline"`
-</content>
-</invoke>
