@@ -84,21 +84,27 @@ TICK is `buffer-chars-modified-tick' at the time of scan.")
   "Scan the buffer for callout blocks (uncached).
 Each entry is (BEG END TYPE) where BEG is BOL of the marker line, END
 is EOL of the last blockquote line, and TYPE is the callout type
-string."
+string.
+
+Widens for the duration of its body so the cache key
+\(`buffer-chars-modified-tick') is a pure function of buffer contents
+regardless of any current narrowing.  See fix-gfm-narrowing-safety."
   (let (blocks)
-    (save-excursion
-      (save-match-data
-        (goto-char (point-min))
-        (while (re-search-forward gfm-callouts--marker-re nil t)
-          (let ((block-beg (line-beginning-position))
-                (block-end (line-end-position))
-                (type (match-string-no-properties 1)))
-            (forward-line 1)
-            (while (and (not (eobp))
-                        (looking-at gfm-callouts--blockquote-line-re))
-              (setq block-end (line-end-position))
-              (forward-line 1))
-            (push (list block-beg block-end type) blocks)))))
+    (save-restriction
+      (widen)
+      (save-excursion
+        (save-match-data
+          (goto-char (point-min))
+          (while (re-search-forward gfm-callouts--marker-re nil t)
+            (let ((block-beg (line-beginning-position))
+                  (block-end (line-end-position))
+                  (type (match-string-no-properties 1)))
+              (forward-line 1)
+              (while (and (not (eobp))
+                          (looking-at gfm-callouts--blockquote-line-re))
+                (setq block-end (line-end-position))
+                (forward-line 1))
+              (push (list block-beg block-end type) blocks))))))
     (nreverse blocks)))
 
 (defun gfm-callouts--find-blocks ()
@@ -293,7 +299,16 @@ visual row."
   "Apply width-independent anchor overlays for BLOCK.
 Paints the per-line tinted background and the per-body-line
 `wrap-prefix' so wrapped content stays inside the box.  Anchors are
-shared across windows; reveal does not touch them."
+shared across windows; reveal does not touch them.
+
+Widens for the duration of the apply so a BLOCK whose source range lies
+outside the current restriction (e.g. another slide under
+`+presentation-mode') can still be parsed and decorated.  Without this,
+the per-line walk would clamp at the narrowing's `point-max' and loop
+forever.  Display under narrowing is naturally clipped by Emacs'
+overlay engine."
+  (save-restriction
+   (widen)
   (cl-destructuring-bind (beg end type) (gfm-callouts--block-payload block)
     (let* ((type-face (alist-get type gfm-callouts--type-faces
                                   nil nil #'string=))
@@ -327,14 +342,17 @@ shared across windows; reveal does not touch them."
                    lbeg lend
                    'face bg-face
                    (and is-body (list 'wrap-prefix wrap)))
-            (setq p (min (1+ end) (1+ lend)))))))))
+            (setq p (min (1+ end) (1+ lend))))))))))
 
 (defun gfm-callouts--apply-block-display (block window)
   "Apply per-WINDOW display overlays for BLOCK.
 Top border (leading on marker line + trailing after), per-body-line
 `> ' → `│ ' substitution + right-edge after-string, bottom border
 hung off the last body line's end (or the marker's trailing piece for
-a body-less callout)."
+a body-less callout).
+See `gfm-callouts--apply-block-anchors' for the widening rationale."
+  (save-restriction
+   (widen)
   (cl-destructuring-bind (beg end type) (gfm-callouts--block-payload block)
     (let* ((type-face (alist-get type gfm-callouts--type-faces
                                   nil nil #'string=))
@@ -430,7 +448,7 @@ a body-less callout)."
                  (new (concat existing "\n" bottom-str)))
             (put-text-property 0 1 'cursor t new)
             (overlay-put trailing-ov 'after-string new)))
-        (ignore last-right-after-ov)))))
+        (ignore last-right-after-ov))))))
 
 (defun gfm-callouts--apply-overlays ()
   "Create overlays for every callout block in the buffer.

@@ -117,6 +117,37 @@
     (should (null (plist-get spec :strike-through)))
     (should (null (plist-get spec :box)))))
 
+;;; Narrowing-resilient shared teardown
+
+(ert-deftest lang-markdown/gfm-block-borders-remove-overlays-full-clear-widens ()
+  "`--remove-overlays' with no BEG/END clears overlays outside the narrowing.
+Regression: under `+presentation-mode' the buffer is narrowed when a full
+rebuild fires; the prior implementation left tagged overlays sitting
+outside the restriction (zombies on widen).  See the
+fix-gfm-narrowing-safety change."
+  :tags '(narrowing-regression)
+  (let ((overlays nil))
+    (let* ((registry (gfm-block-borders-registry-for
+                      'lm-test-tag
+                      (make-symbol "lm-test-overlays-1"))))
+      (set (gfm-block-borders-registry-overlays-symbol registry) nil)
+      (with-temp-buffer
+        (insert "first region\n\n--- divider ---\n\nsecond region\n")
+        (let ((ov-a (make-overlay 1 5))
+              (ov-b (make-overlay 30 35)))
+          (overlay-put ov-a 'lm-test-tag t)
+          (overlay-put ov-b 'lm-test-tag t)
+          (set (gfm-block-borders-registry-overlays-symbol registry)
+               (list ov-a ov-b)))
+        (narrow-to-region 1 10)
+        (gfm-block-borders--remove-overlays registry)
+        (widen)
+        (setq overlays
+              (cl-remove-if-not
+               (lambda (ov) (overlay-get ov 'lm-test-tag))
+               (overlays-in (point-min) (point-max))))))
+    (should-not overlays)))
+
 ;;; gfm-callouts tests
 
 (let* ((module-dir (file-name-directory (or load-file-name buffer-file-name)))
@@ -278,6 +309,114 @@
       (let ((after (gfm-callouts--find-blocks)))
         (should-not (eq before after))
         (should (= 2 (length after)))))))
+
+;;; Narrowing-resilient discovery and teardown — callouts
+
+(defun lang-markdown-tests--two-slide-callouts-buffer ()
+  "Insert a two-slide buffer with one callout per slide."
+  (insert "> [!NOTE]\n> first.\n")
+  (insert "\n# slide 2\n\n")
+  (insert "> [!TIP]\n> second.\n"))
+
+(ert-deftest lang-markdown/gfm-callouts-narrowed-rebuild-does-not-signal ()
+  "Narrowed callout rebuild over a widened cache must not signal."
+  :tags '(narrowing-regression)
+  (with-temp-buffer
+    (lang-markdown-tests--two-slide-callouts-buffer)
+    (gfm-callouts-mode 1)
+    (let ((slide-1-end (save-excursion
+                         (goto-char (point-min))
+                         (search-forward "# slide 2")
+                         (line-beginning-position))))
+      (narrow-to-region (point-min) slide-1-end)
+      (should (progn (gfm-callouts--rebuild) t)))))
+
+(ert-deftest lang-markdown/gfm-callouts-narrowed-rebuild-no-zombies ()
+  "Post-`widen' the tracking list length matches the on-buffer overlay count."
+  :tags '(narrowing-regression)
+  (with-temp-buffer
+    (lang-markdown-tests--two-slide-callouts-buffer)
+    (gfm-callouts-mode 1)
+    (let ((slide-1-end (save-excursion
+                         (goto-char (point-min))
+                         (search-forward "# slide 2")
+                         (line-beginning-position))))
+      (narrow-to-region (point-min) slide-1-end)
+      (gfm-callouts--rebuild)
+      (widen)
+      (let ((on-buffer (cl-count-if
+                        (lambda (ov) (overlay-get ov 'gfm-callouts))
+                        (overlays-in (point-min) (point-max)))))
+        (should (= (length gfm-callouts--overlays) on-buffer))))))
+
+;;; Cross-narrow partial-block coverage — overlay set converges across paths
+
+(defun lang-markdown-tests--tagged-source-positions (tag)
+  "Return sorted (BEG . END) positions of overlays carrying TAG."
+  (sort
+   (mapcar (lambda (ov) (cons (overlay-start ov) (overlay-end ov)))
+           (cl-remove-if-not (lambda (ov) (overlay-get ov tag))
+                             (overlays-in (point-min) (point-max))))
+   (lambda (a b) (or (< (car a) (car b))
+                     (and (= (car a) (car b)) (< (cdr a) (cdr b)))))))
+
+(ert-deftest lang-markdown/gfm-tables-narrow-rebuild-widen-rebuild-converges ()
+  "narrow → rebuild → widen → rebuild produces same overlay set as widened rebuild.
+Regression net for any future narrowing-scoped optimisation that
+re-introduces narrowing-dependent caches/teardown."
+  :tags '(narrowing-regression)
+  (with-temp-buffer
+    (lang-markdown-tests--two-slide-tables-buffer)
+    (gfm-tables-mode 1)
+    (let* ((baseline (lang-markdown-tests--tagged-source-positions 'gfm-tables))
+           (slide-1-end (save-excursion
+                          (goto-char (point-min))
+                          (search-forward "# slide 2")
+                          (line-beginning-position))))
+      (narrow-to-region (point-min) slide-1-end)
+      (gfm-tables--rebuild)
+      (widen)
+      (gfm-tables--rebuild)
+      (should (equal baseline
+                     (lang-markdown-tests--tagged-source-positions 'gfm-tables))))))
+
+(ert-deftest lang-markdown/gfm-code-fences-narrow-rebuild-widen-rebuild-converges ()
+  "narrow → rebuild → widen → rebuild produces same overlay set as widened rebuild."
+  :tags '(narrowing-regression)
+  (with-temp-buffer
+    (lang-markdown-tests--two-slide-fences-buffer)
+    (gfm-code-fences-mode 1)
+    (let* ((baseline (lang-markdown-tests--tagged-source-positions 'gfm-code-fences))
+           (slide-1-end (save-excursion
+                          (goto-char (point-min))
+                          (search-forward "# slide 2")
+                          (line-beginning-position))))
+      (narrow-to-region (point-min) slide-1-end)
+      (gfm-code-fences--rebuild)
+      (widen)
+      (gfm-code-fences--rebuild)
+      (should (equal baseline
+                     (lang-markdown-tests--tagged-source-positions
+                      'gfm-code-fences))))))
+
+(ert-deftest lang-markdown/gfm-callouts-narrow-rebuild-widen-rebuild-converges ()
+  "narrow → rebuild → widen → rebuild produces same overlay set as widened rebuild."
+  :tags '(narrowing-regression)
+  (with-temp-buffer
+    (lang-markdown-tests--two-slide-callouts-buffer)
+    (gfm-callouts-mode 1)
+    (let* ((baseline (lang-markdown-tests--tagged-source-positions 'gfm-callouts))
+           (slide-1-end (save-excursion
+                          (goto-char (point-min))
+                          (search-forward "# slide 2")
+                          (line-beginning-position))))
+      (narrow-to-region (point-min) slide-1-end)
+      (gfm-callouts--rebuild)
+      (widen)
+      (gfm-callouts--rebuild)
+      (should (equal baseline
+                     (lang-markdown-tests--tagged-source-positions
+                      'gfm-callouts))))))
 
 ;;; Box-width sizing
 
@@ -612,6 +751,45 @@ when both `gfm-callouts-mode' and `gfm-code-fences-mode' are active."
 
 (ert-deftest lang-markdown/gfm-code-fences-enabled-via-gfm-mode-hook ()
   (should (memq 'gfm-code-fences-mode gfm-mode-hook)))
+
+;;; Narrowing-resilient discovery and teardown — code fences
+
+(defun lang-markdown-tests--two-slide-fences-buffer ()
+  "Insert a two-slide buffer with one fenced code block per slide."
+  (insert "```bash\necho one\n```\n")
+  (insert "\n# slide 2\n\n")
+  (insert "```bash\necho two\n```\n"))
+
+(ert-deftest lang-markdown/gfm-code-fences-narrowed-rebuild-does-not-signal ()
+  "Narrowed rebuild of fences over a widened cache must not signal."
+  :tags '(narrowing-regression)
+  (with-temp-buffer
+    (lang-markdown-tests--two-slide-fences-buffer)
+    (gfm-code-fences-mode 1)
+    (let ((slide-1-end (save-excursion
+                         (goto-char (point-min))
+                         (search-forward "# slide 2")
+                         (line-beginning-position))))
+      (narrow-to-region (point-min) slide-1-end)
+      (should (progn (gfm-code-fences--rebuild) t)))))
+
+(ert-deftest lang-markdown/gfm-code-fences-narrowed-rebuild-no-zombies ()
+  "Post-`widen' the tracking list length matches the on-buffer overlay count."
+  :tags '(narrowing-regression)
+  (with-temp-buffer
+    (lang-markdown-tests--two-slide-fences-buffer)
+    (gfm-code-fences-mode 1)
+    (let ((slide-1-end (save-excursion
+                         (goto-char (point-min))
+                         (search-forward "# slide 2")
+                         (line-beginning-position))))
+      (narrow-to-region (point-min) slide-1-end)
+      (gfm-code-fences--rebuild)
+      (widen)
+      (let ((on-buffer (cl-count-if
+                        (lambda (ov) (overlay-get ov 'gfm-code-fences))
+                        (overlays-in (point-min) (point-max)))))
+        (should (= (length gfm-code-fences--overlays) on-buffer))))))
 
 (ert-deftest lang-markdown/gfm-code-fences-border-face-resets-styling ()
   "Border face spec inherits the configured face but resets styling
@@ -1760,6 +1938,49 @@ suppression, the hook moves point back to cell 0 and the next
 
 (ert-deftest lang-markdown/gfm-tables-enabled-via-gfm-mode-hook ()
   (should (memq 'gfm-tables-mode gfm-mode-hook)))
+
+;;; Narrowing-resilient discovery and teardown — tables
+
+(defun lang-markdown-tests--two-slide-tables-buffer ()
+  "Insert a two-slide buffer with one table per slide; return widened mark."
+  (insert "| A | B |\n| - | - |\n| 1 | 2 |\n")
+  (insert "\n# slide 2\n\n")
+  (insert "| C | D |\n| - | - |\n| 3 | 4 |\n"))
+
+(ert-deftest lang-markdown/gfm-tables-narrowed-rebuild-does-not-signal ()
+  "Narrowed rebuild over a widened cache must not raise `args-out-of-range'.
+Pre-fix, `gfm-tables--apply-table' touched header positions outside the
+narrowing and signalled.  See fix-gfm-narrowing-safety."
+  :tags '(narrowing-regression)
+  (with-temp-buffer
+    (lang-markdown-tests--two-slide-tables-buffer)
+    (gfm-tables-mode 1)
+    (let ((slide-1-end (save-excursion
+                         (goto-char (point-min))
+                         (search-forward "# slide 2")
+                         (line-beginning-position))))
+      (narrow-to-region (point-min) slide-1-end)
+      (should (progn (gfm-tables--rebuild) t)))))
+
+(ert-deftest lang-markdown/gfm-tables-narrowed-rebuild-no-zombies ()
+  "Post-`widen' the tracking list length matches the on-buffer overlay count.
+Pre-fix the full-clear `--remove-overlays' under narrowing left
+off-narrowing overlays untracked."
+  :tags '(narrowing-regression)
+  (with-temp-buffer
+    (lang-markdown-tests--two-slide-tables-buffer)
+    (gfm-tables-mode 1)
+    (let ((slide-1-end (save-excursion
+                         (goto-char (point-min))
+                         (search-forward "# slide 2")
+                         (line-beginning-position))))
+      (narrow-to-region (point-min) slide-1-end)
+      (gfm-tables--rebuild)
+      (widen)
+      (let ((on-buffer (cl-count-if
+                        (lambda (ov) (overlay-get ov 'gfm-tables))
+                        (overlays-in (point-min) (point-max)))))
+        (should (= (length gfm-tables--overlays) on-buffer))))))
 
 ;;; Per-rebuild width cache
 

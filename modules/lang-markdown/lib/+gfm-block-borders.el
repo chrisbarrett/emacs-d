@@ -270,16 +270,22 @@ HIDDEN-OVS-SYMBOL is the symbol of the buffer-local list used by reveal."
 
 (defun gfm-block-borders--remove-overlays (registry &optional beg end)
   "Remove all REGISTRY-tagged overlays between BEG and END.
-With both BEG and END nil, also clear the registry's overlay list and
-hidden-ovs list (full reset)."
-  (remove-overlays (or beg (point-min)) (or end (point-max))
-                   (gfm-block-borders-registry-tag registry) t)
-  (let ((list-sym (gfm-block-borders-registry-overlays-symbol registry))
+With both BEG and END nil, widen for the duration of the clear so the
+registry list and the on-buffer overlay set stay in lockstep regardless
+of any current narrowing; also clear the registry's overlay list and
+hidden-ovs list (full reset).  Scoped calls (BEG and/or END non-nil)
+operate on the literal range — callers pass real buffer positions."
+  (let ((tag (gfm-block-borders-registry-tag registry))
+        (list-sym (gfm-block-borders-registry-overlays-symbol registry))
         (hidden-sym (gfm-block-borders-registry-hidden-ovs-symbol registry)))
     (cond
      ((or beg end)
+      (remove-overlays (or beg (point-min)) (or end (point-max)) tag t)
       (set list-sym (cl-remove-if-not #'overlay-buffer (symbol-value list-sym))))
      (t
+      (save-restriction
+        (widen)
+        (remove-overlays (point-min) (point-max) tag t))
       (set list-sym nil)
       (when hidden-sym (set hidden-sym nil))))))
 

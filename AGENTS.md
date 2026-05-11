@@ -61,6 +61,16 @@ agents' sandboxes; always include your unique suffix.
 | Integration test | `make test-integration` |
 | Setup hooks      | `make setup-hooks`      |
 
+The narrowing-regression suite for the GFM decorator modes lives in
+`modules/lang-markdown/tests.el` under `:tags '(narrowing-regression)`
+— enable any gfm mode in a sandbox, narrow to a sub-region containing
+some but not all blocks, call `<mode>--rebuild`, and assert the
+overlay set converges across `narrow → rebuild → widen → rebuild`
+versus a clean widened rebuild.  Pre-fix these signal
+`args-out-of-range` (tables) or leak zombie overlays (fences,
+callouts).  See `openspec/changes/archive/*-fix-gfm-narrowing-safety`
+for the full repro analysis.
+
 ### Nix devShell for git commands
 
 Run `git commit`, `git rebase`, and other git ops via

@@ -90,8 +90,14 @@ TICK is `buffer-chars-modified-tick' at the time of scan.")
 
 (defun gfm-code-fences--find-blocks-1 ()
   "Scan the buffer for fenced code blocks (uncached).
-Each entry is (OPEN-BEG OPEN-END CLOSE-BEG CLOSE-END LANG LANG-BEG LANG-END)."
+Each entry is (OPEN-BEG OPEN-END CLOSE-BEG CLOSE-END LANG LANG-BEG LANG-END).
+
+Widens for the duration of its body so the cache key
+\(`buffer-chars-modified-tick') is a pure function of buffer contents
+regardless of any current narrowing.  See fix-gfm-narrowing-safety."
   (let (blocks)
+   (save-restriction
+    (widen)
     (save-excursion
       (save-match-data
         (goto-char (point-min))
@@ -115,7 +121,7 @@ Each entry is (OPEN-BEG OPEN-END CLOSE-BEG CLOSE-END LANG LANG-BEG LANG-END)."
                 (push (list open-beg open-end close-beg close-end
                             lang lang-beg lang-end)
                       blocks)
-                (goto-char (line-end-position))))))))
+                (goto-char (line-end-position)))))))))
     (nreverse blocks)))
 
 (defun gfm-code-fences--find-blocks ()
@@ -140,23 +146,26 @@ OPEN-END CLOSE-BEG CLOSE-END LANG LANG-BEG LANG-END)."
 
 (defun gfm-code-fences--find-yaml-helmet-1 ()
   "Scan the buffer for a leading YAML helmet (uncached).
-Returns (OPEN-BEG OPEN-END CLOSE-BEG CLOSE-END) or nil."
-  (save-excursion
-    (save-match-data
-      (goto-char (point-min))
-      (when (looking-at gfm-code-fences--yaml-marker-re)
-        (let ((open-beg (match-beginning 0))
-              (open-end (match-end 0)))
-          (forward-line 1)
-          (let (close-beg close-end)
-            (while (and (not (eobp)) (not close-beg))
-              (cond
-               ((looking-at gfm-code-fences--yaml-marker-re)
-                (setq close-beg (match-beginning 0)
-                      close-end (match-end 0)))
-               (t (forward-line 1))))
-            (when close-beg
-              (list open-beg open-end close-beg close-end))))))))
+Returns (OPEN-BEG OPEN-END CLOSE-BEG CLOSE-END) or nil.
+Widens for the duration of its body so the cache is narrowing-independent."
+  (save-restriction
+    (widen)
+    (save-excursion
+      (save-match-data
+        (goto-char (point-min))
+        (when (looking-at gfm-code-fences--yaml-marker-re)
+          (let ((open-beg (match-beginning 0))
+                (open-end (match-end 0)))
+            (forward-line 1)
+            (let (close-beg close-end)
+              (while (and (not (eobp)) (not close-beg))
+                (cond
+                 ((looking-at gfm-code-fences--yaml-marker-re)
+                  (setq close-beg (match-beginning 0)
+                        close-end (match-end 0)))
+                 (t (forward-line 1))))
+              (when close-beg
+                (list open-beg open-end close-beg close-end)))))))))
 
 (defun gfm-code-fences--find-yaml-helmet ()
   "Return the leading YAML helmet, memoised by chars-modified tick."
@@ -190,9 +199,12 @@ does not invalidate cached scans.")
 
 (defun gfm-code-fences--find-indent-blocks-1 (excluded-ranges)
   "Return indented code blocks not overlapping EXCLUDED-RANGES (uncached).
-Each block is (BLOCK-BEG BLOCK-END INDENT-WIDTH)."
+Each block is (BLOCK-BEG BLOCK-END INDENT-WIDTH).
+Widens for the duration of its body so the cache is narrowing-independent."
   (let (blocks
         (prev-blank t))
+   (save-restriction
+    (widen)
     (save-excursion
       (goto-char (point-min))
       (while (not (eobp))
@@ -221,7 +233,7 @@ Each block is (BLOCK-BEG BLOCK-END INDENT-WIDTH)."
               (setq prev-blank nil)))
            (t
             (setq prev-blank blank)
-            (forward-line 1))))))
+            (forward-line 1)))))))
     (nreverse blocks)))
 
 (defun gfm-code-fences--find-indent-blocks (excluded-ranges)
@@ -675,26 +687,35 @@ source order.  Indent discovery excludes fenced + yaml ranges."
     (nreverse result)))
 
 (defun gfm-code-fences--apply-block-anchors (block)
-  "Apply anchor overlays for tagged BLOCK."
-  (gfm-code-fences--time-phase 'apply
-    (cl-case (gfm-code-fences--block-kind block)
-      (fenced (gfm-code-fences--apply-fenced-block-anchors
+  "Apply anchor overlays for tagged BLOCK.
+Widens for the duration of the apply so a BLOCK whose source range lies
+outside the current restriction (e.g. another slide under
+`+presentation-mode') can still be parsed and decorated.  Display under
+narrowing is naturally clipped by Emacs' overlay engine."
+  (save-restriction
+    (widen)
+    (gfm-code-fences--time-phase 'apply
+      (cl-case (gfm-code-fences--block-kind block)
+        (fenced (gfm-code-fences--apply-fenced-block-anchors
+                 (gfm-code-fences--block-payload block)))
+        (yaml (gfm-code-fences--apply-yaml-block-anchors
                (gfm-code-fences--block-payload block)))
-      (yaml (gfm-code-fences--apply-yaml-block-anchors
-             (gfm-code-fences--block-payload block)))
-      (indent (gfm-code-fences--apply-indent-block-anchors
-               (gfm-code-fences--block-payload block))))))
+        (indent (gfm-code-fences--apply-indent-block-anchors
+                 (gfm-code-fences--block-payload block)))))))
 
 (defun gfm-code-fences--apply-block-display (block window)
-  "Apply per-WINDOW display overlays for tagged BLOCK."
-  (gfm-code-fences--time-phase 'apply
-    (cl-case (gfm-code-fences--block-kind block)
-      (fenced (gfm-code-fences--apply-fenced-block-display
+  "Apply per-WINDOW display overlays for tagged BLOCK.
+See `gfm-code-fences--apply-block-anchors' for the widening rationale."
+  (save-restriction
+    (widen)
+    (gfm-code-fences--time-phase 'apply
+      (cl-case (gfm-code-fences--block-kind block)
+        (fenced (gfm-code-fences--apply-fenced-block-display
+                 (gfm-code-fences--block-payload block) window))
+        (yaml (gfm-code-fences--apply-yaml-block-display
                (gfm-code-fences--block-payload block) window))
-      (yaml (gfm-code-fences--apply-yaml-block-display
-             (gfm-code-fences--block-payload block) window))
-      (indent (gfm-code-fences--apply-indent-block-display
-               (gfm-code-fences--block-payload block) window)))))
+        (indent (gfm-code-fences--apply-indent-block-display
+                 (gfm-code-fences--block-payload block) window))))))
 
 (defun gfm-code-fences--apply-overlays ()
   "Create overlays for every block in the buffer.

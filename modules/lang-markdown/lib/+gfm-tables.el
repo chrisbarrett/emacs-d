@@ -21,6 +21,7 @@
 ;;; Code:
 
 (require 'cl-lib)
+(require '+gfm-block-borders)
 (require '+gfm-code-fences nil t)
 (require 'markdown-mode nil t)
 
@@ -319,11 +320,17 @@ invalidate the cache on plain motion.")
 (defun gfm-tables--find-blocks-1 ()
   "Scan the buffer for GFM tables, ignoring any excluded-ranges filtering.
 Each entry is (HEADER-BEG DELIM-BEG BODY-BEG BODY-END).  Internal
-helper for `gfm-tables--find-blocks'."
+helper for `gfm-tables--find-blocks'.
+
+The scanner widens for the duration of its body so the cache key
+\(`buffer-chars-modified-tick') is a pure function of buffer contents
+regardless of any current narrowing.  See fix-gfm-narrowing-safety."
   (let (blocks)
-    (save-excursion
-      (save-match-data
-        (goto-char (point-min))
+    (save-restriction
+      (widen)
+      (save-excursion
+        (save-match-data
+          (goto-char (point-min))
         (while (re-search-forward gfm-tables--delim-re nil t)
           (let* ((delim-beg (match-beginning 0))
                  (delim-end (match-end 0))
@@ -357,7 +364,7 @@ helper for `gfm-tables--find-blocks'."
                   (push (list header-beg delim-beg body-beg body-end)
                         blocks)
                   (goto-char body-end))
-                 (t (goto-char delim-end))))))))))
+                 (t (goto-char delim-end)))))))))))
     (nreverse blocks)))
 
 (defun gfm-tables--find-blocks (&optional excluded-ranges)
@@ -727,6 +734,15 @@ No-op when stats are not initialised."
 (defvar-local gfm-tables--overlays nil
   "All gfm-tables overlays currently in this buffer.")
 
+(defconst gfm-tables--registry
+  (gfm-block-borders-registry-for
+   'gfm-tables
+   'gfm-tables--overlays)
+  "Shared overlay-registry context for tables.
+Routes the full-clear teardown through `gfm-block-borders--remove-overlays'
+so it widens for the duration of the clear, matching the fences/callouts
+contract.")
+
 (defun gfm-tables--register (ov)
   "Tag OV as a gfm-tables overlay and remember it for bulk cleanup."
   (overlay-put ov 'gfm-tables t)
@@ -734,14 +750,11 @@ No-op when stats are not initialised."
   ov)
 
 (defun gfm-tables--remove-overlays (&optional beg end)
-  "Remove all gfm-tables overlays between BEG and END."
-  (remove-overlays (or beg (point-min)) (or end (point-max))
-                   'gfm-tables t)
-  (cond
-   ((or beg end)
-    (setq gfm-tables--overlays
-          (cl-remove-if-not #'overlay-buffer gfm-tables--overlays)))
-   (t (setq gfm-tables--overlays nil))))
+  "Remove all gfm-tables overlays between BEG and END.
+Delegates to the shared `gfm-block-borders--remove-overlays' so the
+no-arg full-clear branch widens; scoped (BEG/END) calls operate on the
+literal range as before."
+  (gfm-block-borders--remove-overlays gfm-tables--registry beg end))
 
 (defun gfm-tables--make-anchor (beg end cell-bounds)
   "Create an anchor overlay over [BEG, END] holding CELL-BOUNDS.
@@ -897,19 +910,26 @@ Keys: :header-beg :header-end :delim-beg :delim-end :body-positions
   "Decorate one table identified by HEADER-BEG, DELIM-BEG, BODY-BEG, BODY-END.
 Builds anchor overlays once per row and one display overlay per row
 *per window* currently showing the buffer.  When no window shows the
-buffer, falls back to a single unrestricted display overlay."
-  (let ((parsed (gfm-tables--parse-table header-beg delim-beg
-                                         body-beg body-end)))
-    (gfm-tables--time-phase 'apply
-      (gfm-tables--make-anchor
-       header-beg (plist-get parsed :header-end)
-       (gfm-tables--cell-bounds header-beg (plist-get parsed :header-end)))
-      (cl-loop for (lbeg . lend) in (plist-get parsed :body-positions)
-               do (gfm-tables--make-anchor
-                   lbeg lend (gfm-tables--cell-bounds lbeg lend))))
-    (let ((windows (or (gfm-tables--display-windows) (list nil))))
-      (dolist (win windows)
-        (gfm-tables--apply-table-display-for-parsed parsed win)))))
+buffer, falls back to a single unrestricted display overlay.
+
+Widens for the duration of its body so cached positions outside the
+current restriction (e.g. a table on another slide under
+`+presentation-mode') can be parsed and decorated.  Display under
+narrowing is naturally clipped by Emacs' overlay engine."
+  (save-restriction
+    (widen)
+    (let ((parsed (gfm-tables--parse-table header-beg delim-beg
+                                           body-beg body-end)))
+      (gfm-tables--time-phase 'apply
+        (gfm-tables--make-anchor
+         header-beg (plist-get parsed :header-end)
+         (gfm-tables--cell-bounds header-beg (plist-get parsed :header-end)))
+        (cl-loop for (lbeg . lend) in (plist-get parsed :body-positions)
+                 do (gfm-tables--make-anchor
+                     lbeg lend (gfm-tables--cell-bounds lbeg lend))))
+      (let ((windows (or (gfm-tables--display-windows) (list nil))))
+        (dolist (win windows)
+          (gfm-tables--apply-table-display-for-parsed parsed win))))))
 
 (defun gfm-tables--remove-display-overlays-in-block (block window)
   "Delete WINDOW's display overlays inside BLOCK.
@@ -937,15 +957,19 @@ display overlay (used when wiping out an unrestricted fallback set)."
 
 (defun gfm-tables--rebuild-block-for-window (block window)
   "Replace WINDOW's display overlays for BLOCK with fresh ones at current width.
-Anchors and other windows' display overlays are left untouched."
-  (cl-destructuring-bind (header-beg delim-beg body-beg body-end) block
-    (let* ((gfm-tables--width-cache
-            (or gfm-tables--width-cache
-                (make-hash-table :test 'eq)))
-           (parsed (gfm-tables--parse-table header-beg delim-beg
-                                            body-beg body-end)))
-      (gfm-tables--remove-display-overlays-in-block block window)
-      (gfm-tables--apply-table-display-for-parsed parsed window))))
+Anchors and other windows' display overlays are left untouched.
+Widens so a BLOCK whose source range lies outside the current
+restriction can still be parsed and re-rendered."
+  (save-restriction
+    (widen)
+    (cl-destructuring-bind (header-beg delim-beg body-beg body-end) block
+      (let* ((gfm-tables--width-cache
+              (or gfm-tables--width-cache
+                  (make-hash-table :test 'eq)))
+             (parsed (gfm-tables--parse-table header-beg delim-beg
+                                              body-beg body-end)))
+        (gfm-tables--remove-display-overlays-in-block block window)
+        (gfm-tables--apply-table-display-for-parsed parsed window)))))
 
 (defun gfm-tables--fenced-ranges ()
   "Return (BEG . END) ranges of fenced code blocks, if discoverable."
