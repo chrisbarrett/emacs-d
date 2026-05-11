@@ -15,16 +15,20 @@ Emacs (e.g. driving overlay rebuilds under narrowing, soak-testing a minor
 mode, calling fragile internals), spin up a separate daemon with its own
 server name and `-Q` so the user's session is never disrupted.
 
-Start:
+Use a server name with prefix `emacs-claude-sandbox-` followed by a
+unique suffix (PID, timestamp, or random tag) so concurrent agents don't
+collide and `pkill` patterns can't hit unrelated processes. Bind the name
+to a shell var for the session:
 
 ```bash
-emacs -Q --bg-daemon=claude-sandbox
+SANDBOX="emacs-claude-sandbox-$$"
+emacs -Q --bg-daemon="$SANDBOX"
 ```
 
 Call it via `-s`:
 
 ```bash
-emacsclient -s claude-sandbox -e '<elisp>'
+emacsclient -s "$SANDBOX" -e '<elisp>'
 ```
 
 Load only what the experiment needs — add the module's `lib/` to `load-path`
@@ -35,17 +39,18 @@ the user's primary daemon.
 Kill the sandbox between experiments to discard polluted state:
 
 ```bash
-emacsclient -s claude-sandbox -e '(kill-emacs 0)'   # graceful
-pkill -f 'claude-sandbox'                           # hard, when wedged
+emacsclient -s "$SANDBOX" -e '(kill-emacs 0)'   # graceful
+pkill -f "$SANDBOX"                             # hard, when wedged
 ```
 
 Default socket: `${TMPDIR:-/tmp}/emacs$UID/<server-name>`. The sandbox
 daemon writes to that path only; it never touches the user's socket.
 
-Hang-safety: when an `emacsclient -s claude-sandbox -e …` call does not
-return, do **not** keep retrying or sending further commands — `pkill` the
-sandbox and restart fresh. Never `pkill -f emacs` unqualified; always
-include the server name.
+Hang-safety: when an `emacsclient -s "$SANDBOX" -e …` call does not
+return, do **not** keep retrying or sending further commands — `pkill`
+the sandbox by its exact name and restart fresh. Never `pkill -f emacs`
+or `pkill -f emacs-claude-sandbox-` unqualified — both can hit other
+agents' sandboxes; always include your unique suffix.
 
 ## Commands
 
