@@ -61,6 +61,16 @@ agents' sandboxes; always include your unique suffix.
 | Integration test | `make test-integration` |
 | Setup hooks      | `make setup-hooks`      |
 
+### Nix devShell for git commands
+
+Run `git commit`, `git rebase`, and other git ops via
+`nix develop --command bash -c '<cmd>'`. The devShell exports
+`TREESIT_EXTRA_LOAD_PATH` pointing at the bundled tree-sitter grammars;
+the prek pre-commit hook needs that path so tests like
+`lang-markdown/gfm-code-fences-yaml-*` can load `yaml-ts-mode`'s
+grammar. Outside the devShell those tests fail with `(eq yaml-ts-mode
+nil)` and the hook blocks the commit.
+
 ## Structure
 
 | Path                 | Purpose                                                   |
