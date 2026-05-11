@@ -38,7 +38,7 @@
   :group 'may-i)
 
 (defface may-i-reason-face
-  '((t :inherit font-lock-doc-face :slant italic))
+  '((t :inherit font-lock-doc-face :slant normal))
   "Face for the reason string of `(allow|ask|deny …)' verbs."
   :group 'may-i)
 
@@ -109,8 +109,8 @@ first argument — either a bare string or an `(or …)' form."
   `(;; Def forms: head + name being defined.
     (,(rx-to-string
        `(seq "(" (group (or ,@may-i-def-keywords)) symbol-end
-             (* whitespace)
-             (? (group (+ (or word (syntax symbol)))))))
+         (* whitespace)
+         (? (group (+ (or word (syntax symbol)))))))
      (1 font-lock-keyword-face)
      (2 font-lock-function-name-face nil t))
 
@@ -173,6 +173,12 @@ first argument — either a bare string or an `(or …)' form."
 ;;;###autoload
 (add-to-list 'auto-mode-alist (cons (rx "/may-i/" (+? any) ".lisp" eos)
                                     'may-i-config-mode))
+
+(with-eval-after-load 'apheleia
+  (defvar apheleia-formatters)
+  (defvar apheleia-mode-alist)
+  (add-to-list 'apheleia-formatters '(may-i . ("may-i" "fmt" "-")))
+  (add-to-list 'apheleia-mode-alist '(may-i-config-mode . may-i)))
 
 (put 'check 'lisp-indent-function 0)
 (put 'cond 'lisp-indent-function 0)

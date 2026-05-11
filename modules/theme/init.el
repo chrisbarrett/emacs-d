@@ -10,6 +10,8 @@
 
 (use-package catppuccin-theme
   :demand t
+  :custom
+  (catppuccin-italic-comments t)
   :init
   (setq +theme-dark 'catppuccin)
   (+theme-update))
