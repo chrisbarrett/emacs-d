@@ -41,5 +41,5 @@
 
 ## 8. Smoke
 
-- [ ] 8.1 Open a real presentation document.  Enter `+presentation-mode`, navigate forward and back through slides containing each block kind, save the file (triggers `after-change`), split-window the buffer, resize.  Confirm: no errors, no doubled borders, no missing rendering on widen.
-- [ ] 8.2 Outside `+presentation-mode`, open a markdown file, `markdown-narrow-to-subtree`, navigate, edit, widen.  Same checks.
+- [x] 8.1 Open a real presentation document.  Enter `+presentation-mode`, navigate forward and back through slides containing each block kind, save the file (triggers `after-change`), split-window the buffer, resize.  Confirm: no errors, no doubled borders, no missing rendering on widen.
+- [x] 8.2 Outside `+presentation-mode`, open a markdown file, `markdown-narrow-to-subtree`, navigate, edit, widen.  Same checks.
