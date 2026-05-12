@@ -180,7 +180,6 @@ first argument — either a bare string or an `(or …)' form."
   (add-to-list 'apheleia-formatters '(may-i . ("may-i" "fmt" "-")))
   (add-to-list 'apheleia-mode-alist '(may-i-config-mode . may-i)))
 
-(put 'check 'lisp-indent-function 0)
 (put 'cond 'lisp-indent-function 0)
 (put 'define 'lisp-indent-function 1)
 (put 'define-arg-style 'lisp-indent-function 1)
