@@ -1,0 +1,56 @@
+schema: spec-driven
+
+# Injected into <context> for every artifact generation.
+context: |
+  This is a personal Emacs configuration managed as a structured project.
+  Configuration is divided into self-contained modules under `modules/`, each
+  covering one config domain (axis). Specs track intended behaviour and
+  implementation invariants for those modules.
+
+  Axis rule: one spec per axis. Axis name = module directory name where a
+  corresponding module exists (e.g. `lang-markdown`, `presentation`, `vcs`).
+  Sub-feature specs for the same axis are folded into the axis spec, not kept
+  separate.
+
+  Recognised axes (kebab-case identifier = spec directory name):
+    lang-markdown, presentation, eglot, evil, org, vcs, completion, theme,
+    contributor-internals.
+  A new axis requires a "Decision: new axis X" in design.md.
+
+  Scope rule: every stable spec is either behaviour-facing (observable Emacs
+  behaviour: modes, keys, faces, overlay rendering, window layout, commands)
+  or internals-facing (implementation invariants: overlay lifecycle, narrowing
+  safety, rebuild correctness). Internals-facing specs state
+  `Internals-facing.` in their Purpose. The meta-spec `spec-conventions` is
+  exempt.
+
+  No trust model. Omit Trust-relevant declarations.
+
+  See `openspec/specs/spec-conventions/spec.md` for full conventions.
+
+# Per-artifact authoring reminders injected into <rules> when generating
+# that artifact type. Scope is openspec/changes/<name>/, never the stable
+# store under openspec/specs/.
+rules:
+  proposal:
+    - State the affected axis (spec directory name) in the Capabilities section.
+    - Distinguish new axes (new specs) from changes within an existing axis (delta specs).
+    - Pure structural / hygiene edits (heading shuffles, prose tweaks that touch no `### Requirement:` body) go in tasks.md, not as spec deltas.
+
+  design:
+    - Required only if the change is cross-cutting, introduces a new module dependency, has narrowing/performance complexity, or has ambiguity worth resolving before code.
+    - Decisions section lists alternatives considered and why rejected.
+    - Cite source file paths + line numbers for any Emacs internals the design relies on.
+
+  specs:
+    - Delta-style headings (`## ADDED Requirements`, `## MODIFIED Requirements`, `## REMOVED Requirements`) appear ONLY in delta files under `openspec/changes/<change>/specs/`. Never in stable specs under `openspec/specs/`.
+    - MODIFIED requirements include the FULL updated requirement body (heading + prose + all scenarios). Partial MODIFIED loses content at archive time.
+    - REMOVED requirements include `**Reason:**` and `**Migration:**` lines.
+    - Each requirement has at least one `#### Scenario:` (exactly 4 hashes — 3 fails silently).
+    - Use SHALL or MUST for normative statements; avoid should/may.
+    - Axis renames are filesystem moves driven by tasks.md, not paired ADDED+REMOVED blocks.
+
+  tasks:
+    - Each task is a `- [ ]` checkbox under a numbered `## N. <group>` heading; the apply phase parses this format.
+    - Group by dependency order — earliest tasks first.
+    - Verification tasks (running tests, confirming output) go in a final group, not interspersed.
