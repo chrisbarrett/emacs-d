@@ -379,6 +379,40 @@ tick, so the result is deterministic from the tick alone."
 
 ;;; Bordered rendering — fenced + YAML (shared)
 
+(defun gfm-code-fences--face-extend-bg (face)
+  "Return FACE's `:background' when FACE also specifies `:extend t', else nil.
+FACE is a face symbol, an attribute plist, or a list thereof; for a
+list the first element specifying an `:extend t' background wins."
+  (cond
+   ((null face) nil)
+   ((symbolp face)
+    (and (facep face)
+         (eq (face-attribute face :extend nil t) t)
+         (let ((bg (face-attribute face :background nil t)))
+           (and (stringp bg) bg))))
+   ((and (consp face) (keywordp (car face)))
+    (and (eq (plist-get face :extend) t)
+         (let ((bg (plist-get face :background)))
+           (and (stringp bg) bg))))
+   ((consp face)
+    (cl-some #'gfm-code-fences--face-extend-bg face))
+   (t nil)))
+
+(defun gfm-code-fences--line-extend-bg (lbeg lend)
+  "Return the `:extend t' background colour on the line [LBEG, LEND), or nil.
+Scans `face' text properties across the line for the first face
+specifying both `:background' and `:extend t' — the background that
+native fontification (e.g. `diff-added' in a fenced `diff' block)
+would otherwise leak past the right border, and that should instead
+fill the box interior up to the border."
+  (let ((pos lbeg)
+        (result nil))
+    (while (and (null result) (< pos lend))
+      (setq result (gfm-code-fences--face-extend-bg
+                    (get-text-property pos 'face)))
+      (setq pos (next-single-property-change pos 'face nil lend)))
+    result))
+
 (defun gfm-code-fences--apply-bordered-anchors
     (open-line-end close-line-beg _face)
   "Apply width-independent anchors for a fenced/yaml block.
@@ -444,12 +478,14 @@ the top border (icon string for fenced, `meta' for YAML, or nil)."
       (while (< p close-line-beg)
         (let* ((lbeg p)
                (lend (save-excursion (goto-char p) (line-end-position)))
+               (line-bg (gfm-code-fences--line-extend-bg lbeg lend))
                (after (gfm-code-fences--time-phase 'compose-overflow
                         (if (> (- lend lbeg) content-budget)
                             (gfm-block-borders--right-after-overflow
                              face (buffer-substring-no-properties lbeg lend)
-                             window)
-                          (gfm-block-borders--right-after box-width face)))))
+                             window nil line-bg)
+                          (gfm-block-borders--right-after
+                           box-width face line-bg)))))
           (gfm-code-fences--make-display
            lbeg lend window
            'gfm-code-fences-kind 'body
@@ -522,12 +558,14 @@ INDENT-WIDTH is the buffer indent width; FACE colours the borders."
                (line-content-w (max 0 (- (- lend lbeg) indent-width)))
                (line-text (buffer-substring-no-properties
                            (min (+ lbeg indent-width) lend) lend))
+               (line-bg (gfm-code-fences--line-extend-bg lbeg lend))
                (overflow-p (> line-content-w content-budget))
                (after (gfm-code-fences--time-phase 'compose-overflow
                         (if overflow-p
                             (gfm-block-borders--right-after-overflow
-                             face line-text window)
-                          (gfm-block-borders--right-after box-width face)))))
+                             face line-text window nil line-bg)
+                          (gfm-block-borders--right-after
+                           box-width face line-bg)))))
           (when first
             (gfm-code-fences--make-display
              lbeg lbeg window

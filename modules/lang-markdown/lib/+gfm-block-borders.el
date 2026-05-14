@@ -140,13 +140,17 @@ LEADING covers BUFFER-WIDTH cols matching the marker line's char count."
          (rem-fill (propertize (make-string rem-fill-w ?─) 'face face)))
     (cons leading (concat rem-fill (propertize "┘" 'face face)))))
 
-(defun gfm-block-borders--right-after (box-width face)
-  "Build the after-string that draws the right border at column BOX-WIDTH."
+(defun gfm-block-borders--right-after (box-width face &optional bg)
+  "Build the after-string that draws the right border at column BOX-WIDTH.
+When BG is non-nil, the padding and separator before the border `│'
+are painted with `:background BG' so a body line's highlight band
+fills the gap up to the border; nil leaves them on the border face."
   (let* ((face (gfm-block-borders--normalised-border-face face))
+         (pad-face (if bg (append face (list :background bg)) face))
          (align-col (- box-width 2))
          (pad (propertize " " 'display `(space :align-to ,align-col)
-                          'face face))
-         (sep (propertize " " 'face face))
+                          'face pad-face))
+         (sep (propertize " " 'face pad-face))
          (pipe (propertize "│" 'face face))
          (str (concat pad sep pipe)))
     (put-text-property 0 1 'cursor t str)
@@ -201,14 +205,17 @@ on continuation rows pass `│ '."
               (gfm-block-borders--normalised-border-face face)))
 
 (defun gfm-block-borders--right-after-overflow (face line-text window
-                                                     &optional cont-prefix-w)
+                                                     &optional cont-prefix-w bg)
   "After-string padding the right border to WINDOW's edge for a wrapped line.
 LINE-TEXT is the line's buffer content; the function simulates word-wrap
 to work out where the line ends visually, accounting for the wrap-prefix
 on continuation lines.  WINDOW selects the width; nil falls back to a
 sane default.  CONT-PREFIX-W defaults to
-`gfm-block-borders--wrap-prefix-w'."
+`gfm-block-borders--wrap-prefix-w'.  When BG is non-nil the padding is
+painted with `:background BG' so the highlight band fills the gap up
+to the border."
   (let* ((face (gfm-block-borders--normalised-border-face face))
+         (pad-face (if bg (append face (list :background bg)) face))
          (text-width (gfm-block-borders--available-width window))
          (cpw (or cont-prefix-w gfm-block-borders--wrap-prefix-w))
          ;; +2 for the `│ ' before-string contribution to the first visual line.
@@ -216,7 +223,7 @@ sane default.  CONT-PREFIX-W defaults to
                       (concat "│ " line-text) text-width cpw))
          (target-col (1- text-width))
          (pad-len (max 0 (- target-col visual-col)))
-         (pad (propertize (make-string pad-len ?\s) 'face face))
+         (pad (propertize (make-string pad-len ?\s) 'face pad-face))
          (pipe (propertize "│" 'face face))
          (str (concat pad pipe)))
     (put-text-property 0 1 'cursor t str)

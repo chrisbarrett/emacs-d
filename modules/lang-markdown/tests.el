@@ -929,6 +929,70 @@ when both `gfm-callouts-mode' and `gfm-code-fences-mode' are active."
                      (lang-markdown-tests--clip-positions
                       'gfm-code-fences))))))
 
+;;; Body background fill — code fences
+
+(defun lang-markdown-tests--fence-body-after-string (body-beg lend)
+  "Return the body display overlay's `after-string' for line [BODY-BEG, LEND]."
+  (let ((ov (cl-find-if
+             (lambda (o)
+               (eq (overlay-get o 'gfm-code-fences-kind) 'body))
+             (overlays-in body-beg (1+ lend)))))
+    (and ov (overlay-get ov 'after-string))))
+
+(ert-deftest lang-markdown/gfm-code-fences-diff-body-bg-fills-gap ()
+  "A `+' body line's right-edge padding carries the `:extend t' background."
+  (with-temp-buffer
+    (insert "```diff\n+ x\n```\n")
+    (gfm-code-fences-mode 1)
+    ;; Stand in for native fontification copying diff-mode's `:extend t'
+    ;; `diff-added' face onto the `+' body line — an explicit plist,
+    ;; since batch Emacs does not realise a defface's `:extend'.
+    (let* ((diff-added-face '(:background "#c3ebc1" :extend t))
+           (body-beg (progn (goto-char (point-min))
+                            (forward-line 1) (point)))
+           (lend (line-end-position)))
+      (put-text-property body-beg (1+ lend) 'face diff-added-face)
+      ;; Rebuild so the display pass reads the freshly-applied face.
+      (gfm-code-fences--rebuild)
+      (let ((after (lang-markdown-tests--fence-body-after-string
+                    body-beg lend)))
+        (should after)
+        ;; The padding (first char of the after-string) is painted with
+        ;; the diff background.
+        (should (equal "#c3ebc1"
+                       (plist-get (get-text-property 0 'face after)
+                                  :background)))))))
+
+(ert-deftest lang-markdown/gfm-code-fences-plain-body-no-bg-fill ()
+  "A body line with no `:extend t' background keeps the border-face padding."
+  (with-temp-buffer
+    (insert "```text\nplain line\n```\n")
+    (gfm-code-fences-mode 1)
+    (let* ((body-beg (progn (goto-char (point-min))
+                            (forward-line 1) (point)))
+           (lend (line-end-position))
+           (after (lang-markdown-tests--fence-body-after-string
+                   body-beg lend)))
+      (should after)
+      (should-not (plist-get (get-text-property 0 'face after)
+                             :background)))))
+
+(ert-deftest lang-markdown/gfm-code-fences-line-extend-bg-ignores-non-extending ()
+  "`gfm-code-fences--line-extend-bg' ignores a `:background' without `:extend t'."
+  (with-temp-buffer
+    (insert "code line\n")
+    ;; A `:background' without `:extend t' must not fill the gap.
+    (put-text-property (point-min) (1- (point-max))
+                       'face '(:background "#abcdef"))
+    (should-not (gfm-code-fences--line-extend-bg (point-min)
+                                                 (1- (point-max))))
+    ;; A face specifying both is picked up.
+    (put-text-property (point-min) (1- (point-max))
+                       'face '(:background "#abcdef" :extend t))
+    (should (equal "#abcdef"
+                   (gfm-code-fences--line-extend-bg (point-min)
+                                                    (1- (point-max)))))))
+
 (ert-deftest lang-markdown/gfm-code-fences-border-face-resets-styling ()
   "Border face spec inherits the configured face but resets styling
 attrs that would otherwise leak from font-lock onto box edges (slant,
