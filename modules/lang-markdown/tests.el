@@ -1419,6 +1419,45 @@ is non-nil — `(url)' is composed into a single chain glyph."
       (when (get-buffer " *gfm-tables-fontify*")
         (kill-buffer " *gfm-tables-fontify*")))))
 
+(ert-deftest lang-markdown/gfm-tables-visible-width-compute-walks-source-overlays ()
+  "With (buffer beg end) args, the walker honours overlay display strings.
+An overlay carrying a `display' string in the source buffer is counted
+at the display width, not the underlying text width."
+  (with-temp-buffer
+    (insert "hello world")
+    (let ((ov (make-overlay 1 6)))           ; covers "hello"
+      (overlay-put ov 'display "X"))
+    ;; Region [1, 12) is "hello world": "hello" -> "X" (1) + " world" (6) = 7.
+    (should (= 7 (gfm-tables--visible-width--compute
+                  (buffer-substring (point-min) (point-max))
+                  (current-buffer) (point-min) (point-max))))))
+
+(ert-deftest lang-markdown/gfm-tables-visible-width-compute-honours-source-invisible ()
+  "With source args, an overlay `invisible' prop in `buffer-invisibility-spec'
+shrinks the measured width."
+  (with-temp-buffer
+    (insert "abcdef")
+    (setq buffer-invisibility-spec '(tag))
+    (let ((ov (make-overlay 3 5)))           ; covers "cd"
+      (overlay-put ov 'invisible 'tag))
+    (should (= 4 (gfm-tables--visible-width--compute
+                  (buffer-substring (point-min) (point-max))
+                  (current-buffer) (point-min) (point-max))))))
+
+(ert-deftest lang-markdown/gfm-tables-visible-width-compute-region-trims-padding ()
+  "Source-region measurement trims leading/trailing whitespace of the cell."
+  (with-temp-buffer
+    (insert "  abc  ")
+    (should (= 3 (gfm-tables--visible-width--compute
+                  (buffer-substring (point-min) (point-max))
+                  (current-buffer) (point-min) (point-max))))))
+
+(ert-deftest lang-markdown/gfm-tables-visible-width-nil-region-args-unchanged ()
+  "Passing nil for the new region args leaves the string-walk path unchanged."
+  (let ((s (concat "abc" (propertize "X" 'display "longer") "de")))
+    (should (= (gfm-tables--visible-width s)
+               (gfm-tables--visible-width s nil nil nil)))))
+
 (ert-deftest lang-markdown/gfm-tables-cell-link-pos-finds-inline-link ()
   "Inline link inside a cell is locatable from the row overlay."
   (with-temp-buffer
@@ -2359,6 +2398,433 @@ window holding point."
         (should (assq k phases))))))
 
 ;;; Reveal
+
+;;; gfm-links tests
+
+(require '+gfm-links)
+
+(defmacro lang-markdown-tests--with-links-buffer (contents &rest body)
+  "Run BODY in a `markdown-mode' temp buffer holding CONTENTS, links mode on."
+  (declare (indent 1))
+  `(with-temp-buffer
+     (delay-mode-hooks (markdown-mode))
+     (setq-local markdown-hide-urls t)
+     (insert ,contents)
+     (gfm-links-mode 1)
+     ,@body))
+
+(defun lang-markdown-tests--link-overlays ()
+  "Return gfm-links overlays in the current buffer, sorted by start."
+  (sort (copy-sequence gfm-links--overlays)
+        (lambda (a b) (< (overlay-start a) (overlay-start b)))))
+
+(defun lang-markdown-tests--link-overlay-at (pos &optional side)
+  "Return a gfm-links overlay covering POS, optionally matching SIDE."
+  (cl-find-if (lambda (o)
+                (and (overlay-get o 'gfm-links-revealable)
+                     (<= (overlay-start o) pos)
+                     (< pos (overlay-end o))
+                     (or (null side) (eq side (overlay-get o 'gfm-links-side)))))
+              gfm-links--overlays))
+
+;;; Mode toggle
+
+(ert-deftest lang-markdown/gfm-links-mode-creates-overlays ()
+  "Enabling the mode decorates a recognised link."
+  (lang-markdown-tests--with-links-buffer
+      "See [Anthropic](https://anthropic.com) here.\n"
+    (should (lang-markdown-tests--link-overlay-at 6 'title))
+    (should (lang-markdown-tests--link-overlay-at 18 'url))))
+
+(ert-deftest lang-markdown/gfm-links-mode-removes-overlays ()
+  "Disabling the mode removes every overlay it created."
+  (lang-markdown-tests--with-links-buffer
+      "See [Anthropic](https://anthropic.com) here.\n"
+    (should gfm-links--overlays)
+    (gfm-links-mode -1)
+    (should-not gfm-links--overlays)
+    (should-not (cl-some (lambda (o) (overlay-get o 'gfm-links))
+                         (overlays-in (point-min) (point-max))))))
+
+(ert-deftest lang-markdown/gfm-links-hide-urls-off-disables-mode ()
+  "Setting `markdown-hide-urls' to nil disables the mode and clears overlays."
+  (with-temp-buffer
+    (delay-mode-hooks (markdown-mode))
+    (setq-local markdown-hide-urls t)
+    (insert "See [Anthropic](https://anthropic.com).\n")
+    (gfm-links--maybe-enable)
+    (should gfm-links-mode)
+    (setq-local markdown-hide-urls nil)
+    (should-not gfm-links-mode)
+    (should-not gfm-links--overlays)))
+
+(ert-deftest lang-markdown/gfm-links-enabled-via-gfm-mode-hook ()
+  "The maybe-enable hook is wired into `gfm-mode-hook'."
+  (should (memq 'gfm-links--maybe-enable gfm-mode-hook)))
+
+;;; 14.1 Per-shape decoration
+
+(ert-deftest lang-markdown/gfm-links-inline-with-title-attr ()
+  "Inline link with a title attribute is decorated and exposes the attr."
+  (lang-markdown-tests--with-links-buffer
+      "[Anthropic](https://anthropic.com \"official\")\n"
+    (let ((ov (lang-markdown-tests--link-overlay-at 2 'title)))
+      (should ov)
+      (should (eq 'inline (overlay-get ov 'gfm-links-kind)))
+      (should (equal "https://anthropic.com" (overlay-get ov 'gfm-links-url)))
+      (should (equal "official" (overlay-get ov 'gfm-links-title-attr)))
+      (should (equal "Anthropic"
+                     (substring-no-properties (overlay-get ov 'display)))))))
+
+(ert-deftest lang-markdown/gfm-links-reference-full ()
+  "Full reference link resolves through the definition alist."
+  (lang-markdown-tests--with-links-buffer
+      "[docs][d] here.\n\n[d]: https://example.com\n"
+    (let ((ov (lang-markdown-tests--link-overlay-at 2 'title)))
+      (should ov)
+      (should (eq 'reference (overlay-get ov 'gfm-links-kind)))
+      (should (equal "https://example.com" (overlay-get ov 'gfm-links-url))))))
+
+(ert-deftest lang-markdown/gfm-links-reference-collapsed ()
+  "Collapsed reference link `[text][]' resolves using the text as label."
+  (lang-markdown-tests--with-links-buffer
+      "[design][] here.\n\n[design]: ./docs/adr-001.md\n"
+    (let ((ov (lang-markdown-tests--link-overlay-at 2 'title)))
+      (should ov)
+      (should (equal "./docs/adr-001.md" (overlay-get ov 'gfm-links-url))))))
+
+(ert-deftest lang-markdown/gfm-links-reference-shortcut ()
+  "Shortcut reference `[label]' is decorated only when a definition exists."
+  (lang-markdown-tests--with-links-buffer
+      "Prose [design] more.\n\n[design]: ./adr.md\n"
+    (let ((ov (lang-markdown-tests--link-overlay-at 8 'title)))
+      (should ov)
+      (should (eq 'reference (overlay-get ov 'gfm-links-kind)))
+      (should (equal "./adr.md" (overlay-get ov 'gfm-links-url))))))
+
+(ert-deftest lang-markdown/gfm-links-reference-shortcut-undefined-not-decorated ()
+  "Shortcut `[label]' with no matching definition is left raw."
+  (lang-markdown-tests--with-links-buffer
+      "Prose [design] more, no definition.\n"
+    (should-not (lang-markdown-tests--link-overlay-at 8))))
+
+(ert-deftest lang-markdown/gfm-links-autolink-host-label ()
+  "An autolink is decorated with the host as the visible label."
+  (lang-markdown-tests--with-links-buffer
+      "Visit <https://anthropic.com/path> now.\n"
+    (let ((ov (lang-markdown-tests--link-overlay-at 8 'title)))
+      (should ov)
+      (should (eq 'autolink (overlay-get ov 'gfm-links-kind)))
+      (should (equal "anthropic.com"
+                     (substring-no-properties (overlay-get ov 'display)))))))
+
+(ert-deftest lang-markdown/gfm-links-bare-url ()
+  "A GFM bare URL is decorated."
+  (lang-markdown-tests--with-links-buffer
+      "Visit https://anthropic.com today.\n"
+    (let ((ov (lang-markdown-tests--link-overlay-at 8 'title)))
+      (should ov)
+      (should (eq 'bare-url (overlay-get ov 'gfm-links-kind)))
+      (should (equal "anthropic.com"
+                     (substring-no-properties (overlay-get ov 'display)))))))
+
+(ert-deftest lang-markdown/gfm-links-wiki-link ()
+  "A wiki link is decorated when `markdown-enable-wiki-links' is on."
+  (with-temp-buffer
+    (delay-mode-hooks (markdown-mode))
+    (setq-local markdown-hide-urls t)
+    (setq-local markdown-enable-wiki-links t)
+    (insert "See [[Some Page]] here.\n")
+    (gfm-links-mode 1)
+    (let ((ov (lang-markdown-tests--link-overlay-at 6 'title)))
+      (should ov)
+      (should (eq 'wiki (overlay-get ov 'gfm-links-kind))))))
+
+(ert-deftest lang-markdown/gfm-links-image-not-decorated ()
+  "Image links are explicitly left raw."
+  (lang-markdown-tests--with-links-buffer
+      "![alt](./diagram.png)\n"
+    (should-not gfm-links--overlays)))
+
+(ert-deftest lang-markdown/gfm-links-reference-definition-not-decorated ()
+  "Reference-definition lines themselves are not decorated."
+  (lang-markdown-tests--with-links-buffer
+      "[d]: https://example.com\n"
+    (should-not gfm-links--overlays)))
+
+;;; 14.2 Reference resolution
+
+(ert-deftest lang-markdown/gfm-links-ref-def-alist-build ()
+  "The ref-def alist maps a downcased label to its URL, title, and position."
+  (lang-markdown-tests--with-links-buffer
+      "[D]: https://example.com \"a title\"\n"
+    (let ((entry (gfm-links--resolve-ref "d")))
+      (should entry)
+      (should (equal "https://example.com" (nth 0 entry)))
+      (should (equal "a title" (nth 1 entry)))
+      (should (integerp (nth 2 entry))))))
+
+(ert-deftest lang-markdown/gfm-links-ref-def-first-wins ()
+  "When a label is defined twice, the first definition wins."
+  (lang-markdown-tests--with-links-buffer
+      "[d]: https://first.example\n[d]: https://second.example\n"
+    (should (equal "https://first.example" (nth 0 (gfm-links--resolve-ref "d"))))))
+
+(ert-deftest lang-markdown/gfm-links-broken-reference-not-decorated ()
+  "A reference link whose label has no definition is not decorated."
+  (lang-markdown-tests--with-links-buffer
+      "[title][missing] here.\n"
+    (should-not (lang-markdown-tests--link-overlay-at 2))))
+
+(ert-deftest lang-markdown/gfm-links-ref-def-recomputed-on-rebuild ()
+  "Editing a definition line and rebuilding re-resolves reference links."
+  (lang-markdown-tests--with-links-buffer
+      "[docs][d]\n\n[d]: https://old.example\n"
+    (should (equal "https://old.example"
+                   (overlay-get (lang-markdown-tests--link-overlay-at 2 'title)
+                                'gfm-links-url)))
+    (goto-char (point-min))
+    (search-forward "https://old.example")
+    (replace-match "https://new.example")
+    (gfm-links--rebuild)
+    (should (equal "https://new.example"
+                   (overlay-get (lang-markdown-tests--link-overlay-at 2 'title)
+                                'gfm-links-url)))))
+
+;;; 5.x Icon resolution
+
+(ert-deftest lang-markdown/gfm-links-icon-for-http-url ()
+  "An http(s) URL resolves through `nerd-icons-icon-for-url'."
+  (skip-unless (fboundp 'nerd-icons-icon-for-url))
+  (should (equal (nerd-icons-icon-for-url "https://github.com/foo/bar")
+                 (gfm-links--icon-for-target "https://github.com/foo/bar"))))
+
+(ert-deftest lang-markdown/gfm-links-icon-for-relative-file ()
+  "A relative path resolves through `nerd-icons-icon-for-file' on the basename."
+  (skip-unless (fboundp 'nerd-icons-icon-for-file))
+  (should (equal (nerd-icons-icon-for-file "init.el")
+                 (gfm-links--icon-for-target "./modules/init.el"))))
+
+(ert-deftest lang-markdown/gfm-links-label-for-naked-url ()
+  "The naked-URL label is the URL host."
+  (should (equal "anthropic.com"
+                 (gfm-links--label-for-naked-url
+                  "https://anthropic.com/some/path"))))
+
+;;; 7.x Suppression of the built-in compose path
+
+(ert-deftest lang-markdown/gfm-links-suppresses-composition ()
+  "With the mode on, the URL region gets no `composition' text property."
+  (lang-markdown-tests--with-links-buffer
+      "[Anthropic](https://anthropic.com)\n"
+    (font-lock-ensure)
+    (goto-char (point-min))
+    (search-forward "(")
+    (should-not (get-text-property (point) 'composition))))
+
+(ert-deftest lang-markdown/gfm-links-composition-applies-when-mode-off ()
+  "With the mode off but `markdown-hide-urls' on, composition still applies."
+  (with-temp-buffer
+    (delay-mode-hooks (markdown-mode))
+    (setq-local markdown-hide-urls t)
+    (insert "[Anthropic](https://anthropic.com)\n")
+    (font-lock-ensure)
+    (goto-char (point-min))
+    (search-forward "(")
+    (should (get-text-property (point) 'composition))))
+
+;;; 8.x Cursor reveal
+
+(ert-deftest lang-markdown/gfm-links-reveal-whole-link ()
+  "Point on the title reveals both the title-side and url-side overlays."
+  (lang-markdown-tests--with-links-buffer
+      "[Anthropic](https://anthropic.com)\n"
+    (let ((title-ov (lang-markdown-tests--link-overlay-at 2 'title))
+          (url-ov (lang-markdown-tests--link-overlay-at 13 'url)))
+      (should (overlay-get title-ov 'display))
+      (should (overlay-get url-ov 'display))
+      (goto-char 3)
+      (gfm-links--reveal)
+      (should-not (overlay-get title-ov 'display))
+      (should-not (overlay-get url-ov 'display))
+      (goto-char (point-max))
+      (gfm-links--reveal)
+      (should (overlay-get title-ov 'display))
+      (should (overlay-get url-ov 'display)))))
+
+(ert-deftest lang-markdown/gfm-links-reveal-respects-window-restriction ()
+  "Reveal in window A does not expose the link via window B's overlays."
+  (let ((buf (generate-new-buffer "*gfm-links-reveal-test*")))
+    (unwind-protect
+        (progn
+          (with-current-buffer buf
+            (delay-mode-hooks (markdown-mode))
+            (setq-local markdown-hide-urls t)
+            (insert "[Anthropic](https://anthropic.com)\n"))
+          (set-window-buffer (selected-window) buf)
+          (let* ((win-a (selected-window))
+                 (win-b (split-window)))
+            (set-window-buffer win-b buf)
+            (with-current-buffer buf
+              (gfm-links-mode 1)
+              (with-selected-window win-a
+                (goto-char 3)
+                (gfm-links--reveal))
+              (let* ((title-ovs
+                      (cl-remove-if-not
+                       (lambda (o) (eq 'title (overlay-get o 'gfm-links-side)))
+                       gfm-links--overlays))
+                     (a-ov (cl-find-if
+                            (lambda (o) (eq (overlay-get o 'window) win-a))
+                            title-ovs))
+                     (b-ov (cl-find-if
+                            (lambda (o) (eq (overlay-get o 'window) win-b))
+                            title-ovs)))
+                (should a-ov)
+                (should b-ov)
+                (should-not (overlay-get a-ov 'display))
+                (should (overlay-get b-ov 'display))))
+            (delete-window win-b)))
+      (kill-buffer buf))))
+
+;;; 9.x RET / follow-link
+
+(ert-deftest lang-markdown/gfm-links-ret-bound-on-title-overlay ()
+  "`RET' resolves to the follow command inside a decorated link only."
+  (lang-markdown-tests--with-links-buffer
+      "[Anthropic](https://anthropic.com) plain prose.\n"
+    (goto-char 3)
+    (should (eq 'gfm-links-follow-link-at-point (key-binding (kbd "RET"))))
+    (goto-char (point-max))
+    (should-not (eq 'gfm-links-follow-link-at-point (key-binding (kbd "RET"))))))
+
+(ert-deftest lang-markdown/gfm-links-follow-link-browses-url ()
+  "`gfm-links-follow-link-at-point' browses the resolved URL on a link."
+  (lang-markdown-tests--with-links-buffer
+      "[Anthropic](https://anthropic.com)\n"
+    (let (browsed)
+      (cl-letf (((symbol-function 'markdown--browse-url)
+                 (lambda (url) (setq browsed url))))
+        (goto-char 3)
+        (gfm-links-follow-link-at-point)
+        (should (equal "https://anthropic.com" browsed))))))
+
+(ert-deftest lang-markdown/gfm-links-follow-link-off-link-errors ()
+  "`gfm-links-follow-link-at-point' off any decorated link signals a user error."
+  (lang-markdown-tests--with-links-buffer
+      "[Anthropic](https://anthropic.com) plain.\n"
+    (goto-char (point-max))
+    (should-error (gfm-links-follow-link-at-point) :type 'user-error)))
+
+;;; 10.x xref backend
+
+(ert-deftest lang-markdown/gfm-links-xref-backend-claims-reference-link ()
+  "The xref backend claims a reference link and defers off one."
+  (lang-markdown-tests--with-links-buffer
+      "[docs][d] then [inline](https://x.example)\n\n[d]: https://d.example\n"
+    (goto-char 3)
+    (should (eq 'gfm-links (gfm-links--xref-backend)))
+    (goto-char (+ (point-min) 17))      ; inside the inline link
+    (should-not (gfm-links--xref-backend))))
+
+(ert-deftest lang-markdown/gfm-links-xref-jumps-to-definition ()
+  "`xref-backend-definitions' points at the `[label]:' definition line."
+  (lang-markdown-tests--with-links-buffer
+      "[docs][adr] here.\n\n[adr]: https://adr.example\n"
+    (goto-char 3)
+    (let* ((id (xref-backend-identifier-at-point 'gfm-links))
+           (defs (xref-backend-definitions 'gfm-links id))
+           (def-pos (save-excursion
+                      (goto-char (point-min))
+                      (search-forward "[adr]:")
+                      (line-beginning-position))))
+      (should (equal "adr" id))
+      (should (= 1 (length defs)))
+      (should (= def-pos
+                 (xref-location-marker (xref-item-location (car defs))))))))
+
+;;; 11.x Eldoc
+
+(ert-deftest lang-markdown/gfm-links-eldoc-returns-url-on-link ()
+  "Eldoc returns the resolved URL (and title attr) when point is on a link."
+  (lang-markdown-tests--with-links-buffer
+      "[Anthropic](https://anthropic.com \"official\")\n"
+    (goto-char 3)
+    (let ((doc (gfm-links--eldoc-function #'ignore)))
+      (should (stringp doc))
+      (should (string-match-p "https://anthropic.com" doc))
+      (should (string-match-p "official" doc)))))
+
+(ert-deftest lang-markdown/gfm-links-eldoc-returns-nil-off-link ()
+  "Eldoc returns nil when point is not on a decorated link."
+  (lang-markdown-tests--with-links-buffer
+      "[Anthropic](https://anthropic.com) plain prose.\n"
+    (goto-char (point-max))
+    (should-not (gfm-links--eldoc-function #'ignore))))
+
+;;; 14.8 Width walker — table cell with a decorated link
+
+(ert-deftest lang-markdown/gfm-links-table-cell-width-counts-decoration ()
+  "A table cell with a decorated link sizes its column by the visible width."
+  (with-temp-buffer
+    (delay-mode-hooks (markdown-mode))
+    (setq-local markdown-hide-urls t)
+    (insert "| [Anthropic](https://anthropic.com) |\n| --- |\n| x |\n")
+    (gfm-links-mode 1)
+    (goto-char (point-min))
+    (let* ((cells (gfm-tables--fontify-row-cells
+                   (line-beginning-position) (line-end-position)))
+           (w (gfm-tables--visible-width (car cells))))
+      ;; "Anthropic" (9) + URL icon (1) = 10, well under the raw 34 chars.
+      (should (<= w 12))
+      (should (< w (length "[Anthropic](https://anthropic.com)"))))))
+
+(ert-deftest lang-markdown/gfm-links-table-cell-bakes-in-decoration ()
+  "A table cell's fontified string has the link decoration spliced in.
+The raw bracket/URL text is gone — `display' text properties nested in
+an overlay's `display' string are not honoured by redisplay, so the
+decoration must be baked into the cell string itself."
+  (with-temp-buffer
+    (delay-mode-hooks (markdown-mode))
+    (setq-local markdown-hide-urls t)
+    (insert "| [Anthropic](https://anthropic.com) |\n| --- |\n| x |\n")
+    (gfm-links-mode 1)
+    (goto-char (point-min))
+    (let* ((cell (car (gfm-tables--fontify-row-cells
+                       (line-beginning-position) (line-end-position))))
+           (plain (substring-no-properties cell)))
+      (should (string-match-p "Anthropic" plain))
+      (should-not (string-match-p "(https://anthropic\\.com)" plain))
+      (should-not (string-match-p "\\[Anthropic\\]" plain)))))
+
+;;; 14.9 Narrowing-regression
+
+(defun lang-markdown-tests--two-slide-links-buffer ()
+  "Insert a two-slide buffer with one decorated link per slide."
+  (insert "Slide one: [Anthropic](https://anthropic.com).\n")
+  (insert "\n# slide 2\n\n")
+  (insert "Slide two: [Example](https://example.com).\n"))
+
+(ert-deftest lang-markdown/gfm-links-narrow-rebuild-widen-rebuild-converges ()
+  "narrow -> rebuild -> widen -> rebuild matches a clean widened rebuild."
+  :tags '(narrowing-regression)
+  (with-temp-buffer
+    (delay-mode-hooks (markdown-mode))
+    (setq-local markdown-hide-urls t)
+    (lang-markdown-tests--two-slide-links-buffer)
+    (gfm-links-mode 1)
+    (let* ((baseline (lang-markdown-tests--tagged-source-positions 'gfm-links))
+           (slide-1-end (save-excursion
+                          (goto-char (point-min))
+                          (search-forward "# slide 2")
+                          (line-beginning-position))))
+      (narrow-to-region (point-min) slide-1-end)
+      (gfm-links--rebuild)
+      (widen)
+      (gfm-links--rebuild)
+      (should (equal baseline
+                     (lang-markdown-tests--tagged-source-positions
+                      'gfm-links))))))
 
 (provide 'lang-markdown-tests)
 

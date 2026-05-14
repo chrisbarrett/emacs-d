@@ -36,6 +36,9 @@
   (gfm-mode-hook . gfm-callouts-mode)
   (gfm-mode-hook . gfm-code-fences-mode)
   (gfm-mode-hook . gfm-tables-mode)
+  ;; `gfm-links--maybe-enable' turns on `gfm-links-mode' when
+  ;; `markdown-hide-urls' is non-nil and tracks later changes to it.
+  (gfm-mode-hook . gfm-links--maybe-enable)
 
   :custom
   (markdown-fontify-code-blocks-natively t)

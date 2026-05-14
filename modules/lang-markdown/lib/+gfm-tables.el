@@ -101,20 +101,93 @@ inside a table.")
               (markdown-mode))))))
     buf))
 
-(defun gfm-tables--fontify-cell (cell)
+(defun gfm-tables--transcribe-source-overlays (str buffer beg end)
+  "Return STR with width-affecting overlay decoration from BUFFER baked in.
+STR is the fontified, trimmed cell text; BUFFER's region [BEG, END) is
+the raw source between the cell pipes (including padding).  The
+region's leading and trailing whitespace is skipped so STR offset 0
+maps to the first content character.  Overlays carrying a `display'
+string — for instance the link overlays created by `gfm-links-mode' —
+have that string spliced into STR in place of the covered text, and
+overlays hidden via `invisible' splice to the empty string.  Splicing
+\(rather than copying the property) is required because a `display'
+text property nested inside an overlay's `display' string is not
+honoured by redisplay.  Source positions map 1:1 onto STR offsets,
+which holds for any cell without backslash-escaped pipes.  Returns STR
+unchanged when no width-affecting overlay intersects the region."
+  (with-current-buffer buffer
+    (while (and (< beg end) (memq (char-after beg) '(?\s ?\t)))
+      (setq beg (1+ beg)))
+    (while (and (> end beg) (memq (char-after (1- end)) '(?\s ?\t)))
+      (setq end (1- end)))
+    (let ((slen (length str))
+          (edits nil))
+      (dolist (ov (overlays-in beg end))
+        (let ((s (- (max beg (overlay-start ov)) beg))
+              (e (- (min end (overlay-end ov)) beg))
+              (disp (overlay-get ov 'display)))
+          (when (and (<= 0 s) (< s e) (<= e slen))
+            (cond
+             ((stringp disp) (cl-pushnew (list s e disp) edits :test #'equal))
+             ((overlay-get ov 'invisible)
+              (cl-pushnew (list s e "") edits :test #'equal))))))
+      (if (null edits)
+          str
+        ;; Apply right-to-left so earlier offsets stay valid.  Per-window
+        ;; overlays yield identical (S E DISP) triples — `cl-pushnew'
+        ;; collapses those — and `floor' skips any genuine overlap.
+        (setq edits (sort edits (lambda (a b) (> (car a) (car b)))))
+        (let ((result (copy-sequence str))
+              (floor slen))
+          (dolist (edit edits)
+            (when (<= (nth 1 edit) floor)
+              (setq result (concat (substring result 0 (nth 0 edit))
+                                   (nth 2 edit)
+                                   (substring result (nth 1 edit)))
+                    floor (nth 0 edit))))
+          result)))))
+
+(defun gfm-tables--fontify-cell (cell &optional buffer beg end)
   "Return CELL with markdown inline syntax fontified.
 The visible width of the result equals the visible width of CELL,
-provided `markdown-hide-markup' is nil (the default)."
+provided `markdown-hide-markup' is nil (the default).
+
+With BUFFER, BEG and END all non-nil, CELL is the trimmed text of the
+source-buffer region [BEG, END).  Width-affecting overlay decoration on
+that region is baked into the returned string via
+`gfm-tables--transcribe-source-overlays', so a cell containing a
+`gfm-links-mode'-decorated link both renders and sizes its column by
+the decorated width rather than the raw markdown width."
   (cond
    ((or (null cell) (string-empty-p cell)) (or cell ""))
    ((not (fboundp 'markdown-mode)) cell)
    (t
-    (with-current-buffer (gfm-tables--fontify-buffer)
-      (let ((inhibit-modification-hooks t))
-        (erase-buffer)
-        (insert cell)
-        (font-lock-ensure))
-      (buffer-string)))))
+    (let ((fontified
+           (with-current-buffer (gfm-tables--fontify-buffer)
+             (let ((inhibit-modification-hooks t))
+               (erase-buffer)
+               (insert cell)
+               (font-lock-ensure))
+             (buffer-string))))
+      (if (and buffer beg end)
+          (gfm-tables--transcribe-source-overlays fontified buffer beg end)
+        fontified)))))
+
+(defun gfm-tables--fontify-row-cells (line-beg line-end)
+  "Fontify the cells of the table row spanning LINE-BEG..LINE-END.
+Each cell is measured against its source region so overlay
+decorations (e.g. `gfm-links-mode' link overlays) inside a cell size
+the column to their decorated width.  Cells past the available source
+bounds fall back to plain string measurement."
+  (let* ((line (buffer-substring-no-properties line-beg line-end))
+         (cells (gfm-tables--split-row line))
+         (bounds (gfm-tables--cell-bounds line-beg line-end))
+         (buffer (current-buffer)))
+    (cl-loop for cell in cells
+             for i from 0
+             for b = (nth i bounds)
+             collect (gfm-tables--fontify-cell
+                      cell buffer (and b (car b)) (and b (cdr b))))))
 
 (defun gfm-tables--invisible-p (val spec)
   "Non-nil if invisibility property VAL is hidden under SPEC.
@@ -149,48 +222,117 @@ outside one, so the cache never crosses rebuild boundaries.")
           (setq i (min nd ni nc))))))
     clean))
 
-(defun gfm-tables--visible-width--compute (s)
-  "Walk S to compute its visible width; honours display/composition/invisible."
-  (if (gfm-tables--no-width-affecting-props-p s)
-      (string-width s)
+(defun gfm-tables--visible-width--compute-region (buffer beg end)
+  "Walk the region [BEG, END) in BUFFER, returning its visible width.
+Consults overlay properties as well as text properties via
+`get-char-property', so overlay decorations (e.g. the link overlays
+created by `gfm-links-mode') are measured at their visible width
+rather than their underlying source width.  Honours `display',
+`invisible', and `composition' the same way the string walker does.
+Leading and trailing whitespace of the region is trimmed first so a
+table cell measures by its content, not its source padding."
+  (with-current-buffer buffer
     (let ((spec buffer-invisibility-spec)
-          (w 0) (i 0) (n (length s)))
-      (while (< i n)
-        (let* ((invis (get-text-property i 'invisible s))
-               (disp (get-text-property i 'display s))
-               (comp (find-composition i nil s t)))
-          (cond
-           ((gfm-tables--invisible-p invis spec)
-            (setq i (or (next-single-property-change i 'invisible s) n)))
-           ((stringp disp)
-            (cl-incf w (string-width disp))
-            (setq i (or (next-single-property-change i 'display s) n)))
-           ;; Honour only explicit compositions (those backed by a
-           ;; `composition' text property).  Auto-compositions from
-           ;; `composition-function-table' (e.g. `fl' / `--' ligatures
-           ;; in the fontify scratch buffer) are not applied to overlay
-           ;; display strings, so counting them here under-pads the
-           ;; cell and pushes the closing border off-grid.
-           ((and comp (= (nth 0 comp) i)
-                 (get-text-property i 'composition s))
-            (cl-incf w (or (nth 5 comp) 1))
-            (setq i (nth 1 comp)))
-           (t
-            (let* ((nd (or (next-single-property-change i 'display s) n))
-                   (ni (or (next-single-property-change i 'invisible s) n))
-                   (nc (or (next-single-property-change i 'composition s) n))
-                   (next (min nd ni nc)))
-              (cl-incf w (string-width (substring-no-properties s i next)))
-              (setq i next))))))
+          (w 0))
+      ;; Trim source padding: the cell region between pipes includes the
+      ;; surrounding spaces, but column width is a property of the content.
+      (while (and (< beg end)
+                  (memq (char-after beg) '(?\s ?\t)))
+        (setq beg (1+ beg)))
+      (while (and (> end beg)
+                  (memq (char-after (1- end)) '(?\s ?\t)))
+        (setq end (1- end)))
+      (let ((i beg))
+        (while (< i end)
+          (let* ((invis (get-char-property i 'invisible buffer))
+                 (disp (get-char-property i 'display buffer))
+                 (comp (find-composition i nil nil t)))
+            (cond
+             ((gfm-tables--invisible-p invis spec)
+              (setq i (or (next-single-char-property-change
+                           i 'invisible buffer end)
+                          end)))
+             ((stringp disp)
+              (cl-incf w (string-width disp))
+              (setq i (or (next-single-char-property-change
+                           i 'display buffer end)
+                          end)))
+             ((and comp (= (nth 0 comp) i)
+                   (get-char-property i 'composition buffer))
+              (cl-incf w (or (nth 5 comp) 1))
+              (setq i (min end (nth 1 comp))))
+             (t
+              (let* ((nd (or (next-single-char-property-change
+                              i 'display buffer end)
+                             end))
+                     (ni (or (next-single-char-property-change
+                              i 'invisible buffer end)
+                             end))
+                     (nc (or (next-single-char-property-change
+                              i 'composition buffer end)
+                             end))
+                     (next (min nd ni nc end)))
+                (cl-incf w (string-width
+                            (buffer-substring-no-properties i next)))
+                (setq i next)))))))
       w)))
 
-(defun gfm-tables--visible-width (s)
+(defun gfm-tables--visible-width--compute (s &optional buffer beg end)
+  "Walk S to compute its visible width; honours display/composition/invisible.
+With BUFFER, BEG and END all non-nil, walk the region [BEG, END) in
+BUFFER instead of S, consulting overlay properties as well as text
+properties — see `gfm-tables--visible-width--compute-region'.  This
+keeps existing single-argument callers behaving exactly as before."
+  (if (and buffer beg end)
+      (gfm-tables--visible-width--compute-region buffer beg end)
+    (if (gfm-tables--no-width-affecting-props-p s)
+        (string-width s)
+      (let ((spec buffer-invisibility-spec)
+            (w 0) (i 0) (n (length s)))
+        (while (< i n)
+          (let* ((invis (get-text-property i 'invisible s))
+                 (disp (get-text-property i 'display s))
+                 (comp (find-composition i nil s t)))
+            (cond
+             ((gfm-tables--invisible-p invis spec)
+              (setq i (or (next-single-property-change i 'invisible s) n)))
+             ((stringp disp)
+              (cl-incf w (string-width disp))
+              (setq i (or (next-single-property-change i 'display s) n)))
+             ;; Honour only explicit compositions (those backed by a
+             ;; `composition' text property).  Auto-compositions from
+             ;; `composition-function-table' (e.g. `fl' / `--' ligatures
+             ;; in the fontify scratch buffer) are not applied to overlay
+             ;; display strings, so counting them here under-pads the
+             ;; cell and pushes the closing border off-grid.
+             ((and comp (= (nth 0 comp) i)
+                   (get-text-property i 'composition s))
+              (cl-incf w (or (nth 5 comp) 1))
+              (setq i (nth 1 comp)))
+             (t
+              (let* ((nd (or (next-single-property-change i 'display s) n))
+                     (ni (or (next-single-property-change i 'invisible s) n))
+                     (nc (or (next-single-property-change i 'composition s) n))
+                     (next (min nd ni nc)))
+                (cl-incf w (string-width (substring-no-properties s i next)))
+                (setq i next))))))
+        w))))
+
+(defun gfm-tables--visible-width (s &optional buffer beg end)
   "Return on-screen width of S in the current buffer.
 Honours `display' string replacements, the `composition' text property
 \(used by `markdown-mode' to collapse hidden URLs into a single glyph),
 and any `invisible' property currently hidden by `buffer-invisibility-spec'.
-When `gfm-tables--width-cache' is bound, results are memoised by `eq'."
+When `gfm-tables--width-cache' is bound, results are memoised by `eq'.
+
+With BUFFER, BEG and END all non-nil, the visible width is measured
+against the region [BEG, END) in BUFFER — consulting overlays as well
+as text properties — instead of against S.  Region measurements are
+not memoised, since the same string S may map to different source
+regions across rebuilds."
   (cond
+   ((and buffer beg end)
+    (gfm-tables--visible-width--compute s buffer beg end))
    ((and gfm-tables--width-cache
          (gethash s gfm-tables--width-cache)))
    (t
@@ -873,22 +1015,18 @@ Keys: :header-beg :header-end :delim-beg :delim-end :body-positions
                          (goto-char header-beg) (line-end-position)))
            (delim-end (save-excursion
                         (goto-char delim-beg) (line-end-position)))
-           (header-line (buffer-substring-no-properties
-                         header-beg header-end))
            (header-cells (gfm-tables--time-phase 'parse
-                           (mapcar #'gfm-tables--fontify-cell
-                                   (gfm-tables--split-row header-line))))
+                           (gfm-tables--fontify-row-cells
+                            header-beg header-end)))
            (body-rows '())
            (body-positions '()))
       (gfm-tables--time-phase 'parse
         (goto-char body-beg)
         (while (< (point) body-end)
           (let* ((lbeg (line-beginning-position))
-                 (lend (line-end-position))
-                 (line (buffer-substring-no-properties lbeg lend)))
+                 (lend (line-end-position)))
             (push (cons lbeg lend) body-positions)
-            (push (mapcar #'gfm-tables--fontify-cell
-                          (gfm-tables--split-row line))
+            (push (gfm-tables--fontify-row-cells lbeg lend)
                   body-rows))
           (forward-line 1)))
       (list :header-beg header-beg :header-end header-end
