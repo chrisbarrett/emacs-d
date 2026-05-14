@@ -13,9 +13,14 @@
     (allow "Killing this agent's sandbox Emacs daemon")))
 
 (check
-  (allow "pkill -f emacs-claude-sandbox-12345")
-  (allow "pkill -f \"emacs-claude-sandbox-$$\"")
-  ;; Bare prefix must NOT match — would hit other agents' sandboxes.
-  (ask "pkill -f emacs-claude-sandbox-")
-  ;; Unrelated pkill stays subject to the global rule.
-  (ask "pkill -f some-other-process"))
+ (allow "pkill -f \"emacs-claude-sandbox-$$\"")
+ ;; Bare prefix must NOT match — would hit other agents' sandboxes.
+ (ask "pkill -f emacs-claude-sandbox-")
+ (allow "pkill -f emacs-claude-sandbox-12345")
+ ;; Unrelated pkill stays subject to the global rule.
+ (ask "pkill -f some-other-process"))
+
+(rule (or "./scripts/checkdoc.sh" "./scripts/affected.sh"
+          "./scripts/run-tests.sh" "./scripts/byte-compile.sh"
+          "./scripts/affected-tests.sh" "./scripts/integration-test.sh")
+  (allow))
