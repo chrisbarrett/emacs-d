@@ -360,6 +360,59 @@ fix-gfm-narrowing-safety change."
    (lambda (a b) (or (< (car a) (car b))
                      (and (= (car a) (car b)) (< (cdr a) (cdr b)))))))
 
+;;; Extend-clip test helpers
+
+(defun lang-markdown-tests--spec-extend (spec)
+  "Return SPEC's `:extend' attribute, or the symbol `unspecified'.
+SPEC is a face symbol, an attribute plist, or a list of either; for a
+list, earlier entries take precedence."
+  (cond
+   ((null spec) 'unspecified)
+   ((symbolp spec)
+    (if (facep spec) (face-attribute spec :extend nil nil) 'unspecified))
+   ((and (consp spec) (keywordp (car spec)))
+    (if (plist-member spec :extend) (plist-get spec :extend) 'unspecified))
+   ((consp spec)
+    (let ((res 'unspecified))
+      (dolist (s (reverse spec))
+        (let ((e (lang-markdown-tests--spec-extend s)))
+          (unless (eq e 'unspecified) (setq res e))))
+      res))
+   (t 'unspecified)))
+
+(defun lang-markdown-tests--merged-extend-at (pos)
+  "Resolve the `:extend' attribute Emacs would paint at POS.
+Merges the text-property `face' with every overlay `face' at POS;
+overlay faces take precedence over text properties, higher `priority'
+overlays over lower."
+  (let ((layers '()))                   ; (PRIORITY . SPEC), low first
+    (let ((tp (get-text-property pos 'face)))
+      (when tp (push (cons most-negative-fixnum tp) layers)))
+    (dolist (ov (overlays-at pos))
+      (let ((f (overlay-get ov 'face)))
+        (when f
+          (push (cons (or (overlay-get ov 'priority) 0) f) layers))))
+    (setq layers (sort layers (lambda (a b) (< (car a) (car b)))))
+    (let ((res 'unspecified))
+      (dolist (l layers)
+        (let ((e (lang-markdown-tests--spec-extend (cdr l))))
+          (unless (eq e 'unspecified) (setq res e))))
+      res)))
+
+(defun lang-markdown-tests--clip-positions (tag)
+  "Return sorted (BEG . END) positions of TAG's extend-clip anchors."
+  (sort
+   (mapcar (lambda (ov) (cons (overlay-start ov) (overlay-end ov)))
+           (cl-remove-if-not
+            (lambda (ov)
+              (and (overlay-get ov tag)
+                   (equal (overlay-get ov 'face) '(:extend nil))
+                   (eql (overlay-get ov 'priority)
+                        gfm-block-borders--extend-clip-priority)))
+            (overlays-in (point-min) (point-max))))
+   (lambda (a b) (or (< (car a) (car b))
+                     (and (= (car a) (car b)) (< (cdr a) (cdr b)))))))
+
 (ert-deftest lang-markdown/gfm-tables-narrow-rebuild-widen-rebuild-converges ()
   "narrow → rebuild → widen → rebuild produces same overlay set as widened rebuild.
 Regression net for any future narrowing-scoped optimisation that
@@ -417,6 +470,48 @@ re-introduces narrowing-dependent caches/teardown."
       (should (equal baseline
                      (lang-markdown-tests--tagged-source-positions
                       'gfm-callouts))))))
+
+;;; Extend-clip — callouts
+
+(ert-deftest lang-markdown/gfm-callouts-extend-overlay-clipped ()
+  "An `:extend t' overlay face on a callout body line merges to nil at its newline."
+  (with-temp-buffer
+    (insert "> [!NOTE]\n> body line.\n")
+    (gfm-callouts-mode 1)
+    (let* ((body-beg (progn (goto-char (point-min))
+                            (forward-line 1) (point)))
+           (nl (line-end-position)))    ; newline char of the body line
+      ;; Mimic `hl-line' / `region': an overlay face carrying `:extend t'
+      ;; over the body line and its trailing newline.
+      (let ((hl (make-overlay body-beg (1+ nl))))
+        (overlay-put hl 'face '(:extend t))
+        (overlay-put hl 'priority -50)   ; `hl-line's overlay priority
+        ;; The leak-source `:extend t' overlay face is present on the
+        ;; newline, but the higher-priority extend-clip wins → nil.
+        (should (cl-some (lambda (o)
+                           (eq t (lang-markdown-tests--spec-extend
+                                  (overlay-get o 'face))))
+                         (overlays-at nl)))
+        (should (null (lang-markdown-tests--merged-extend-at nl)))))))
+
+(ert-deftest lang-markdown/gfm-callouts-extend-clip-narrow-converges ()
+  "Callout extend-clip anchors converge across narrow → rebuild → widen → rebuild."
+  :tags '(narrowing-regression)
+  (with-temp-buffer
+    (lang-markdown-tests--two-slide-callouts-buffer)
+    (gfm-callouts-mode 1)
+    (let* ((baseline (lang-markdown-tests--clip-positions 'gfm-callouts))
+           (slide-1-end (save-excursion
+                          (goto-char (point-min))
+                          (search-forward "# slide 2")
+                          (line-beginning-position))))
+      (should baseline)
+      (narrow-to-region (point-min) slide-1-end)
+      (gfm-callouts--rebuild)
+      (widen)
+      (gfm-callouts--rebuild)
+      (should (equal baseline
+                     (lang-markdown-tests--clip-positions 'gfm-callouts))))))
 
 ;;; Box-width sizing
 
@@ -790,6 +885,49 @@ when both `gfm-callouts-mode' and `gfm-code-fences-mode' are active."
                         (lambda (ov) (overlay-get ov 'gfm-code-fences))
                         (overlays-in (point-min) (point-max)))))
         (should (= (length gfm-code-fences--overlays) on-buffer))))))
+
+;;; Extend-clip — code fences
+
+(ert-deftest lang-markdown/gfm-code-fences-diff-extend-clipped ()
+  "A `:extend t' text-property face on a `+' body line merges to nil at its newline."
+  (with-temp-buffer
+    (insert "```diff\n+ added line\n```\n")
+    (gfm-code-fences-mode 1)
+    ;; Stand in for `markdown-fontify-code-blocks-natively' copying
+    ;; diff-mode's `:extend t' `diff-added' face — newline included —
+    ;; onto the `+' body line.  An explicit plist is used rather than
+    ;; the `diff-added' symbol because batch Emacs does not realise a
+    ;; defface's `:extend' attribute for `face-attribute'.
+    (let* ((diff-added-face '(:background "#c3ebc1" :extend t))
+           (body-beg (progn (goto-char (point-min))
+                            (forward-line 1) (point)))
+           (nl (line-end-position)))    ; newline char of the `+' line
+      (put-text-property body-beg (1+ nl) 'face diff-added-face)
+      ;; The leak-source `:extend t' face is present on the newline,
+      ;; but the extend-clip overlay wins the merge → nil.
+      (should (eq t (lang-markdown-tests--spec-extend
+                     (get-text-property nl 'face))))
+      (should (null (lang-markdown-tests--merged-extend-at nl))))))
+
+(ert-deftest lang-markdown/gfm-code-fences-extend-clip-narrow-converges ()
+  "Fence extend-clip anchors converge across narrow → rebuild → widen → rebuild."
+  :tags '(narrowing-regression)
+  (with-temp-buffer
+    (lang-markdown-tests--two-slide-fences-buffer)
+    (gfm-code-fences-mode 1)
+    (let* ((baseline (lang-markdown-tests--clip-positions 'gfm-code-fences))
+           (slide-1-end (save-excursion
+                          (goto-char (point-min))
+                          (search-forward "# slide 2")
+                          (line-beginning-position))))
+      (should baseline)
+      (narrow-to-region (point-min) slide-1-end)
+      (gfm-code-fences--rebuild)
+      (widen)
+      (gfm-code-fences--rebuild)
+      (should (equal baseline
+                     (lang-markdown-tests--clip-positions
+                      'gfm-code-fences))))))
 
 (ert-deftest lang-markdown/gfm-code-fences-border-face-resets-styling ()
   "Border face spec inherits the configured face but resets styling

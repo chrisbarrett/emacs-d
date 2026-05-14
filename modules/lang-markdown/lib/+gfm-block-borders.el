@@ -346,6 +346,31 @@ WINDOW non-nil restricts the overlay to that window only."
     (push ov (symbol-value list-sym))
     ov))
 
+;;; Extend-clip primitive
+
+(defconst gfm-block-borders--extend-clip-priority 100
+  "Overlay `priority' for extend-clip anchors.
+Must outrank `hl-line' (overlay priority -50) and `region' so a body
+line's `:extend t' background is confined to the box interior even
+when carried by another mode's overlay face rather than a text
+property.")
+
+(defun gfm-block-borders--make-extend-clip (registry beg end)
+  "Make an extend-clip anchor over [BEG, END) under REGISTRY.
+The anchor carries the anonymous face `(:extend nil)' at
+`gfm-block-borders--extend-clip-priority'.  `:extend' is consulted
+only at newline positions, so the anchor is a no-op on every non-EOL
+character and clips every interior newline of the block body at
+once — keeping an `:extend t' background (a `diff-added'
+text-property face, an `hl-line' / `region' overlay face) from
+painting past the box's right border.  Built through
+`gfm-block-borders--make-anchor' so the existing registry teardown
+applies."
+  (gfm-block-borders--make-anchor
+   registry beg end
+   'face '(:extend nil)
+   'priority gfm-block-borders--extend-clip-priority))
+
 ;;; Scheduler primitives
 
 (defun gfm-block-borders--extend-dirty-region (region-symbol beg end)

@@ -182,6 +182,10 @@ Returns a hex colour string, or nil if either colour is unresolvable."
   (apply #'gfm-block-borders--make-anchor
          gfm-callouts--registry beg end props))
 
+(defsubst gfm-callouts--make-extend-clip (beg end)
+  "Make an extend-clip anchor over [BEG, END) for the callout registry."
+  (gfm-block-borders--make-extend-clip gfm-callouts--registry beg end))
+
 (defsubst gfm-callouts--make-display (beg end window &rest props)
   "Make a display overlay over [BEG, END] for WINDOW with PROPS."
   (apply #'gfm-block-borders--make-display
@@ -342,7 +346,14 @@ overlay engine."
                    lbeg lend
                    'face bg-face
                    (and is-body (list 'wrap-prefix wrap)))
-            (setq p (min (1+ end) (1+ lend))))))))))
+            (setq p (min (1+ end) (1+ lend)))))
+        ;; Extend-clip over the callout body — covers every body-line
+        ;; newline so an `:extend t' background (the callout's own
+        ;; tinted `bg-face', or another mode's `hl-line' / `region'
+        ;; overlay) stays inside the box and never paints past the
+        ;; right border.
+        (gfm-callouts--make-extend-clip
+         marker-line-end (min (1+ end) (point-max))))))))
 
 (defun gfm-callouts--apply-block-display (block window)
   "Apply per-WINDOW display overlays for BLOCK.

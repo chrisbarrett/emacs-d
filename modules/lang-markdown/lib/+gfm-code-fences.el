@@ -368,6 +368,10 @@ tick, so the result is deterministic from the tick alone."
   (apply #'gfm-block-borders--make-anchor
          gfm-code-fences--registry beg end props))
 
+(defsubst gfm-code-fences--make-extend-clip (beg end)
+  "Make an extend-clip anchor over [BEG, END) for the fence registry."
+  (gfm-block-borders--make-extend-clip gfm-code-fences--registry beg end))
+
 (defsubst gfm-code-fences--make-display (beg end window &rest props)
   "Make a display overlay over [BEG, END] for WINDOW with PROPS."
   (apply #'gfm-block-borders--make-display
@@ -376,19 +380,27 @@ tick, so the result is deterministic from the tick alone."
 ;;; Bordered rendering — fenced + YAML (shared)
 
 (defun gfm-code-fences--apply-bordered-anchors
-    (_open-line-end _close-line-beg _face)
-  "No-op: fenced/yaml body decoration lives entirely on per-window
-display overlays.
+    (open-line-end close-line-beg _face)
+  "Apply width-independent anchors for a fenced/yaml block.
 
-Two zero-width overlays at the same buffer position render in an
-order Emacs does not guarantee: an anchor carrying just the
-`│ ' before-string and a sibling display overlay carrying the
-right-edge `│' after-string can render after-string-first on empty
-body lines, painting the left border at the right position.
-Collapsing both strings onto a single overlay sidesteps the
-ambiguity at the cost of duplicating the `│ ' string per window —
-acceptable, mirrors gfm-tables row decoration."
-  nil)
+The only width-independent anchor is the extend-clip over the block
+body [OPEN-LINE-END, CLOSE-LINE-BEG): an overlay face `(:extend
+nil)' covering every interior newline so an `:extend t' background —
+the `diff-added' / `diff-removed' text-property faces native
+fontification copies onto a ` ```diff ` block, or an overlay face
+like `hl-line' / `region' — stays inside the box.
+
+Fenced/yaml body decoration otherwise lives entirely on per-window
+display overlays: two zero-width overlays at the same buffer
+position render in an order Emacs does not guarantee — an anchor
+carrying just the `│ ' before-string and a sibling display overlay
+carrying the right-edge `│' after-string can render
+after-string-first on empty body lines, painting the left border at
+the right position.  Collapsing both strings onto a single overlay
+sidesteps the ambiguity at the cost of duplicating the `│ ' string
+per window — acceptable, mirrors gfm-tables row decoration."
+  (when (< open-line-end close-line-beg)
+    (gfm-code-fences--make-extend-clip open-line-end close-line-beg)))
 
 (defun gfm-code-fences--apply-bordered-display
     (window open-line-beg open-line-end close-line-beg close-line-end face label)
@@ -461,6 +473,10 @@ the top border (icon string for fenced, `meta' for YAML, or nil)."
 
 (defun gfm-code-fences--apply-indent-anchors (beg end indent-width face)
   "Build width-independent anchors for an indent block at [BEG, END]."
+  ;; Extend-clip over the whole indent body — covers every interior
+  ;; newline plus the last line's, confining an `:extend t' overlay
+  ;; face (`hl-line', `region') to the box interior.
+  (gfm-code-fences--make-extend-clip beg (min (1+ end) (point-max)))
   (let ((lhs (propertize "│ " 'face
                          (gfm-block-borders--normalised-border-face face)))
         (first t)
