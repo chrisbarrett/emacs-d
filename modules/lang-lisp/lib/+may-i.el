@@ -174,6 +174,10 @@ first argument — either a bare string or an `(or …)' form."
 (add-to-list 'auto-mode-alist (cons (rx "/may-i/" (+? any) ".lisp" eos)
                                     'may-i-config-mode))
 
+;;;###autoload
+(add-to-list 'auto-mode-alist (cons (rx "/.may-i" (? ".local") ".lisp" eos)
+                                    'may-i-config-mode))
+
 (with-eval-after-load 'apheleia
   (defvar apheleia-formatters)
   (defvar apheleia-mode-alist)
