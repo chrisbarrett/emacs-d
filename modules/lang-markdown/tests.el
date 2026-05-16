@@ -117,22 +117,28 @@
     (should (null (plist-get spec :strike-through)))
     (should (null (plist-get spec :box)))))
 
-(ert-deftest lang-markdown/gfm-block-borders-extend-clip-face-is-defface ()
-  "`gfm-block-borders-extend-clip-face' is a defface with explicit `:extend nil'.
-Regression: an anonymous attribute plist `(:extend nil)' is rejected
-by Emacs's face-spec parser as \"Invalid face: :extend\" and the
-display engine silently drops it — the leak persists.  Only a
-`defface'd face actually clips, so assert the face exists, is a
-symbol, and carries an explicit `:extend nil' attribute."
-  (should (facep 'gfm-block-borders-extend-clip-face))
-  (should (eq nil (face-attribute 'gfm-block-borders-extend-clip-face
-                                  :extend nil nil)))
-  ;; The anonymous plist that the early design tried is, in fact,
-  ;; rejected by Emacs's face parser — pin the regression so any
-  ;; future revert to a plist trips here.
-  (should-error (face-attribute-merged-with
-                 :extend 'unspecified '(:extend nil))
-                :type 'error))
+(ert-deftest lang-markdown/gfm-block-borders-right-after-tail-fills-to-window-edge ()
+  "`right-after' ends with `(space :align-to right)' in the default face.
+Regression: an overlay face with `:extend nil' does NOT clip a
+sibling `:extend t' face's past-EOL fill — Emacs's
+`face_at_buffer_position' merge skips opted-out faces rather than
+suppressing opted-in ones.  The working idiom is to physically
+fill the visual line to the window edge with the default
+background, leaving no past-EOL region for `:extend' to colour."
+  (let* ((after (gfm-block-borders--right-after 40 'default))
+         (tail-i (1- (length after))))
+    (should (equal '(space :align-to right)
+                   (get-text-property tail-i 'display after)))
+    (should (eq 'default (get-text-property tail-i 'face after)))))
+
+(ert-deftest lang-markdown/gfm-block-borders-right-after-overflow-tail-fills-to-window-edge ()
+  "`right-after-overflow' ends with `(space :align-to right)' in the default face."
+  (let* ((after (gfm-block-borders--right-after-overflow
+                 'default "x" nil))
+         (tail-i (1- (length after))))
+    (should (equal '(space :align-to right)
+                   (get-text-property tail-i 'display after)))
+    (should (eq 'default (get-text-property tail-i 'face after)))))
 
 ;;; Narrowing-resilient shared teardown
 
@@ -377,34 +383,6 @@ fix-gfm-narrowing-safety change."
    (lambda (a b) (or (< (car a) (car b))
                      (and (= (car a) (car b)) (< (cdr a) (cdr b)))))))
 
-;;; Extend-clip test helpers
-
-(defun lang-markdown-tests--clip-overlay-at (tag pos)
-  "Return the TAG-tagged extend-clip overlay covering POS, or nil."
-  (cl-find-if
-   (lambda (ov)
-     (and (overlay-get ov tag)
-          (eq (overlay-get ov 'face)
-              'gfm-block-borders-extend-clip-face)
-          (eql (overlay-get ov 'priority)
-               gfm-block-borders--extend-clip-priority)))
-   (overlays-at pos)))
-
-(defun lang-markdown-tests--clip-positions (tag)
-  "Return sorted (BEG . END) positions of TAG's extend-clip anchors."
-  (sort
-   (mapcar (lambda (ov) (cons (overlay-start ov) (overlay-end ov)))
-           (cl-remove-if-not
-            (lambda (ov)
-              (and (overlay-get ov tag)
-                   (eq (overlay-get ov 'face)
-                       'gfm-block-borders-extend-clip-face)
-                   (eql (overlay-get ov 'priority)
-                        gfm-block-borders--extend-clip-priority)))
-            (overlays-in (point-min) (point-max))))
-   (lambda (a b) (or (< (car a) (car b))
-                     (and (= (car a) (car b)) (< (cdr a) (cdr b)))))))
-
 (ert-deftest lang-markdown/gfm-tables-narrow-rebuild-widen-rebuild-converges ()
   "narrow → rebuild → widen → rebuild produces same overlay set as widened rebuild.
 Regression net for any future narrowing-scoped optimisation that
@@ -465,39 +443,31 @@ re-introduces narrowing-dependent caches/teardown."
 
 ;;; Extend-clip — callouts
 
-(ert-deftest lang-markdown/gfm-callouts-extend-clip-covers-body-newline ()
-  "The callout extend-clip overlay covers each body line's newline.
-At priority `gfm-block-borders--extend-clip-priority' (100), above
-`hl-line' (-50) and `region', it suppresses a foreign `:extend t'
-overlay face's past-EOL fill."
+(ert-deftest lang-markdown/gfm-callouts-body-after-string-fills-to-window-edge ()
+  "Each callout body line's right-edge after-string ends with a
+`(space :align-to right)' tail in the default face — the visual
+line is fully painted to the window edge, so an `:extend t' overlay
+face like `hl-line' has no past-EOL region left to fill."
   (with-temp-buffer
     (insert "> [!NOTE]\n> body line.\n")
     (gfm-callouts-mode 1)
     (let* ((body-beg (progn (goto-char (point-min))
                             (forward-line 1) (point)))
-           (nl (line-end-position))     ; newline char of the body line
-           (clip (lang-markdown-tests--clip-overlay-at 'gfm-callouts nl)))
-      (should clip)
-      (should (= 100 (overlay-get clip 'priority))))))
-
-(ert-deftest lang-markdown/gfm-callouts-extend-clip-narrow-converges ()
-  "Callout extend-clip anchors converge across narrow → rebuild → widen → rebuild."
-  :tags '(narrowing-regression)
-  (with-temp-buffer
-    (lang-markdown-tests--two-slide-callouts-buffer)
-    (gfm-callouts-mode 1)
-    (let* ((baseline (lang-markdown-tests--clip-positions 'gfm-callouts))
-           (slide-1-end (save-excursion
-                          (goto-char (point-min))
-                          (search-forward "# slide 2")
-                          (line-beginning-position))))
-      (should baseline)
-      (narrow-to-region (point-min) slide-1-end)
-      (gfm-callouts--rebuild)
-      (widen)
-      (gfm-callouts--rebuild)
-      (should (equal baseline
-                     (lang-markdown-tests--clip-positions 'gfm-callouts))))))
+           (nl (line-end-position))
+           (rhs (cl-find-if
+                 (lambda (o)
+                   (eq (overlay-get o 'gfm-callouts-kind) 'body-rhs))
+                 (overlays-in body-beg (1+ nl))))
+           (after (and rhs (overlay-get rhs 'after-string))))
+      (should after)
+      (let* ((nl-i (cl-position ?\n after))
+             ;; Tail is the last char of the non-trailing-newline
+             ;; portion of the after-string (last body line also
+             ;; carries the bottom border after a `\n').
+             (tail-i (if nl-i (1- nl-i) (1- (length after)))))
+        (should (equal '(space :align-to right)
+                       (get-text-property tail-i 'display after)))
+        (should (eq 'default (get-text-property tail-i 'face after)))))))
 
 ;;; Box-width sizing
 
@@ -548,8 +518,12 @@ line (last body line's after-string also carries the bottom border)."
                  (first-rhs (car sorted))
                  (after (overlay-get first-rhs 'after-string)))
             (should after)
-            ;; Right-edge string ends in `│' (no bottom border on this row).
-            (should (string-suffix-p "│" after))))
+            ;; Right-edge string contains `│', followed by the
+            ;; window-edge tail (no bottom border on this row).
+            (should (string-match-p "│ \\'" after))
+            (should (equal '(space :align-to right)
+                           (get-text-property (1- (length after))
+                                              'display after)))))
       (kill-buffer buf))))
 
 ;;; Per-window display overlays
@@ -871,43 +845,6 @@ when both `gfm-callouts-mode' and `gfm-code-fences-mode' are active."
                         (lambda (ov) (overlay-get ov 'gfm-code-fences))
                         (overlays-in (point-min) (point-max)))))
         (should (= (length gfm-code-fences--overlays) on-buffer))))))
-
-;;; Extend-clip — code fences
-
-(ert-deftest lang-markdown/gfm-code-fences-extend-clip-covers-body-newline ()
-  "The fence extend-clip overlay covers each body line's newline.
-Carrying `gfm-block-borders-extend-clip-face' (`:extend nil') at
-priority 100, it suppresses the past-EOL fill of a `:extend t'
-text-property face such as `diff-added' on a ` ```diff ` body line."
-  (with-temp-buffer
-    (insert "```diff\n+ added line\n```\n")
-    (gfm-code-fences-mode 1)
-    (let* ((body-beg (progn (goto-char (point-min))
-                            (forward-line 1) (point)))
-           (nl (line-end-position))     ; newline char of the `+' line
-           (clip (lang-markdown-tests--clip-overlay-at 'gfm-code-fences nl)))
-      (should clip)
-      (should (= 100 (overlay-get clip 'priority))))))
-
-(ert-deftest lang-markdown/gfm-code-fences-extend-clip-narrow-converges ()
-  "Fence extend-clip anchors converge across narrow → rebuild → widen → rebuild."
-  :tags '(narrowing-regression)
-  (with-temp-buffer
-    (lang-markdown-tests--two-slide-fences-buffer)
-    (gfm-code-fences-mode 1)
-    (let* ((baseline (lang-markdown-tests--clip-positions 'gfm-code-fences))
-           (slide-1-end (save-excursion
-                          (goto-char (point-min))
-                          (search-forward "# slide 2")
-                          (line-beginning-position))))
-      (should baseline)
-      (narrow-to-region (point-min) slide-1-end)
-      (gfm-code-fences--rebuild)
-      (widen)
-      (gfm-code-fences--rebuild)
-      (should (equal baseline
-                     (lang-markdown-tests--clip-positions
-                      'gfm-code-fences))))))
 
 ;;; Body background fill — code fences
 

@@ -144,7 +144,18 @@ LEADING covers BUFFER-WIDTH cols matching the marker line's char count."
   "Build the after-string that draws the right border at column BOX-WIDTH.
 When BG is non-nil, the padding and separator before the border `│'
 are painted with `:background BG' so a body line's highlight band
-fills the gap up to the border; nil leaves them on the border face."
+fills the gap up to the border; nil leaves them on the border face.
+
+The after-string ends with `(space :align-to right)' painted in the
+default face — this fills the visual line from `│' to the window's
+right edge with the default background, masking any `:extend t'
+past-EOL fill that an underlying face (`diff-added' / `diff-removed'
+text-property faces, `hl-line' / `region' overlay faces) would
+otherwise paint past the border.  `:extend nil' on an overlay does
+NOT clip such a leak — the C-level past-EOL face merge in
+`face_at_buffer_position' simply skips faces that opt out, leaving
+the leaking face's background intact.  Filling the visual line so
+there is no past-EOL region to fill is the working idiom."
   (let* ((face (gfm-block-borders--normalised-border-face face))
          (pad-face (if bg (append face (list :background bg)) face))
          (align-col (- box-width 2))
@@ -152,7 +163,9 @@ fills the gap up to the border; nil leaves them on the border face."
                           'face pad-face))
          (sep (propertize " " 'face pad-face))
          (pipe (propertize "│" 'face face))
-         (str (concat pad sep pipe)))
+         (tail (propertize " " 'display '(space :align-to right)
+                           'face 'default))
+         (str (concat pad sep pipe tail)))
     (put-text-property 0 1 'cursor t str)
     str))
 
@@ -213,7 +226,11 @@ on continuation lines.  WINDOW selects the width; nil falls back to a
 sane default.  CONT-PREFIX-W defaults to
 `gfm-block-borders--wrap-prefix-w'.  When BG is non-nil the padding is
 painted with `:background BG' so the highlight band fills the gap up
-to the border."
+to the border.
+
+A trailing `(space :align-to right)' in the default face fills the
+last wrapped visual row from `│' to the window's right edge — see
+`gfm-block-borders--right-after' for why."
   (let* ((face (gfm-block-borders--normalised-border-face face))
          (pad-face (if bg (append face (list :background bg)) face))
          (text-width (gfm-block-borders--available-width window))
@@ -225,7 +242,9 @@ to the border."
          (pad-len (max 0 (- target-col visual-col)))
          (pad (propertize (make-string pad-len ?\s) 'face pad-face))
          (pipe (propertize "│" 'face face))
-         (str (concat pad pipe)))
+         (tail (propertize " " 'display '(space :align-to right)
+                           'face 'default))
+         (str (concat pad pipe tail)))
     (put-text-property 0 1 'cursor t str)
     str))
 
@@ -352,55 +371,6 @@ WINDOW non-nil restricts the overlay to that window only."
       (overlay-put ov (pop props) (pop props)))
     (push ov (symbol-value list-sym))
     ov))
-
-;;; Extend-clip primitive
-
-(defconst gfm-block-borders--extend-clip-priority 100
-  "Overlay `priority' for extend-clip anchors.
-Must outrank `hl-line' (overlay priority -50) and `region' so a body
-line's `:extend t' background is confined to the box interior even
-when carried by another mode's overlay face rather than a text
-property.")
-
-(defface gfm-block-borders-extend-clip-face
-  '((t :extend nil))
-  "Face whose only role is to suppress `:extend t' on a covered newline.
-The decorator anchors carrying this face span a bordered block's
-body, so a foreign `:extend t' background (a `diff-added' /
-`diff-removed' text-property face, an overlay face like `hl-line' /
-`region') merges down to `:extend nil' at every body-line newline
-and stops at the box's right border instead of leaking to the window
-edge.
-
-The face MUST be a `defface' rather than an anonymous attribute plist
-`(:extend nil)': Emacs's face-spec parser rejects a plist whose first
-key is `:extend' as `Invalid face: :extend', so an anonymous plist
-silently fails to clip."
-  :group 'gfm-block-borders)
-
-;; `defface' only initialises a face on frames that don't yet have an
-;; entry for it; reloading this file in a live session leaves existing
-;; frames with whatever `:extend' value the face had before (commonly
-;; `unspecified', under which the clip does NOT suppress an underlying
-;; `:extend t').  Imperatively pin `:extend nil' on all current frames
-;; so the clip works on the very first redisplay after load.
-(set-face-attribute 'gfm-block-borders-extend-clip-face nil :extend nil)
-
-(defun gfm-block-borders--make-extend-clip (registry beg end)
-  "Make an extend-clip anchor over [BEG, END) under REGISTRY.
-The anchor carries `gfm-block-borders-extend-clip-face' at
-`gfm-block-borders--extend-clip-priority'.  `:extend' is consulted
-only at newline positions, so the anchor is a no-op on every non-EOL
-character and clips every interior newline of the block body at
-once — keeping an `:extend t' background (a `diff-added'
-text-property face, an `hl-line' / `region' overlay face) from
-painting past the box's right border.  Built through
-`gfm-block-borders--make-anchor' so the existing registry teardown
-applies."
-  (gfm-block-borders--make-anchor
-   registry beg end
-   'face 'gfm-block-borders-extend-clip-face
-   'priority gfm-block-borders--extend-clip-priority))
 
 ;;; Scheduler primitives
 
