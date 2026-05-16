@@ -142,9 +142,14 @@ LEADING covers BUFFER-WIDTH cols matching the marker line's char count."
 
 (defun gfm-block-borders--right-after (box-width face &optional bg)
   "Build the after-string that draws the right border at column BOX-WIDTH.
-When BG is non-nil, the padding and separator before the border `│'
-are painted with `:background BG' so a body line's highlight band
-fills the gap up to the border; nil leaves them on the border face.
+When BG is non-nil, the padding before the border `│' is painted
+with `:background BG' so a body line's highlight band fills up to
+the right-side inner gap; nil leaves it on the border face.
+
+The separator immediately before `│' is left on the border face so
+the band stops one column short of the border, mirroring the
+left-side gap (the space in the `│ ' before-string).  The band thus
+sits *inside* the box rather than abutting the right border.
 
 The after-string ends with `(space :align-to right)' painted in the
 default face — this fills the visual line from `│' to the window's
@@ -161,7 +166,7 @@ there is no past-EOL region to fill is the working idiom."
          (align-col (- box-width 2))
          (pad (propertize " " 'display `(space :align-to ,align-col)
                           'face pad-face))
-         (sep (propertize " " 'face pad-face))
+         (sep (propertize " " 'face face))
          (pipe (propertize "│" 'face face))
          (tail (propertize " " 'display '(space :align-to right)
                            'face 'default))
