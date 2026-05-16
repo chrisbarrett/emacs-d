@@ -362,9 +362,25 @@ line's `:extend t' background is confined to the box interior even
 when carried by another mode's overlay face rather than a text
 property.")
 
+(defface gfm-block-borders-extend-clip-face
+  '((t :extend nil))
+  "Face whose only role is to suppress `:extend t' on a covered newline.
+The decorator anchors carrying this face span a bordered block's
+body, so a foreign `:extend t' background (a `diff-added' /
+`diff-removed' text-property face, an overlay face like `hl-line' /
+`region') merges down to `:extend nil' at every body-line newline
+and stops at the box's right border instead of leaking to the window
+edge.
+
+The face MUST be a `defface' rather than an anonymous attribute plist
+`(:extend nil)': Emacs's face-spec parser rejects a plist whose first
+key is `:extend' as `Invalid face: :extend', so an anonymous plist
+silently fails to clip."
+  :group 'gfm-block-borders)
+
 (defun gfm-block-borders--make-extend-clip (registry beg end)
   "Make an extend-clip anchor over [BEG, END) under REGISTRY.
-The anchor carries the anonymous face `(:extend nil)' at
+The anchor carries `gfm-block-borders-extend-clip-face' at
 `gfm-block-borders--extend-clip-priority'.  `:extend' is consulted
 only at newline positions, so the anchor is a no-op on every non-EOL
 character and clips every interior newline of the block body at
@@ -375,7 +391,7 @@ painting past the box's right border.  Built through
 applies."
   (gfm-block-borders--make-anchor
    registry beg end
-   'face '(:extend nil)
+   'face 'gfm-block-borders-extend-clip-face
    'priority gfm-block-borders--extend-clip-priority))
 
 ;;; Scheduler primitives

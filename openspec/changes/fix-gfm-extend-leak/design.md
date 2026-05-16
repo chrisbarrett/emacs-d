@@ -52,14 +52,22 @@ does not cover the newline — that `:extend t` is currently inert.
 
 ## Decisions
 
-### Decision: clip via an overlay face `(:extend nil)`
+### Decision: clip via a named `defface` `gfm-block-borders-extend-clip-face`
 
-`(:extend nil)` is an anonymous face specifying only `:extend`; every
-other attribute stays unspecified and merges from below, so the
-background colour on the actual text is untouched — only the past-EOL
-fill is suppressed. An overlay carrying that face over the block body,
-covering each interior newline, forces the merged `:extend` to nil at
-every body-line end.
+The clip face specifies only `:extend nil`; every other attribute
+stays unspecified and merges from below, so the background colour on
+the actual text is untouched — only the past-EOL fill is suppressed.
+An overlay carrying that face over the block body, covering each
+interior newline, forces the merged `:extend` to nil at every
+body-line end.
+
+The face MUST be a `defface`. The originally-considered anonymous
+attribute plist `(:extend nil)` was tried first and **silently
+fails**: Emacs's face-spec parser rejects a plist whose first key is
+`:extend` with `Invalid face: :extend`, the display engine drops the
+spec, and the leak persists.  `face-attribute-merged-with` raises the
+same error, so the named-face form also makes the merge testable
+without a custom helper.
 
 Alternatives considered:
 
@@ -71,6 +79,8 @@ Alternatives considered:
 - Stripping `:extend` from the copied text properties after native
   fontification. Fights jit-lock, which re-applies properties on every
   refontification. Rejected.
+- Anonymous attribute plist `(:extend nil)` on the overlay. Rejected
+  per above — does not clip.
 
 ### Decision: one clip anchor per block, spanning the whole body
 
