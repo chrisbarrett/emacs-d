@@ -378,6 +378,14 @@ key is `:extend' as `Invalid face: :extend', so an anonymous plist
 silently fails to clip."
   :group 'gfm-block-borders)
 
+;; `defface' only initialises a face on frames that don't yet have an
+;; entry for it; reloading this file in a live session leaves existing
+;; frames with whatever `:extend' value the face had before (commonly
+;; `unspecified', under which the clip does NOT suppress an underlying
+;; `:extend t').  Imperatively pin `:extend nil' on all current frames
+;; so the clip works on the very first redisplay after load.
+(set-face-attribute 'gfm-block-borders-extend-clip-face nil :extend nil)
+
 (defun gfm-block-borders--make-extend-clip (registry beg end)
   "Make an extend-clip anchor over [BEG, END) under REGISTRY.
 The anchor carries `gfm-block-borders-extend-clip-face' at
