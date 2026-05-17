@@ -146,10 +146,10 @@ When BG is non-nil, the padding before the border `│' is painted
 with `:background BG' so a body line's highlight band fills up to
 the right-side inner gap; nil leaves it on the border face.
 
-The separator immediately before `│' is left on the border face so
-the band stops one column short of the border, mirroring the
-left-side gap (the space in the `│ ' before-string).  The band thus
-sits *inside* the box rather than abutting the right border.
+When BG is active, the band ends two columns short of `│' (a 2-col
+default-bg gap); when nil, the band ends one column short.  The
+extra column of internal padding when bg-fill is active makes the
+band visibly inset from the right border rather than abutting it.
 
 The after-string ends with `(space :align-to right)' painted in the
 default face — this fills the visual line from `│' to the window's
@@ -163,10 +163,10 @@ the leaking face's background intact.  Filling the visual line so
 there is no past-EOL region to fill is the working idiom."
   (let* ((face (gfm-block-borders--normalised-border-face face))
          (pad-face (if bg (append face (list :background bg)) face))
-         (align-col (- box-width 2))
+         (align-col (if bg (- box-width 3) (- box-width 2)))
          (pad (propertize " " 'display `(space :align-to ,align-col)
                           'face pad-face))
-         (sep (propertize " " 'face face))
+         (sep (propertize (if bg "  " " ") 'face face))
          (pipe (propertize "│" 'face face))
          (tail (propertize " " 'display '(space :align-to right)
                            'face 'default))
@@ -243,13 +243,16 @@ last wrapped visual row from `│' to the window's right edge — see
          ;; +2 for the `│ ' before-string contribution to the first visual line.
          (visual-col (gfm-block-borders--last-visual-col
                       (concat "│ " line-text) text-width cpw))
-         (target-col (1- text-width))
+         ;; When BG is active, stop the bg-painted pad two columns
+         ;; short of `│' (an inner-padded band); else stop one short.
+         (target-col (- text-width (if bg 3 1)))
          (pad-len (max 0 (- target-col visual-col)))
          (pad (propertize (make-string pad-len ?\s) 'face pad-face))
+         (gap (and bg (propertize "  " 'face face)))
          (pipe (propertize "│" 'face face))
          (tail (propertize " " 'display '(space :align-to right)
                            'face 'default))
-         (str (concat pad pipe tail)))
+         (str (concat pad (or gap "") pipe tail)))
     (put-text-property 0 1 'cursor t str)
     str))
 
