@@ -88,10 +88,18 @@ Compatibility alias for `gfm-block-borders--available-width'."
 Border glyphs share buffer regions with prose whose font-lock face
 carries `:slant italic', `:underline t', etc.  Without an explicit
 override, those attrs leak through face composition on GUI frames
-and visually slant the box edges."
+and visually slant the box edges.
+
+`:background' is explicitly pinned to `\"unspecified-bg\"' — the
+literal Emacs marker for the system / frame background — to stop
+the buffer position's text-property `:background' (e.g. `diff-added'
+on the newline at the body line's end) from bleeding through into
+border / before-string / after-string chars whose `:background'
+would otherwise be unspecified and inherit from below."
   `(:inherit ,face
     :slant normal :weight normal
-    :underline nil :overline nil :strike-through nil :box nil))
+    :underline nil :overline nil :strike-through nil :box nil
+    :background "unspecified-bg"))
 
 (defun gfm-block-borders--top-strings (width face buffer-width &optional icon)
   "Return (LEADING . TRAILING) split of the top border WIDTH cols wide.
@@ -162,11 +170,15 @@ NOT clip such a leak — the C-level past-EOL face merge in
 the leaking face's background intact.  Filling the visual line so
 there is no past-EOL region to fill is the working idiom."
   (let* ((face (gfm-block-borders--normalised-border-face face))
-         (pad-face (if bg (append face (list :background bg)) face))
-         (align-col (if bg (- box-width 5) (- box-width 2)))
+         ;; `face' already pins `:background "unspecified-bg"' so the
+         ;; border / sep / pipe paint the system bg.  When BG is non-nil
+         ;; the pad replaces that pin with the highlight colour.
+         (pad-face (if bg (plist-put (copy-sequence face) :background bg)
+                     face))
+         (align-col (if bg (- box-width 3) (- box-width 2)))
          (pad (propertize " " 'display `(space :align-to ,align-col)
                           'face pad-face))
-         (sep (propertize (if bg "    " " ") 'face face))
+         (sep (propertize (if bg "  " " ") 'face face))
          (pipe (propertize "│" 'face face))
          (tail (propertize " " 'display '(space :align-to right)
                            'face 'default))
@@ -237,18 +249,19 @@ A trailing `(space :align-to right)' in the default face fills the
 last wrapped visual row from `│' to the window's right edge — see
 `gfm-block-borders--right-after' for why."
   (let* ((face (gfm-block-borders--normalised-border-face face))
-         (pad-face (if bg (append face (list :background bg)) face))
+         (pad-face (if bg (plist-put (copy-sequence face) :background bg)
+                     face))
          (text-width (gfm-block-borders--available-width window))
          (cpw (or cont-prefix-w gfm-block-borders--wrap-prefix-w))
          ;; +2 for the `│ ' before-string contribution to the first visual line.
          (visual-col (gfm-block-borders--last-visual-col
                       (concat "│ " line-text) text-width cpw))
-         ;; When BG is active, stop the bg-painted pad four columns
+         ;; When BG is active, stop the bg-painted pad two columns
          ;; short of `│' (an inner-padded band); else stop one short.
-         (target-col (- text-width (if bg 5 1)))
+         (target-col (- text-width (if bg 3 1)))
          (pad-len (max 0 (- target-col visual-col)))
          (pad (propertize (make-string pad-len ?\s) 'face pad-face))
-         (gap (and bg (propertize "    " 'face face)))
+         (gap (and bg (propertize "  " 'face face)))
          (pipe (propertize "│" 'face face))
          (tail (propertize " " 'display '(space :align-to right)
                            'face 'default))

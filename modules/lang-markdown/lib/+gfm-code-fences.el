@@ -488,17 +488,17 @@ the top border (icon string for fenced, `meta' for YAML, or nil)."
            'after-string after)
           ;; When the line carries an `:extend t' background, inset
           ;; the band on the left too by masking the first body
-          ;; char's text-prop background with the default colour.
+          ;; char's text-prop background with the system bg.
+          ;; `:background "unspecified-bg"' is the literal Emacs
+          ;; marker that paints with the frame's background, even
+          ;; when the underlying text-prop face specifies a colour.
           ;; Foreground (e.g. `diff-indicator-added' on a `+') leaks
           ;; through from below since we set only `:background'.
           (when (and line-bg (< lbeg lend))
-            (let ((default-bg (face-attribute 'default :background nil t)))
-              (when (and (stringp default-bg)
-                         (not (string= default-bg "unspecified-bg")))
-                (gfm-code-fences--make-display
-                 lbeg (1+ lbeg) window
-                 'gfm-code-fences-kind 'body-bg-inset
-                 'face `(:background ,default-bg)))))
+            (gfm-code-fences--make-display
+             lbeg (1+ lbeg) window
+             'gfm-code-fences-kind 'body-bg-inset
+             'face '(:background "unspecified-bg")))
           (setq p (min close-line-beg (1+ lend))))))
     ;; Bottom — leading on the marker line, trailing after.
     (gfm-code-fences--make-display
@@ -580,16 +580,14 @@ INDENT-WIDTH is the buffer indent width; FACE colours the borders."
            'after-string (if last-line (concat after "\n" bot-str) after))
           ;; Inset the bg band on the left by masking the first body
           ;; char (after the indent) when the line carries an
-          ;; `:extend t' background.
+          ;; `:extend t' background.  See the fenced display path
+          ;; for the `"unspecified-bg"' rationale.
           (let ((body-start (+ lbeg indent-width)))
             (when (and line-bg (< body-start lend))
-              (let ((default-bg (face-attribute 'default :background nil t)))
-                (when (and (stringp default-bg)
-                           (not (string= default-bg "unspecified-bg")))
-                  (gfm-code-fences--make-display
-                   body-start (1+ body-start) window
-                   'gfm-code-fences-kind 'body-bg-inset
-                   'face `(:background ,default-bg))))))
+              (gfm-code-fences--make-display
+               body-start (1+ body-start) window
+               'gfm-code-fences-kind 'body-bg-inset
+               'face '(:background "unspecified-bg"))))
           (setq first nil)
           (setq p (1+ lend)))))))
 

@@ -881,7 +881,11 @@ when both `gfm-callouts-mode' and `gfm-code-fences-mode' are active."
                                   :background)))))))
 
 (ert-deftest lang-markdown/gfm-code-fences-plain-body-no-bg-fill ()
-  "A body line with no `:extend t' background keeps the border-face padding."
+  "A body line with no `:extend t' background paints the padding with system bg.
+The padding face carries `:background \"unspecified-bg\"' so the
+after-string actively paints the system background instead of
+inheriting (and bleeding through) the buffer text-property face's
+`:background' at the line's newline."
   (with-temp-buffer
     (insert "```text\nplain line\n```\n")
     (gfm-code-fences-mode 1)
@@ -891,8 +895,9 @@ when both `gfm-callouts-mode' and `gfm-code-fences-mode' are active."
            (after (lang-markdown-tests--fence-body-after-string
                    body-beg lend)))
       (should after)
-      (should-not (plist-get (get-text-property 0 'face after)
-                             :background)))))
+      (should (equal "unspecified-bg"
+                     (plist-get (get-text-property 0 'face after)
+                                :background))))))
 
 (ert-deftest lang-markdown/gfm-code-fences-line-extend-bg-ignores-non-extending ()
   "`gfm-code-fences--line-extend-bg' ignores a `:background' without `:extend t'."
