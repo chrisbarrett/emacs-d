@@ -84,6 +84,26 @@ border composed of:
   (such as `hl-line` or `region`) — has no past-EOL region left to
   fill and cannot extend past the right border
 
+The body-line anchor overlay's face SHALL specify only
+`:background` (when a tint is resolvable) and `:extend t`, leaving
+every other face attribute unspecified.  This allows the markdown
+emphasis faces carried by buffer text under the anchor
+(`markdown-italic-face`, `markdown-bold-face`,
+`markdown-strike-through-face`, `markdown-link-face`,
+`markdown-inline-code-face`) to merge through and render with their
+respective attributes (slant, weight, underline, strike-through,
+foreground).
+
+To prevent `markdown-blockquote-face`'s theme-imposed attributes from
+being applied across callout body lines (and across plain blockquotes
+elsewhere in the buffer), the configuration SHALL neutralise
+`markdown-blockquote-face` by setting every face attribute to
+`unspecified` — covering at minimum `:foreground`, `:background`,
+`:slant`, `:weight`, `:underline`, `:strike-through`, `:extend`, and
+`:inherit`.  Clearing inheritance alone is insufficient because themes
+typically set `:foreground`/`:background`/`:slant` directly on this
+face.
+
 #### Scenario: Callout renders with curved box and label
 
 - **WHEN** an `[!IMPORTANT]` callout with two body lines is
@@ -105,6 +125,42 @@ border composed of:
   example `hl-line` while point is on that line
 - **THEN** the `:extend` background is confined to the box interior and
   does not paint past the right-edge `│` to the window edge
+
+#### Scenario: Bold inline markup inside a callout body renders bold
+
+- **WHEN** a callout body line contains `**bold**`
+- **THEN** the characters covered by `markdown-bold-face` render
+  with the bold weight contributed by that face, on top of the
+  callout's tinted background
+
+#### Scenario: Italic inline markup inside a callout body renders italic
+
+- **WHEN** a callout body line contains `*italic*`
+- **THEN** the characters covered by `markdown-italic-face` render
+  with the italic slant contributed by that face, on top of the
+  callout's tinted background
+
+#### Scenario: Link text inside a callout body renders with link styling
+
+- **WHEN** a callout body line contains `[label](url)`
+- **THEN** the link-text characters covered by `markdown-link-face`
+  render with that face's foreground / underline, on top of the
+  callout's tinted background
+
+#### Scenario: Inline code inside a callout body renders with code styling
+
+- **WHEN** a callout body line contains `` `code` ``
+- **THEN** the code characters covered by `markdown-inline-code-face`
+  render with that face's attributes (fixed pitch, contrasting
+  foreground), on top of the callout's tinted background
+
+#### Scenario: Plain callout body text renders with default foreground and no italic
+
+- **WHEN** a callout body line contains text with no inline markup
+- **THEN** the text renders with the `default` face's foreground and
+  without `:slant italic`, because `markdown-blockquote-face` has been
+  neutralised (every attribute set to `unspecified`) and so contributes
+  nothing to the face stack
 
 ### Requirement: Callout box width sizing
 
