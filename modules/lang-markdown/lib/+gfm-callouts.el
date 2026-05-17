@@ -328,9 +328,15 @@ overlay engine."
                                   nil nil #'string=))
            (border-face (or type-face 'gfm-callouts-box-face))
            (tint (gfm-callouts--tinted-bg border-face))
+           ;; Anchor face specifies only background tint and `:extend
+           ;; t'; all other attributes left unspecified so emphasis
+           ;; faces on buffer text (bold, italic, link, inline code)
+           ;; merge through.  Blockquote-italic suppression now lives
+           ;; at the face layer — see the `set-face-attribute' for
+           ;; `markdown-blockquote-face' in `lang-markdown/init.el'.
            (bg-face (if tint
-                        `(:inherit default :background ,tint :extend t)
-                      '(:inherit default :extend t)))
+                        `(:background ,tint :extend t)
+                      '(:extend t)))
            (wrap (propertize "│ " 'face
                              (let ((s `(:inherit ,border-face :slant normal)))
                                (if tint

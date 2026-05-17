@@ -33,11 +33,15 @@ emphasis faces carried by buffer text under the anchor
 respective attributes (slant, weight, underline, strike-through,
 foreground).
 
-To prevent `markdown-blockquote-face`'s default italic from being
-applied across callout body lines (and across plain blockquotes
-elsewhere in the buffer), the configuration SHALL detach
-`markdown-blockquote-face` from `font-lock-doc-face` so it no longer
-carries `:slant italic`.
+To prevent `markdown-blockquote-face`'s theme-imposed attributes from
+being applied across callout body lines (and across plain blockquotes
+elsewhere in the buffer), the configuration SHALL neutralise
+`markdown-blockquote-face` by setting every face attribute to
+`unspecified` — covering at minimum `:foreground`, `:background`,
+`:slant`, `:weight`, `:underline`, `:strike-through`, `:extend`, and
+`:inherit`.  Clearing inheritance alone is insufficient because themes
+typically set `:foreground`/`:background`/`:slant` directly on this
+face.
 
 #### Scenario: Callout renders with curved box and label
 
@@ -89,9 +93,10 @@ carries `:slant italic`.
   render with that face's attributes (fixed pitch, contrasting
   foreground), on top of the callout's tinted background
 
-#### Scenario: Plain callout body text renders without italic
+#### Scenario: Plain callout body text renders with default foreground and no italic
 
 - **WHEN** a callout body line contains text with no inline markup
-- **THEN** the text renders without `:slant italic`, because
-  `markdown-blockquote-face` no longer inherits italic from
-  `font-lock-doc-face`
+- **THEN** the text renders with the `default` face's foreground and
+  without `:slant italic`, because `markdown-blockquote-face` has been
+  neutralised (every attribute set to `unspecified`) and so contributes
+  nothing to the face stack

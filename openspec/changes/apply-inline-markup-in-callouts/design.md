@@ -55,18 +55,24 @@ attributes either win for all underlying faces or none.
 
 ## Decisions
 
-### Decision: Detach `markdown-blockquote-face` from `font-lock-doc-face`
+### Decision: Neutralise `markdown-blockquote-face` (clear every attribute)
 
-Override the face in `modules/lang-markdown/init.el`'s `:config` so
-`markdown-blockquote-face` no longer inherits the italic.  The change
-is global — applies to plain blockquotes as well as callouts.
+Override the face in `modules/lang-markdown/init.el`'s `:config` so it
+contributes nothing — every attribute set to `'unspecified`.  Plain
+blockquote chars then render with `default`; emphasis faces merge
+through cleanly inside callout boxes.
 
-**Rationale:** Blockquote-italic is the only attribute fighting the
-overlay.  Removing it at the face source eliminates the conflict
-without per-span overlay machinery.  Aligns with the broader pattern
-in this configuration: callouts, code fences, and tables already
-override markdown-mode's default rendering rather than work alongside
-it.
+**Rationale:** Themes set more than just italic on this face.  Catppuccin
+(and similar) specify `:foreground`, `:background`, `:extend`, and
+`:slant italic` directly on `markdown-blockquote-face` — not via
+inheritance from `font-lock-doc-face`.  An `:inherit`-only override
+leaves the direct attributes (notably foreground) in place, and they
+keep clobbering buffer text under the callout anchor.  Clearing every
+attribute removes the face's footprint entirely; the face stack
+collapses to whatever else is applied (emphasis faces, default).
+Aligns with the broader pattern in this configuration: callouts, code
+fences, and tables already own their rendering rather than work
+alongside markdown-mode's defaults.
 
 **Alternatives considered:**
 

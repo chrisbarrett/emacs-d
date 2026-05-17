@@ -270,18 +270,73 @@ fix-gfm-narrowing-safety change."
       (should (string-match-p "┌─ NOTE" (overlay-get marker 'display)))
       (should (string-match-p "\\`│ \\'" (overlay-get body   'display))))))
 
-(ert-deftest lang-markdown/gfm-callouts-overrides-blockquote-italic ()
-  "A face overlay inheriting `default' covers the whole callout block."
+(ert-deftest lang-markdown/gfm-callouts-body-anchor-face-only-bg-and-extend ()
+  "Body-line anchor face specifies only `:background' and/or `:extend' so
+emphasis faces on buffer text merge through."
   (with-temp-buffer
     (insert "> [!NOTE]\n> Hello.\n")
     (gfm-callouts-mode 1)
-    (should (cl-some (lambda (ov)
-                       (let ((f (overlay-get ov 'face)))
-                         (and (overlay-get ov 'gfm-callouts)
-                              (or (eq f 'default)
-                                  (and (listp f)
-                                       (eq (plist-get f :inherit) 'default))))))
-                     (overlays-in (point-min) (point-max))))))
+    (let ((bodies (cl-remove-if-not
+                   (lambda (ov)
+                     (and (overlay-get ov 'gfm-callouts-anchor)
+                          (overlay-get ov 'wrap-prefix)))
+                   (overlays-in (point-min) (point-max)))))
+      (should bodies)
+      (dolist (ov bodies)
+        (let ((face (overlay-get ov 'face)))
+          (should (listp face))
+          (should-not (plist-member face :slant))
+          (should-not (plist-member face :weight))
+          (should-not (plist-member face :underline))
+          (should-not (plist-member face :strike-through))
+          (should-not (plist-member face :foreground))
+          (should-not (plist-member face :inherit)))))))
+
+(ert-deftest lang-markdown/gfm-callouts-body-inline-markup-faces-merge-through ()
+  "Bold/italic/link/inline-code inside a callout body keep their markdown faces."
+  (require 'markdown-mode)
+  (with-temp-buffer
+    (gfm-mode)
+    (insert "> [!NOTE]\n> **boldword** *italword* [linktext](https://x) `codeword`\n")
+    (gfm-callouts-mode 1)
+    (font-lock-ensure)
+    (dolist (cell '(("boldword"   markdown-bold-face)
+                    ("italword"   markdown-italic-face)
+                    ("linktext"   markdown-link-face)
+                    ("codeword"   markdown-inline-code-face)))
+      (let ((needle (car cell)) (want (cadr cell)))
+        (goto-char (point-min))
+        (should (search-forward needle nil t))
+        (let* ((pos (match-beginning 0))
+               (f (get-text-property pos 'face)))
+          (should (or (eq f want)
+                      (and (listp f) (memq want f)))))))))
+
+(ert-deftest lang-markdown/gfm-callouts-blockquote-face-neutralised ()
+  "After applying the lang-markdown override, `markdown-blockquote-face'
+contributes no visible attributes — no italic, no foreground/background,
+no inherit chain — so emphasis faces and the default face show through."
+  (require 'markdown-mode)
+  (let ((attrs '(:family :foundry :width :height :weight :slant
+                 :underline :overline :strike-through :box
+                 :inverse-video :foreground :background
+                 :stipple :extend :inherit))
+        (prev (mapcar (lambda (a)
+                        (cons a (face-attribute 'markdown-blockquote-face a nil)))
+                      '(:family :foundry :width :height :weight :slant
+                        :underline :overline :strike-through :box
+                        :inverse-video :foreground :background
+                        :stipple :extend :inherit))))
+    (unwind-protect
+        (progn
+          (dolist (a attrs)
+            (set-face-attribute 'markdown-blockquote-face nil a 'unspecified))
+          (dolist (a attrs)
+            (should (eq (face-attribute 'markdown-blockquote-face a nil)
+                        'unspecified))))
+      (dolist (cell prev)
+        (set-face-attribute 'markdown-blockquote-face nil
+                            (car cell) (cdr cell))))))
 
 (ert-deftest lang-markdown/gfm-callouts-marker-only-callout-renders-bottom ()
   "A callout with no body lines still gets a bottom border."
