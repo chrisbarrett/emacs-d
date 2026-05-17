@@ -312,6 +312,21 @@ emphasis faces on buffer text merge through."
           (should (or (eq f want)
                       (and (listp f) (memq want f)))))))))
 
+(ert-deftest lang-markdown/gfm-callouts-body-face-does-not-clobber-slant ()
+  "Per-type callout body faces must not specify `:slant', so italic from
+`markdown-italic-face' merges through.  The body faces are prepended to
+body chars with `font-lock-prepend-text-property', so any attribute
+they specify sits at the top of the face merge and shadows lower
+faces."
+  (dolist (face '(+markdown-gfm-callout-note-body-face
+                  +markdown-gfm-callout-tip-body-face
+                  +markdown-gfm-callout-important-body-face
+                  +markdown-gfm-callout-warning-body-face
+                  +markdown-gfm-callout-caution-body-face))
+    (should (eq (face-attribute face :slant nil) 'unspecified))
+    (should (eq (face-attribute face :weight nil) 'unspecified))
+    (should (eq (face-attribute face :underline nil) 'unspecified))))
+
 (ert-deftest lang-markdown/gfm-callouts-blockquote-face-neutralised ()
   "After applying the lang-markdown override, `markdown-blockquote-face'
 contributes no visible attributes — no italic, no foreground/background,

@@ -51,28 +51,35 @@
   :group 'markdown-faces)
 
 (defface +markdown-gfm-callout-note-body-face
-  '((t :slant normal))
-  "Body face for [!NOTE] callouts; `:background' set dynamically from theme."
+  '((t))
+  "Body face for [!NOTE] callouts; `:background' set dynamically from theme.
+Default spec is intentionally empty so inline-markup emphasis (italic,
+bold, underline, link, inline code) merged in from `markdown-italic-face'
+et al. is not clobbered when this face is prepended to body chars."
   :group 'markdown-faces)
 
 (defface +markdown-gfm-callout-tip-body-face
-  '((t :slant normal))
-  "Body face for [!TIP] callouts; `:background' set dynamically from theme."
+  '((t))
+  "Body face for [!TIP] callouts; `:background' set dynamically from theme.
+See `+markdown-gfm-callout-note-body-face' for the empty-spec rationale."
   :group 'markdown-faces)
 
 (defface +markdown-gfm-callout-important-body-face
-  '((t :slant normal))
-  "Body face for [!IMPORTANT] callouts; `:background' set dynamically from theme."
+  '((t))
+  "Body face for [!IMPORTANT] callouts; `:background' set dynamically from theme.
+See `+markdown-gfm-callout-note-body-face' for the empty-spec rationale."
   :group 'markdown-faces)
 
 (defface +markdown-gfm-callout-warning-body-face
-  '((t :slant normal))
-  "Body face for [!WARNING] callouts; `:background' set dynamically from theme."
+  '((t))
+  "Body face for [!WARNING] callouts; `:background' set dynamically from theme.
+See `+markdown-gfm-callout-note-body-face' for the empty-spec rationale."
   :group 'markdown-faces)
 
 (defface +markdown-gfm-callout-caution-body-face
-  '((t :slant normal))
-  "Body face for [!CAUTION]/[!CRITICAL] callouts; `:background' set dynamically from theme."
+  '((t))
+  "Body face for [!CAUTION]/[!CRITICAL] callouts; `:background' set dynamically from theme.
+See `+markdown-gfm-callout-note-body-face' for the empty-spec rationale."
   :group 'markdown-faces)
 
 (defface +markdown-prettier-ignore-comment-face
@@ -153,7 +160,12 @@ overlay's tinted panel.  Returns nil if either colour is unresolvable."
 
 ;;;###autoload
 (defun +markdown-gfm-callout-refresh-body-faces (&rest _)
-  "Recompute `:background' on each callout body face from the current theme."
+  "Recompute `:background' on each callout body face from the current theme.
+Also clears `:slant', `:weight', and `:underline' on each body face.
+Body faces are prepended to body chars via `font-lock-prepend-text-property',
+so any attribute they specify shadows the markdown emphasis faces beneath
+them in the merge — emphasis would silently disappear inside callout
+bodies."
   (dolist (entry +markdown-gfm-callout-type-body-face-alist)
     (let* ((type (car entry))
            (body-face (cdr entry))
@@ -161,6 +173,10 @@ overlay's tinted panel.  Returns nil if either colour is unresolvable."
                                    nil nil #'string=))
            (tint (and header-face
                       (+markdown-gfm-callout--tint-bg header-face))))
+      (set-face-attribute body-face nil
+                          :slant 'unspecified
+                          :weight 'unspecified
+                          :underline 'unspecified)
       (when tint
         (set-face-background body-face tint)))))
 
