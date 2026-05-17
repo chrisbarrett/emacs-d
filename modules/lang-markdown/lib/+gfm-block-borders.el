@@ -163,10 +163,10 @@ the leaking face's background intact.  Filling the visual line so
 there is no past-EOL region to fill is the working idiom."
   (let* ((face (gfm-block-borders--normalised-border-face face))
          (pad-face (if bg (append face (list :background bg)) face))
-         (align-col (if bg (- box-width 3) (- box-width 2)))
+         (align-col (if bg (- box-width 4) (- box-width 2)))
          (pad (propertize " " 'display `(space :align-to ,align-col)
                           'face pad-face))
-         (sep (propertize (if bg "  " " ") 'face face))
+         (sep (propertize (if bg "   " " ") 'face face))
          (pipe (propertize "│" 'face face))
          (tail (propertize " " 'display '(space :align-to right)
                            'face 'default))
@@ -243,12 +243,12 @@ last wrapped visual row from `│' to the window's right edge — see
          ;; +2 for the `│ ' before-string contribution to the first visual line.
          (visual-col (gfm-block-borders--last-visual-col
                       (concat "│ " line-text) text-width cpw))
-         ;; When BG is active, stop the bg-painted pad two columns
+         ;; When BG is active, stop the bg-painted pad three columns
          ;; short of `│' (an inner-padded band); else stop one short.
-         (target-col (- text-width (if bg 3 1)))
+         (target-col (- text-width (if bg 4 1)))
          (pad-len (max 0 (- target-col visual-col)))
          (pad (propertize (make-string pad-len ?\s) 'face pad-face))
-         (gap (and bg (propertize "  " 'face face)))
+         (gap (and bg (propertize "   " 'face face)))
          (pipe (propertize "│" 'face face))
          (tail (propertize " " 'display '(space :align-to right)
                            'face 'default))
