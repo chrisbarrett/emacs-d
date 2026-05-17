@@ -182,6 +182,7 @@ Returns a hex colour string, or nil if either colour is unresolvable."
   (apply #'gfm-block-borders--make-anchor
          gfm-callouts--registry beg end props))
 
+
 (defsubst gfm-callouts--make-display (beg end window &rest props)
   "Make a display overlay over [BEG, END] for WINDOW with PROPS."
   (apply #'gfm-block-borders--make-display
@@ -264,7 +265,13 @@ line-end as an after-string."
 (defun gfm-callouts--right-after (box-width face bg)
   "Build the body-line right-edge after-string.
 Pads with `space :align-to' to BOX-WIDTH-2, then a tinted gap, then
-`│'.  Carries the `cursor' text property so cursor motion crosses it."
+`│'.  Carries the `cursor' text property so cursor motion crosses it.
+
+A trailing `(space :align-to right)' in the default face fills the
+visual line from `│' to the window's right edge, masking any
+`:extend t' past-EOL fill that a foreign overlay (`hl-line',
+`region') would otherwise paint past the border — see
+`gfm-block-borders--right-after' for the rationale."
   (let* ((align-face (let ((spec `(:inherit ,face :slant normal)))
                        (if bg (append spec (list :background bg)) spec)))
          (str (concat
@@ -272,7 +279,10 @@ Pads with `space :align-to' to BOX-WIDTH-2, then a tinted gap, then
                            'display `(space :align-to ,(- box-width 2))
                            'face align-face)
                (gfm-callouts--upright " " face bg)
-               (gfm-callouts--upright "│" face bg))))
+               (gfm-callouts--upright "│" face bg)
+               (propertize " "
+                           'display '(space :align-to right)
+                           'face 'default))))
     (put-text-property 0 1 'cursor t str)
     str))
 
@@ -280,7 +290,9 @@ Pads with `space :align-to' to BOX-WIDTH-2, then a tinted gap, then
   "Build the right-edge after-string for a wrapped body line.
 Simulates word-wrap of `│ ' + LINE-TEXT in WINDOW's width to compute
 how much padding is needed before the closing `│' on the final wrapped
-visual row."
+visual row.  A trailing `(space :align-to right)' in the default face
+extends the last wrapped row to the window edge, suppressing past-EOL
+`:extend' leaks — see `gfm-callouts--right-after'."
   (let* ((text-width (gfm-block-borders--available-width window))
          (visual-col (gfm-block-borders--last-visual-col
                       (concat "│ " line-text) text-width
@@ -291,7 +303,9 @@ visual row."
                       (if bg (append s (list :background bg)) s)))
          (pad (propertize (make-string pad-len ?\s) 'face face-spec))
          (pipe (gfm-callouts--upright "│" face bg))
-         (str (concat pad pipe)))
+         (tail (propertize " " 'display '(space :align-to right)
+                           'face 'default))
+         (str (concat pad pipe tail)))
     (put-text-property 0 1 'cursor t str)
     str))
 

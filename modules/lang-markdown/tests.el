@@ -117,6 +117,29 @@
     (should (null (plist-get spec :strike-through)))
     (should (null (plist-get spec :box)))))
 
+(ert-deftest lang-markdown/gfm-block-borders-right-after-tail-fills-to-window-edge ()
+  "`right-after' ends with `(space :align-to right)' in the default face.
+Regression: an overlay face with `:extend nil' does NOT clip a
+sibling `:extend t' face's past-EOL fill — Emacs's
+`face_at_buffer_position' merge skips opted-out faces rather than
+suppressing opted-in ones.  The working idiom is to physically
+fill the visual line to the window edge with the default
+background, leaving no past-EOL region for `:extend' to colour."
+  (let* ((after (gfm-block-borders--right-after 40 'default))
+         (tail-i (1- (length after))))
+    (should (equal '(space :align-to right)
+                   (get-text-property tail-i 'display after)))
+    (should (eq 'default (get-text-property tail-i 'face after)))))
+
+(ert-deftest lang-markdown/gfm-block-borders-right-after-overflow-tail-fills-to-window-edge ()
+  "`right-after-overflow' ends with `(space :align-to right)' in the default face."
+  (let* ((after (gfm-block-borders--right-after-overflow
+                 'default "x" nil))
+         (tail-i (1- (length after))))
+    (should (equal '(space :align-to right)
+                   (get-text-property tail-i 'display after)))
+    (should (eq 'default (get-text-property tail-i 'face after)))))
+
 ;;; Narrowing-resilient shared teardown
 
 (ert-deftest lang-markdown/gfm-block-borders-remove-overlays-full-clear-widens ()
@@ -418,6 +441,34 @@ re-introduces narrowing-dependent caches/teardown."
                      (lang-markdown-tests--tagged-source-positions
                       'gfm-callouts))))))
 
+;;; Extend-clip — callouts
+
+(ert-deftest lang-markdown/gfm-callouts-body-after-string-fills-to-window-edge ()
+  "Each callout body line's right-edge after-string ends with a
+`(space :align-to right)' tail in the default face — the visual
+line is fully painted to the window edge, so an `:extend t' overlay
+face like `hl-line' has no past-EOL region left to fill."
+  (with-temp-buffer
+    (insert "> [!NOTE]\n> body line.\n")
+    (gfm-callouts-mode 1)
+    (let* ((body-beg (progn (goto-char (point-min))
+                            (forward-line 1) (point)))
+           (nl (line-end-position))
+           (rhs (cl-find-if
+                 (lambda (o)
+                   (eq (overlay-get o 'gfm-callouts-kind) 'body-rhs))
+                 (overlays-in body-beg (1+ nl))))
+           (after (and rhs (overlay-get rhs 'after-string))))
+      (should after)
+      (let* ((nl-i (cl-position ?\n after))
+             ;; Tail is the last char of the non-trailing-newline
+             ;; portion of the after-string (last body line also
+             ;; carries the bottom border after a `\n').
+             (tail-i (if nl-i (1- nl-i) (1- (length after)))))
+        (should (equal '(space :align-to right)
+                       (get-text-property tail-i 'display after)))
+        (should (eq 'default (get-text-property tail-i 'face after)))))))
+
 ;;; Box-width sizing
 
 (ert-deftest lang-markdown/gfm-callouts-box-width-clamps-to-narrow-window ()
@@ -467,8 +518,12 @@ line (last body line's after-string also carries the bottom border)."
                  (first-rhs (car sorted))
                  (after (overlay-get first-rhs 'after-string)))
             (should after)
-            ;; Right-edge string ends in `│' (no bottom border on this row).
-            (should (string-suffix-p "│" after))))
+            ;; Right-edge string contains `│', followed by the
+            ;; window-edge tail (no bottom border on this row).
+            (should (string-match-p "│ \\'" after))
+            (should (equal '(space :align-to right)
+                           (get-text-property (1- (length after))
+                                              'display after)))))
       (kill-buffer buf))))
 
 ;;; Per-window display overlays
@@ -790,6 +845,75 @@ when both `gfm-callouts-mode' and `gfm-code-fences-mode' are active."
                         (lambda (ov) (overlay-get ov 'gfm-code-fences))
                         (overlays-in (point-min) (point-max)))))
         (should (= (length gfm-code-fences--overlays) on-buffer))))))
+
+;;; Body background fill — code fences
+
+(defun lang-markdown-tests--fence-body-after-string (body-beg lend)
+  "Return the body display overlay's `after-string' for line [BODY-BEG, LEND]."
+  (let ((ov (cl-find-if
+             (lambda (o)
+               (eq (overlay-get o 'gfm-code-fences-kind) 'body))
+             (overlays-in body-beg (1+ lend)))))
+    (and ov (overlay-get ov 'after-string))))
+
+(ert-deftest lang-markdown/gfm-code-fences-diff-body-bg-fills-gap ()
+  "A `+' body line's right-edge padding carries the `:extend t' background."
+  (with-temp-buffer
+    (insert "```diff\n+ x\n```\n")
+    (gfm-code-fences-mode 1)
+    ;; Stand in for native fontification copying diff-mode's `:extend t'
+    ;; `diff-added' face onto the `+' body line — an explicit plist,
+    ;; since batch Emacs does not realise a defface's `:extend'.
+    (let* ((diff-added-face '(:background "#c3ebc1" :extend t))
+           (body-beg (progn (goto-char (point-min))
+                            (forward-line 1) (point)))
+           (lend (line-end-position)))
+      (put-text-property body-beg (1+ lend) 'face diff-added-face)
+      ;; Rebuild so the display pass reads the freshly-applied face.
+      (gfm-code-fences--rebuild)
+      (let ((after (lang-markdown-tests--fence-body-after-string
+                    body-beg lend)))
+        (should after)
+        ;; The padding (first char of the after-string) is painted with
+        ;; the diff background.
+        (should (equal "#c3ebc1"
+                       (plist-get (get-text-property 0 'face after)
+                                  :background)))))))
+
+(ert-deftest lang-markdown/gfm-code-fences-plain-body-no-bg-fill ()
+  "A body line with no `:extend t' background paints the padding with system bg.
+The padding face carries `:background \"unspecified-bg\"' so the
+after-string actively paints the system background instead of
+inheriting (and bleeding through) the buffer text-property face's
+`:background' at the line's newline."
+  (with-temp-buffer
+    (insert "```text\nplain line\n```\n")
+    (gfm-code-fences-mode 1)
+    (let* ((body-beg (progn (goto-char (point-min))
+                            (forward-line 1) (point)))
+           (lend (line-end-position))
+           (after (lang-markdown-tests--fence-body-after-string
+                   body-beg lend)))
+      (should after)
+      (should (equal "unspecified-bg"
+                     (plist-get (get-text-property 0 'face after)
+                                :background))))))
+
+(ert-deftest lang-markdown/gfm-code-fences-line-extend-bg-ignores-non-extending ()
+  "`gfm-code-fences--line-extend-bg' ignores a `:background' without `:extend t'."
+  (with-temp-buffer
+    (insert "code line\n")
+    ;; A `:background' without `:extend t' must not fill the gap.
+    (put-text-property (point-min) (1- (point-max))
+                       'face '(:background "#abcdef"))
+    (should-not (gfm-code-fences--line-extend-bg (point-min)
+                                                 (1- (point-max))))
+    ;; A face specifying both is picked up.
+    (put-text-property (point-min) (1- (point-max))
+                       'face '(:background "#abcdef" :extend t))
+    (should (equal "#abcdef"
+                   (gfm-code-fences--line-extend-bg (point-min)
+                                                    (1- (point-max)))))))
 
 (ert-deftest lang-markdown/gfm-code-fences-border-face-resets-styling ()
   "Border face spec inherits the configured face but resets styling

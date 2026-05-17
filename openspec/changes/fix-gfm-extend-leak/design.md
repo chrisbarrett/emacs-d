@@ -52,55 +52,67 @@ does not cover the newline — that `:extend t` is currently inert.
 
 ## Decisions
 
-### Decision: clip via an overlay face `(:extend nil)`
+### Decision: fill the visual line to the window edge in the per-line `after-string`
 
-`(:extend nil)` is an anonymous face specifying only `:extend`; every
-other attribute stays unspecified and merges from below, so the
-background colour on the actual text is untouched — only the past-EOL
-fill is suppressed. An overlay carrying that face over the block body,
-covering each interior newline, forces the merged `:extend` to nil at
-every body-line end.
+Each body line's existing right-edge `after-string` is extended with a
+trailing `(space :align-to right)` glyph painted in the `default`
+face.  This physically paints the visual line from `│` to the
+window's right edge with the default background, so when Emacs
+renders the line break there is no past-EOL region left to fill —
+`:extend` becomes irrelevant.  No new overlays; the existing per-line,
+per-window after-strings are simply lengthened.
+
+The shared `gfm-block-borders--right-after` and
+`gfm-block-borders--right-after-overflow` append the tail for fenced /
+indent body lines; `gfm-callouts--right-after` and
+`gfm-callouts--right-after-overflow` do the same for callout body
+lines.
+
+The originally-shipped approach — a high-priority overlay carrying
+`face '(:extend nil)'` (anonymous plist or a `defface`) over each
+block body's newlines — **does not work**, for a reason internal to
+Emacs's face engine:
+
+- `face_at_buffer_position` (`xfaces.c`) is called with
+  `attr_filter = LFACE_EXTEND_INDEX` when picking the past-EOL fill
+  face (`extend_face_to_end_of_line` in `xdisp.c`).
+- With that filter, `merge_face_ref` **skips** any face that has
+  `:extend nil`, whether explicit or unspecified — the face opts
+  out of the merge instead of suppressing siblings.
+- An overlay with `:extend nil` therefore can't clip a text-property
+  / overlay neighbour with `:extend t`: both are visited
+  independently, and the opted-out face contributes nothing while
+  the opted-in face's `:background` still paints.
+
+Sources: `src/xdisp.c` `extend_face_to_end_of_line`, `src/xfaces.c`
+`face_at_buffer_position` and `merge_face_ref`; manual entry for
+`:extend` in *Face Attributes*.
 
 Alternatives considered:
 
 - Buffer-local `face-remap-add-relative` on `diff-added` /
-  `diff-removed` → `(:extend nil)`. Trivial and robust, but
-  diff-specific and buffer-global; does nothing for `hl-line` /
-  `region`. Rejected as the primary mechanism — the overlay
-  generalises.
-- Stripping `:extend` from the copied text properties after native
-  fontification. Fights jit-lock, which re-applies properties on every
-  refontification. Rejected.
+  `diff-removed` → `(:extend nil)`. Trivial and robust for the diff
+  case, but diff-specific and buffer-global; does nothing for
+  `hl-line` / `region`. Rejected.
+- A high-priority `:extend t` overlay carrying the box's background
+  over each body-line newline. Works for the *background* leak but
+  forces a single fixed bg colour; tints, gradients, and per-line
+  fix-2 fills become harder to compose. The after-string tail is the
+  more local mechanism.
+- Stripping `:extend` from copied text properties after native
+  fontification. Fights jit-lock, which re-applies properties on
+  every refontification. Rejected.
+- Overlay face `(:extend nil)` — the previously-shipped approach.
+  Rejected; cannot clip per the engine semantics above.
 
-### Decision: one clip anchor per block, spanning the whole body
+### Decision: per-line, per-window — co-located with the existing after-string
 
-`:extend` is consulted only at newline positions, so a block-spanning
-overlay with `(:extend nil)` is a no-op on every non-EOL character and
-clips every interior newline at once — one overlay per block instead of
-one per line. It is width-independent, so it is an **anchor** overlay
-(shared across windows), not a per-window display overlay. It is
-created in the existing anchor pass
-(`gfm-code-fences--apply-*-anchors`, `gfm-callouts--apply-block-anchors`)
-and torn down by the existing registry range-removal.
-
-### Decision: explicit high `priority` on the clip overlay
-
-Overlay faces always beat text-property faces regardless of priority, so
-the diff (text-property) case needs no priority. But `hl-line` (overlay
-priority -50; `hl-line.el`, `hl-line-highlight`) and `region` are
-*overlay* faces; to outrank them the clip overlay needs an explicit
-numeric `priority`. Use a named constant
-(`gfm-block-borders--extend-clip-priority`, value 100) so the intent is
-documented. Without the priority the clip still fixes the reported diff
-case but not `hl-line` / `region`.
-
-### Decision: shared helper in `+gfm-block-borders.el`
-
-A `gfm-block-borders--make-extend-clip (registry beg end)` helper builds
-the anchor through the registry's `--make-anchor`, tagged so existing
-teardown handles it. Both decorators call it from their anchor pass.
-This keeps the mechanism in one place, mirroring how the border
-primitives already live in the shared lib.
+The tail piggybacks on the same per-window display overlay that
+already carries the `│` right border.  The window-reconciler that
+rebuilds per-window display overlays on resize / split also rebuilds
+the tail at the new width, so `:align-to right` is always evaluated
+against the current window edge.  No new anchor overlays, no new
+teardown.
 
 ## Risks / Trade-offs
 

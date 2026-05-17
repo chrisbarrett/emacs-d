@@ -88,10 +88,18 @@ Compatibility alias for `gfm-block-borders--available-width'."
 Border glyphs share buffer regions with prose whose font-lock face
 carries `:slant italic', `:underline t', etc.  Without an explicit
 override, those attrs leak through face composition on GUI frames
-and visually slant the box edges."
+and visually slant the box edges.
+
+`:background' is explicitly pinned to `\"unspecified-bg\"' — the
+literal Emacs marker for the system / frame background — to stop
+the buffer position's text-property `:background' (e.g. `diff-added'
+on the newline at the body line's end) from bleeding through into
+border / before-string / after-string chars whose `:background'
+would otherwise be unspecified and inherit from below."
   `(:inherit ,face
     :slant normal :weight normal
-    :underline nil :overline nil :strike-through nil :box nil))
+    :underline nil :overline nil :strike-through nil :box nil
+    :background "unspecified-bg"))
 
 (defun gfm-block-borders--top-strings (width face buffer-width &optional icon)
   "Return (LEADING . TRAILING) split of the top border WIDTH cols wide.
@@ -140,15 +148,43 @@ LEADING covers BUFFER-WIDTH cols matching the marker line's char count."
          (rem-fill (propertize (make-string rem-fill-w ?─) 'face face)))
     (cons leading (concat rem-fill (propertize "┘" 'face face)))))
 
-(defun gfm-block-borders--right-after (box-width face)
-  "Build the after-string that draws the right border at column BOX-WIDTH."
+(defun gfm-block-borders--right-after (box-width face &optional bg)
+  "Build the after-string that draws the right border at column BOX-WIDTH.
+When BG is non-nil, the padding before the border `│' is painted
+with `:background BG' so a body line's highlight band fills up to
+the right-side inner gap; nil leaves it on the border face.
+
+When BG is active, the band ends two columns short of `│' (a 2-col
+default-bg gap); when nil, the band ends one column short.  The
+extra column of internal padding when bg-fill is active makes the
+band visibly inset from the right border rather than abutting it.
+
+The after-string ends with `(space :align-to right)' painted in the
+default face — this fills the visual line from `│' to the window's
+right edge with the default background, masking any `:extend t'
+past-EOL fill that an underlying face (`diff-added' / `diff-removed'
+text-property faces, `hl-line' / `region' overlay faces) would
+otherwise paint past the border.  `:extend nil' on an overlay does
+NOT clip such a leak — the C-level past-EOL face merge in
+`face_at_buffer_position' simply skips faces that opt out, leaving
+the leaking face's background intact.  Filling the visual line so
+there is no past-EOL region to fill is the working idiom."
   (let* ((face (gfm-block-borders--normalised-border-face face))
-         (align-col (- box-width 2))
+         ;; `face' already pins `:background "unspecified-bg"' so the
+         ;; border / sep / pipe paint the system bg.  When BG is non-nil
+         ;; the pad replaces that pin with the highlight colour, and
+         ;; the band runs all the way to the col before `│' (no
+         ;; default-bg sep).
+         (pad-face (if bg (plist-put (copy-sequence face) :background bg)
+                     face))
+         (align-col (if bg (- box-width 1) (- box-width 2)))
          (pad (propertize " " 'display `(space :align-to ,align-col)
-                          'face face))
-         (sep (propertize " " 'face face))
+                          'face pad-face))
+         (sep (propertize (if bg "" " ") 'face face))
          (pipe (propertize "│" 'face face))
-         (str (concat pad sep pipe)))
+         (tail (propertize " " 'display '(space :align-to right)
+                           'face 'default))
+         (str (concat pad sep pipe tail)))
     (put-text-property 0 1 'cursor t str)
     str))
 
@@ -201,24 +237,38 @@ on continuation rows pass `│ '."
               (gfm-block-borders--normalised-border-face face)))
 
 (defun gfm-block-borders--right-after-overflow (face line-text window
-                                                     &optional cont-prefix-w)
+                                                     &optional cont-prefix-w bg)
   "After-string padding the right border to WINDOW's edge for a wrapped line.
 LINE-TEXT is the line's buffer content; the function simulates word-wrap
 to work out where the line ends visually, accounting for the wrap-prefix
 on continuation lines.  WINDOW selects the width; nil falls back to a
 sane default.  CONT-PREFIX-W defaults to
-`gfm-block-borders--wrap-prefix-w'."
+`gfm-block-borders--wrap-prefix-w'.  When BG is non-nil the padding is
+painted with `:background BG' so the highlight band fills the gap up
+to the border.
+
+A trailing `(space :align-to right)' in the default face fills the
+last wrapped visual row from `│' to the window's right edge — see
+`gfm-block-borders--right-after' for why."
   (let* ((face (gfm-block-borders--normalised-border-face face))
+         (pad-face (if bg (plist-put (copy-sequence face) :background bg)
+                     face))
          (text-width (gfm-block-borders--available-width window))
          (cpw (or cont-prefix-w gfm-block-borders--wrap-prefix-w))
          ;; +2 for the `│ ' before-string contribution to the first visual line.
          (visual-col (gfm-block-borders--last-visual-col
                       (concat "│ " line-text) text-width cpw))
-         (target-col (1- text-width))
+         ;; Pad runs to the col before `│' regardless of BG; the
+         ;; non-overflow path collapses its 1-col `sep' when BG is
+         ;; active, so the wrapped path matches by always reaching
+         ;; `target-col = text-width - 1'.
+         (target-col (- text-width 1))
          (pad-len (max 0 (- target-col visual-col)))
-         (pad (propertize (make-string pad-len ?\s) 'face face))
+         (pad (propertize (make-string pad-len ?\s) 'face pad-face))
          (pipe (propertize "│" 'face face))
-         (str (concat pad pipe)))
+         (tail (propertize " " 'display '(space :align-to right)
+                           'face 'default))
+         (str (concat pad pipe tail)))
     (put-text-property 0 1 'cursor t str)
     str))
 
