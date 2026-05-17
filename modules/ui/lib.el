@@ -80,9 +80,16 @@ Only works for specific navigation commands like `dired-find-file',
 
 ;;;###autoload
 (defun +goto-address-maybe-h ()
-  "Enable `goto-address-mode' unless in `org-mode' (which handles URLs natively)."
+  "Enable `goto-address-mode' unless in `org-mode' (which handles URLs natively).
+The eager `goto-address' pre-fontification pass is wrapped in
+`with-demoted-errors' so an upstream edge case in
+`goto-address-fontify' — where the URL regex matches text whose
+`thing-at-point' URL bounds resolve to nil, leading to
+`(make-overlay nil nil)' — does not abort the whole buffer-open
+sequence.  `goto-address-mode' itself registers a jit-lock fontifier
+that handles visible regions on demand."
   (unless (derived-mode-p 'org-mode 'org-agenda-mode)
-    (goto-address)
+    (with-demoted-errors "goto-address: %s" (goto-address))
     (goto-address-mode +1)))
 
 
