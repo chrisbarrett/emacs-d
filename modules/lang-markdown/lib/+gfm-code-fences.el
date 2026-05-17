@@ -82,6 +82,18 @@ be picked even when the corresponding mode is not installed."
                   (nerd-icons-icon-for-mode (gfm-code-fences--lang-mode lang)))))
       (and (stringp icon) icon))))
 
+(defconst gfm-code-fences--lhs-margin-langs
+  '("diff" "patch")
+  "Languages whose first body column is a meaningful indicator.
+For these the body content starts in what would otherwise be the box's
+left padding column — the `+'/`-'/` ' marks in a diff form a visual
+margin between the left border and the annotated source.")
+
+(defun gfm-code-fences--lang-has-lhs-margin-p (lang)
+  "Non-nil if LANG renders an indicator column that doubles as the LHS margin.
+See `gfm-code-fences--lhs-margin-langs'."
+  (and lang (member (downcase lang) gfm-code-fences--lhs-margin-langs)))
+
 ;;; Block discovery — fenced
 
 (defvar-local gfm-code-fences--fenced-blocks-cache nil
@@ -431,17 +443,28 @@ acceptable, mirrors gfm-tables row decoration."
   nil)
 
 (defun gfm-code-fences--apply-bordered-display
-    (window open-line-beg open-line-end close-line-beg close-line-end face label)
+    (window open-line-beg open-line-end close-line-beg close-line-end face label
+            &optional lhs-margin)
   "Build per-WINDOW display overlays for a fenced/yaml block.
 Borders sized to WINDOW's width; FACE colours; LABEL right-aligned in
-the top border (icon string for fenced, `meta' for YAML, or nil)."
+the top border (icon string for fenced, `meta' for YAML, or nil).
+
+When LHS-MARGIN is non-nil the block's body owns its first column as
+a meaningful indicator (e.g. `+'/`-'/` ' in a ` ```diff ` block).  In
+that mode the left decoration shrinks to a single `│' (no left
+padding column), the body content starts at col 1, and the bg-fill's
+left-side mask is suppressed so the indicator keeps its own bg."
   (let* ((body-beg (save-excursion
                      (goto-char open-line-end) (forward-line 1) (point)))
          (body-end (max body-beg (1- close-line-beg)))
          (max-content (gfm-block-borders--max-line-width body-beg body-end))
          (text-width (gfm-block-borders--available-width window))
-         (box-width (min text-width (max 80 (+ max-content 4))))
-         (content-budget (- box-width 4))
+         ;; Left decoration: 2 cols (`│ ') normally, 1 col (`│') when
+         ;; LHS-MARGIN.  Right decoration is always 2 cols (sep + `│').
+         (left-deco-w (if lhs-margin 1 2))
+         (total-deco-w (+ left-deco-w 2))
+         (box-width (min text-width (max 80 (+ max-content total-deco-w))))
+         (content-budget (- box-width total-deco-w))
          (open-buf-width (- open-line-end open-line-beg))
          (close-buf-width (- close-line-end close-line-beg))
          (top-split (gfm-code-fences--time-phase 'compose-borders
@@ -466,8 +489,10 @@ the top border (icon string for fenced, `meta' for YAML, or nil)."
     ;; this overlay-creation loop, `forward-line' interacts with our
     ;; cursor-intangible / display props and can stall mid-block,
     ;; spinning on the same line forever (bisect 2026-05-08).
-    (let ((lhs (propertize "│ " 'face
+    (let ((lhs (propertize (if lhs-margin "│" "│ ") 'face
                            (gfm-block-borders--normalised-border-face face)))
+          (wrap (gfm-block-borders--wrap-prefix
+                 face (and lhs-margin "⋱")))
           (p body-beg))
       (while (< p close-line-beg)
         (let* ((lbeg p)
@@ -484,7 +509,7 @@ the top border (icon string for fenced, `meta' for YAML, or nil)."
            lbeg lend window
            'gfm-code-fences-kind 'body
            'before-string lhs
-           'wrap-prefix (gfm-block-borders--wrap-prefix face)
+           'wrap-prefix wrap
            'after-string after)
           ;; When the line carries an `:extend t' background, inset
           ;; the band on the left too by masking the first body
@@ -494,7 +519,11 @@ the top border (icon string for fenced, `meta' for YAML, or nil)."
           ;; when the underlying text-prop face specifies a colour.
           ;; Foreground (e.g. `diff-indicator-added' on a `+') leaks
           ;; through from below since we set only `:background'.
-          (when (and line-bg (< lbeg lend))
+          ;;
+          ;; Skip the mask when the block has an LHS margin: the
+          ;; first body col IS the indicator (`+'/`-'), and its bg
+          ;; is part of the annotation band.
+          (when (and line-bg (not lhs-margin) (< lbeg lend))
             (gfm-code-fences--make-display
              lbeg (1+ lbeg) window
              'gfm-code-fences-kind 'body-bg-inset
@@ -616,10 +645,11 @@ INDENT-WIDTH is the buffer indent width; FACE colours the borders."
   (let* ((face gfm-code-fences--border-face)
          (lang (nth 4 block))
          (icon (and lang (gfm-code-fences--icon-for-lang lang)))
+         (lhs-margin (gfm-code-fences--lang-has-lhs-margin-p lang))
          (positions (gfm-code-fences--fenced-line-positions block)))
     (cl-destructuring-bind (olb ole clb cle) positions
       (gfm-code-fences--apply-bordered-display
-       window olb ole clb cle face icon))))
+       window olb ole clb cle face icon lhs-margin))))
 
 (defun gfm-code-fences--yaml-line-positions (helmet)
   "Return (OLB OLE CLB CLE) line positions for HELMET."
