@@ -163,10 +163,13 @@ the leaking face's background intact.  Filling the visual line so
 there is no past-EOL region to fill is the working idiom."
   (let* ((face (gfm-block-borders--normalised-border-face face))
          (pad-face (if bg (append face (list :background bg)) face))
-         (align-col (- box-width 2))
+         ;; pad ends at `box-width - 3'; the two `sep' cols form the
+         ;; default-bg gap so the band sits inset from the right `│'
+         ;; (col `box-width - 1') by 2 cols.
+         (align-col (- box-width 3))
          (pad (propertize " " 'display `(space :align-to ,align-col)
                           'face pad-face))
-         (sep (propertize " " 'face face))
+         (sep (propertize "  " 'face face))
          (pipe (propertize "│" 'face face))
          (tail (propertize " " 'display '(space :align-to right)
                            'face 'default))
@@ -239,17 +242,22 @@ last wrapped visual row from `│' to the window's right edge — see
   (let* ((face (gfm-block-borders--normalised-border-face face))
          (pad-face (if bg (append face (list :background bg)) face))
          (text-width (gfm-block-borders--available-width window))
-         (cpw (or cont-prefix-w gfm-block-borders--wrap-prefix-w))
-         ;; +2 for the `│ ' before-string contribution to the first visual line.
+         ;; Fences/indent use a 3-col left decoration (`│  ') and a
+         ;; matching 3-col continuation wrap-prefix.
+         (cpw (or cont-prefix-w 3))
          (visual-col (gfm-block-borders--last-visual-col
-                      (concat "│ " line-text) text-width cpw))
-         (target-col (1- text-width))
+                      (concat "│  " line-text) text-width cpw))
+         ;; Leave a 2-col default-bg gap before the right `│' (at
+         ;; col `text-width - 1') by stopping the bg-painted pad at
+         ;; col `text-width - 3'.
+         (target-col (- text-width 3))
          (pad-len (max 0 (- target-col visual-col)))
          (pad (propertize (make-string pad-len ?\s) 'face pad-face))
+         (gap (propertize "  " 'face face))
          (pipe (propertize "│" 'face face))
          (tail (propertize " " 'display '(space :align-to right)
                            'face 'default))
-         (str (concat pad pipe tail)))
+         (str (concat pad gap pipe tail)))
     (put-text-property 0 1 'cursor t str)
     str))
 

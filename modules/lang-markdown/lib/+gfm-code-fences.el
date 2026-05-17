@@ -440,8 +440,11 @@ the top border (icon string for fenced, `meta' for YAML, or nil)."
          (body-end (max body-beg (1- close-line-beg)))
          (max-content (gfm-block-borders--max-line-width body-beg body-end))
          (text-width (gfm-block-borders--available-width window))
-         (box-width (min text-width (max 80 (+ max-content 4))))
-         (content-budget (- box-width 4))
+         ;; Decoration: `│  ' on the left (3 cols) and `  │' on the right
+         ;; (2-col inset gap + border) — 6 cols total of decoration so the
+         ;; body's bg-fill band sits inset from each border by 2 cols.
+         (box-width (min text-width (max 80 (+ max-content 6))))
+         (content-budget (- box-width 6))
          (open-buf-width (- open-line-end open-line-beg))
          (close-buf-width (- close-line-end close-line-beg))
          (top-split (gfm-code-fences--time-phase 'compose-borders
@@ -466,7 +469,7 @@ the top border (icon string for fenced, `meta' for YAML, or nil)."
     ;; this overlay-creation loop, `forward-line' interacts with our
     ;; cursor-intangible / display props and can stall mid-block,
     ;; spinning on the same line forever (bisect 2026-05-08).
-    (let ((lhs (propertize "│ " 'face
+    (let ((lhs (propertize "│  " 'face
                            (gfm-block-borders--normalised-border-face face)))
           (p body-beg))
       (while (< p close-line-beg)
@@ -484,7 +487,9 @@ the top border (icon string for fenced, `meta' for YAML, or nil)."
            lbeg lend window
            'gfm-code-fences-kind 'body
            'before-string lhs
-           'wrap-prefix (gfm-block-borders--wrap-prefix face)
+           ;; 3-char wrap-prefix keeps continuation rows aligned with
+           ;; the body's 3-col left decoration (`│  ').
+           'wrap-prefix (gfm-block-borders--wrap-prefix face "⋱  ")
            'after-string after)
           (setq p (min close-line-beg (1+ lend))))))
     ;; Bottom — leading on the marker line, trailing after.
@@ -503,7 +508,7 @@ the top border (icon string for fenced, `meta' for YAML, or nil)."
 
 (defun gfm-code-fences--apply-indent-anchors (beg end indent-width face)
   "Build width-independent anchors for an indent block at [BEG, END]."
-  (let ((lhs (propertize "│ " 'face
+  (let ((lhs (propertize "│  " 'face
                          (gfm-block-borders--normalised-border-face face)))
         (first t)
         (p beg))
@@ -511,18 +516,19 @@ the top border (icon string for fenced, `meta' for YAML, or nil)."
       (let* ((lbeg p)
              (lend (save-excursion (goto-char p) (line-end-position)))
              (cover-end (min (+ lbeg indent-width) lend)))
-        ;; Cover indent chars with `│ ' display; carry cursor-intangible.
+        ;; Cover indent chars with `│  ' display; carry cursor-intangible.
         (gfm-code-fences--make-anchor
          lbeg cover-end
          'gfm-code-fences-kind 'indent-body
          'gfm-code-fences-indent-first first
          'cursor-intangible t
          'display lhs)
-        ;; Wrap-prefix on the whole line (continuation lines).
+        ;; Wrap-prefix on the whole line (continuation lines); 3 cols
+        ;; to match the 3-col left decoration.
         (gfm-code-fences--make-anchor
          lbeg lend
          'gfm-code-fences-kind 'indent-wrap
-         'wrap-prefix (gfm-block-borders--wrap-prefix face))
+         'wrap-prefix (gfm-block-borders--wrap-prefix face "⋱  "))
         (setq first nil)
         (setq p (1+ lend))))))
 
@@ -531,8 +537,10 @@ the top border (icon string for fenced, `meta' for YAML, or nil)."
 INDENT-WIDTH is the buffer indent width; FACE colours the borders."
   (let* ((max-content (gfm-block-borders--max-line-width beg end indent-width))
          (text-width (gfm-block-borders--available-width window))
-         (box-width (min text-width (max 80 (+ max-content 4))))
-         (content-budget (- box-width 4))
+         ;; 6 cols decoration: `│  ' left + `  │' right.  See the
+         ;; fenced display path for the same rationale.
+         (box-width (min text-width (max 80 (+ max-content 6))))
+         (content-budget (- box-width 6))
          (top-split (gfm-code-fences--time-phase 'compose-borders
                       (gfm-block-borders--top-strings box-width face 0 nil)))
          (bot-split (gfm-code-fences--time-phase 'compose-borders
