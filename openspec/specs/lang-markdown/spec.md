@@ -78,6 +78,11 @@ border composed of:
 - a tinted background face derived by blending the type face's
   foreground 10 % toward the default background, painted across
   every line of the callout
+- a per-line right-edge fill that paints the visual line to the
+  window edge in the default face, so any `:extend t` background —
+  whether carried by a text property or by another mode's overlay
+  (such as `hl-line` or `region`) — has no past-EOL region left to
+  fill and cannot extend past the right border
 
 #### Scenario: Callout renders with curved box and label
 
@@ -93,6 +98,13 @@ border composed of:
 - **WHEN** an `[!NOTE]` callout with no body lines is decorated
 - **THEN** the bottom border attaches to the marker line's trailing
   after-string so the box still closes
+
+#### Scenario: Body line with an extend background does not leak past the border
+
+- **WHEN** a callout body line carries a face with `:extend t` — for
+  example `hl-line` while point is on that line
+- **THEN** the `:extend` background is confined to the box interior and
+  does not paint past the right-edge `│` to the window edge
 
 ### Requirement: Callout box width sizing
 
@@ -498,6 +510,13 @@ or indented) with a curved-border box composed of:
 - a bottom border (`└─…─┘`) on or below the closing line
 - a `wrap-prefix` of `⋱ ` on continuation visual lines so wrapped
   content stays visually inside the box
+- a per-line right-edge fill that paints the visual line to the
+  window edge in the default face, so any `:extend t` background —
+  whether carried by a text property (such as the `diff-added` /
+  `diff-removed` faces applied by native fontification of a
+  ` ```diff ` block) or by another mode's overlay (such as `hl-line`
+  or `region`) — has no past-EOL region left to fill and cannot
+  extend past the right border
 
 The border face is `+markdown-overlay-border-face` for fenced and
 indent blocks, and `font-lock-constant-face` for YAML helmets.
@@ -523,6 +542,54 @@ indent blocks, and `font-lock-constant-face` for YAML helmets.
 - **THEN** the rendered output has a top border whose entire width
   precedes the first body line (no marker line to share), and a
   matching bottom border after the last body line
+
+#### Scenario: Diff body line background does not leak past the border
+
+- **WHEN** a ` ```diff ` fenced block is decorated and native
+  fontification has applied the `:extend t` `diff-added` face to a `+`
+  line, including its trailing newline
+- **THEN** the `diff-added` background is confined to the box interior
+  and does not paint past the right-edge `│` to the window edge
+
+### Requirement: Code-fence body background fill
+
+The system SHALL paint a fenced or indent code-block body line's
+right-edge after-string padding with that line's background whenever the
+line carries a face with both `:extend t` and a `:background` — for
+example the `diff-added` / `diff-removed` faces that native fontification
+applies inside a fenced `diff` block — so the highlighted band fills the
+box interior up to the right border `│`. When a body line carries no
+such face, the right-edge padding SHALL retain the border face's default
+appearance.
+
+This applies to the wrapped (overflow) right-edge after-string as well
+as the non-wrapped one. It does not apply to callouts, whose right-edge
+padding is already filled with the callout tint, nor to YAML helmets,
+whose body the decorator fontifies itself.
+
+#### Scenario: Diff added line fills to the border
+
+- **WHEN** a fenced `diff` block is decorated and native
+  fontification has applied the `:extend t` `diff-added` face to a `+`
+  body line
+- **THEN** that line's right-edge after-string padding is painted with
+  `diff-added`'s background, so the highlight band reaches the
+  right-edge `│`
+
+#### Scenario: Plain code line keeps the default gap
+
+- **WHEN** a fenced block body line carries no face with `:extend t` and
+  a `:background`
+- **THEN** that line's right-edge after-string padding renders with the
+  border face, unchanged from prior behaviour
+
+#### Scenario: Background absent until fontification runs
+
+- **WHEN** a fenced block is decorated before native fontification has
+  applied any `:extend t` background to its body
+- **THEN** the right-edge padding renders with the default border
+  appearance, and a later rebuild repaints it once the `:extend t`
+  background is present
 
 ### Requirement: Code-fence box width sizing
 

@@ -17,10 +17,11 @@ border composed of:
 - a tinted background face derived by blending the type face's
   foreground 10 % toward the default background, painted across
   every line of the callout
-- an extend-clip anchor over the callout body that confines any
-  `:extend t` background face — whether carried by a text property or
-  by another mode's overlay (such as `hl-line` or `region`) — to the
-  box interior, so the background never extends past the right border
+- a per-line right-edge fill that paints the visual line to the
+  window edge in the default face, so any `:extend t` background —
+  whether carried by a text property or by another mode's overlay
+  (such as `hl-line` or `region`) — has no past-EOL region left to
+  fill and cannot extend past the right border
 
 #### Scenario: Callout renders with curved box and label
 
@@ -58,12 +59,13 @@ or indented) with a curved-border box composed of:
 - a bottom border (`└─…─┘`) on or below the closing line
 - a `wrap-prefix` of `⋱ ` on continuation visual lines so wrapped
   content stays visually inside the box
-- an extend-clip anchor over the block body that confines any
-  `:extend t` background face — whether carried by a text property
-  (such as the `diff-added` / `diff-removed` faces applied by native
-  fontification of a ` ```diff ` block) or by another mode's overlay
-  (such as `hl-line` or `region`) — to the box interior, so the
-  background never extends past the right border
+- a per-line right-edge fill that paints the visual line to the
+  window edge in the default face, so any `:extend t` background —
+  whether carried by a text property (such as the `diff-added` /
+  `diff-removed` faces applied by native fontification of a
+  ` ```diff ` block) or by another mode's overlay (such as `hl-line`
+  or `region`) — has no past-EOL region left to fill and cannot
+  extend past the right border
 
 The border face is `+markdown-overlay-border-face` for fenced and
 indent blocks, and `font-lock-constant-face` for YAML helmets.
