@@ -172,13 +172,15 @@ there is no past-EOL region to fill is the working idiom."
   (let* ((face (gfm-block-borders--normalised-border-face face))
          ;; `face' already pins `:background "unspecified-bg"' so the
          ;; border / sep / pipe paint the system bg.  When BG is non-nil
-         ;; the pad replaces that pin with the highlight colour.
+         ;; the pad replaces that pin with the highlight colour, and
+         ;; the band runs all the way to the col before `│' (no
+         ;; default-bg sep).
          (pad-face (if bg (plist-put (copy-sequence face) :background bg)
                      face))
-         (align-col (- box-width 2))
+         (align-col (if bg (- box-width 1) (- box-width 2)))
          (pad (propertize " " 'display `(space :align-to ,align-col)
                           'face pad-face))
-         (sep (propertize " " 'face face))
+         (sep (propertize (if bg "" " ") 'face face))
          (pipe (propertize "│" 'face face))
          (tail (propertize " " 'display '(space :align-to right)
                            'face 'default))
@@ -256,6 +258,10 @@ last wrapped visual row from `│' to the window's right edge — see
          ;; +2 for the `│ ' before-string contribution to the first visual line.
          (visual-col (gfm-block-borders--last-visual-col
                       (concat "│ " line-text) text-width cpw))
+         ;; Pad runs to the col before `│' regardless of BG; the
+         ;; non-overflow path collapses its 1-col `sep' when BG is
+         ;; active, so the wrapped path matches by always reaching
+         ;; `target-col = text-width - 1'.
          (target-col (- text-width 1))
          (pad-len (max 0 (- target-col visual-col)))
          (pad (propertize (make-string pad-len ?\s) 'face pad-face))
