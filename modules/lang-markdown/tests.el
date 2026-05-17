@@ -3020,6 +3020,187 @@ decoration must be baked into the cell string itself."
                      (lang-markdown-tests--tagged-source-positions
                       'gfm-links))))))
 
+;;; gfm-hrule tests
+
+(let* ((module-dir (file-name-directory (or load-file-name buffer-file-name)))
+       (hrule-file (expand-file-name "lib/+gfm-hrule.el" module-dir)))
+  (when (file-exists-p hrule-file)
+    (load hrule-file nil 'nomessage)))
+
+(defun lang-markdown-tests--hrule-bar-overlays ()
+  "Return display overlays carrying the HR bar."
+  (cl-remove-if-not
+   (lambda (ov) (eq (overlay-get ov 'gfm-hrule-kind) 'bar))
+   (overlays-in (point-min) (point-max))))
+
+(ert-deftest lang-markdown/gfm-hrule-find-blocks-detects-dash-form ()
+  "Dash-form HR lines are discovered via the `markdown-hr' property."
+  (with-temp-buffer
+    (delay-mode-hooks (gfm-mode))
+    (insert "\nfoo\n\n---\n\nbar\n")
+    (font-lock-ensure)
+    (let ((blocks (gfm-hrule--find-blocks)))
+      (should (= 1 (length blocks))))))
+
+(ert-deftest lang-markdown/gfm-hrule-find-blocks-ignores-asterisk-form ()
+  "Asterisk-form HR lines are not discovered."
+  (with-temp-buffer
+    (delay-mode-hooks (gfm-mode))
+    (insert "\nfoo\n\n***\n\nbar\n")
+    (font-lock-ensure)
+    (should-not (gfm-hrule--find-blocks))))
+
+(ert-deftest lang-markdown/gfm-hrule-find-blocks-ignores-underscore-form ()
+  "Underscore-form HR lines are not discovered."
+  (with-temp-buffer
+    (delay-mode-hooks (gfm-mode))
+    (insert "\nfoo\n\n___\n\nbar\n")
+    (font-lock-ensure)
+    (should-not (gfm-hrule--find-blocks))))
+
+(ert-deftest lang-markdown/gfm-hrule-find-blocks-ignores-setext-2-underline ()
+  "A setext-2 heading underline is not discovered as an HR."
+  (with-temp-buffer
+    (delay-mode-hooks (gfm-mode))
+    (insert "Heading\n---\n\nbody\n")
+    (font-lock-ensure)
+    (should-not (gfm-hrule--find-blocks))))
+
+(ert-deftest lang-markdown/gfm-hrule-find-blocks-ignores-dashes-in-fenced-code ()
+  "Dash-only lines inside a fenced code block are not discovered."
+  (with-temp-buffer
+    (delay-mode-hooks (gfm-mode))
+    (insert "```\n---\n```\n")
+    (font-lock-ensure)
+    (should-not (gfm-hrule--find-blocks))))
+
+(ert-deftest lang-markdown/gfm-hrule-find-blocks-ignores-blockquote-form ()
+  "A `> ---' line inside a blockquote is not discovered."
+  (with-temp-buffer
+    (delay-mode-hooks (gfm-mode))
+    (insert "\nfoo\n\n> ---\n\nbar\n")
+    (font-lock-ensure)
+    (should-not (gfm-hrule--find-blocks))))
+
+(ert-deftest lang-markdown/gfm-hrule-mode-creates-bar-overlay ()
+  "Enabling the mode creates a bar display overlay over the HR line."
+  (let ((buf (generate-new-buffer "*gfm-hrule-mode-test*")))
+    (unwind-protect
+        (with-current-buffer buf
+          (delay-mode-hooks (gfm-mode))
+          (insert "\nfoo\n\n---\n\nbar\n")
+          (font-lock-ensure)
+          (gfm-hrule-mode 1)
+          (let ((ovs (lang-markdown-tests--hrule-bar-overlays)))
+            (should (= 1 (length ovs)))
+            (let* ((ov (car ovs))
+                   (display (overlay-get ov 'display)))
+              (should (stringp display))
+              (should (string-match-p "\\`─+\\'" display))
+              (should (overlay-get ov 'gfm-hrule-revealable))
+              (should (overlay-get ov 'evaporate)))))
+      (kill-buffer buf))))
+
+(ert-deftest lang-markdown/gfm-hrule-mode-asterisk-produces-no-overlay ()
+  "Asterisk-form HR does not produce a bar overlay."
+  (with-temp-buffer
+    (delay-mode-hooks (gfm-mode))
+    (insert "\nfoo\n\n***\n\nbar\n")
+    (font-lock-ensure)
+    (gfm-hrule-mode 1)
+    (should-not (lang-markdown-tests--hrule-bar-overlays))))
+
+(ert-deftest lang-markdown/gfm-hrule-mode-setext-produces-no-overlay ()
+  "A setext-2 underline produces no bar overlay."
+  (with-temp-buffer
+    (delay-mode-hooks (gfm-mode))
+    (insert "Heading\n---\n\nbody\n")
+    (font-lock-ensure)
+    (gfm-hrule-mode 1)
+    (should-not (lang-markdown-tests--hrule-bar-overlays))))
+
+(ert-deftest lang-markdown/gfm-hrule-mode-fenced-code-produces-no-overlay ()
+  "An HR-looking line inside a fenced code block produces no overlay."
+  (with-temp-buffer
+    (delay-mode-hooks (gfm-mode))
+    (insert "```\n---\n```\n")
+    (font-lock-ensure)
+    (gfm-hrule-mode 1)
+    (should-not (lang-markdown-tests--hrule-bar-overlays))))
+
+(ert-deftest lang-markdown/gfm-hrule-mode-blockquote-produces-no-overlay ()
+  "A `> ---' line inside a blockquote produces no bar overlay."
+  (with-temp-buffer
+    (delay-mode-hooks (gfm-mode))
+    (insert "\nfoo\n\n> ---\n\nbar\n")
+    (font-lock-ensure)
+    (gfm-hrule-mode 1)
+    (should-not (lang-markdown-tests--hrule-bar-overlays))))
+
+(ert-deftest lang-markdown/gfm-hrule-mode-removes-overlays ()
+  "Disabling the mode removes all bar overlays."
+  (with-temp-buffer
+    (delay-mode-hooks (gfm-mode))
+    (insert "\nfoo\n\n---\n\nbar\n")
+    (font-lock-ensure)
+    (gfm-hrule-mode 1)
+    (gfm-hrule-mode -1)
+    (should-not (lang-markdown-tests--hrule-bar-overlays))))
+
+(ert-deftest lang-markdown/gfm-hrule-reveal-suppresses-display-at-point ()
+  "Point on the HR line suppresses the bar; moving off restores it."
+  (let ((buf (generate-new-buffer "*gfm-hrule-reveal-test*")))
+    (unwind-protect
+        (with-current-buffer buf
+          (delay-mode-hooks (gfm-mode))
+          (insert "\nfoo\n\n---\n\nbar\n")
+          (font-lock-ensure)
+          (gfm-hrule-mode 1)
+          (let* ((ov (car (lang-markdown-tests--hrule-bar-overlays)))
+                 (hr-pos (and ov (overlay-start ov))))
+            (should ov)
+            (should (stringp (overlay-get ov 'display)))
+            (goto-char hr-pos)
+            (gfm-hrule--reveal)
+            (should (null (overlay-get ov 'display)))
+            (goto-char (point-min))
+            (gfm-hrule--reveal)
+            (should (stringp (overlay-get ov 'display)))))
+      (kill-buffer buf))))
+
+(ert-deftest lang-markdown/gfm-hrule-enabled-via-gfm-mode-hook ()
+  "`gfm-hrule-mode' is wired into `gfm-mode-hook'."
+  (should (memq 'gfm-hrule-mode gfm-mode-hook)))
+
+;;; Narrowing-regression — gfm-hrule
+
+(defun lang-markdown-tests--two-slide-hrule-buffer ()
+  "Insert a two-slide buffer with one HR per slide."
+  (insert "first\n\n---\n\nbody one\n")
+  (insert "\n# slide 2\n\n")
+  (insert "second\n\n---\n\nbody two\n"))
+
+(ert-deftest lang-markdown/gfm-hrule-narrow-rebuild-widen-rebuild-converges ()
+  "narrow -> rebuild -> widen -> rebuild matches a clean widened rebuild."
+  :tags '(narrowing-regression)
+  (with-temp-buffer
+    (delay-mode-hooks (gfm-mode))
+    (lang-markdown-tests--two-slide-hrule-buffer)
+    (font-lock-ensure)
+    (gfm-hrule-mode 1)
+    (let* ((baseline (lang-markdown-tests--tagged-source-positions 'gfm-hrule))
+           (slide-1-end (save-excursion
+                          (goto-char (point-min))
+                          (search-forward "# slide 2")
+                          (line-beginning-position))))
+      (narrow-to-region (point-min) slide-1-end)
+      (gfm-hrule--rebuild)
+      (widen)
+      (gfm-hrule--rebuild)
+      (should (equal baseline
+                     (lang-markdown-tests--tagged-source-positions
+                      'gfm-hrule))))))
+
 (provide 'lang-markdown-tests)
 
 ;;; lang-markdown/tests.el ends here
