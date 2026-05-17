@@ -193,6 +193,18 @@
 
   :config
   (+markdown-style-header-faces)
+  ;; Neutralise `markdown-blockquote-face' so the face contributes nothing
+  ;; — no italic, no theme-imposed foreground/background, no extend.  The
+  ;; default face wins for plain blockquote chars; emphasis faces merge
+  ;; through cleanly inside callout boxes (see
+  ;; `gfm-callouts--apply-block-anchors').  Themes like catppuccin set
+  ;; `:foreground'/`:background'/`:slant' directly on this face, so
+  ;; `:inherit'-only fixes don't suffice — every attribute must be cleared.
+  (dolist (attr '(:family :foundry :width :height :weight :slant
+                  :underline :overline :strike-through :box
+                  :inverse-video :foreground :background
+                  :stipple :extend :inherit))
+    (set-face-attribute 'markdown-blockquote-face nil attr 'unspecified))
   (+local-leader-set-key 'markdown-mode-map
     "l" '(markdown-toggle-url-hiding :wk "toggle URLs")
     "f" '(markdown-insert-footnote :wk "insert footnote")
