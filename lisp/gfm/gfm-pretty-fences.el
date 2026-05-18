@@ -2,7 +2,7 @@
 
 ;;; Commentary:
 
-;; Minor mode that adorns GFM fenced code blocks, leading YAML frontmatter,
+;; Decorator that adorns GFM fenced code blocks, leading YAML frontmatter,
 ;; and 4-space / tab-indented code blocks with a curved border, language
 ;; icons, and reveal-on-cursor for fence markers.
 ;;
@@ -17,14 +17,12 @@
 ;; two windows of different widths renders at each window's own width.
 ;; Discovery is memoised per `buffer-chars-modified-tick'; rebuilds are
 ;; scoped to the dirty region when possible and prioritised
-;; visible-window-first when widths change.
-;;
-;; Shared primitives — box-drawing, wrap simulation, overlay registry,
-;; debounced scheduler, window-state reconciler — live in
-;; `gfm-pretty-borders.el'.  This file hosts only fences-specific
-;; concerns: block discovery (fenced + YAML + indent), language icon
-;; resolution, performance stats, scoped post-edit rebuild policy,
-;; and the minor-mode glue.
+;; visible-window-first when widths change.  The engine owns the
+;; scheduler, scoped-rebuild routing, and generic rebuild stats; this
+;; file contributes block discovery, structural-line ranges (fence
+;; markers + YAML helmet markers), an edit-adjacency predicate (blank
+;; line adjacent to an indent block), per-block apply functions,
+;; language-icon resolution, and the YAML body fontification helper.
 
 ;;; Code:
 
@@ -37,11 +35,6 @@
 (defgroup gfm-pretty-fences nil
   "Visual treatment for GFM fenced code blocks."
   :group 'markdown-faces)
-
-(defcustom gfm-pretty-fences-slow-rebuild-threshold 0.05
-  "Threshold in seconds above which a single rebuild emits a warning."
-  :type 'number
-  :group 'gfm-pretty-fences)
 
 (defconst gfm-pretty-fences--open-re
   (rx bol (* blank)
@@ -209,82 +202,7 @@ Widens for the duration of its body so the cache is narrowing-independent."
             (forward-line 1)))))))
     (nreverse blocks)))
 
-;;; Performance instrumentation
-
-(defvar-local gfm-pretty-fences--stats nil
-  "Per-buffer alist of rebuild stats.")
-
-(defconst gfm-pretty-fences--phase-keys
-  '(find-fenced find-yaml find-indent compose-borders compose-overflow apply)
-  "Keys used in `gfm-pretty-fences--stats' `phase-totals' alist, in display order.")
-
-(defun gfm-pretty-fences--init-stats ()
-  "Reset the per-buffer rebuild stats to zero."
-  (setq gfm-pretty-fences--stats
-        (list (cons 'rebuild-count 0)
-              (cons 'total-time 0.0)
-              (cons 'last-time 0.0)
-              (cons 'max-time 0.0)
-              (cons 'block-count 0)
-              (cons 'phase-totals
-                    (mapcar (lambda (k) (cons k 0.0))
-                            gfm-pretty-fences--phase-keys)))))
-
-(defun gfm-pretty-fences--accum-phase (phase delta)
-  "Accumulate DELTA seconds into PHASE in `gfm-pretty-fences--stats'."
-  (when gfm-pretty-fences--stats
-    (let ((totals (alist-get 'phase-totals gfm-pretty-fences--stats)))
-      (when totals
-        (setf (alist-get phase totals)
-              (+ delta (or (alist-get phase totals) 0.0)))
-        (setf (alist-get 'phase-totals gfm-pretty-fences--stats) totals)))))
-
-(defmacro gfm-pretty-fences--time-phase (phase &rest body)
-  "Run BODY, accumulating its wall-time into PHASE on the buffer's stats."
-  (declare (indent 1) (debug (form body)))
-  (let ((start (make-symbol "start")))
-    `(let ((,start (current-time)))
-       (prog1 (progn ,@body)
-         (gfm-pretty-fences--accum-phase
-          ,phase (float-time (time-since ,start)))))))
-
-(defun gfm-pretty-fences--record-stats (duration block-count)
-  "Update stats with DURATION and BLOCK-COUNT from one rebuild."
-  (unless gfm-pretty-fences--stats (gfm-pretty-fences--init-stats))
-  (setf (alist-get 'rebuild-count gfm-pretty-fences--stats)
-        (1+ (alist-get 'rebuild-count gfm-pretty-fences--stats)))
-  (setf (alist-get 'total-time gfm-pretty-fences--stats)
-        (+ duration (alist-get 'total-time gfm-pretty-fences--stats)))
-  (setf (alist-get 'last-time gfm-pretty-fences--stats) duration)
-  (setf (alist-get 'max-time gfm-pretty-fences--stats)
-        (max duration (alist-get 'max-time gfm-pretty-fences--stats)))
-  (setf (alist-get 'block-count gfm-pretty-fences--stats) block-count)
-  (when (> duration gfm-pretty-fences-slow-rebuild-threshold)
-    (message "gfm-pretty-fences: slow rebuild in %s: %.3fs"
-             (buffer-name) duration)))
-
-(defun gfm-pretty-fences--format-phase-totals (totals)
-  "Return a phase-by-phase summary string for TOTALS, sorted by total desc."
-  (let ((sorted (sort (copy-sequence totals)
-                      (lambda (a b) (> (cdr a) (cdr b))))))
-    (mapconcat (lambda (p) (format "%s=%.3fs" (car p) (cdr p)))
-               sorted " ")))
-
-(defun gfm-pretty-fences-stats ()
-  "Display the current buffer's gfm-pretty-fences rebuild statistics."
-  (interactive)
-  (if (not gfm-pretty-fences--stats)
-      (message "gfm-pretty-fences: no stats yet")
-    (let-alist gfm-pretty-fences--stats
-      (message
-       "gfm-pretty-fences [%s]: rebuilds=%d total=%.3fs last=%.3fs max=%.3fs blocks=%d | %s"
-       (buffer-name)
-       .rebuild-count .total-time .last-time .max-time .block-count
-       (gfm-pretty-fences--format-phase-totals .phase-totals)))))
-
 ;;; Overlay registry
-
-(defvar gfm-pretty-fences-mode)
 
 (defvar-local gfm-pretty-fences--overlays nil
   "All fence overlays currently in this buffer.")
@@ -298,24 +216,6 @@ Widens for the duration of its body so the cache is narrowing-independent."
 (defsubst gfm-pretty-fences--register (ov)
   "Tag OV as a fence overlay and remember it for bulk cleanup."
   (gfm-pretty--register gfm-pretty-fences--registry ov))
-
-(defsubst gfm-pretty-fences--remove-overlays (&optional beg end)
-  "Remove all gfm-pretty-fences overlays between BEG and END."
-  (gfm-pretty--remove-overlays gfm-pretty-fences--registry beg end))
-
-(defsubst gfm-pretty-fences--prune-dead-overlays ()
-  "Drop overlays from the registry whose buffer is gone."
-  (gfm-pretty--prune-dead-overlays gfm-pretty-fences--registry))
-
-(defsubst gfm-pretty-fences--remove-display-overlays-in-range (beg end window)
-  "Delete display overlays in [BEG, END] for WINDOW."
-  (gfm-pretty--remove-display-overlays-in-range
-   gfm-pretty-fences--registry beg end window))
-
-(defsubst gfm-pretty-fences--remove-display-overlays-for-window (window)
-  "Delete every display overlay restricted to WINDOW across the buffer."
-  (gfm-pretty--remove-display-overlays-for-window
-   gfm-pretty-fences--registry window))
 
 (defsubst gfm-pretty-fences--make-anchor (beg end &rest props)
   "Make an anchor overlay over [BEG, END] with PROPS."
@@ -409,10 +309,10 @@ left-side mask is suppressed so the indicator keeps its own bg."
          (content-budget (- box-width total-deco-w))
          (open-buf-width (- open-line-end open-line-beg))
          (close-buf-width (- close-line-end close-line-beg))
-         (top-split (gfm-pretty-fences--time-phase 'compose-borders
+         (top-split (gfm-pretty-time-phase 'fences 'compose-borders
                       (gfm-pretty--top-strings box-width face
                                                       open-buf-width label)))
-         (bot-split (gfm-pretty-fences--time-phase 'compose-borders
+         (bot-split (gfm-pretty-time-phase 'fences 'compose-borders
                       (gfm-pretty--bottom-strings box-width face
                                                          close-buf-width))))
     ;; Top — leading on the marker line, trailing after.
@@ -440,7 +340,7 @@ left-side mask is suppressed so the indicator keeps its own bg."
         (let* ((lbeg p)
                (lend (save-excursion (goto-char p) (line-end-position)))
                (line-bg (gfm-pretty-fences--line-extend-bg lbeg lend))
-               (after (gfm-pretty-fences--time-phase 'compose-overflow
+               (after (gfm-pretty-time-phase 'fences 'compose-overflow
                         (if (> (- lend lbeg) content-budget)
                             (gfm-pretty--right-after-overflow
                              face (buffer-substring-no-properties lbeg lend)
@@ -517,9 +417,9 @@ INDENT-WIDTH is the buffer indent width; FACE colours the borders."
          (text-width (gfm-pretty--available-width window))
          (box-width (min text-width (max 80 (+ max-content 4))))
          (content-budget (- box-width 4))
-         (top-split (gfm-pretty-fences--time-phase 'compose-borders
+         (top-split (gfm-pretty-time-phase 'fences 'compose-borders
                       (gfm-pretty--top-strings box-width face 0 nil)))
-         (bot-split (gfm-pretty-fences--time-phase 'compose-borders
+         (bot-split (gfm-pretty-time-phase 'fences 'compose-borders
                       (gfm-pretty--bottom-strings box-width face 0)))
          (top-str (concat (car top-split) (cdr top-split)))
          (bot-str (concat (car bot-split) (cdr bot-split))))
@@ -534,7 +434,7 @@ INDENT-WIDTH is the buffer indent width; FACE colours the borders."
                            (min (+ lbeg indent-width) lend) lend))
                (line-bg (gfm-pretty-fences--line-extend-bg lbeg lend))
                (overflow-p (> line-content-w content-budget))
-               (after (gfm-pretty-fences--time-phase 'compose-overflow
+               (after (gfm-pretty-time-phase 'fences 'compose-overflow
                         (if overflow-p
                             (gfm-pretty--right-after-overflow
                              face line-text window nil line-bg)
@@ -688,9 +588,9 @@ scoped-rebuild containment.  PAYLOAD is the kind-specific data tuple."
   "Return tagged blocks discovered in the current buffer.
 Order is: yaml (if any), then fenced in source order, then indent in
 source order.  Indent discovery excludes fenced + yaml ranges."
-  (let* ((helmet (gfm-pretty-fences--time-phase 'find-yaml
+  (let* ((helmet (gfm-pretty-time-phase 'fences 'find-yaml
                    (gfm-pretty-fences--find-yaml-helmet)))
-         (fenced (gfm-pretty-fences--time-phase 'find-fenced
+         (fenced (gfm-pretty-time-phase 'fences 'find-fenced
                    (gfm-pretty-fences--find-blocks)))
          (excluded
           (append
@@ -703,7 +603,7 @@ source order.  Indent discovery excludes fenced + yaml ranges."
                          (gfm-pretty-fences--fenced-line-positions b)
                        (cons olb cle)))
                    fenced)))
-         (indent (gfm-pretty-fences--time-phase 'find-indent
+         (indent (gfm-pretty-time-phase 'fences 'find-indent
                    (gfm-pretty-fences--find-indent-blocks excluded)))
          result)
     (when helmet
@@ -733,7 +633,7 @@ outside the current restriction (e.g. another slide under
 narrowing is naturally clipped by Emacs' overlay engine."
   (save-restriction
     (widen)
-    (gfm-pretty-fences--time-phase 'apply
+    (gfm-pretty-time-phase 'fences 'apply
       (cl-case (gfm-pretty-fences--block-kind block)
         (fenced (gfm-pretty-fences--apply-fenced-block-anchors
                  (gfm-pretty-fences--block-payload block)))
@@ -747,7 +647,7 @@ narrowing is naturally clipped by Emacs' overlay engine."
 See `gfm-pretty-fences--apply-block-anchors' for the widening rationale."
   (save-restriction
     (widen)
-    (gfm-pretty-fences--time-phase 'apply
+    (gfm-pretty-time-phase 'fences 'apply
       (cl-case (gfm-pretty-fences--block-kind block)
         (fenced (gfm-pretty-fences--apply-fenced-block-display
                  (gfm-pretty-fences--block-payload block) window))
@@ -756,62 +656,14 @@ See `gfm-pretty-fences--apply-block-anchors' for the widening rationale."
         (indent (gfm-pretty-fences--apply-indent-block-display
                  (gfm-pretty-fences--block-payload block) window))))))
 
-(defun gfm-pretty-fences--apply-overlays ()
-  "Create overlays for every block in the buffer.
-Anchors are shared across windows; display overlays are produced once
-per window currently showing the buffer (or one unrestricted set when
-no window does).  Returns the block count."
-  (save-excursion
-    (let* ((blocks (gfm-pretty--collect (gfm-pretty--get 'fences)))
-           (windows (or (gfm-pretty--display-windows) (list nil))))
-      (dolist (block blocks)
-        (gfm-pretty-fences--apply-block-anchors block))
-      (dolist (window windows)
-        (dolist (block blocks)
-          (gfm-pretty-fences--apply-block-display block window)))
-      (length blocks))))
-
-;;; Rebuild
-
-(defsubst gfm-pretty-fences--window-state ()
-  "Return the (WINDOW . WIDTH) snapshot used to detect rendering drift."
-  (gfm-pretty--window-state))
-
-(defun gfm-pretty-fences--rebuild ()
-  "Remove and recreate all gfm-pretty-fences overlays."
-  (let ((start (current-time)))
-    (gfm-pretty-fences--remove-overlays)
-    (let ((n (gfm-pretty-fences--apply-overlays)))
-      (gfm-pretty-fences--record-stats (float-time (time-since start)) n))))
-
-(defun gfm-pretty-fences--rebuild-block (block)
-  "Tear down BLOCK's overlays and re-apply just that block.
-BLOCK is a `gfm-pretty-fences--block' struct."
-  (let* ((start (current-time))
-         (range (gfm-pretty-fences--block-range block)))
-    (gfm-pretty-fences--remove-overlays (car range) (cdr range))
-    (gfm-pretty-fences--apply-block-anchors block)
-    (dolist (window (or (gfm-pretty--display-windows) (list nil)))
-      (gfm-pretty-fences--apply-block-display block window))
-    (gfm-pretty-fences--record-stats (float-time (time-since start)) 1)))
-
-(defun gfm-pretty-fences--rebuild-blocks (blocks)
-  "Tear down each block in BLOCKS and re-apply them in one pass."
-  (let ((start (current-time))
-        (windows (or (gfm-pretty--display-windows) (list nil))))
-    (dolist (block blocks)
-      (let ((range (gfm-pretty-fences--block-range block)))
-        (gfm-pretty-fences--remove-overlays (car range) (cdr range)))
-      (gfm-pretty-fences--apply-block-anchors block)
-      (dolist (window windows)
-        (gfm-pretty-fences--apply-block-display block window)))
-    (gfm-pretty-fences--record-stats (float-time (time-since start))
-                                   (length blocks))))
+;;; Visibility helper
 
 (defun gfm-pretty-fences--block-visible-p (block ranges)
   "Non-nil if BLOCK's source range overlaps any range in RANGES."
   (gfm-pretty--block-visible-p
    block ranges #'gfm-pretty-fences--block-range))
+
+;;; Structural-line + edit-adjacency hooks for engine routing
 
 (defun gfm-pretty-fences--fence-line-ranges ()
   "Return per-line (BEG . END) ranges for every fence opening / closing line.
@@ -842,11 +694,6 @@ Includes YAML helmet markers as well so edits to those lines invalidate."
                     close-end)
               ranges)))
     ranges))
-
-(defun gfm-pretty-fences--region-overlaps-fence-line-p (region)
-  "Non-nil if REGION overlaps a fence opening/closing line."
-  (cl-some (lambda (r) (gfm-pretty--region-overlaps-p region r))
-           (gfm-pretty-fences--fence-line-ranges)))
 
 (defun gfm-pretty-fences--blank-line-adjacent-to-indent-p (region)
   "Non-nil if REGION overlaps a blank line adjacent to an indent block.
@@ -896,133 +743,23 @@ destroy a block."
                      region (cons after-beg after-end)))))))
      blocks)))
 
-(defun gfm-pretty-fences--block-fully-contains-p (block region)
-  "Non-nil if REGION lies inside BLOCK's source range."
-  (let ((br (gfm-pretty-fences--block-range block)))
-    (and (>= (car region) (car br))
-         (<= (cdr region) (cdr br)))))
-
-;;; Compat shims for legacy test fixtures
-
-(defvar-local gfm-pretty-fences--dirty-region nil
-  "Compat: legacy dirty region read by the 0-arg `--rebuild-scoped' path.")
-
-(defvar-local gfm-pretty-fences--last-window-state nil
-  "Compat: legacy window-state snapshot probed by `--schedule-full-rebuild'.")
-
-(defvar-local gfm-pretty-fences--rebuild-timer nil
-  "Compat: mirror of `gfm-pretty--rebuild-timer' for legacy probing.")
-
-(defun gfm-pretty-fences--schedule-full-rebuild (&rest _)
-  "Compat shim — arm the engine timer when window state has drifted."
-  (unless (buffer-base-buffer)
-    (let ((state (gfm-pretty--window-state)))
-      (unless (equal state gfm-pretty-fences--last-window-state)
-        (gfm-pretty--arm-engine-timer)
-        (setq gfm-pretty-fences--rebuild-timer
-              gfm-pretty--rebuild-timer)))))
-
-(defun gfm-pretty-fences--rebuild-block-for-window (block window)
-  "Compat shim — delegate to the engine."
-  (gfm-pretty--rebuild-block-for-window
-   (gfm-pretty--get 'fences) block window))
-
-(defun gfm-pretty-fences--rebuild-scoped (&optional dirty)
-  "Rebuild only what DIRTY (cons BEG . END) demands.
-With DIRTY nil, reads `gfm-pretty-fences--dirty-region' (legacy test
-entry point) and clears it."
-  (let ((dirty (or dirty
-                   (prog1 gfm-pretty-fences--dirty-region
-                     (setq gfm-pretty-fences--dirty-region nil)))))
-    (cond
-     ((null dirty) nil)
-     ((gfm-pretty-fences--region-overlaps-fence-line-p dirty)
-      (gfm-pretty-fences--rebuild))
-     ((gfm-pretty-fences--blank-line-adjacent-to-indent-p dirty)
-      (gfm-pretty-fences--rebuild))
-     (t
-      (let* ((blocks (gfm-pretty-fences--collect-blocks))
-             (matching (cl-loop for b in blocks
-                                when (gfm-pretty--region-overlaps-p
-                                      dirty
-                                      (gfm-pretty-fences--block-range b))
-                                collect b)))
-        (cond
-         ((null matching) nil)
-         ((and (null (cdr matching))
-               (gfm-pretty-fences--block-fully-contains-p (car matching) dirty))
-          (gfm-pretty-fences--rebuild-block (car matching)))
-         (t
-          (gfm-pretty-fences--rebuild))))))))
-
-;;; Compatibility shims for existing tests
-
-(defalias 'gfm-pretty-fences--simulate-wrap #'gfm-pretty--simulate-wrap)
-(defalias 'gfm-pretty-fences--last-visual-col #'gfm-pretty--last-visual-col)
-(defalias 'gfm-pretty-fences--normalised-border-face
-  #'gfm-pretty--normalised-border-face)
-(defalias 'gfm-pretty-fences--in-ranges-p #'gfm-pretty--in-ranges-p)
-(defalias 'gfm-pretty-fences--region-overlaps-p
-  #'gfm-pretty--region-overlaps-p)
-(defalias 'gfm-pretty-fences--available-width
-  #'gfm-pretty--available-width)
-(defalias 'gfm-pretty-fences--text-width #'gfm-pretty--text-width)
-(defalias 'gfm-pretty-fences--max-line-width #'gfm-pretty--max-line-width)
-(defalias 'gfm-pretty-fences--display-windows
-  #'gfm-pretty--display-windows)
-
-(defconst gfm-pretty-fences--wrap-prefix-w gfm-pretty--wrap-prefix-w
-  "Compatibility alias for the shared wrap-prefix width.")
-
-(defun gfm-pretty-fences--wrap-prefix (face)
-  "Wrap-prefix string used on continuation lines (delegates to lib)."
-  (gfm-pretty--wrap-prefix face))
-
-(defun gfm-pretty-fences--right-after (box-width face)
-  "Right-edge after-string (delegates to lib)."
-  (gfm-pretty--right-after box-width face))
-
-(defun gfm-pretty-fences--right-after-overflow (face line-text window)
-  "Right-edge overflow after-string (delegates to lib)."
-  (gfm-pretty--right-after-overflow face line-text window))
-
-(defun gfm-pretty-fences--top-strings (width face buffer-width &optional icon)
-  "Top border strings (delegates to lib)."
-  (gfm-pretty--top-strings width face buffer-width icon))
-
-(defun gfm-pretty-fences--bottom-strings (width face buffer-width)
-  "Bottom border strings (delegates to lib)."
-  (gfm-pretty--bottom-strings width face buffer-width))
-
 ;;; Lifecycle hooks delegated to engine
 
 (defun gfm-pretty-fences--on-enable ()
   "Per-decorator setup invoked on enable."
-  (cursor-intangible-mode 1)
-  (gfm-pretty-fences--init-stats))
+  (cursor-intangible-mode 1))
 
 (defun gfm-pretty-fences--on-disable ()
   "Per-decorator teardown invoked on disable."
   (cursor-intangible-mode -1))
 
-;;; Minor mode (compat shim)
+;;; Stats command (thin wrapper over engine)
 
 ;;;###autoload
-(define-minor-mode gfm-pretty-fences-mode
-  "Adorn fenced code blocks with curved dashed borders and language icons.
-Compatibility shim — lifecycle is owned by the engine.  Prefer
-`gfm-pretty-mode' plus `gfm-pretty-toggle-decorator' for control."
-  :lighter " gfm-cf"
-  (cond
-   (gfm-pretty-fences-mode
-    (gfm-pretty--install-engine-hooks)
-    (gfm-pretty--enable-decorator (gfm-pretty--get 'fences)))
-   (t
-    (gfm-pretty--disable-decorator (gfm-pretty--get 'fences))
-    (unless (cl-some (lambda (entry)
-                       (gfm-pretty--state-get (car entry) 'enabled-p))
-                     gfm-pretty--decorators)
-      (gfm-pretty--remove-engine-hooks)))))
+(defun gfm-pretty-fences-stats ()
+  "Display the fences decorator's rebuild stats and phase totals."
+  (interactive)
+  (gfm-pretty-stats 'fences))
 
 ;;; gfm-pretty decorator registration
 
@@ -1033,8 +770,8 @@ Compatibility shim — lifecycle is owned by the engine.  Prefer
     :range-fn           #'gfm-pretty-fences--block-range
     :apply-anchors-fn   #'gfm-pretty-fences--apply-block-anchors
     :apply-display-fn   #'gfm-pretty-fences--apply-block-display
-    :rebuild-fn         #'gfm-pretty-fences--rebuild
-    :scoped-rebuild-fn  #'gfm-pretty-fences--rebuild-scoped
+    :structural-line-ranges-fn #'gfm-pretty-fences--fence-line-ranges
+    :edit-adjacency-fn  #'gfm-pretty-fences--blank-line-adjacent-to-indent-p
     :revealable-prop    'gfm-pretty-fences-revealable
     :saved-display-prop 'gfm-pretty-fences-saved-display
     :on-enable-fn       #'gfm-pretty-fences--on-enable

@@ -1,22 +1,19 @@
-;;; gfm-pretty-borders.el --- Graphics toolkit for GFM block decorators -*- lexical-binding: t; -*-
+;;; gfm-pretty-borders.el --- Box-drawing primitives for GFM decorators -*- lexical-binding: t; -*-
 
 ;;; Commentary:
 
-;; Decorator-neutral graphics primitives shared across the gfm-pretty
-;; decorators (callouts, fences, tables, hrule, links).  Hosts the
-;; box-drawing primitives (top/bottom border builders, right-edge
-;; after-strings, wrap simulator), width helpers, a normalised border
-;; face, and the in-range/region-overlaps predicates.
+;; Decorator-neutral box-drawing primitives shared across the
+;; gfm-pretty decorators: top / bottom border builders, right-edge
+;; after-string builders, wrap simulator, wrap-prefix factory, and the
+;; normalised border face.
 ;;
-;; The lifecycle engine — overlay registry, scheduler primitives,
-;; window-state tracking, and the reconciler — lives in
-;; `gfm-pretty-engine.el'.  Files that need only the graphics
-;; primitives require this module directly; files that drive
-;; rebuilds require `gfm-pretty-engine.el'.
+;; Width helpers, range / overlap predicates, the window-list helper,
+;; and the wrap-prefix width constant live in `gfm-pretty-engine.el'.
 
 ;;; Code:
 
 (require 'cl-lib)
+(require 'gfm-pretty-engine)
 
 (defgroup gfm-pretty-borders nil
   "Shared border-drawing primitives for GFM block decorators."
@@ -32,57 +29,12 @@
 (define-obsolete-face-alias '+markdown-overlay-border-face
   'gfm-pretty-border-face "29.1")
 
-(defconst gfm-pretty--wrap-prefix-w 2
-  "Visual width of the wrap-prefix shown on continuation visual lines.")
-
 (defcustom gfm-pretty--icon-gui-nudge 0.25
   "Fractional columns to shift the language icon leftward on GUI frames.
 Compensates for icon-font glyphs whose pixel width exceeds the
 `string-width' cell count.  Ignored on TTY frames."
   :type 'number
   :group 'gfm-pretty-borders)
-
-;;; Range helpers
-
-(defun gfm-pretty--in-ranges-p (pos ranges)
-  "Non-nil if POS lies in any (BEG . END) range in RANGES."
-  (cl-some (lambda (r) (and (>= pos (car r)) (<= pos (cdr r)))) ranges))
-
-(defun gfm-pretty--region-overlaps-p (a b)
-  "Non-nil if (BEG . END) ranges A and B overlap."
-  (and (<= (car a) (cdr b)) (>= (cdr a) (car b))))
-
-;;; Width helpers
-
-(defun gfm-pretty--available-width (&optional window)
-  "Return the available char width for a block in WINDOW.
-Falls back to a window currently showing the buffer, then to
-`fill-column' or 80."
-  (let ((win (or window
-                 (get-buffer-window (current-buffer))
-                 (get-buffer-window (current-buffer) t))))
-    (or (and win (window-max-chars-per-line win))
-        fill-column
-        80)))
-
-(defun gfm-pretty--text-width (&optional window)
-  "Return WINDOW's max chars per visual line.
-Compatibility alias for `gfm-pretty--available-width'."
-  (gfm-pretty--available-width window))
-
-(defun gfm-pretty--max-line-width (beg end &optional indent)
-  "Maximum line width between BEG and END, subtracting INDENT from each line."
-  (let ((max-col 0)
-        (indent (or indent 0)))
-    (save-excursion
-      (goto-char beg)
-      (while (and (not (eobp)) (<= (line-beginning-position) end))
-        (let* ((lbeg (line-beginning-position))
-               (lend (line-end-position))
-               (len (max 0 (- (- lend lbeg) indent))))
-          (setq max-col (max max-col len)))
-        (forward-line 1)))
-    max-col))
 
 ;;; Border primitives
 

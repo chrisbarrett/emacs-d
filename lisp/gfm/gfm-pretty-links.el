@@ -46,7 +46,10 @@
 (require 'gfm-pretty-engine)
 (require 'nerd-icons nil t)
 
-(defvar gfm-pretty-links-mode)
+(defvar gfm-pretty-mode)
+(declare-function gfm-pretty-mode "gfm-pretty")
+(declare-function gfm-pretty--require-all "gfm-pretty")
+(declare-function gfm-pretty-toggle-decorator "gfm-pretty")
 
 (defgroup gfm-pretty-links nil
   "Overlay decoration for GitHub Flavored Markdown links."
@@ -539,19 +542,19 @@ scoped to another window are never touched."
 
 (define-advice markdown-fontify-inline-links
     (:around (orig &rest args) gfm-pretty-links-suppress-compose)
-  "Skip the `markdown-hide-urls' compose branch under `gfm-pretty-links-mode'.
+  "Skip the `markdown-hide-urls' compose branch under the links decorator.
 The body still runs — faces apply, properties propagate — only the URL
 glyph composition is suppressed, because the gfm-pretty-links overlays
 own the link's appearance.  Inert in buffers where the mode is off."
-  (if (bound-and-true-p gfm-pretty-links-mode)
+  (if (gfm-pretty--state-get 'links 'enabled-p)
       (let ((markdown-hide-urls nil)) (apply orig args))
     (apply orig args)))
 
 (define-advice markdown-fontify-reference-links
     (:around (orig &rest args) gfm-pretty-links-suppress-compose)
-  "Skip the `markdown-hide-urls' compose branch under `gfm-pretty-links-mode'.
+  "Skip the `markdown-hide-urls' compose branch under the links decorator.
 See `markdown-fontify-inline-links@gfm-pretty-links-suppress-compose'."
-  (if (bound-and-true-p gfm-pretty-links-mode)
+  (if (gfm-pretty--state-get 'links 'enabled-p)
       (let ((markdown-hide-urls nil)) (apply orig args))
     (apply orig args)))
 
@@ -627,51 +630,46 @@ decorated link so other eldoc providers are not blocked."
                #'gfm-pretty-links--eldoc-function t)
   (setq gfm-pretty-links--ref-def-alist nil))
 
-;;; Minor mode (compat shim)
-
-;;;###autoload
-(define-minor-mode gfm-pretty-links-mode
-  "Decorate Markdown links with per-window overlays.
-Compatibility shim — lifecycle is owned by the engine.  Prefer
-`gfm-pretty-mode' plus `gfm-pretty-toggle-decorator' for control."
-  :lighter " gfm-ln"
-  (cond
-   (gfm-pretty-links-mode
-    (gfm-pretty--install-engine-hooks)
-    (gfm-pretty--enable-decorator (gfm-pretty--get 'links)))
-   (t
-    (gfm-pretty--disable-decorator (gfm-pretty--get 'links))
-    (unless (cl-some (lambda (entry)
-                       (gfm-pretty--state-get (car entry) 'enabled-p))
-                     gfm-pretty--decorators)
-      (gfm-pretty--remove-engine-hooks)))))
-
 ;;; markdown-hide-urls integration
 
+(defun gfm-pretty-links--enabled-p ()
+  "Non-nil when the links decorator is on in the current buffer."
+  (gfm-pretty--state-get 'links 'enabled-p))
+
 (defun gfm-pretty-links--watch-hide-urls (_symbol newval operation where)
-  "Track `markdown-hide-urls' changes into `gfm-pretty-links-mode'.
+  "Track `markdown-hide-urls' changes into the links decorator.
 Enabling/disabling stays independent of the variable — toggling the
-variable simply follows through to the mode in the affected buffer
-\(WHERE, or the current buffer for a global set)."
+variable follows through to the links decorator in WHERE (or the
+current buffer for a global set) via `gfm-pretty-mode' +
+`gfm-pretty-toggle-decorator'."
   (when (eq operation 'set)
     (let ((buf (if (bufferp where) where (current-buffer))))
       (when (buffer-live-p buf)
         (with-current-buffer buf
           (when (and gfm-pretty-links--watching (derived-mode-p 'markdown-mode))
-            (if newval
-                (unless gfm-pretty-links-mode (gfm-pretty-links-mode 1))
-              (when gfm-pretty-links-mode (gfm-pretty-links-mode -1)))))))))
+            (cond
+             ;; Enable: ensure umbrella is on, then ensure links bit is on.
+             (newval
+              (unless gfm-pretty-mode (gfm-pretty-mode 1))
+              (unless (gfm-pretty-links--enabled-p)
+                (gfm-pretty-toggle-decorator 'links)))
+             ;; Disable: only flip the links bit; leave umbrella alone.
+             (t
+              (when (gfm-pretty-links--enabled-p)
+                (gfm-pretty-toggle-decorator 'links))))))))))
 
 ;;;###autoload
 (defun gfm-pretty-links--maybe-enable ()
-  "Enable `gfm-pretty-links-mode' when `markdown-hide-urls' is on, and track it.
+  "Enable the links decorator when `markdown-hide-urls' is on, and track it.
 Wired into `markdown-mode-hook' / `gfm-mode-hook'.  Installs a
-buffer-local watcher on `markdown-hide-urls' so later changes to the
-variable toggle the mode."
+variable watcher on `markdown-hide-urls' so later changes flip the
+decorator's enable bit via `gfm-pretty-toggle-decorator'."
   (setq gfm-pretty-links--watching t)
   (add-variable-watcher 'markdown-hide-urls #'gfm-pretty-links--watch-hide-urls)
   (when (bound-and-true-p markdown-hide-urls)
-    (gfm-pretty-links-mode 1)))
+    (unless gfm-pretty-mode (gfm-pretty-mode 1))
+    (unless (gfm-pretty-links--enabled-p)
+      (gfm-pretty-toggle-decorator 'links))))
 
 ;;; gfm-pretty decorator registration
 

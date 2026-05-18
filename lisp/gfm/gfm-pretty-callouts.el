@@ -8,7 +8,7 @@
 ;;   > [!IMPORTANT]
 ;;   > Lorem ipsum.
 ;;
-;; Mirrors `gfm-pretty-fences-mode' on the Path C anchor / display split:
+;; Mirrors the fences decorator on the Path C anchor / display split:
 ;;
 ;; - Anchor overlays carry width-independent props (tinted background
 ;;   face, `wrap-prefix' for continuation rows).  Shared across windows.
@@ -49,11 +49,6 @@
 (defface gfm-pretty-callouts-box-face
   '((t :inherit shadow))
   "Fallback face for callout box-drawing characters."
-  :group 'gfm-pretty-callouts)
-
-(defcustom gfm-pretty-callouts-slow-rebuild-threshold 0.05
-  "Threshold in seconds above which a single rebuild emits a warning."
-  :type 'number
   :group 'gfm-pretty-callouts)
 
 (defconst gfm-pretty-callouts--type-faces
@@ -121,31 +116,7 @@ Returns a hex colour string, or nil if either colour is unresolvable."
                                 bg-rgb fg-rgb)
                      '(2))))))
 
-;;; Performance instrumentation (lightweight)
-
-(defvar-local gfm-pretty-callouts--stats nil
-  "Per-buffer alist of rebuild stats: (rebuild-count total-time last-time).")
-
-(defun gfm-pretty-callouts--init-stats ()
-  "Reset the per-buffer rebuild stats to zero."
-  (setq gfm-pretty-callouts--stats
-        (list (cons 'rebuild-count 0)
-              (cons 'total-time 0.0)
-              (cons 'last-time 0.0))))
-
-(defun gfm-pretty-callouts--record-stats (duration)
-  "Record DURATION (seconds) for one rebuild."
-  (unless gfm-pretty-callouts--stats (gfm-pretty-callouts--init-stats))
-  (cl-incf (alist-get 'rebuild-count gfm-pretty-callouts--stats))
-  (cl-incf (alist-get 'total-time gfm-pretty-callouts--stats) duration)
-  (setf (alist-get 'last-time gfm-pretty-callouts--stats) duration)
-  (when (> duration gfm-pretty-callouts-slow-rebuild-threshold)
-    (message "gfm-pretty-callouts: slow rebuild in %s: %.3fs"
-             (buffer-name) duration)))
-
 ;;; Overlay registry
-
-(defvar gfm-pretty-callouts-mode)
 
 (defvar-local gfm-pretty-callouts--overlays nil
   "All callout overlays currently in this buffer.")
@@ -325,7 +296,7 @@ overlay engine."
       ;; Per-line anchor: tinted background + wrap-prefix on body lines.
       ;; Iterate via position math — `forward-line' inside the
       ;; overlay-creation loop interacts with cursor-intangible /
-      ;; display props (set by `gfm-pretty-fences-mode' on the same
+      ;; display props (set by the fences decorator on the same
       ;; buffer) and can stall mid-block; see the matching note in
       ;; `gfm-pretty-fences.el'.  Combining face + wrap-prefix on a
       ;; single anchor per line keeps Emacs's redisplay from picking
@@ -397,7 +368,7 @@ See `gfm-pretty-callouts--apply-block-anchors' for the widening rationale."
         ;; Body lines.  Iterate via explicit text-position math, not
         ;; `forward-line': inside this overlay-creation loop,
         ;; `forward-line' interacts with cursor-intangible / display
-        ;; props (set by `gfm-pretty-fences-mode' on the same buffer)
+        ;; props (set by the fences decorator on the same buffer)
         ;; and can stall mid-block, spinning forever — see the
         ;; matching note in `gfm-pretty-fences.el'.
         (when has-body
@@ -450,48 +421,14 @@ See `gfm-pretty-callouts--apply-block-anchors' for the widening rationale."
             (overlay-put trailing-ov 'after-string new)))
         (ignore last-right-after-ov))))))
 
-;;; Rebuild
-
-(defun gfm-pretty-callouts--rebuild ()
-  "Remove and recreate all gfm-pretty-callouts overlays."
-  (let ((start (current-time)))
-    (gfm-pretty-callouts--remove-overlays)
-    (save-excursion
-      (let* ((blocks (gfm-pretty--collect (gfm-pretty--get 'callouts)))
-             (windows (or (gfm-pretty--display-windows) (list nil))))
-        (dolist (block blocks)
-          (gfm-pretty-callouts--apply-block-anchors block))
-        (dolist (window windows)
-          (dolist (block blocks)
-            (gfm-pretty-callouts--apply-block-display block window)))))
-    (gfm-pretty-callouts--record-stats (float-time (time-since start)))))
-
-(defun gfm-pretty-callouts--rebuild-block (block)
-  "Tear down BLOCK's overlays and re-apply just that block."
-  (let* ((start (current-time))
-         (range (gfm-pretty-callouts--block-range block)))
-    (gfm-pretty-callouts--remove-overlays (car range) (cdr range))
-    (gfm-pretty-callouts--apply-block-anchors block)
-    (dolist (window (or (gfm-pretty--display-windows) (list nil)))
-      (gfm-pretty-callouts--apply-block-display block window))
-    (gfm-pretty-callouts--record-stats (float-time (time-since start)))))
-
-(defun gfm-pretty-callouts--rebuild-blocks (blocks)
-  "Tear down each block in BLOCKS and re-apply them in one pass."
-  (let ((start (current-time))
-        (windows (or (gfm-pretty--display-windows) (list nil))))
-    (dolist (block blocks)
-      (let ((range (gfm-pretty-callouts--block-range block)))
-        (gfm-pretty-callouts--remove-overlays (car range) (cdr range)))
-      (gfm-pretty-callouts--apply-block-anchors block)
-      (dolist (window windows)
-        (gfm-pretty-callouts--apply-block-display block window)))
-    (gfm-pretty-callouts--record-stats (float-time (time-since start)))))
+;;; Visibility helper
 
 (defun gfm-pretty-callouts--block-visible-p (block ranges)
   "Non-nil if BLOCK's source range overlaps any range in RANGES."
   (gfm-pretty--block-visible-p
    block ranges #'gfm-pretty-callouts--block-range))
+
+;;; Structural-line + edit-adjacency hooks for engine routing
 
 (defun gfm-pretty-callouts--marker-line-ranges ()
   "Return per-line (BEG . END) ranges for every `> [!TYPE]' line."
@@ -500,11 +437,6 @@ See `gfm-pretty-callouts--apply-block-anchors' for the widening rationale."
               (cons beg (save-excursion
                           (goto-char beg) (line-end-position)))))
           (gfm-pretty-callouts--find-blocks)))
-
-(defun gfm-pretty-callouts--region-overlaps-marker-line-p (region)
-  "Non-nil if REGION overlaps any callout marker line."
-  (cl-some (lambda (r) (gfm-pretty--region-overlaps-p region r))
-           (gfm-pretty-callouts--marker-line-ranges)))
 
 (defun gfm-pretty-callouts--region-adjacent-to-callout-p (region)
   "Non-nil if REGION overlaps a line directly above or below a callout.
@@ -533,101 +465,17 @@ Edits there can create or destroy block boundaries."
                  region (cons after-beg after-end))))))
    (gfm-pretty-callouts--find-blocks)))
 
-(defun gfm-pretty-callouts--block-fully-contains-p (block region)
-  "Non-nil if REGION lies inside BLOCK's source range."
-  (let ((br (gfm-pretty-callouts--block-range block)))
-    (and (>= (car region) (car br))
-         (<= (cdr region) (cdr br)))))
-
-;;; Compat shims for legacy test fixtures
-;;
-;; Pre-engine code stored per-decorator scheduler state in these
-;; buffer-locals; the engine now owns the equivalents in
-;; `gfm-pretty--state' / `gfm-pretty--rebuild-timer'.  The shims below
-;; let the still-extant test suite drive scoped rebuilds and probe
-;; window-state diff scheduling without exposing the engine
-;; internals.  Remove once the tests migrate.
-
-(defvar-local gfm-pretty-callouts--dirty-region nil
-  "Compat: legacy dirty region read by the 0-arg `--rebuild-scoped' path.")
-
-(defvar-local gfm-pretty-callouts--last-window-state nil
-  "Compat: legacy window-state snapshot probed by `--schedule-full-rebuild'.")
-
-(defvar-local gfm-pretty-callouts--rebuild-timer nil
-  "Compat: mirror of `gfm-pretty--rebuild-timer' for legacy probing.")
-
-(defun gfm-pretty-callouts--schedule-full-rebuild (&rest _)
-  "Compat shim — arm the engine timer when window state has drifted."
-  (unless (buffer-base-buffer)
-    (let ((state (gfm-pretty--window-state)))
-      (unless (equal state gfm-pretty-callouts--last-window-state)
-        (gfm-pretty--arm-engine-timer)
-        (setq gfm-pretty-callouts--rebuild-timer
-              gfm-pretty--rebuild-timer)))))
-
-(defun gfm-pretty-callouts--rebuild-block-for-window (block window)
-  "Compat shim — delegate to the engine."
-  (gfm-pretty--rebuild-block-for-window
-   (gfm-pretty--get 'callouts) block window))
-
-(defun gfm-pretty-callouts--rebuild-scoped (&optional dirty)
-  "Rebuild only what DIRTY (cons BEG . END) demands.
-With DIRTY nil, reads `gfm-pretty-callouts--dirty-region' (legacy test
-entry point) and clears it."
-  (let ((dirty (or dirty
-                   (prog1 gfm-pretty-callouts--dirty-region
-                     (setq gfm-pretty-callouts--dirty-region nil)))))
-  (cond
-   ((null dirty) nil)
-   ((gfm-pretty-callouts--region-overlaps-marker-line-p dirty)
-    (gfm-pretty-callouts--rebuild))
-   ((gfm-pretty-callouts--region-adjacent-to-callout-p dirty)
-    (gfm-pretty-callouts--rebuild))
-   (t
-    (let* ((blocks (gfm-pretty-callouts--collect-blocks))
-           (matching (cl-loop for b in blocks
-                              when (gfm-pretty--region-overlaps-p
-                                    dirty
-                                    (gfm-pretty-callouts--block-range b))
-                              collect b)))
-      (cond
-       ((null matching) nil)
-       ((and (null (cdr matching))
-             (gfm-pretty-callouts--block-fully-contains-p (car matching) dirty))
-        (gfm-pretty-callouts--rebuild-block (car matching)))
-       (t (gfm-pretty-callouts--rebuild))))))))
-
 ;;; Lifecycle hooks delegated to engine
 
 (defun gfm-pretty-callouts--on-enable ()
-  "Per-decorator setup invoked on enable: stats reset only.
+  "Per-decorator setup invoked on enable.
 Font-lock / face refresh are installed at load time."
-  (gfm-pretty-callouts--init-stats))
+  nil)
 
 (defun gfm-pretty-callouts--on-disable ()
   "Per-decorator teardown invoked on disable.
 Engine handles overlay teardown."
   nil)
-
-;;; Minor mode (compat shim)
-
-;;;###autoload
-(define-minor-mode gfm-pretty-callouts-mode
-  "Render GFM callout blockquotes as boxes.
-Compatibility shim — lifecycle is owned by the engine.  Prefer
-`gfm-pretty-mode' plus `gfm-pretty-toggle-decorator' for control."
-  :lighter " gfm-cb"
-  (cond
-   (gfm-pretty-callouts-mode
-    (gfm-pretty--install-engine-hooks)
-    (gfm-pretty--enable-decorator (gfm-pretty--get 'callouts)))
-   (t
-    (gfm-pretty--disable-decorator (gfm-pretty--get 'callouts))
-    (unless (cl-some (lambda (entry)
-                       (gfm-pretty--state-get (car entry) 'enabled-p))
-                     gfm-pretty--decorators)
-      (gfm-pretty--remove-engine-hooks)))))
 
 ;;; Callout faces (moved from modules/lang-markdown/lib.el)
 
@@ -936,8 +784,8 @@ only that line, missing the multi-line matcher's anchor."
     :range-fn           #'gfm-pretty-callouts--block-range
     :apply-anchors-fn   #'gfm-pretty-callouts--apply-block-anchors
     :apply-display-fn   #'gfm-pretty-callouts--apply-block-display
-    :rebuild-fn         #'gfm-pretty-callouts--rebuild
-    :scoped-rebuild-fn  #'gfm-pretty-callouts--rebuild-scoped
+    :structural-line-ranges-fn #'gfm-pretty-callouts--marker-line-ranges
+    :edit-adjacency-fn  #'gfm-pretty-callouts--region-adjacent-to-callout-p
     :revealable-prop    'gfm-pretty-callouts-revealable
     :saved-display-prop 'gfm-pretty-callouts-saved-display
     :on-enable-fn       #'gfm-pretty-callouts--on-enable

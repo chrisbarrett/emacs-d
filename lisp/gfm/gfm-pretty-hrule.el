@@ -143,23 +143,6 @@ lazily; we depend on it being populated before discovery."
 
 ;;; gfm-pretty decorator registration
 
-;;;###autoload
-(define-minor-mode gfm-pretty-hrule-mode
-  "Render GFM dash-form thematic breaks as full-width unicode bars.
-Compatibility shim around the engine — prefer `gfm-pretty-mode'
-plus `gfm-pretty-toggle-decorator' for per-decorator control."
-  :lighter " gfm-hr"
-  (cond
-   (gfm-pretty-hrule-mode
-    (gfm-pretty--install-engine-hooks)
-    (gfm-pretty--enable-decorator (gfm-pretty--get 'hrule)))
-   (t
-    (gfm-pretty--disable-decorator (gfm-pretty--get 'hrule))
-    (unless (cl-some (lambda (entry)
-                       (gfm-pretty--state-get (car entry) 'enabled-p))
-                     gfm-pretty--decorators)
-      (gfm-pretty--remove-engine-hooks)))))
-
 (with-eval-after-load 'gfm-pretty-engine
   (gfm-pretty-define-decorator 'hrule
     :registry           gfm-pretty-hrule--registry
