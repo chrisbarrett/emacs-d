@@ -22,6 +22,7 @@
 
 (require 'cl-lib)
 (require 'gfm-pretty-borders)
+(require 'gfm-pretty-engine)
 (require 'gfm-pretty-fences nil t)
 (require 'markdown-mode nil t)
 

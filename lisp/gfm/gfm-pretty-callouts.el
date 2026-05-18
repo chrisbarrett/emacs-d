@@ -40,6 +40,7 @@
 
 (require 'cl-lib)
 (require 'gfm-pretty-borders)
+(require 'gfm-pretty-engine)
 
 (defgroup gfm-pretty-callouts nil
   "Box overlays for GitHub Flavored Markdown callouts."

@@ -43,7 +43,7 @@
 (require 'xref)
 (require 'eldoc)
 (require 'markdown-mode)
-(require 'gfm-pretty-borders)
+(require 'gfm-pretty-engine)
 (require 'nerd-icons nil t)
 
 (defvar gfm-pretty-links-mode)

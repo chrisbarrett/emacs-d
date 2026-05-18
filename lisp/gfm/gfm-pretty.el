@@ -71,6 +71,7 @@ Recognised keys:
 (defun gfm-pretty--require-all ()
   "Load every decorator library so registrations populate the registry."
   (require 'gfm-pretty-borders)
+  (require 'gfm-pretty-engine)
   (require 'gfm-pretty-callouts)
   (require 'gfm-pretty-fences)
   (require 'gfm-pretty-tables)

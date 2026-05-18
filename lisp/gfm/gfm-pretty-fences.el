@@ -31,6 +31,7 @@
 (require 'cl-lib)
 (require 'markdown-mode)
 (require 'gfm-pretty-borders)
+(require 'gfm-pretty-engine)
 (require 'nerd-icons nil t)
 
 (defgroup gfm-pretty-fences nil

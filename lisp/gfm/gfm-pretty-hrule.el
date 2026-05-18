@@ -29,7 +29,7 @@
 ;;; Code:
 
 (require 'cl-lib)
-(require 'gfm-pretty-borders)
+(require 'gfm-pretty-engine)
 
 (defgroup gfm-pretty-hrule nil
   "Full-width unicode bar overlays for GFM thematic breaks."
