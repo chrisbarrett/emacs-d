@@ -3175,6 +3175,53 @@ decoration must be baked into the cell string itself."
     (should-not gfm-pretty-tables-mode)
     (should-not gfm-pretty-hrule-mode)))
 
+(ert-deftest gfm-pretty/umbrella-installs-one-engine-hook-per-event ()
+  "Engine installs exactly one of its own handler per lifecycle hook.
+Decorators may install their own extras via `:on-enable-fn' (tables
+cursor handler, links xref / eldoc) — those are not the engine's
+hooks and are checked separately."
+  (require 'gfm-pretty-callouts)
+  (require 'gfm-pretty-fences)
+  (require 'gfm-pretty-tables)
+  (require 'gfm-pretty-hrule)
+  (require 'gfm-pretty-links)
+  (with-temp-buffer
+    (let ((ac-before (cl-count #'gfm-pretty--after-change
+                               after-change-functions))
+          (wcc-before (cl-count #'gfm-pretty--wcc
+                                window-configuration-change-hook))
+          (pc-before (cl-count #'gfm-pretty--reveal
+                               post-command-hook)))
+      (gfm-pretty-mode 1)
+      (should (= 1 (- (cl-count #'gfm-pretty--after-change
+                                after-change-functions)
+                      ac-before)))
+      (should (= 1 (- (cl-count #'gfm-pretty--wcc
+                                window-configuration-change-hook)
+                      wcc-before)))
+      (should (= 1 (- (cl-count #'gfm-pretty--reveal
+                                post-command-hook)
+                      pc-before)))
+      (gfm-pretty-mode -1)
+      (should (= ac-before (cl-count #'gfm-pretty--after-change
+                                     after-change-functions)))
+      (should (= wcc-before (cl-count #'gfm-pretty--wcc
+                                      window-configuration-change-hook)))
+      (should (= pc-before (cl-count #'gfm-pretty--reveal
+                                     post-command-hook))))))
+
+(ert-deftest gfm-pretty/engine-arms-at-most-one-rebuild-timer ()
+  "Editing the buffer arms at most one engine-owned idle rebuild timer."
+  (with-temp-buffer
+    (gfm-pretty-mode 1)
+    (insert "> [!NOTE]\n> Hello.\n")
+    (should (or (null gfm-pretty--rebuild-timer)
+                (timerp gfm-pretty--rebuild-timer)))
+    (when (timerp gfm-pretty--rebuild-timer)
+      (cancel-timer gfm-pretty--rebuild-timer)
+      (setq gfm-pretty--rebuild-timer nil))
+    (gfm-pretty-mode -1)))
+
 (ert-deftest gfm-pretty/toggle-decorator-flips ()
   "`gfm-pretty-toggle-decorator' toggles a single decorator."
   (require 'gfm-pretty-fences)
