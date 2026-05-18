@@ -330,7 +330,7 @@ no inherit chain — so emphasis faces and the default face show through."
     (insert "> [!NOTE]\n> Hello.\n")
     (gfm-pretty-callouts-mode 1)
     (goto-char (point-min))
-    (gfm-pretty-callouts--reveal)
+    (gfm-pretty--reveal)
     (let ((ov (cl-find-if (lambda (o) (overlay-get o 'gfm-pretty-callouts-revealable))
                           (overlays-at (point-min)))))
       (should ov)
@@ -338,7 +338,7 @@ no inherit chain — so emphasis faces and the default face show through."
       (should (stringp (overlay-get ov 'gfm-pretty-callouts-saved-display))))
     ;; Move off the prefix; display restores.
     (goto-char (point-max))
-    (gfm-pretty-callouts--reveal)
+    (gfm-pretty--reveal)
     (let ((ov (cl-find-if (lambda (o) (overlay-get o 'gfm-pretty-callouts-revealable))
                           (overlays-at (point-min)))))
       (should ov)
@@ -346,22 +346,26 @@ no inherit chain — so emphasis faces and the default face show through."
 
 ;;; Block-discovery cache
 
-(ert-deftest lang-markdown/gfm-pretty-callouts-find-blocks-cache-eq-no-edit ()
-  "Two `gfm-pretty-callouts--find-blocks' calls with no edits return `eq' lists."
+(ert-deftest lang-markdown/gfm-pretty-callouts-collect-cache-eq-no-edit ()
+  "Two `gfm-pretty--collect' calls on `callouts' with no edits return `eq' lists."
   (with-temp-buffer
     (insert "> [!NOTE]\n> Hello.\n")
-    (let ((a (gfm-pretty-callouts--find-blocks))
-          (b (gfm-pretty-callouts--find-blocks)))
+    (gfm-pretty-callouts-mode 1)
+    (let* ((d (gfm-pretty--get 'callouts))
+           (a (gfm-pretty--collect d))
+           (b (gfm-pretty--collect d)))
       (should (eq a b)))))
 
-(ert-deftest lang-markdown/gfm-pretty-callouts-find-blocks-cache-invalidates-on-edit ()
-  "Edits invalidate the callouts blocks cache."
+(ert-deftest lang-markdown/gfm-pretty-callouts-collect-cache-invalidates-on-edit ()
+  "Edits invalidate the engine `:collect-fn' cache for the callouts decorator."
   (with-temp-buffer
     (insert "> [!NOTE]\n> Hello.\n")
-    (let ((before (gfm-pretty-callouts--find-blocks)))
+    (gfm-pretty-callouts-mode 1)
+    (let* ((d (gfm-pretty--get 'callouts))
+           (before (gfm-pretty--collect d)))
       (goto-char (point-max))
       (insert "\n> [!TIP]\n> More.\n")
-      (let ((after (gfm-pretty-callouts--find-blocks)))
+      (let ((after (gfm-pretty--collect d)))
         (should-not (eq before after))
         (should (= 2 (length after)))))))
 
@@ -780,7 +784,7 @@ when both `gfm-pretty-callouts-mode' and `gfm-pretty-fences-mode' are active."
               (gfm-pretty-callouts-mode 1)
               (with-selected-window win-a
                 (goto-char (point-min))
-                (gfm-pretty-callouts--reveal))
+                (gfm-pretty--reveal))
               (let* ((revealable
                       (cl-remove-if-not
                        (lambda (o)
@@ -1050,46 +1054,43 @@ Cases are restricted to modes that ship with Emacs so the test never skips."
 
 ;;; Discovery cache
 
-(ert-deftest lang-markdown/gfm-pretty-fences-find-blocks-cache-eq-no-edit ()
-  "Two `gfm-pretty-fences--find-blocks' calls with no edits return `eq' lists."
+(ert-deftest lang-markdown/gfm-pretty-fences-collect-cache-eq-no-edit ()
+  "Two `gfm-pretty--collect' calls on `fences' with no edits return `eq' lists.
+Pass 3 moved memoisation into the engine; per-decorator block caches were
+retired."
   (with-temp-buffer
     (insert "```bash\necho hi\n```\n")
-    (let ((a (gfm-pretty-fences--find-blocks))
-          (b (gfm-pretty-fences--find-blocks)))
+    (gfm-pretty-fences-mode 1)
+    (let* ((d (gfm-pretty--get 'fences))
+           (a (gfm-pretty--collect d))
+           (b (gfm-pretty--collect d)))
       (should (eq a b)))))
 
-(ert-deftest lang-markdown/gfm-pretty-fences-find-blocks-cache-invalidates-on-edit ()
-  "Edits invalidate the fenced-blocks cache."
+(ert-deftest lang-markdown/gfm-pretty-fences-collect-cache-invalidates-on-edit ()
+  "Edits invalidate the engine `:collect-fn' cache for the fences decorator."
   (with-temp-buffer
     (insert "```bash\necho hi\n```\n")
-    (let ((before (gfm-pretty-fences--find-blocks)))
+    (gfm-pretty-fences-mode 1)
+    (let* ((d (gfm-pretty--get 'fences))
+           (before (gfm-pretty--collect d)))
       (goto-char (point-max))
       (insert "\n```sh\nfoo\n```\n")
-      (let ((after (gfm-pretty-fences--find-blocks)))
-        (should-not (eq before after))
-        (should (= 2 (length after)))))))
-
-(ert-deftest lang-markdown/gfm-pretty-fences-yaml-helmet-cache-invalidates-on-edit ()
-  "Edits invalidate the YAML-helmet cache."
-  (with-temp-buffer
-    (insert "---\nkey: value\n---\nbody\n")
-    (let ((before (gfm-pretty-fences--find-yaml-helmet)))
-      (should before)
-      (let ((same (gfm-pretty-fences--find-yaml-helmet)))
-        (should (eq before same)))
-      (goto-char (point-max))
-      (insert "more\n")
-      (let ((after (gfm-pretty-fences--find-yaml-helmet)))
-        ;; Helmet positions unchanged but cache list itself is fresh.
+      (let ((after (gfm-pretty--collect d)))
         (should-not (eq before after))))))
 
-(ert-deftest lang-markdown/gfm-pretty-fences-indent-blocks-cache-eq-no-edit ()
-  "Two `gfm-pretty-fences--find-indent-blocks' calls return `eq' lists."
+(ert-deftest lang-markdown/gfm-pretty-fences-collect-cache-narrowing-resilient ()
+  "Engine `:collect-fn' is invoked under widen so narrowing does not hide blocks."
   (with-temp-buffer
-    (insert "Para.\n\n    code one\n    code two\n\nMore.\n")
-    (let ((a (gfm-pretty-fences--find-indent-blocks nil))
-          (b (gfm-pretty-fences--find-indent-blocks nil)))
-      (should (eq a b)))))
+    (insert "```bash\nfirst\n```\n\n```sh\nsecond\n```\n")
+    (gfm-pretty-fences-mode 1)
+    (let* ((d (gfm-pretty--get 'fences))
+           (full (gfm-pretty--collect d)))
+      (should (cl-some #'identity full))
+      ;; Bust the cache and re-collect under narrowing.
+      (gfm-pretty--state-set 'fences 'blocks-cache nil)
+      (narrow-to-region (point-min) (1+ (point-min)))
+      (let ((narrowed (gfm-pretty--collect d)))
+        (should (= (length full) (length narrowed)))))))
 
 ;;; Per-window display overlays
 
@@ -1356,21 +1357,23 @@ Anchors stay shared across windows; only display overlays carry a
     (insert "Some prose.\n| - | - |\nMore prose.\n")
     (should-not (gfm-pretty-tables--find-blocks))))
 
-(ert-deftest lang-markdown/gfm-pretty-tables-find-blocks-cache-invalidates-on-edit ()
-  "`gfm-pretty-tables--find-blocks' caches by `buffer-modified-tick'.
+(ert-deftest lang-markdown/gfm-pretty-tables-collect-cache-invalidates-on-edit ()
+  "Engine `:collect-fn' for the tables decorator caches by chars-modified tick.
 Two calls without an intervening edit return `eq' lists; an edit
 invalidates the cache and the next call returns a fresh list reflecting
 the new buffer state."
   (with-temp-buffer
     (insert "| A | B |\n| - | - |\n| 1 | 2 |\n\nintro\n")
-    (let ((first (gfm-pretty-tables--find-blocks))
-          (second (gfm-pretty-tables--find-blocks)))
-      (should (eq first second)))
-    ;; Append a second table; cache must invalidate.
-    (goto-char (point-max))
-    (insert "\n| C | D |\n| - | - |\n| 3 | 4 |\n")
-    (let ((after (gfm-pretty-tables--find-blocks)))
-      (should (= 2 (length after))))))
+    (gfm-pretty-tables-mode 1)
+    (let* ((d (gfm-pretty--get 'tables))
+           (first (gfm-pretty--collect d))
+           (second (gfm-pretty--collect d)))
+      (should (eq first second))
+      ;; Append a second table; cache must invalidate.
+      (goto-char (point-max))
+      (insert "\n| C | D |\n| - | - |\n| 3 | 4 |\n")
+      (let ((after (gfm-pretty--collect d)))
+        (should (= 2 (length after)))))))
 
 (ert-deftest lang-markdown/gfm-pretty-tables-find-blocks-skips-fenced ()
   (with-temp-buffer
@@ -3112,10 +3115,10 @@ decoration must be baked into the cell string itself."
             (should ov)
             (should (stringp (overlay-get ov 'display)))
             (goto-char hr-pos)
-            (gfm-pretty-hrule--reveal)
+            (gfm-pretty--reveal)
             (should (null (overlay-get ov 'display)))
             (goto-char (point-min))
-            (gfm-pretty-hrule--reveal)
+            (gfm-pretty--reveal)
             (should (stringp (overlay-get ov 'display)))))
       (kill-buffer buf))))
 

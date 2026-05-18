@@ -97,11 +97,7 @@ See `gfm-pretty-fences--lhs-margin-langs'."
 
 ;;; Block discovery — fenced
 
-(defvar-local gfm-pretty-fences--fenced-blocks-cache nil
-  "Pair (TICK . BLOCKS) memoising `gfm-pretty-fences--find-blocks'.
-TICK is `buffer-chars-modified-tick' at the time of scan.")
-
-(defun gfm-pretty-fences--find-blocks-1 ()
+(defun gfm-pretty-fences--find-blocks ()
   "Scan the buffer for fenced code blocks (uncached).
 Each entry is (OPEN-BEG OPEN-END CLOSE-BEG CLOSE-END LANG LANG-BEG LANG-END).
 
@@ -137,27 +133,9 @@ regardless of any current narrowing.  See fix-gfm-narrowing-safety."
                 (goto-char (line-end-position)))))))))
     (nreverse blocks)))
 
-(defun gfm-pretty-fences--find-blocks ()
-  "Return all fenced code blocks in the current buffer.
-Memoised by `buffer-chars-modified-tick' so repeat calls without an
-intervening edit reuse the cached scan.  Each entry is (OPEN-BEG
-OPEN-END CLOSE-BEG CLOSE-END LANG LANG-BEG LANG-END)."
-  (let ((tick (buffer-chars-modified-tick)))
-    (cond
-     ((and gfm-pretty-fences--fenced-blocks-cache
-           (= tick (car gfm-pretty-fences--fenced-blocks-cache)))
-      (cdr gfm-pretty-fences--fenced-blocks-cache))
-     (t
-      (let ((blocks (gfm-pretty-fences--find-blocks-1)))
-        (setq gfm-pretty-fences--fenced-blocks-cache (cons tick blocks))
-        blocks)))))
-
 ;;; Block discovery — YAML helmet
 
-(defvar-local gfm-pretty-fences--yaml-helmet-cache nil
-  "Pair (TICK . HELMET-OR-NIL) memoising `gfm-pretty-fences--find-yaml-helmet'.")
-
-(defun gfm-pretty-fences--find-yaml-helmet-1 ()
+(defun gfm-pretty-fences--find-yaml-helmet ()
   "Scan the buffer for a leading YAML helmet (uncached).
 Returns (OPEN-BEG OPEN-END CLOSE-BEG CLOSE-END) or nil.
 Widens for the duration of its body so the cache is narrowing-independent."
@@ -180,18 +158,6 @@ Widens for the duration of its body so the cache is narrowing-independent."
               (when close-beg
                 (list open-beg open-end close-beg close-end)))))))))
 
-(defun gfm-pretty-fences--find-yaml-helmet ()
-  "Return the leading YAML helmet, memoised by chars-modified tick."
-  (let ((tick (buffer-chars-modified-tick)))
-    (cond
-     ((and gfm-pretty-fences--yaml-helmet-cache
-           (= tick (car gfm-pretty-fences--yaml-helmet-cache)))
-      (cdr gfm-pretty-fences--yaml-helmet-cache))
-     (t
-      (let ((helmet (gfm-pretty-fences--find-yaml-helmet-1)))
-        (setq gfm-pretty-fences--yaml-helmet-cache (cons tick helmet))
-        helmet)))))
-
 ;;; Block discovery — indent
 
 (defun gfm-pretty-fences--line-indent ()
@@ -204,13 +170,7 @@ Widens for the duration of its body so the cache is narrowing-independent."
   "Non-nil if the current line is blank."
   (looking-at-p "[[:blank:]]*$"))
 
-(defvar-local gfm-pretty-fences--indent-blocks-cache nil
-  "Pair (TICK . BLOCKS) memoising the unfiltered indent-block scan.
-Cache key is `buffer-chars-modified-tick' only; the call-site
-EXCLUDED-RANGES parameter is applied as a post-filter so its content
-does not invalidate cached scans.")
-
-(defun gfm-pretty-fences--find-indent-blocks-1 (excluded-ranges)
+(defun gfm-pretty-fences--find-indent-blocks (excluded-ranges)
   "Return indented code blocks not overlapping EXCLUDED-RANGES (uncached).
 Each block is (BLOCK-BEG BLOCK-END INDENT-WIDTH).
 Widens for the duration of its body so the cache is narrowing-independent."
@@ -248,21 +208,6 @@ Widens for the duration of its body so the cache is narrowing-independent."
             (setq prev-blank blank)
             (forward-line 1)))))))
     (nreverse blocks)))
-
-(defun gfm-pretty-fences--find-indent-blocks (excluded-ranges)
-  "Return indented code blocks, memoised by chars-modified tick.
-EXCLUDED-RANGES filters at scan time but is not part of the cache key:
-in practice callers always pass the buffer's fenced ranges for the same
-tick, so the result is deterministic from the tick alone."
-  (let ((tick (buffer-chars-modified-tick)))
-    (cond
-     ((and gfm-pretty-fences--indent-blocks-cache
-           (= tick (car gfm-pretty-fences--indent-blocks-cache)))
-      (cdr gfm-pretty-fences--indent-blocks-cache))
-     (t
-      (let ((blocks (gfm-pretty-fences--find-indent-blocks-1 excluded-ranges)))
-        (setq gfm-pretty-fences--indent-blocks-cache (cons tick blocks))
-        blocks)))))
 
 ;;; Performance instrumentation
 
@@ -344,14 +289,10 @@ tick, so the result is deterministic from the tick alone."
 (defvar-local gfm-pretty-fences--overlays nil
   "All fence overlays currently in this buffer.")
 
-(defvar-local gfm-pretty-fences--hidden-ovs nil
-  "Revealable overlays whose display is currently suppressed.")
-
 (defconst gfm-pretty-fences--registry
   (gfm-pretty--registry-for
    'gfm-pretty-fences
-   'gfm-pretty-fences--overlays
-   'gfm-pretty-fences--hidden-ovs)
+   'gfm-pretty-fences--overlays)
   "Shared overlay-registry context for fences.")
 
 (defsubst gfm-pretty-fences--register (ov)
@@ -821,7 +762,7 @@ Anchors are shared across windows; display overlays are produced once
 per window currently showing the buffer (or one unrestricted set when
 no window does).  Returns the block count."
   (save-excursion
-    (let* ((blocks (gfm-pretty-fences--collect-blocks))
+    (let* ((blocks (gfm-pretty--collect (gfm-pretty--get 'fences)))
            (windows (or (gfm-pretty--display-windows) (list nil))))
       (dolist (block blocks)
         (gfm-pretty-fences--apply-block-anchors block))
@@ -829,39 +770,6 @@ no window does).  Returns the block count."
         (dolist (block blocks)
           (gfm-pretty-fences--apply-block-display block window)))
       (length blocks))))
-
-;;; Cursor-driven reveal
-
-(defun gfm-pretty-fences--reveal ()
-  "Suppress display on the selected window's revealable overlays at point.
-With per-window display overlays each window owns its own copy of the
-top/bottom marker overlays, so reveal toggles only the selected
-window's overlay (matched on the `window' overlay property; nil
-matches the unrestricted fallback)."
-  (let ((pos (point))
-        (win (selected-window)))
-    ;; Restore overlays no longer at point.
-    (setq gfm-pretty-fences--hidden-ovs
-          (cl-loop for ov in gfm-pretty-fences--hidden-ovs
-                   if (and (overlay-buffer ov)
-                           (>= pos (overlay-start ov))
-                           (<= pos (overlay-end ov)))
-                   collect ov
-                   else do (when (overlay-buffer ov)
-                             (overlay-put ov 'display
-                                          (overlay-get ov 'gfm-pretty-fences-saved-display))
-                             (overlay-put ov 'gfm-pretty-fences-saved-display nil))))
-    ;; Hide revealable overlays at point in the selected window.
-    (dolist (ov (overlays-in pos (1+ pos)))
-      (when (and (overlay-get ov 'gfm-pretty-fences-revealable)
-                 (overlay-get ov 'display)
-                 (let ((w (overlay-get ov 'window)))
-                   (or (null w) (eq w win)))
-                 (not (memq ov gfm-pretty-fences--hidden-ovs)))
-        (overlay-put ov 'gfm-pretty-fences-saved-display
-                     (overlay-get ov 'display))
-        (overlay-put ov 'display nil)
-        (push ov gfm-pretty-fences--hidden-ovs)))))
 
 ;;; Rebuild
 
@@ -1130,8 +1038,7 @@ Compatibility shim — lifecycle is owned by the engine.  Prefer
     :revealable-prop    'gfm-pretty-fences-revealable
     :saved-display-prop 'gfm-pretty-fences-saved-display
     :on-enable-fn       #'gfm-pretty-fences--on-enable
-    :on-disable-fn      #'gfm-pretty-fences--on-disable
-    :reveal-fn          #'gfm-pretty-fences--reveal))
+    :on-disable-fn      #'gfm-pretty-fences--on-disable))
 
 (provide 'gfm-pretty-fences)
 

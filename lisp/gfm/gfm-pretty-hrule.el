@@ -34,7 +34,7 @@
 
 ;;; Block discovery
 
-(defun gfm-pretty-hrule--find-blocks-1 ()
+(defun gfm-pretty-hrule--find-blocks ()
   "Scan the widened buffer for dash-form HR blocks (uncached).
 Each entry is (BEG END) covering BOL to EOL of the HR line.
 
@@ -71,37 +71,15 @@ non-whitespace character is `-' (dash form)."
                   (setq pos (max end (1+ pos))))))))))
     (nreverse blocks)))
 
-(defvar-local gfm-pretty-hrule--blocks-cache nil
-  "Pair (TICK . BLOCKS) memoising `gfm-pretty-hrule--find-blocks'.
-TICK is `buffer-chars-modified-tick' at the time of scan.")
-
-(defun gfm-pretty-hrule--find-blocks ()
-  "Return all dash-form HR blocks in the current buffer.
-Memoised by `buffer-chars-modified-tick' so repeat calls without an
-intervening edit reuse the cached scan."
-  (let ((tick (buffer-chars-modified-tick)))
-    (cond
-     ((and gfm-pretty-hrule--blocks-cache
-           (= tick (car gfm-pretty-hrule--blocks-cache)))
-      (cdr gfm-pretty-hrule--blocks-cache))
-     (t
-      (let ((blocks (gfm-pretty-hrule--find-blocks-1)))
-        (setq gfm-pretty-hrule--blocks-cache (cons tick blocks))
-        blocks)))))
-
 ;;; Overlay registry
 
 (defvar-local gfm-pretty-hrule--overlays nil
   "All gfm-pretty-hrule overlays currently in this buffer.")
 
-(defvar-local gfm-pretty-hrule--hidden-ovs nil
-  "Revealable overlays whose display is currently suppressed.")
-
 (defconst gfm-pretty-hrule--registry
   (gfm-pretty--registry-for
    'gfm-pretty-hrule
-   'gfm-pretty-hrule--overlays
-   'gfm-pretty-hrule--hidden-ovs)
+   'gfm-pretty-hrule--overlays)
   "Shared overlay-registry context for HR bars.")
 
 ;;; Block enumeration
@@ -113,7 +91,8 @@ intervening edit reuse the cached scan."
   range payload)
 
 (defun gfm-pretty-hrule--collect-blocks ()
-  "Return tagged HR blocks for the buffer."
+  "Uncached widened scan returning tagged HR blocks.
+The engine memoises this via `gfm-pretty--collect'."
   (mapcar (lambda (b)
             (gfm-pretty-hrule--make-block
              :range (cons (nth 0 b) (1+ (nth 1 b)))
@@ -156,38 +135,11 @@ lazily; we depend on it being populated before discovery."
   "Remove and recreate all gfm-pretty-hrule overlays."
   (gfm-pretty--remove-overlays gfm-pretty-hrule--registry)
   (gfm-pretty-hrule--ensure-syntax-propertize)
-  (let* ((blocks (gfm-pretty-hrule--collect-blocks))
+  (let* ((blocks (gfm-pretty--collect (gfm-pretty--get 'hrule)))
          (windows (or (gfm-pretty--display-windows) (list nil))))
     (dolist (window windows)
       (dolist (block blocks)
         (gfm-pretty-hrule--apply-block-display block window)))))
-
-;;; Cursor-driven reveal (selected-window aware)
-
-(defun gfm-pretty-hrule--reveal ()
-  "Suppress display on the selected window's revealable overlays at point."
-  (let ((pos (point))
-        (win (selected-window)))
-    (setq gfm-pretty-hrule--hidden-ovs
-          (cl-loop for ov in gfm-pretty-hrule--hidden-ovs
-                   if (and (overlay-buffer ov)
-                           (>= pos (overlay-start ov))
-                           (<= pos (overlay-end ov)))
-                   collect ov
-                   else do (when (overlay-buffer ov)
-                             (overlay-put ov 'display
-                                          (overlay-get ov 'gfm-pretty-hrule-saved-display))
-                             (overlay-put ov 'gfm-pretty-hrule-saved-display nil))))
-    (dolist (ov (overlays-in pos (1+ pos)))
-      (when (and (overlay-get ov 'gfm-pretty-hrule-revealable)
-                 (overlay-get ov 'display)
-                 (let ((w (overlay-get ov 'window)))
-                   (or (null w) (eq w win)))
-                 (not (memq ov gfm-pretty-hrule--hidden-ovs)))
-        (overlay-put ov 'gfm-pretty-hrule-saved-display
-                     (overlay-get ov 'display))
-        (overlay-put ov 'display nil)
-        (push ov gfm-pretty-hrule--hidden-ovs)))))
 
 ;;; gfm-pretty decorator registration
 
@@ -217,8 +169,7 @@ plus `gfm-pretty-toggle-decorator' for per-decorator control."
     :apply-display-fn   #'gfm-pretty-hrule--apply-block-display
     :rebuild-fn         #'gfm-pretty-hrule--rebuild
     :revealable-prop    'gfm-pretty-hrule-revealable
-    :saved-display-prop 'gfm-pretty-hrule-saved-display
-    :reveal-fn          #'gfm-pretty-hrule--reveal))
+    :saved-display-prop 'gfm-pretty-hrule-saved-display))
 
 (provide 'gfm-pretty-hrule)
 

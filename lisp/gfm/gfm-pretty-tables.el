@@ -453,17 +453,6 @@ escapes and `|' inside backtick code spans."
   "Non-nil if POS lies in any (BEG . END) range in RANGES."
   (cl-some (lambda (r) (and (>= pos (car r)) (<= pos (cdr r)))) ranges))
 
-(defvar-local gfm-pretty-tables--blocks-cache nil
-  "Pair (TICK . BLOCKS) memoising `gfm-pretty-tables--find-blocks'.
-TICK is the `buffer-chars-modified-tick' at scan time.
-BLOCKS is the unfiltered, full-buffer block list as returned by
-`gfm-pretty-tables--find-blocks-1'.  Stale when its tick disagrees with
-`buffer-chars-modified-tick'.  We key on the chars tick rather than
-`buffer-modified-tick' because the latter increments for text-property
-changes too — including the `cursor' anchor we re-set on every cell
-crossing in `gfm-pretty-tables--update-cursor-highlight' — which would
-invalidate the cache on plain motion.")
-
 (defun gfm-pretty-tables--find-blocks-1 ()
   "Scan the buffer for GFM tables, ignoring any excluded-ranges filtering.
 Each entry is (HEADER-BEG DELIM-BEG BODY-BEG BODY-END).  Internal
@@ -518,18 +507,9 @@ regardless of any current narrowing.  See fix-gfm-narrowing-safety."
   "Return all GFM tables in the buffer.
 Each entry is (HEADER-BEG DELIM-BEG BODY-BEG BODY-END).  Tables whose
 delimiter row falls inside any (BEG . END) range in EXCLUDED-RANGES are
-omitted.  The unfiltered scan is memoised by `buffer-modified-tick' so
-non-modifying callers (cell motion, edit dispatch) reuse a single scan
-between edits."
-  (let* ((tick (buffer-chars-modified-tick))
-         (all (cond
-               ((and gfm-pretty-tables--blocks-cache
-                     (= tick (car gfm-pretty-tables--blocks-cache)))
-                (cdr gfm-pretty-tables--blocks-cache))
-               (t
-                (let ((blocks (gfm-pretty-tables--find-blocks-1)))
-                  (setq gfm-pretty-tables--blocks-cache (cons tick blocks))
-                  blocks)))))
+omitted.  Engine-level memoisation in `gfm-pretty--collect' covers the
+rebuild path; this helper exists for filtered callers."
+  (let ((all (gfm-pretty-tables--find-blocks-1)))
     (if excluded-ranges
         (cl-remove-if (lambda (b)
                         (gfm-pretty-tables--in-ranges-p (nth 1 b) excluded-ranges))

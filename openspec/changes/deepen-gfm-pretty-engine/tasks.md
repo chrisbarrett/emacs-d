@@ -51,24 +51,24 @@
 
 ## 3. Pass 3 — Engine memoises `:collect-fn`
 
-- [ ] 3.1 In `gfm-pretty-engine.el`, define `gfm-pretty--collect DECORATOR`: reads `gfm-pretty--state-get name 'blocks-cache` (a `(TICK . BLOCKS)` cons), compares car to `(buffer-chars-modified-tick)`, returns cached cdr on hit. On miss: calls `:collect-fn` under `save-restriction` + `widen`, stores the result, returns it.
-- [ ] 3.2 Update every engine call-site that today invokes a decorator's `--find-blocks` (cached wrapper) to call `gfm-pretty--collect DECORATOR` instead.
-- [ ] 3.3 In each decorator file, delete:
+- [x] 3.1 In `gfm-pretty-engine.el`, define `gfm-pretty--collect DECORATOR`: reads `gfm-pretty--state-get name 'blocks-cache` (a `(TICK . BLOCKS)` cons), compares car to `(buffer-chars-modified-tick)`, returns cached cdr on hit. On miss: calls `:collect-fn` under `save-restriction` + `widen`, stores the result, returns it.
+- [x] 3.2 Update every engine call-site that today invokes a decorator's `--find-blocks` (cached wrapper) to call `gfm-pretty--collect DECORATOR` instead.
+- [x] 3.3 In each decorator file, delete:
   - the `--blocks-cache` defvar-local (or `--fenced-blocks-cache` / `--yaml-helmet-cache` / `--indent-blocks-cache` for fences; ALL of these become engine-owned)
   - the `--find-blocks` cached wrapper (keep `--find-blocks-1`, the uncached widened scan, which is what the engine calls)
-- [ ] 3.4 For the fences decorator's multi-cache layout (fenced + yaml + indent each had their own cache), introduce a single `:collect-fn` that returns the combined block list and let the engine cache the combined result. Internal helpers `--find-fenced-blocks-1`, `--find-yaml-helmet-1`, `--find-indent-blocks-1` survive as private; the public `:collect-fn` composes them.
-- [ ] 3.5 Run `make test`. The "Block discovery memoisation" scenarios pass; per-decorator narrowing-regression tests still pass.
-- [ ] 3.6 Commit pass 3: `gfm-pretty: engine memoises collect-fn; drop per-decorator caches`.
+- [x] 3.4 For the fences decorator's multi-cache layout (fenced + yaml + indent each had their own cache), introduce a single `:collect-fn` that returns the combined block list and let the engine cache the combined result. Internal helpers `--find-fenced-blocks-1`, `--find-yaml-helmet-1`, `--find-indent-blocks-1` survive as private; the public `:collect-fn` composes them.
+- [x] 3.5 Run `make test`. The "Block discovery memoisation" scenarios pass; per-decorator narrowing-regression tests still pass.
+- [x] 3.6 Commit pass 3: `gfm-pretty: engine memoises collect-fn; drop per-decorator caches`.
 
 ## 4. Pass 4 — Engine drives reveal
 
-- [ ] 4.1 In `gfm-pretty-engine.el`, define `gfm-pretty--reveal`: iterates decorators with non-nil `enabled-p` AND non-nil `:revealable-prop`. For each, runs the reveal algorithm against that decorator's prop / saved-display prop / hidden-ovs (engine-tracked).
-- [ ] 4.2 Define `gfm-pretty--reveal-for DECORATOR PROP SAVED-PROP`: the existing algorithm (loop over engine-tracked hidden-ovs for the decorator; restore those point left; loop over `overlays-in (point) (1+ point)`; hide those at point in selected window).
-- [ ] 4.3 Wire `gfm-pretty--reveal` into the engine's `post-command-hook` (already added as a stub in pass 2).
-- [ ] 4.4 Delete `--reveal` functions from `gfm-pretty-callouts.el`, `gfm-pretty-fences.el`, `gfm-pretty-hrule.el`, `gfm-pretty-links.el`. Each delete also removes the `--hidden-ovs` defvar-local since engine state tracks `hidden-ovs` per decorator.
-- [ ] 4.5 Tables: confirm `:on-enable-fn` installs its own cursor handler and that the engine skips tables in the reveal loop (because tables omits `:revealable-prop`). No reveal code in tables to delete — it never had one.
-- [ ] 4.6 Run `make test`. Full ERT suite passes; per-decorator reveal scenarios pass via the engine.
-- [ ] 4.7 Commit pass 4: `gfm-pretty: engine-driven reveal; drop per-decorator handlers`.
+- [x] 4.1 In `gfm-pretty-engine.el`, define `gfm-pretty--reveal`: iterates decorators with non-nil `enabled-p` AND non-nil `:revealable-prop`. For each, runs the reveal algorithm against that decorator's prop / saved-display prop / hidden-ovs (engine-tracked).
+- [x] 4.2 Define `gfm-pretty--reveal-for DECORATOR PROP SAVED-PROP`: the existing algorithm (loop over engine-tracked hidden-ovs for the decorator; restore those point left; loop over `overlays-in (point) (1+ point)`; hide those at point in selected window).
+- [x] 4.3 Wire `gfm-pretty--reveal` into the engine's `post-command-hook` (already added as a stub in pass 2).
+- [x] 4.4 Delete `--reveal` functions from `gfm-pretty-callouts.el`, `gfm-pretty-fences.el`, `gfm-pretty-hrule.el`, `gfm-pretty-links.el`. Each delete also removes the `--hidden-ovs` defvar-local since engine state tracks `hidden-ovs` per decorator.
+- [x] 4.5 Tables: confirm `:on-enable-fn` installs its own cursor handler and that the engine skips tables in the reveal loop (because tables omits `:revealable-prop`). No reveal code in tables to delete — it never had one.
+- [x] 4.6 Run `make test`. Full ERT suite passes; per-decorator reveal scenarios pass via the engine.
+- [x] 4.7 Commit pass 4: `gfm-pretty: engine-driven reveal; drop per-decorator handlers`.
 
 ## 5. Pass 5 — Rename `+markdown-` faces
 

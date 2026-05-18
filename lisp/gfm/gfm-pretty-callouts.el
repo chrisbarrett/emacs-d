@@ -75,13 +75,9 @@
   (rx bol ">")
   "Regexp matching any blockquote continuation line.")
 
-;;; Block discovery (cached)
+;;; Block discovery
 
-(defvar-local gfm-pretty-callouts--blocks-cache nil
-  "Pair (TICK . BLOCKS) memoising `gfm-pretty-callouts--find-blocks'.
-TICK is `buffer-chars-modified-tick' at the time of scan.")
-
-(defun gfm-pretty-callouts--find-blocks-1 ()
+(defun gfm-pretty-callouts--find-blocks ()
   "Scan the buffer for callout blocks (uncached).
 Each entry is (BEG END TYPE) where BEG is BOL of the marker line, END
 is EOL of the last blockquote line, and TYPE is the callout type
@@ -107,20 +103,6 @@ regardless of any current narrowing.  See fix-gfm-narrowing-safety."
                 (forward-line 1))
               (push (list block-beg block-end type) blocks))))))
     (nreverse blocks)))
-
-(defun gfm-pretty-callouts--find-blocks ()
-  "Return all callout blocks in the current buffer.
-Memoised by `buffer-chars-modified-tick' so repeat calls without an
-intervening edit reuse the cached scan."
-  (let ((tick (buffer-chars-modified-tick)))
-    (cond
-     ((and gfm-pretty-callouts--blocks-cache
-           (= tick (car gfm-pretty-callouts--blocks-cache)))
-      (cdr gfm-pretty-callouts--blocks-cache))
-     (t
-      (let ((blocks (gfm-pretty-callouts--find-blocks-1)))
-        (setq gfm-pretty-callouts--blocks-cache (cons tick blocks))
-        blocks)))))
 
 ;;; Tinted background for the callout panel
 
@@ -168,14 +150,10 @@ Returns a hex colour string, or nil if either colour is unresolvable."
 (defvar-local gfm-pretty-callouts--overlays nil
   "All callout overlays currently in this buffer.")
 
-(defvar-local gfm-pretty-callouts--hidden-ovs nil
-  "Revealable overlays whose display is currently suppressed.")
-
 (defconst gfm-pretty-callouts--registry
   (gfm-pretty--registry-for
    'gfm-pretty-callouts
-   'gfm-pretty-callouts--overlays
-   'gfm-pretty-callouts--hidden-ovs)
+   'gfm-pretty-callouts--overlays)
   "Shared overlay-registry context for callouts.")
 
 (defsubst gfm-pretty-callouts--make-anchor (beg end &rest props)
@@ -213,7 +191,8 @@ raw (BEG END TYPE) tuple."
   range payload)
 
 (defun gfm-pretty-callouts--collect-blocks ()
-  "Return tagged callout blocks for the buffer."
+  "Uncached widened scan returning tagged callout blocks.
+The engine memoises this via `gfm-pretty--collect'."
   (mapcar (lambda (b)
             (gfm-pretty-callouts--make-block
              :range (cons (nth 0 b) (1+ (nth 1 b)))
@@ -471,56 +450,20 @@ See `gfm-pretty-callouts--apply-block-anchors' for the widening rationale."
             (overlay-put trailing-ov 'after-string new)))
         (ignore last-right-after-ov))))))
 
-(defun gfm-pretty-callouts--apply-overlays ()
-  "Create overlays for every callout block in the buffer.
-Anchors shared, displays per-window.  Returns the block count."
-  (save-excursion
-    (let* ((blocks (gfm-pretty-callouts--collect-blocks))
-           (windows (or (gfm-pretty--display-windows) (list nil))))
-      (dolist (block blocks)
-        (gfm-pretty-callouts--apply-block-anchors block))
-      (dolist (window windows)
-        (dolist (block blocks)
-          (gfm-pretty-callouts--apply-block-display block window)))
-      (length blocks))))
-
-;;; Cursor-driven reveal (selected-window aware)
-
-(defun gfm-pretty-callouts--reveal ()
-  "Suppress display on the selected window's revealable overlays at point.
-Restores overlays no longer at point.  Per-window: only overlays
-whose `window' property is nil or matches the selected window are
-toggled, so cursor in window A does not expose source in window B."
-  (let ((pos (point))
-        (win (selected-window)))
-    (setq gfm-pretty-callouts--hidden-ovs
-          (cl-loop for ov in gfm-pretty-callouts--hidden-ovs
-                   if (and (overlay-buffer ov)
-                           (>= pos (overlay-start ov))
-                           (<= pos (overlay-end ov)))
-                   collect ov
-                   else do (when (overlay-buffer ov)
-                             (overlay-put ov 'display
-                                          (overlay-get ov 'gfm-pretty-callouts-saved-display))
-                             (overlay-put ov 'gfm-pretty-callouts-saved-display nil))))
-    (dolist (ov (overlays-in pos (1+ pos)))
-      (when (and (overlay-get ov 'gfm-pretty-callouts-revealable)
-                 (overlay-get ov 'display)
-                 (let ((w (overlay-get ov 'window)))
-                   (or (null w) (eq w win)))
-                 (not (memq ov gfm-pretty-callouts--hidden-ovs)))
-        (overlay-put ov 'gfm-pretty-callouts-saved-display
-                     (overlay-get ov 'display))
-        (overlay-put ov 'display nil)
-        (push ov gfm-pretty-callouts--hidden-ovs)))))
-
 ;;; Rebuild
 
 (defun gfm-pretty-callouts--rebuild ()
   "Remove and recreate all gfm-pretty-callouts overlays."
   (let ((start (current-time)))
     (gfm-pretty-callouts--remove-overlays)
-    (gfm-pretty-callouts--apply-overlays)
+    (save-excursion
+      (let* ((blocks (gfm-pretty--collect (gfm-pretty--get 'callouts)))
+             (windows (or (gfm-pretty--display-windows) (list nil))))
+        (dolist (block blocks)
+          (gfm-pretty-callouts--apply-block-anchors block))
+        (dolist (window windows)
+          (dolist (block blocks)
+            (gfm-pretty-callouts--apply-block-display block window)))))
     (gfm-pretty-callouts--record-stats (float-time (time-since start)))))
 
 (defun gfm-pretty-callouts--rebuild-block (block)
@@ -1004,8 +947,7 @@ only that line, missing the multi-line matcher's anchor."
     :revealable-prop    'gfm-pretty-callouts-revealable
     :saved-display-prop 'gfm-pretty-callouts-saved-display
     :on-enable-fn       #'gfm-pretty-callouts--on-enable
-    :on-disable-fn      #'gfm-pretty-callouts--on-disable
-    :reveal-fn          #'gfm-pretty-callouts--reveal))
+    :on-disable-fn      #'gfm-pretty-callouts--on-disable))
 
 (provide 'gfm-pretty-callouts)
 
