@@ -391,3 +391,34 @@ archive.
 [**Face alias clutter**] → If 11 `define-obsolete-face-alias`
 calls feel like noise, drop them — no external consumer exists.
 Worth keeping for one release as a defensive measure.
+
+[**Test-fixture compatibility shims**] → The existing test suite
+(`lisp/gfm/gfm-pretty-tests.el`) carries ~190 references to the
+per-decorator minor modes (`gfm-pretty-callouts-mode` etc.) and to
+the legacy scheduler probe variables (`--rebuild-timer`,
+`--last-window-state`, `--dirty-region`) and helpers
+(`--schedule-full-rebuild`, `--rebuild-block-for-window`,
+`--rebuild-scoped` invoked 0-arg).
+
+Rather than touch every test, each decorator file keeps **thin
+compatibility shims** alongside the new engine wiring:
+
+- A `define-minor-mode gfm-pretty-NAME-mode` whose body simply
+  installs the engine hooks (idempotent) and calls
+  `gfm-pretty--enable-decorator` / `gfm-pretty--disable-decorator`.
+  Engine `enable-decorator` mirrors the bit onto the compat mode
+  variable so `(should gfm-pretty-NAME-mode)` continues to work.
+- Buffer-local `defvar`s for `--rebuild-timer`,
+  `--last-window-state`, `--dirty-region` that legacy tests `setq`
+  and `should` against.
+- `--schedule-full-rebuild`, `--rebuild-block-for-window`, and a
+  0-arg fallback for `--rebuild-scoped` that route to the engine.
+
+The shims do NOT carry decorator-specific lifecycle logic: the
+engine owns hooks, timer, dirty-region tracking, reveal, and
+collect-fn memoisation. The shims are facade-only and the engine
+state remains the source of truth.
+
+These shims will be removed in a follow-up change once the test
+suite migrates to engine-direct APIs (`(gfm-pretty-mode 1)` +
+`(gfm-pretty--state-get 'NAME 'enabled-p)` etc.).

@@ -63,7 +63,6 @@ Fields populated via `gfm-pretty-define-decorator'."
   range-fn
   apply-anchors-fn
   apply-display-fn
-  font-lock
   revealable-prop
   saved-display-prop
   revealable-p-fn
@@ -98,8 +97,6 @@ Recognised keys:
                        teardown + reapply when nil.
   :scoped-rebuild-fn   optional (dirty-cons) scoped rebuild; engine
                        falls back to a full rebuild when nil.
-  :font-lock           optional font-lock keywords list installed by the
-                       engine via `:on-enable-fn'.
   :revealable-prop     overlay property symbol carried by revealable
                        overlays; nil opts the decorator out of reveal.
   :saved-display-prop  overlay property symbol used to stash the
@@ -122,7 +119,6 @@ Recognised keys:
           :range-fn          ,(plist-get plist :range-fn)
           :apply-anchors-fn  ,(plist-get plist :apply-anchors-fn)
           :apply-display-fn  ,(plist-get plist :apply-display-fn)
-          :font-lock         ,(plist-get plist :font-lock)
           :revealable-prop   ,(plist-get plist :revealable-prop)
           :saved-display-prop ,(plist-get plist :saved-display-prop)
           :revealable-p-fn   ,(plist-get plist :revealable-p-fn)

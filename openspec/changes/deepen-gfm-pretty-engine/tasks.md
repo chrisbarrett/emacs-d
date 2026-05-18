@@ -99,7 +99,7 @@
 
 ## 6. Spec deltas apply
 
-- [ ] 6.1 Apply the `gfm-pretty` delta to the stable spec at `openspec/specs/gfm-pretty/spec.md`:
+- [x] 6.1 Apply the `gfm-pretty` delta to the stable spec at `openspec/specs/gfm-pretty/spec.md`:
   - ADD the new "Block discovery memoisation" requirement with its three scenarios.
   - MODIFY the "Debounced rebuild scheduler" requirement body (sharpened to engine-owned, one-handler-per-hook).
   - MODIFY the "Per-window cursor reveal" requirement body (engine walks each decorator's `:revealable-prop`).

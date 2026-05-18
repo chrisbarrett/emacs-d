@@ -751,7 +751,7 @@ bold there to keep the headings legible."
                     markdown-header-face-6))
       (face-spec-set face spec))))
 
-(defconst +markdown-gfm-callout-type-face-alist
+(defconst gfm-pretty-callouts--type-face-alist
   '(("NOTE"      . gfm-pretty-callouts-note-face)
     ("TIP"       . gfm-pretty-callouts-tip-face)
     ("IMPORTANT" . gfm-pretty-callouts-important-face)
@@ -760,7 +760,7 @@ bold there to keep the headings legible."
     ("CRITICAL"  . gfm-pretty-callouts-caution-face))
   "Map of GFM callout type label to its header face.")
 
-(defconst +markdown-gfm-callout-type-body-face-alist
+(defconst gfm-pretty-callouts--type-body-face-alist
   '(("NOTE"      . gfm-pretty-callouts-note-body-face)
     ("TIP"       . gfm-pretty-callouts-tip-body-face)
     ("IMPORTANT" . gfm-pretty-callouts-important-body-face)
@@ -769,7 +769,7 @@ bold there to keep the headings legible."
     ("CRITICAL"  . gfm-pretty-callouts-caution-body-face))
   "Map of GFM callout type label to its body (tinted background) face.")
 
-(defun +markdown-gfm-callout--tint-bg (face)
+(defun gfm-pretty-callouts--font-lock-tint-bg (face)
   "Return a hex colour 10% from FACE's foreground toward the theme bg.
 Mirrors `gfm-pretty-callouts--tinted-bg' so body face background matches the
 overlay's tinted panel.  Returns nil if either colour is unresolvable."
@@ -794,13 +794,13 @@ Body faces are prepended to body chars via `font-lock-prepend-text-property',
 so any attribute they specify shadows the markdown emphasis faces beneath
 them in the merge — emphasis would silently disappear inside callout
 bodies."
-  (dolist (entry +markdown-gfm-callout-type-body-face-alist)
+  (dolist (entry gfm-pretty-callouts--type-body-face-alist)
     (let* ((type (car entry))
            (body-face (cdr entry))
-           (header-face (alist-get type +markdown-gfm-callout-type-face-alist
+           (header-face (alist-get type gfm-pretty-callouts--type-face-alist
                                    nil nil #'string=))
            (tint (and header-face
-                      (+markdown-gfm-callout--tint-bg header-face))))
+                      (gfm-pretty-callouts--font-lock-tint-bg header-face))))
       (set-face-attribute body-face nil
                           :slant 'unspecified
                           :weight 'unspecified
@@ -812,13 +812,7 @@ bodies."
 
 (add-hook '+theme-changed-hook #'gfm-pretty-callouts--refresh-body-faces)
 
-(defconst +markdown-gfm-callout--marker-re
-  (rx bol "> " "[!"
-      (group (or "NOTE" "TIP" "IMPORTANT" "WARNING" "CAUTION" "CRITICAL"))
-      "]" (* space) eol)
-  "Regexp matching a GFM callout marker line. Group 1 is the type.")
-
-(defun +markdown-gfm-callout--block-end (marker-eol)
+(defun gfm-pretty-callouts--font-lock-block-end (marker-eol)
   "Return EOL of the last `>'-prefixed line following MARKER-EOL."
   (save-excursion
     (goto-char marker-eol)
@@ -830,29 +824,29 @@ bodies."
         (forward-line 1))
       end)))
 
-(defun +markdown-gfm-callout--matcher (limit)
+(defun gfm-pretty-callouts--font-lock-matcher (limit)
   "Font-lock matcher that spans full callout blocks up to LIMIT.
 Match data: group 0 = whole block, group 1 = type label, group 2 =
 marker line.  Sets `font-lock-multiline' on the matched region so
 edits inside the block trigger refontification of the entire block."
-  (when (re-search-forward +markdown-gfm-callout--marker-re limit t)
+  (when (re-search-forward gfm-pretty-callouts--marker-re limit t)
     (let* ((mbeg (match-beginning 0))
            (mend (match-end 0))
            (tbeg (match-beginning 1))
            (tend (match-end 1))
-           (block-end (+markdown-gfm-callout--block-end mend)))
+           (block-end (gfm-pretty-callouts--font-lock-block-end mend)))
       (with-silent-modifications
         (put-text-property mbeg block-end 'font-lock-multiline t))
       (set-match-data (list mbeg block-end tbeg tend mbeg mend))
       t)))
 
-(defun +markdown-gfm-callout--paint-body (type block-beg block-end)
+(defun gfm-pretty-callouts--font-lock-paint-body (type block-beg block-end)
   "Apply TYPE's body face to body content between BLOCK-BEG and BLOCK-END.
 Skips newlines so the tinted background does not bleed one column past
 the right border on body lines (the trailing newline character would
 otherwise pick up `:background')."
   (when-let* ((body-face (alist-get type
-                                    +markdown-gfm-callout-type-body-face-alist
+                                    gfm-pretty-callouts--type-body-face-alist
                                     nil nil #'string=)))
     (save-excursion
       (goto-char block-beg)
@@ -864,7 +858,7 @@ otherwise pick up `:background')."
             (font-lock-prepend-text-property lbeg lend 'face body-face)))
         (forward-line 1)))))
 
-(defun +markdown-gfm-callout--extend-region ()
+(defun gfm-pretty-callouts--font-lock-extend-region ()
   "Extend `font-lock-beg' / `font-lock-end' to cover any callout block.
 If the region overlaps a `> [!TYPE]' marker line or any of its
 `>'-prefixed continuation lines, widen so the whole block is refontified
@@ -881,11 +875,11 @@ only that line, missing the multi-line matcher's anchor."
                     (forward-line -1)
                     (looking-at-p (rx bol ">"))))
         (forward-line -1))
-      (when (looking-at-p +markdown-gfm-callout--marker-re)
+      (when (looking-at-p gfm-pretty-callouts--marker-re)
         (when (< (point) font-lock-beg)
           (setq font-lock-beg (point)
                 changed t))
-        (let ((block-end (+markdown-gfm-callout--block-end
+        (let ((block-end (gfm-pretty-callouts--font-lock-block-end
                           (line-end-position))))
           (when (> block-end font-lock-end)
             (setq font-lock-end block-end
@@ -893,20 +887,20 @@ only that line, missing the multi-line matcher's anchor."
     changed))
 
 ;;;###autoload
-(defun +markdown-fontify-gfm-pretty-callouts ()
+(defun gfm-pretty-callouts-install-font-lock ()
   "Add font-lock keywords for GFM callout syntax."
   (setq-local font-lock-multiline t)
   (add-hook 'font-lock-extend-region-functions
-            #'+markdown-gfm-callout--extend-region nil t)
+            #'gfm-pretty-callouts--font-lock-extend-region nil t)
   (font-lock-add-keywords
    nil
-   `((+markdown-gfm-callout--matcher
+   `((gfm-pretty-callouts--font-lock-matcher
       (2 (alist-get (match-string-no-properties 1)
-                    +markdown-gfm-callout-type-face-alist
+                    gfm-pretty-callouts--type-face-alist
                     nil nil #'string=)
          prepend)
       (2 'gfm-pretty-callouts-header-face prepend)
-      (0 (progn (+markdown-gfm-callout--paint-body
+      (0 (progn (gfm-pretty-callouts--font-lock-paint-body
                  (match-string-no-properties 1)
                  (match-beginning 0)
                  (match-end 0))
