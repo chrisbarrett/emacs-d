@@ -1,4 +1,4 @@
-;;; +gfm-tables.el --- Visual treatment for GFM tables -*- lexical-binding: t; -*-
+;;; gfm-pretty-tables.el --- Visual treatment for GFM tables -*- lexical-binding: t; -*-
 
 ;;; Commentary:
 
@@ -21,58 +21,61 @@
 ;;; Code:
 
 (require 'cl-lib)
-(require '+gfm-block-borders)
-(require '+gfm-code-fences nil t)
+(require 'gfm-pretty-borders)
+(require 'gfm-pretty-fences nil t)
 (require 'markdown-mode nil t)
 
-(defgroup gfm-tables nil
+(defvar gfm-pretty-tables--row-map)
+(defvar gfm-pretty-tables-mode)
+
+(defgroup gfm-pretty-tables nil
   "Visual treatment for GitHub Flavored Markdown tables."
   :group 'markdown-faces)
 
-(defface gfm-tables-active-cell-face
+(defface gfm-pretty-tables-active-cell-face
   '((((background light)) :background "#9ec5ff" :extend t)
     (((background dark))  :background "#2e4a7a" :extend t))
   "Blue background face applied to the table cell at point.
 The colour is intentionally muted so theme-set foregrounds (markdown
 faces inside the cell) still read clearly."
-  :group 'gfm-tables)
+  :group 'gfm-pretty-tables)
 
-(defface gfm-tables-row-alt-face
+(defface gfm-pretty-tables-row-alt-face
   '((((background light)) :background "#f6f1e6")
     (((background dark))  :background "#262637"))
   "Stripe colour for alternating GFM table body rows."
-  :group 'gfm-tables)
+  :group 'gfm-pretty-tables)
 
-(defface gfm-tables-row-alt-cap-face
+(defface gfm-pretty-tables-row-alt-cap-face
   '((((background light)) :foreground "#f6f1e6")
     (((background dark))  :foreground "#262637"))
   "Foreground for alt-row half-block caps.
-Mirrors the background of `gfm-tables-row-alt-face' so that
+Mirrors the background of `gfm-pretty-tables-row-alt-face' so that
 `▐' / `▌' chars at row ends paint a half-cell of alt-bg, extending
 the row's background to the header box's vertical edges."
-  :group 'gfm-tables)
+  :group 'gfm-pretty-tables)
 
-(defcustom gfm-tables-slow-rebuild-threshold 0.05
+(defcustom gfm-pretty-tables-slow-rebuild-threshold 0.05
   "Threshold in seconds above which a single rebuild emits a warning."
   :type 'number
-  :group 'gfm-tables)
+  :group 'gfm-pretty-tables)
 
-(defconst gfm-tables--border-face '+markdown-overlay-border-face
+(defconst gfm-pretty-tables--border-face '+markdown-overlay-border-face
   "Face used for table border characters.")
 
-(defvar gfm-tables--stats)
-(defvar-local gfm-tables--dirty-region nil
+(defvar gfm-pretty-tables--stats)
+(defvar-local gfm-pretty-tables--dirty-region nil
   "Buffer-local (BEG . END) covering all unrebuilt edits, or nil if clean.
 The dirty region grows monotonically until the idle timer fires and
-`gfm-tables--rebuild-scoped' consumes it.")
+`gfm-pretty-tables--rebuild-scoped' consumes it.")
 
-(defvar gfm-tables-mode-map (make-sparse-keymap)
-  "Keymap for `gfm-tables-mode'.
+(defvar gfm-pretty-tables-mode-map (make-sparse-keymap)
+  "Keymap for `gfm-pretty-tables-mode'.
 Intentionally empty: cell-wise bindings live on row overlays via the
-`keymap' overlay property (`gfm-tables--row-map') so they only apply
+`keymap' overlay property (`gfm-pretty-tables--row-map') so they only apply
 inside a table.")
 
-(defconst gfm-tables--delim-re
+(defconst gfm-pretty-tables--delim-re
   ;; Matches a delimiter row like `| --- | :---: | ---: |' — outer pipes
   ;; with one or more dash-runs between them, each optionally flanked by
   ;; `:' for column alignment, and arbitrary trailing whitespace.
@@ -87,13 +90,13 @@ inside a table.")
 
 ;;; Cell fontification
 
-(defconst gfm-tables--fontify-buffer-name " *gfm-tables-fontify*")
+(defconst gfm-pretty-tables--fontify-buffer-name " *gfm-pretty-tables-fontify*")
 
-(defun gfm-tables--fontify-buffer ()
+(defun gfm-pretty-tables--fontify-buffer ()
   "Return a reusable hidden buffer in `markdown-mode' for cell fontification."
-  (let ((buf (get-buffer gfm-tables--fontify-buffer-name)))
+  (let ((buf (get-buffer gfm-pretty-tables--fontify-buffer-name)))
     (unless (and buf (buffer-live-p buf))
-      (setq buf (get-buffer-create gfm-tables--fontify-buffer-name))
+      (setq buf (get-buffer-create gfm-pretty-tables--fontify-buffer-name))
       (with-current-buffer buf
         (let ((inhibit-message t))
           (delay-mode-hooks
@@ -101,13 +104,13 @@ inside a table.")
               (markdown-mode))))))
     buf))
 
-(defun gfm-tables--transcribe-source-overlays (str buffer beg end)
+(defun gfm-pretty-tables--transcribe-source-overlays (str buffer beg end)
   "Return STR with width-affecting overlay decoration from BUFFER baked in.
 STR is the fontified, trimmed cell text; BUFFER's region [BEG, END) is
 the raw source between the cell pipes (including padding).  The
 region's leading and trailing whitespace is skipped so STR offset 0
 maps to the first content character.  Overlays carrying a `display'
-string — for instance the link overlays created by `gfm-links-mode' —
+string — for instance the link overlays created by `gfm-pretty-links-mode' —
 have that string spliced into STR in place of the covered text, and
 overlays hidden via `invisible' splice to the empty string.  Splicing
 \(rather than copying the property) is required because a `display'
@@ -147,7 +150,7 @@ unchanged when no width-affecting overlay intersects the region."
                     floor (nth 0 edit))))
           result)))))
 
-(defun gfm-tables--fontify-cell (cell &optional buffer beg end)
+(defun gfm-pretty-tables--fontify-cell (cell &optional buffer beg end)
   "Return CELL with markdown inline syntax fontified.
 The visible width of the result equals the visible width of CELL,
 provided `markdown-hide-markup' is nil (the default).
@@ -155,41 +158,41 @@ provided `markdown-hide-markup' is nil (the default).
 With BUFFER, BEG and END all non-nil, CELL is the trimmed text of the
 source-buffer region [BEG, END).  Width-affecting overlay decoration on
 that region is baked into the returned string via
-`gfm-tables--transcribe-source-overlays', so a cell containing a
-`gfm-links-mode'-decorated link both renders and sizes its column by
+`gfm-pretty-tables--transcribe-source-overlays', so a cell containing a
+`gfm-pretty-links-mode'-decorated link both renders and sizes its column by
 the decorated width rather than the raw markdown width."
   (cond
    ((or (null cell) (string-empty-p cell)) (or cell ""))
    ((not (fboundp 'markdown-mode)) cell)
    (t
     (let ((fontified
-           (with-current-buffer (gfm-tables--fontify-buffer)
+           (with-current-buffer (gfm-pretty-tables--fontify-buffer)
              (let ((inhibit-modification-hooks t))
                (erase-buffer)
                (insert cell)
                (font-lock-ensure))
              (buffer-string))))
       (if (and buffer beg end)
-          (gfm-tables--transcribe-source-overlays fontified buffer beg end)
+          (gfm-pretty-tables--transcribe-source-overlays fontified buffer beg end)
         fontified)))))
 
-(defun gfm-tables--fontify-row-cells (line-beg line-end)
+(defun gfm-pretty-tables--fontify-row-cells (line-beg line-end)
   "Fontify the cells of the table row spanning LINE-BEG..LINE-END.
 Each cell is measured against its source region so overlay
-decorations (e.g. `gfm-links-mode' link overlays) inside a cell size
+decorations (e.g. `gfm-pretty-links-mode' link overlays) inside a cell size
 the column to their decorated width.  Cells past the available source
 bounds fall back to plain string measurement."
   (let* ((line (buffer-substring-no-properties line-beg line-end))
-         (cells (gfm-tables--split-row line))
-         (bounds (gfm-tables--cell-bounds line-beg line-end))
+         (cells (gfm-pretty-tables--split-row line))
+         (bounds (gfm-pretty-tables--cell-bounds line-beg line-end))
          (buffer (current-buffer)))
     (cl-loop for cell in cells
              for i from 0
              for b = (nth i bounds)
-             collect (gfm-tables--fontify-cell
+             collect (gfm-pretty-tables--fontify-cell
                       cell buffer (and b (car b)) (and b (cdr b))))))
 
-(defun gfm-tables--invisible-p (val spec)
+(defun gfm-pretty-tables--invisible-p (val spec)
   "Non-nil if invisibility property VAL is hidden under SPEC.
 SPEC is a `buffer-invisibility-spec' value."
   (cond
@@ -201,12 +204,12 @@ SPEC is a `buffer-invisibility-spec' value."
                  (if (listp val) (memq tag val) (eq tag val))))
              spec))))
 
-(defvar gfm-tables--width-cache nil
-  "`eq'-keyed hash table memoising `gfm-tables--visible-width' results.
+(defvar gfm-pretty-tables--width-cache nil
+  "`eq'-keyed hash table memoising `gfm-pretty-tables--visible-width' results.
 Bound to a fresh table at the start of each rebuild and unbound (nil)
 outside one, so the cache never crosses rebuild boundaries.")
 
-(defun gfm-tables--no-width-affecting-props-p (s)
+(defun gfm-pretty-tables--no-width-affecting-props-p (s)
   "Non-nil if S carries no `display', `composition', or `invisible' props."
   (let ((n (length s)) (i 0) (clean t))
     (while (and clean (< i n))
@@ -222,11 +225,11 @@ outside one, so the cache never crosses rebuild boundaries.")
           (setq i (min nd ni nc))))))
     clean))
 
-(defun gfm-tables--visible-width--compute-region (buffer beg end)
+(defun gfm-pretty-tables--visible-width--compute-region (buffer beg end)
   "Walk the region [BEG, END) in BUFFER, returning its visible width.
 Consults overlay properties as well as text properties via
 `get-char-property', so overlay decorations (e.g. the link overlays
-created by `gfm-links-mode') are measured at their visible width
+created by `gfm-pretty-links-mode') are measured at their visible width
 rather than their underlying source width.  Honours `display',
 `invisible', and `composition' the same way the string walker does.
 Leading and trailing whitespace of the region is trimmed first so a
@@ -248,7 +251,7 @@ table cell measures by its content, not its source padding."
                  (disp (get-char-property i 'display buffer))
                  (comp (find-composition i nil nil t)))
             (cond
-             ((gfm-tables--invisible-p invis spec)
+             ((gfm-pretty-tables--invisible-p invis spec)
               (setq i (or (next-single-char-property-change
                            i 'invisible buffer end)
                           end)))
@@ -277,15 +280,15 @@ table cell measures by its content, not its source padding."
                 (setq i next)))))))
       w)))
 
-(defun gfm-tables--visible-width--compute (s &optional buffer beg end)
+(defun gfm-pretty-tables--visible-width--compute (s &optional buffer beg end)
   "Walk S to compute its visible width; honours display/composition/invisible.
 With BUFFER, BEG and END all non-nil, walk the region [BEG, END) in
 BUFFER instead of S, consulting overlay properties as well as text
-properties — see `gfm-tables--visible-width--compute-region'.  This
+properties — see `gfm-pretty-tables--visible-width--compute-region'.  This
 keeps existing single-argument callers behaving exactly as before."
   (if (and buffer beg end)
-      (gfm-tables--visible-width--compute-region buffer beg end)
-    (if (gfm-tables--no-width-affecting-props-p s)
+      (gfm-pretty-tables--visible-width--compute-region buffer beg end)
+    (if (gfm-pretty-tables--no-width-affecting-props-p s)
         (string-width s)
       (let ((spec buffer-invisibility-spec)
             (w 0) (i 0) (n (length s)))
@@ -294,7 +297,7 @@ keeps existing single-argument callers behaving exactly as before."
                  (disp (get-text-property i 'display s))
                  (comp (find-composition i nil s t)))
             (cond
-             ((gfm-tables--invisible-p invis spec)
+             ((gfm-pretty-tables--invisible-p invis spec)
               (setq i (or (next-single-property-change i 'invisible s) n)))
              ((stringp disp)
               (cl-incf w (string-width disp))
@@ -318,12 +321,12 @@ keeps existing single-argument callers behaving exactly as before."
                 (setq i next))))))
         w))))
 
-(defun gfm-tables--visible-width (s &optional buffer beg end)
+(defun gfm-pretty-tables--visible-width (s &optional buffer beg end)
   "Return on-screen width of S in the current buffer.
 Honours `display' string replacements, the `composition' text property
 \(used by `markdown-mode' to collapse hidden URLs into a single glyph),
 and any `invisible' property currently hidden by `buffer-invisibility-spec'.
-When `gfm-tables--width-cache' is bound, results are memoised by `eq'.
+When `gfm-pretty-tables--width-cache' is bound, results are memoised by `eq'.
 
 With BUFFER, BEG and END all non-nil, the visible width is measured
 against the region [BEG, END) in BUFFER — consulting overlays as well
@@ -332,18 +335,18 @@ not memoised, since the same string S may map to different source
 regions across rebuilds."
   (cond
    ((and buffer beg end)
-    (gfm-tables--visible-width--compute s buffer beg end))
-   ((and gfm-tables--width-cache
-         (gethash s gfm-tables--width-cache)))
+    (gfm-pretty-tables--visible-width--compute s buffer beg end))
+   ((and gfm-pretty-tables--width-cache
+         (gethash s gfm-pretty-tables--width-cache)))
    (t
-    (let ((w (gfm-tables--visible-width--compute s)))
-      (when gfm-tables--width-cache
-        (puthash s w gfm-tables--width-cache))
+    (let ((w (gfm-pretty-tables--visible-width--compute s)))
+      (when gfm-pretty-tables--width-cache
+        (puthash s w gfm-pretty-tables--width-cache))
       w))))
 
 ;;; Cell parser
 
-(defun gfm-tables--split-row (line)
+(defun gfm-pretty-tables--split-row (line)
   "Split table-row LINE into a list of trimmed cell strings.
 Honours `\\|' escapes and treats `|' inside backtick code spans as
 literal.  Backtick spans support arbitrary opening run lengths and a
@@ -396,7 +399,7 @@ backticks."
 
 ;;; Source-position cell bounds (for navigation)
 
-(defun gfm-tables--cell-bounds (line-beg line-end)
+(defun gfm-pretty-tables--cell-bounds (line-beg line-end)
   "Return source-position cell bounds for the table line at LINE-BEG..LINE-END.
 Each element is (BEG . END) where BEG is the position right after the
 opening `|' and END is the position of the closing `|'.  Honours `\\|'
@@ -445,24 +448,25 @@ escapes and `|' inside backtick code spans."
 
 ;;; Block discovery
 
-(defun gfm-tables--in-ranges-p (pos ranges)
+(defun gfm-pretty-tables--in-ranges-p (pos ranges)
   "Non-nil if POS lies in any (BEG . END) range in RANGES."
   (cl-some (lambda (r) (and (>= pos (car r)) (<= pos (cdr r)))) ranges))
 
-(defvar-local gfm-tables--blocks-cache nil
-  "Pair (BUFFER-CHARS-MODIFIED-TICK . BLOCKS) memoising `gfm-tables--find-blocks'.
+(defvar-local gfm-pretty-tables--blocks-cache nil
+  "Pair (TICK . BLOCKS) memoising `gfm-pretty-tables--find-blocks'.
+TICK is the `buffer-chars-modified-tick' at scan time.
 BLOCKS is the unfiltered, full-buffer block list as returned by
-`gfm-tables--find-blocks-1'.  Stale when its tick disagrees with
+`gfm-pretty-tables--find-blocks-1'.  Stale when its tick disagrees with
 `buffer-chars-modified-tick'.  We key on the chars tick rather than
 `buffer-modified-tick' because the latter increments for text-property
 changes too — including the `cursor' anchor we re-set on every cell
-crossing in `gfm-tables--update-cursor-highlight' — which would
+crossing in `gfm-pretty-tables--update-cursor-highlight' — which would
 invalidate the cache on plain motion.")
 
-(defun gfm-tables--find-blocks-1 ()
+(defun gfm-pretty-tables--find-blocks-1 ()
   "Scan the buffer for GFM tables, ignoring any excluded-ranges filtering.
 Each entry is (HEADER-BEG DELIM-BEG BODY-BEG BODY-END).  Internal
-helper for `gfm-tables--find-blocks'.
+helper for `gfm-pretty-tables--find-blocks'.
 
 The scanner widens for the duration of its body so the cache key
 \(`buffer-chars-modified-tick') is a pure function of buffer contents
@@ -473,7 +477,7 @@ regardless of any current narrowing.  See fix-gfm-narrowing-safety."
       (save-excursion
         (save-match-data
           (goto-char (point-min))
-        (while (re-search-forward gfm-tables--delim-re nil t)
+        (while (re-search-forward gfm-pretty-tables--delim-re nil t)
           (let* ((delim-beg (match-beginning 0))
                  (delim-end (match-end 0))
                  (header-beg
@@ -509,7 +513,7 @@ regardless of any current narrowing.  See fix-gfm-narrowing-safety."
                  (t (goto-char delim-end)))))))))))
     (nreverse blocks)))
 
-(defun gfm-tables--find-blocks (&optional excluded-ranges)
+(defun gfm-pretty-tables--find-blocks (&optional excluded-ranges)
   "Return all GFM tables in the buffer.
 Each entry is (HEADER-BEG DELIM-BEG BODY-BEG BODY-END).  Tables whose
 delimiter row falls inside any (BEG . END) range in EXCLUDED-RANGES are
@@ -518,22 +522,22 @@ non-modifying callers (cell motion, edit dispatch) reuse a single scan
 between edits."
   (let* ((tick (buffer-chars-modified-tick))
          (all (cond
-               ((and gfm-tables--blocks-cache
-                     (= tick (car gfm-tables--blocks-cache)))
-                (cdr gfm-tables--blocks-cache))
+               ((and gfm-pretty-tables--blocks-cache
+                     (= tick (car gfm-pretty-tables--blocks-cache)))
+                (cdr gfm-pretty-tables--blocks-cache))
                (t
-                (let ((blocks (gfm-tables--find-blocks-1)))
-                  (setq gfm-tables--blocks-cache (cons tick blocks))
+                (let ((blocks (gfm-pretty-tables--find-blocks-1)))
+                  (setq gfm-pretty-tables--blocks-cache (cons tick blocks))
                   blocks)))))
     (if excluded-ranges
         (cl-remove-if (lambda (b)
-                        (gfm-tables--in-ranges-p (nth 1 b) excluded-ranges))
+                        (gfm-pretty-tables--in-ranges-p (nth 1 b) excluded-ranges))
                       all)
       all)))
 
 ;;; Column widths
 
-(defun gfm-tables--column-widths (rows)
+(defun gfm-pretty-tables--column-widths (rows)
   "Return per-column max widths across ROWS as a vector.
 Each row is a list of cell strings; column count is the longest row."
   (let* ((cols (apply #'max 0 (mapcar #'length rows)))
@@ -543,10 +547,10 @@ Each row is a list of cell strings; column count is the longest row."
                for i from 0
                do (aset widths i
                         (max (aref widths i)
-                             (gfm-tables--visible-width cell)))))
+                             (gfm-pretty-tables--visible-width cell)))))
     widths))
 
-(defun gfm-tables--box-width (col-widths)
+(defun gfm-pretty-tables--box-width (col-widths)
   "Return the visual width of the table given COL-WIDTHS.
 Width = 2 (outer pipes) + Σ(col-w + 2) + (cols - 1) gaps."
   (let* ((cols (length col-widths))
@@ -556,7 +560,7 @@ Width = 2 (outer pipes) + Σ(col-w + 2) + (cols - 1) gaps."
 
 ;;; Width fitting
 
-(defun gfm-tables--available-width (&optional window)
+(defun gfm-pretty-tables--available-width (&optional window)
   "Return the available char width for a table in WINDOW.
 WINDOW defaults to a window currently showing the buffer.  Uses
 `window-max-chars-per-line', which accounts for the wrap-indicator
@@ -569,11 +573,11 @@ column on ttys and the fringe on graphical frames.  Falls back to
         fill-column
         80)))
 
-(defun gfm-tables--display-windows ()
+(defun gfm-pretty-tables--display-windows ()
   "Return windows currently displaying the buffer, for per-window rendering."
   (get-buffer-window-list (current-buffer) nil t))
 
-(defun gfm-tables--fit-widths (natural budget)
+(defun gfm-pretty-tables--fit-widths (natural budget)
   "Cap NATURAL column widths so their sum ≤ BUDGET.
 Returns a vector the same length as NATURAL.  Uses water-filling:
 columns naturally below the cap stay at their natural width; columns
@@ -607,7 +611,7 @@ uses the full BUDGET.  Cap floors at 1 to avoid empty columns."
 
 ;;; Cell wrapping
 
-(defun gfm-tables--cell-tokens (cell)
+(defun gfm-pretty-tables--cell-tokens (cell)
   "Split CELL on whitespace runs into a list of word substrings.
 Text properties on CELL are preserved on each word."
   (let ((n (length cell)) (i 0) (words nil))
@@ -621,7 +625,7 @@ Text properties on CELL are preserved on each word."
           (push (substring cell start i) words))))
     (nreverse words)))
 
-(defun gfm-tables--slice-by-visible-width (s width)
+(defun gfm-pretty-tables--slice-by-visible-width (s width)
   "Slice S into chunks each with visible-width ≤ WIDTH, preserving props.
 A WIDTH ≤ 0 still makes progress: at least one char per chunk."
   (let ((target (max 1 width))
@@ -640,26 +644,26 @@ A WIDTH ≤ 0 still makes progress: at least one char per chunk."
         (setq i j)))
     (nreverse chunks)))
 
-(defun gfm-tables--wrap-cell (cell width)
+(defun gfm-pretty-tables--wrap-cell (cell width)
   "Wrap fontified CELL to lines of visible-width ≤ WIDTH.
 Returns a non-empty list of propertized line strings.  Words longer
 than WIDTH are hard-broken.  An empty CELL returns (\"\")."
   (let ((target (max 1 width))
-        (words (gfm-tables--cell-tokens cell))
+        (words (gfm-pretty-tables--cell-tokens cell))
         (line "")
         (lines nil))
     (dolist (w words)
-      (let ((ww (gfm-tables--visible-width w)))
+      (let ((ww (gfm-pretty-tables--visible-width w)))
         (cond
          ((> ww target)
           (unless (string-empty-p line)
             (push line lines)
             (setq line ""))
-          (let ((chunks (gfm-tables--slice-by-visible-width w target)))
+          (let ((chunks (gfm-pretty-tables--slice-by-visible-width w target)))
             (dolist (c (butlast chunks))
               (push c lines))
             (setq line (car (last chunks)))))
-         ((<= (+ (gfm-tables--visible-width line)
+         ((<= (+ (gfm-pretty-tables--visible-width line)
                  (if (string-empty-p line) 0 1)
                  ww)
               target)
@@ -672,7 +676,7 @@ than WIDTH are hard-broken.  An empty CELL returns (\"\")."
 
 ;;; Compose strings
 
-(defun gfm-tables--compose-row (cells col-widths role)
+(defun gfm-pretty-tables--compose-row (cells col-widths role)
   "Compose ROLE row's display string from CELLS and COL-WIDTHS.
 ROLE is one of `header', `body-default', or `body-alt'.
 
@@ -680,10 +684,10 @@ Default-bg segments (gap chars, default-bg cells, header cells) are
 left un-faced so they inherit the active `default' face.  This lets
 focus-dim packages (per-window face remaps) and the terminal's tmux
 pane dim track those segments automatically without any rebuild."
-  (let* ((border-face gfm-tables--border-face)
+  (let* ((border-face gfm-pretty-tables--border-face)
          (cell-face (cl-case role
                       (header '(:weight bold))
-                      (body-alt 'gfm-tables-row-alt-face)
+                      (body-alt 'gfm-pretty-tables-row-alt-face)
                       (t nil)))
          (n (length col-widths))
          (parts nil)
@@ -694,7 +698,7 @@ pane dim track those segments automatically without any rebuild."
     (cl-loop for i from 0 below n
              for w = (aref col-widths i)
              for cell = (or (nth i cells) "")
-             for cell-w = (gfm-tables--visible-width cell)
+             for cell-w = (gfm-pretty-tables--visible-width cell)
              for pad = (max 0 (- w cell-w))
              for rendered = (concat " " cell (make-string pad ?\s) " ")
              do (when cell-face
@@ -706,12 +710,12 @@ pane dim track those segments automatically without any rebuild."
     (push rhs parts)
     (apply #'concat (nreverse parts))))
 
-(defun gfm-tables--wrap-row-into-lines (cells col-widths)
+(defun gfm-pretty-tables--wrap-row-into-lines (cells col-widths)
   "Wrap CELLS to COL-WIDTHS, returning a list of per-visual-line cell-lists.
 Each entry is the cells used for one visual line; cells whose wrap is
 shorter than the row's height are padded with empty strings."
   (let* ((widths-list (cl-coerce col-widths 'list))
-         (wrapped (cl-mapcar #'gfm-tables--wrap-cell cells widths-list))
+         (wrapped (cl-mapcar #'gfm-pretty-tables--wrap-cell cells widths-list))
          (height (apply #'max 1 (mapcar #'length wrapped)))
          (padded (mapcar (lambda (lines)
                            (append lines
@@ -721,8 +725,8 @@ shorter than the row's height are padded with empty strings."
               (mapcar (lambda (cell-lines) (nth idx cell-lines)) padded))
             (number-sequence 0 (1- height)))))
 
-(cl-defstruct (gfm-tables--row-layout
-               (:constructor gfm-tables--make-row-layout)
+(cl-defstruct (gfm-pretty-tables--row-layout
+               (:constructor gfm-pretty-tables--make-row-layout)
                (:copier nil))
   "Pre-computed wrapping for a single source row.
 LINE-CELLS is a list of cell-lists, one per visual line, used by the
@@ -732,65 +736,65 @@ visual-line count, and BOUNDS-VEC a flat fixnum vector of length
 every visual line, packed in row-major order: BEG for cell IDX on
 visual line LINE lives at index `(* 2 (+ (* LINE N-CELLS) IDX))', END
 at the next slot.  Packing the bounds into a single vector turns the
-inner lookup in `gfm-tables--apply-cell-highlight' from nested
+inner lookup in `gfm-pretty-tables--apply-cell-highlight' from nested
 cons-list traversal into O(1) `aref'."
   line-cells
   n-cells
   n-lines
   bounds-vec)
 
-(defun gfm-tables--row-layout (cells col-widths)
-  "Return a `gfm-tables--row-layout' for CELLS at COL-WIDTHS.
+(defun gfm-pretty-tables--row-layout (cells col-widths)
+  "Return a `gfm-pretty-tables--row-layout' for CELLS at COL-WIDTHS.
 Computes wrapping and per-cell char bounds once so callers can share
 the result instead of redoing the wrap."
-  (let* ((line-cells (gfm-tables--wrap-row-into-lines cells col-widths))
+  (let* ((line-cells (gfm-pretty-tables--wrap-row-into-lines cells col-widths))
          (n-cells (length col-widths))
          (n-lines (length line-cells))
          (bounds-vec (make-vector (* 2 n-cells n-lines) 0))
          (line-idx 0))
     (dolist (lc line-cells)
       (let ((cell-idx 0))
-        (dolist (b (gfm-tables--row-char-bounds lc col-widths))
+        (dolist (b (gfm-pretty-tables--row-char-bounds lc col-widths))
           (let ((base (* 2 (+ (* line-idx n-cells) cell-idx))))
             (aset bounds-vec base (car b))
             (aset bounds-vec (1+ base) (cdr b)))
           (cl-incf cell-idx)))
       (cl-incf line-idx))
-    (gfm-tables--make-row-layout
+    (gfm-pretty-tables--make-row-layout
      :line-cells line-cells
      :n-cells n-cells
      :n-lines n-lines
      :bounds-vec bounds-vec)))
 
-(defun gfm-tables--display-cell-bounds (layout)
+(defun gfm-pretty-tables--display-cell-bounds (layout)
   "Return the (N-CELLS . BOUNDS-VEC) pair stored on a row's overlay.
-The pair lets `gfm-tables--apply-cell-highlight' index the packed
+The pair lets `gfm-pretty-tables--apply-cell-highlight' index the packed
 bounds vector without keeping `LAYOUT' alive (the wrapped cell
 strings in `line-cells' are no longer needed after composition)."
-  (cons (gfm-tables--row-layout-n-cells layout)
-        (gfm-tables--row-layout-bounds-vec layout)))
+  (cons (gfm-pretty-tables--row-layout-n-cells layout)
+        (gfm-pretty-tables--row-layout-bounds-vec layout)))
 
-(defun gfm-tables--compose-row-from-layout (layout col-widths role)
+(defun gfm-pretty-tables--compose-row-from-layout (layout col-widths role)
   "Compose ROLE row's display string from pre-computed LAYOUT and COL-WIDTHS."
   (mapconcat (lambda (line-cells)
-               (gfm-tables--compose-row line-cells col-widths role))
-             (gfm-tables--row-layout-line-cells layout)
+               (gfm-pretty-tables--compose-row line-cells col-widths role))
+             (gfm-pretty-tables--row-layout-line-cells layout)
              "\n"))
 
-(defun gfm-tables--compose-multiline-row (cells col-widths role)
+(defun gfm-pretty-tables--compose-multiline-row (cells col-widths role)
   "Compose ROLE row from CELLS, wrapping each to its column in COL-WIDTHS.
 Returns a string in which visual lines are joined by newlines.  All
 cells in the row are padded to the tallest cell's height with empty
 strings, so the column grid stays aligned across visual lines."
-  (gfm-tables--compose-row-from-layout
-   (gfm-tables--row-layout cells col-widths)
+  (gfm-pretty-tables--compose-row-from-layout
+   (gfm-pretty-tables--row-layout cells col-widths)
    col-widths role))
 
-(defun gfm-tables--row-char-bounds (cells col-widths)
+(defun gfm-pretty-tables--row-char-bounds (cells col-widths)
   "Return per-cell (BEG . END) offsets for CELLS at COL-WIDTHS.
 Each range covers the cell's display segment from the leading padding
 space through the trailing padding space, exclusive of outer pipes and
-inter-cell gaps, in `gfm-tables--compose-row's output.  Bounds reflect
+inter-cell gaps, in `gfm-pretty-tables--compose-row's output.  Bounds reflect
 the cell strings' actual lengths, so they remain accurate when cells
 contain compositions or other text-property tricks that make displayed
 width less than char length."
@@ -799,7 +803,7 @@ width less than char length."
         (bounds nil))
     (cl-loop for i from 0 below n
              for cell = (or (nth i cells) "")
-             for cell-w = (gfm-tables--visible-width cell)
+             for cell-w = (gfm-pretty-tables--visible-width cell)
              for w = (aref col-widths i)
              for pad = (max 0 (- w cell-w))
              for seg-len = (+ 2 (length cell) pad)
@@ -809,42 +813,42 @@ width less than char length."
                   (setq pos (1+ pos))))
     (nreverse bounds)))
 
-(defun gfm-tables--multiline-row-char-bounds (cells col-widths)
+(defun gfm-pretty-tables--multiline-row-char-bounds (cells col-widths)
   "Per-visual-line char bounds for CELLS wrapped to COL-WIDTHS.
 Returns a list with one entry per visual line in
-`gfm-tables--compose-multiline-row's output; each entry is the
-`gfm-tables--row-char-bounds' for that line's wrapped cells.
+`gfm-pretty-tables--compose-multiline-row's output; each entry is the
+`gfm-pretty-tables--row-char-bounds' for that line's wrapped cells.
 Reconstructs the legacy list-of-lists shape from the packed bounds
 vector for callers (and tests) that depend on the older API."
-  (let* ((layout (gfm-tables--row-layout cells col-widths))
-         (vec (gfm-tables--row-layout-bounds-vec layout))
-         (n-cells (gfm-tables--row-layout-n-cells layout))
-         (n-lines (gfm-tables--row-layout-n-lines layout)))
+  (let* ((layout (gfm-pretty-tables--row-layout cells col-widths))
+         (vec (gfm-pretty-tables--row-layout-bounds-vec layout))
+         (n-cells (gfm-pretty-tables--row-layout-n-cells layout))
+         (n-lines (gfm-pretty-tables--row-layout-n-lines layout)))
     (cl-loop for line below n-lines
              collect (cl-loop for cell below n-cells
                               for base = (* 2 (+ (* line n-cells) cell))
                               collect (cons (aref vec base)
                                             (aref vec (1+ base)))))))
 
-(defun gfm-tables--rule-row (box-width)
+(defun gfm-pretty-tables--rule-row (box-width)
   "Return a `├─…─┤' T-junction rule between header and body, width BOX-WIDTH."
-  (let ((face gfm-tables--border-face))
+  (let ((face gfm-pretty-tables--border-face))
     (concat (propertize "├" 'face face)
             (propertize (make-string (max 0 (- box-width 2)) ?─)
                         'face face)
             (propertize "┤" 'face face))))
 
-(defun gfm-tables--top-border (box-width)
+(defun gfm-pretty-tables--top-border (box-width)
   "Return a `┌─…─┐' top border of total width BOX-WIDTH."
-  (let ((face gfm-tables--border-face))
+  (let ((face gfm-pretty-tables--border-face))
     (concat (propertize "┌" 'face face)
             (propertize (make-string (max 0 (- box-width 2)) ?─)
                         'face face)
             (propertize "┐" 'face face))))
 
-(defun gfm-tables--bottom-border (box-width)
+(defun gfm-pretty-tables--bottom-border (box-width)
   "Return a `└─…─┘' bottom border of total width BOX-WIDTH."
-  (let ((face gfm-tables--border-face))
+  (let ((face gfm-pretty-tables--border-face))
     (concat (propertize "└" 'face face)
             (propertize (make-string (max 0 (- box-width 2)) ?─)
                         'face face)
@@ -852,160 +856,160 @@ vector for callers (and tests) that depend on the older API."
 
 ;;; Performance instrumentation primitives
 
-(defun gfm-tables--accum-phase (phase delta)
-  "Accumulate DELTA seconds into PHASE in `gfm-tables--stats'.
+(defun gfm-pretty-tables--accum-phase (phase delta)
+  "Accumulate DELTA seconds into PHASE in `gfm-pretty-tables--stats'.
 No-op when stats are not initialised."
-  (when gfm-tables--stats
-    (let ((totals (alist-get 'phase-totals gfm-tables--stats)))
+  (when gfm-pretty-tables--stats
+    (let ((totals (alist-get 'phase-totals gfm-pretty-tables--stats)))
       (when totals
         (setf (alist-get phase totals)
               (+ delta (or (alist-get phase totals) 0.0)))
-        (setf (alist-get 'phase-totals gfm-tables--stats) totals)))))
+        (setf (alist-get 'phase-totals gfm-pretty-tables--stats) totals)))))
 
-(defmacro gfm-tables--time-phase (phase &rest body)
-  "Run BODY, accumulating its wall-time into PHASE on `gfm-tables--stats'."
+(defmacro gfm-pretty-tables--time-phase (phase &rest body)
+  "Run BODY, accumulating its wall-time into PHASE on `gfm-pretty-tables--stats'."
   (declare (indent 1) (debug (form body)))
   (let ((start (make-symbol "start")))
     `(let ((,start (current-time)))
        (prog1 (progn ,@body)
-         (gfm-tables--accum-phase
+         (gfm-pretty-tables--accum-phase
           ,phase (float-time (time-since ,start)))))))
 
 ;;; Overlay application
 
-(defvar-local gfm-tables--overlays nil
-  "All gfm-tables overlays currently in this buffer.")
+(defvar-local gfm-pretty-tables--overlays nil
+  "All gfm-pretty-tables overlays currently in this buffer.")
 
-(defconst gfm-tables--registry
-  (gfm-block-borders-registry-for
-   'gfm-tables
-   'gfm-tables--overlays)
+(defconst gfm-pretty-tables--registry
+  (gfm-pretty--registry-for
+   'gfm-pretty-tables
+   'gfm-pretty-tables--overlays)
   "Shared overlay-registry context for tables.
-Routes the full-clear teardown through `gfm-block-borders--remove-overlays'
+Routes the full-clear teardown through `gfm-pretty--remove-overlays'
 so it widens for the duration of the clear, matching the fences/callouts
 contract.")
 
-(defun gfm-tables--register (ov)
-  "Tag OV as a gfm-tables overlay and remember it for bulk cleanup."
-  (overlay-put ov 'gfm-tables t)
-  (push ov gfm-tables--overlays)
+(defun gfm-pretty-tables--register (ov)
+  "Tag OV as a gfm-pretty-tables overlay and remember it for bulk cleanup."
+  (overlay-put ov 'gfm-pretty-tables t)
+  (push ov gfm-pretty-tables--overlays)
   ov)
 
-(defun gfm-tables--remove-overlays (&optional beg end)
-  "Remove all gfm-tables overlays between BEG and END.
-Delegates to the shared `gfm-block-borders--remove-overlays' so the
+(defun gfm-pretty-tables--remove-overlays (&optional beg end)
+  "Remove all gfm-pretty-tables overlays between BEG and END.
+Delegates to the shared `gfm-pretty--remove-overlays' so the
 no-arg full-clear branch widens; scoped (BEG/END) calls operate on the
 literal range as before."
-  (gfm-block-borders--remove-overlays gfm-tables--registry beg end))
+  (gfm-pretty--remove-overlays gfm-pretty-tables--registry beg end))
 
-(defun gfm-tables--make-anchor (beg end cell-bounds)
+(defun gfm-pretty-tables--make-anchor (beg end cell-bounds)
   "Create an anchor overlay over [BEG, END] holding CELL-BOUNDS.
-Anchors carry source-side bookkeeping — `gfm-tables-cell-bounds' and
+Anchors carry source-side bookkeeping — `gfm-pretty-tables-cell-bounds' and
 the row keymap — and never carry a `display' property.  They exist
 once per source row regardless of how many windows are showing the
 buffer; the per-window rendering lives on display overlays."
   (let ((ov (make-overlay beg end)))
-    (overlay-put ov 'gfm-tables t)
-    (overlay-put ov 'gfm-tables-anchor t)
-    (overlay-put ov 'gfm-tables-cell-bounds cell-bounds)
-    (overlay-put ov 'keymap gfm-tables--row-map)
-    (push ov gfm-tables--overlays)
+    (overlay-put ov 'gfm-pretty-tables t)
+    (overlay-put ov 'gfm-pretty-tables-anchor t)
+    (overlay-put ov 'gfm-pretty-tables-cell-bounds cell-bounds)
+    (overlay-put ov 'keymap gfm-pretty-tables--row-map)
+    (push ov gfm-pretty-tables--overlays)
     ov))
 
-(defun gfm-tables--make-display (beg end window display before after col-widths dcb)
+(defun gfm-pretty-tables--make-display (beg end window display before after col-widths dcb)
   "Create a display overlay over [BEG, END] for WINDOW.
 DISPLAY is the composed row text, BEFORE/AFTER the surrounding border
 strings (nil for none), COL-WIDTHS the column-width vector, and DCB
 the (N-CELLS . BOUNDS-VEC) packed pair from
-`gfm-tables--display-cell-bounds'.  Display overlays carry the visible
+`gfm-pretty-tables--display-cell-bounds'.  Display overlays carry the visible
 rendering and never the source keymap (the anchor handles motion).
 WINDOW non-nil restricts the overlay to that window only — Emacs
 renders it just there.  Pass nil for a fallback overlay applying in
 every window (used when no window currently shows the buffer)."
   (let ((ov (make-overlay beg end)))
-    (overlay-put ov 'gfm-tables t)
-    (overlay-put ov 'gfm-tables-display t)
+    (overlay-put ov 'gfm-pretty-tables t)
+    (overlay-put ov 'gfm-pretty-tables-display t)
     (when window (overlay-put ov 'window window))
     (overlay-put ov 'display display)
     (when before (overlay-put ov 'before-string before))
     (when after (overlay-put ov 'after-string after))
-    (when col-widths (overlay-put ov 'gfm-tables-col-widths col-widths))
-    (when dcb (overlay-put ov 'gfm-tables-display-cell-bounds dcb))
-    (push ov gfm-tables--overlays)
+    (when col-widths (overlay-put ov 'gfm-pretty-tables-col-widths col-widths))
+    (when dcb (overlay-put ov 'gfm-pretty-tables-display-cell-bounds dcb))
+    (push ov gfm-pretty-tables--overlays)
     ov))
 
-(defun gfm-tables--display-overlay-for-anchor (anchor &optional window)
+(defun gfm-pretty-tables--display-overlay-for-anchor (anchor &optional window)
   "Return the display overlay paired with ANCHOR for WINDOW, or nil.
 WINDOW defaults to the selected window.  An unrestricted display
 overlay (one created without a window arg) matches any WINDOW."
   (let ((win (or window (selected-window))))
     (cl-find-if (lambda (o)
-                  (and (overlay-get o 'gfm-tables-display)
+                  (and (overlay-get o 'gfm-pretty-tables-display)
                        (let ((w (overlay-get o 'window)))
                          (or (null w) (eq w win)))))
                 (overlays-in (overlay-start anchor) (overlay-end anchor)))))
 
-(defun gfm-tables--remove-overlays-in-block (block)
-  "Remove gfm-tables overlays within BLOCK and prune the cached list.
+(defun gfm-pretty-tables--remove-overlays-in-block (block)
+  "Remove gfm-pretty-tables overlays within BLOCK and prune the cached list.
 BLOCK is (HEADER-BEG DELIM-BEG BODY-BEG BODY-END)."
   (let ((header-beg (nth 0 block))
         (body-end (nth 3 block)))
-    (gfm-tables--remove-overlays header-beg (1+ body-end))))
+    (gfm-pretty-tables--remove-overlays header-beg (1+ body-end))))
 
-(defun gfm-tables--apply-table-display (window header-beg header-end
+(defun gfm-pretty-tables--apply-table-display (window header-beg header-end
                                         delim-beg delim-end body-positions
                                         header-cells body-rows)
   "Build per-WINDOW display overlays for a parsed table.
 WINDOW is either a window object (overlays restrict to it) or nil
 \(unrestricted fallback).  Other args are the parse output produced by
-`gfm-tables--apply-table'."
+`gfm-pretty-tables--apply-table'."
   (let* ((all-rows (cons header-cells body-rows))
-         (natural (gfm-tables--time-phase 'layout
-                    (gfm-tables--column-widths all-rows)))
+         (natural (gfm-pretty-tables--time-phase 'layout
+                    (gfm-pretty-tables--column-widths all-rows)))
          (n-cols (length natural))
          (overhead (+ (* 3 n-cols) 1))
          (budget (max n-cols
-                      (- (gfm-tables--available-width window) overhead)))
-         (col-widths (gfm-tables--time-phase 'layout
-                       (gfm-tables--fit-widths natural budget)))
-         (box-width (gfm-tables--box-width col-widths))
-         (top (gfm-tables--top-border box-width))
-         (bottom (gfm-tables--bottom-border box-width))
-         (rule (gfm-tables--rule-row box-width))
+                      (- (gfm-pretty-tables--available-width window) overhead)))
+         (col-widths (gfm-pretty-tables--time-phase 'layout
+                       (gfm-pretty-tables--fit-widths natural budget)))
+         (box-width (gfm-pretty-tables--box-width col-widths))
+         (top (gfm-pretty-tables--top-border box-width))
+         (bottom (gfm-pretty-tables--bottom-border box-width))
+         (rule (gfm-pretty-tables--rule-row box-width))
          (n-body (length body-rows))
-         (header-layout (gfm-tables--time-phase 'layout
-                          (gfm-tables--row-layout header-cells col-widths)))
-         (body-layouts (gfm-tables--time-phase 'layout
+         (header-layout (gfm-pretty-tables--time-phase 'layout
+                          (gfm-pretty-tables--row-layout header-cells col-widths)))
+         (body-layouts (gfm-pretty-tables--time-phase 'layout
                          (mapcar (lambda (cells)
-                                   (gfm-tables--row-layout cells col-widths))
+                                   (gfm-pretty-tables--row-layout cells col-widths))
                                  body-rows))))
-    (gfm-tables--time-phase 'apply
+    (gfm-pretty-tables--time-phase 'apply
       (let ((header-display
-             (gfm-tables--time-phase 'compose
-               (gfm-tables--compose-row-from-layout
+             (gfm-pretty-tables--time-phase 'compose
+               (gfm-pretty-tables--compose-row-from-layout
                 header-layout col-widths 'header))))
-        (gfm-tables--make-display
+        (gfm-pretty-tables--make-display
          header-beg header-end window
          header-display (concat top "\n") nil
-         col-widths (gfm-tables--display-cell-bounds header-layout)))
-      (gfm-tables--make-display delim-beg delim-end window
+         col-widths (gfm-pretty-tables--display-cell-bounds header-layout)))
+      (gfm-pretty-tables--make-display delim-beg delim-end window
                                 rule nil nil nil nil)
       (cl-loop for (lbeg . lend) in body-positions
-               for cells in body-rows
+               for _cells in body-rows
                for layout in body-layouts
                for idx from 1
                for last-p = (= idx n-body)
                for role = (if (cl-evenp idx) 'body-alt 'body-default)
-               for str = (gfm-tables--time-phase 'compose
-                           (gfm-tables--compose-row-from-layout
+               for str = (gfm-pretty-tables--time-phase 'compose
+                           (gfm-pretty-tables--compose-row-from-layout
                             layout col-widths role))
-               do (gfm-tables--make-display
+               do (gfm-pretty-tables--make-display
                    lbeg lend window
                    str nil (and last-p (concat "\n" bottom))
                    col-widths
-                   (gfm-tables--display-cell-bounds layout))))))
+                   (gfm-pretty-tables--display-cell-bounds layout))))))
 
-(defun gfm-tables--parse-table (header-beg delim-beg body-beg body-end)
+(defun gfm-pretty-tables--parse-table (header-beg delim-beg body-beg body-end)
   "Parse the table at HEADER-BEG..BODY-END, returning a plist.
 Keys: :header-beg :header-end :delim-beg :delim-end :body-positions
 \(list of (LBEG . LEND) per body row in source order),
@@ -1015,18 +1019,18 @@ Keys: :header-beg :header-end :delim-beg :delim-end :body-positions
                          (goto-char header-beg) (line-end-position)))
            (delim-end (save-excursion
                         (goto-char delim-beg) (line-end-position)))
-           (header-cells (gfm-tables--time-phase 'parse
-                           (gfm-tables--fontify-row-cells
+           (header-cells (gfm-pretty-tables--time-phase 'parse
+                           (gfm-pretty-tables--fontify-row-cells
                             header-beg header-end)))
            (body-rows '())
            (body-positions '()))
-      (gfm-tables--time-phase 'parse
+      (gfm-pretty-tables--time-phase 'parse
         (goto-char body-beg)
         (while (< (point) body-end)
           (let* ((lbeg (line-beginning-position))
                  (lend (line-end-position)))
             (push (cons lbeg lend) body-positions)
-            (push (gfm-tables--fontify-row-cells lbeg lend)
+            (push (gfm-pretty-tables--fontify-row-cells lbeg lend)
                   body-rows))
           (forward-line 1)))
       (list :header-beg header-beg :header-end header-end
@@ -1035,16 +1039,16 @@ Keys: :header-beg :header-end :delim-beg :delim-end :body-positions
             :header-cells header-cells
             :body-rows (nreverse body-rows)))))
 
-(defun gfm-tables--apply-table-display-for-parsed (parsed window)
+(defun gfm-pretty-tables--apply-table-display-for-parsed (parsed window)
   "Build display overlays for PARSED in WINDOW (or unrestricted when nil)."
-  (gfm-tables--apply-table-display
+  (gfm-pretty-tables--apply-table-display
    window
    (plist-get parsed :header-beg) (plist-get parsed :header-end)
    (plist-get parsed :delim-beg) (plist-get parsed :delim-end)
    (plist-get parsed :body-positions)
    (plist-get parsed :header-cells) (plist-get parsed :body-rows)))
 
-(defun gfm-tables--apply-table (header-beg delim-beg body-beg body-end)
+(defun gfm-pretty-tables--apply-table (header-beg delim-beg body-beg body-end)
   "Decorate one table identified by HEADER-BEG, DELIM-BEG, BODY-BEG, BODY-END.
 Builds anchor overlays once per row and one display overlay per row
 *per window* currently showing the buffer.  When no window shows the
@@ -1052,48 +1056,48 @@ buffer, falls back to a single unrestricted display overlay.
 
 Widens for the duration of its body so cached positions outside the
 current restriction (e.g. a table on another slide under
-`+presentation-mode') can be parsed and decorated.  Display under
+`gfm-present-mode') can be parsed and decorated.  Display under
 narrowing is naturally clipped by Emacs' overlay engine."
   (save-restriction
     (widen)
-    (let ((parsed (gfm-tables--parse-table header-beg delim-beg
+    (let ((parsed (gfm-pretty-tables--parse-table header-beg delim-beg
                                            body-beg body-end)))
-      (gfm-tables--time-phase 'apply
-        (gfm-tables--make-anchor
+      (gfm-pretty-tables--time-phase 'apply
+        (gfm-pretty-tables--make-anchor
          header-beg (plist-get parsed :header-end)
-         (gfm-tables--cell-bounds header-beg (plist-get parsed :header-end)))
+         (gfm-pretty-tables--cell-bounds header-beg (plist-get parsed :header-end)))
         (cl-loop for (lbeg . lend) in (plist-get parsed :body-positions)
-                 do (gfm-tables--make-anchor
-                     lbeg lend (gfm-tables--cell-bounds lbeg lend))))
-      (let ((windows (or (gfm-tables--display-windows) (list nil))))
+                 do (gfm-pretty-tables--make-anchor
+                     lbeg lend (gfm-pretty-tables--cell-bounds lbeg lend))))
+      (let ((windows (or (gfm-pretty-tables--display-windows) (list nil))))
         (dolist (win windows)
-          (gfm-tables--apply-table-display-for-parsed parsed win))))))
+          (gfm-pretty-tables--apply-table-display-for-parsed parsed win))))))
 
-(defun gfm-tables--remove-display-overlays-in-block (block window)
+(defun gfm-pretty-tables--remove-display-overlays-in-block (block window)
   "Delete WINDOW's display overlays inside BLOCK.
 WINDOW non-nil matches only that window's overlays; nil matches every
 display overlay (used when wiping out an unrestricted fallback set)."
   (let ((header-beg (nth 0 block))
         (body-end (nth 3 block)))
     (dolist (ov (overlays-in header-beg (1+ body-end)))
-      (when (and (overlay-get ov 'gfm-tables-display)
+      (when (and (overlay-get ov 'gfm-pretty-tables-display)
                  (or (null window)
                      (eq (overlay-get ov 'window) window)))
         (delete-overlay ov))))
-  (setq gfm-tables--overlays
-        (cl-remove-if-not #'overlay-buffer gfm-tables--overlays)))
+  (setq gfm-pretty-tables--overlays
+        (cl-remove-if-not #'overlay-buffer gfm-pretty-tables--overlays)))
 
-(defun gfm-tables--remove-display-overlays-for-window (window)
+(defun gfm-pretty-tables--remove-display-overlays-for-window (window)
   "Delete every display overlay restricted to WINDOW across the buffer."
-  (dolist (ov gfm-tables--overlays)
+  (dolist (ov gfm-pretty-tables--overlays)
     (when (and (overlay-buffer ov)
-               (overlay-get ov 'gfm-tables-display)
+               (overlay-get ov 'gfm-pretty-tables-display)
                (eq (overlay-get ov 'window) window))
       (delete-overlay ov)))
-  (setq gfm-tables--overlays
-        (cl-remove-if-not #'overlay-buffer gfm-tables--overlays)))
+  (setq gfm-pretty-tables--overlays
+        (cl-remove-if-not #'overlay-buffer gfm-pretty-tables--overlays)))
 
-(defun gfm-tables--rebuild-block-for-window (block window)
+(defun gfm-pretty-tables--rebuild-block-for-window (block window)
   "Replace WINDOW's display overlays for BLOCK with fresh ones at current width.
 Anchors and other windows' display overlays are left untouched.
 Widens so a BLOCK whose source range lies outside the current
@@ -1101,43 +1105,43 @@ restriction can still be parsed and re-rendered."
   (save-restriction
     (widen)
     (cl-destructuring-bind (header-beg delim-beg body-beg body-end) block
-      (let* ((gfm-tables--width-cache
-              (or gfm-tables--width-cache
+      (let* ((gfm-pretty-tables--width-cache
+              (or gfm-pretty-tables--width-cache
                   (make-hash-table :test 'eq)))
-             (parsed (gfm-tables--parse-table header-beg delim-beg
+             (parsed (gfm-pretty-tables--parse-table header-beg delim-beg
                                               body-beg body-end)))
-        (gfm-tables--remove-display-overlays-in-block block window)
-        (gfm-tables--apply-table-display-for-parsed parsed window)))))
+        (gfm-pretty-tables--remove-display-overlays-in-block block window)
+        (gfm-pretty-tables--apply-table-display-for-parsed parsed window)))))
 
-(defun gfm-tables--fenced-ranges ()
+(defun gfm-pretty-tables--fenced-ranges ()
   "Return (BEG . END) ranges of fenced code blocks, if discoverable."
-  (and (fboundp 'gfm-code-fences--find-blocks)
+  (and (fboundp 'gfm-pretty-fences--find-blocks)
        (mapcar (lambda (b) (cons (nth 0 b) (nth 3 b)))
-               (gfm-code-fences--find-blocks))))
+               (gfm-pretty-fences--find-blocks))))
 
-(defun gfm-tables--apply-overlays ()
+(defun gfm-pretty-tables--apply-overlays ()
   "Apply table overlays to all GFM tables in the buffer."
-  (let* ((blocks (gfm-tables--time-phase 'find-blocks
-                   (gfm-tables--find-blocks (gfm-tables--fenced-ranges))))
+  (let* ((blocks (gfm-pretty-tables--time-phase 'find-blocks
+                   (gfm-pretty-tables--find-blocks (gfm-pretty-tables--fenced-ranges))))
          (n 0))
     (dolist (block blocks)
       (cl-destructuring-bind (h d bb be) block
-        (gfm-tables--apply-table h d bb be)
+        (gfm-pretty-tables--apply-table h d bb be)
         (cl-incf n)))
     n))
 
 ;;; Performance instrumentation
 
-(defvar-local gfm-tables--stats nil
+(defvar-local gfm-pretty-tables--stats nil
   "Per-buffer alist of rebuild stats.")
 
-(defconst gfm-tables--phase-keys
+(defconst gfm-pretty-tables--phase-keys
   '(find-blocks parse layout compose apply)
-  "Keys used in `gfm-tables--stats' `phase-totals' alist, in display order.")
+  "Keys used in `gfm-pretty-tables--stats' `phase-totals' alist, in display order.")
 
-(defun gfm-tables--init-stats ()
+(defun gfm-pretty-tables--init-stats ()
   "Reset the per-buffer rebuild stats to zero."
-  (setq gfm-tables--stats
+  (setq gfm-pretty-tables--stats
         (list (cons 'rebuild-count 0)
               (cons 'total-time 0.0)
               (cons 'last-time 0.0)
@@ -1145,100 +1149,100 @@ restriction can still be parsed and re-rendered."
               (cons 'table-count 0)
               (cons 'phase-totals
                     (mapcar (lambda (k) (cons k 0.0))
-                            gfm-tables--phase-keys)))))
+                            gfm-pretty-tables--phase-keys)))))
 
-(defun gfm-tables--record-stats (duration table-count)
+(defun gfm-pretty-tables--record-stats (duration table-count)
   "Update stats with DURATION and TABLE-COUNT from one rebuild."
-  (unless gfm-tables--stats (gfm-tables--init-stats))
-  (setf (alist-get 'rebuild-count gfm-tables--stats)
-        (1+ (alist-get 'rebuild-count gfm-tables--stats)))
-  (setf (alist-get 'total-time gfm-tables--stats)
-        (+ duration (alist-get 'total-time gfm-tables--stats)))
-  (setf (alist-get 'last-time gfm-tables--stats) duration)
-  (setf (alist-get 'max-time gfm-tables--stats)
-        (max duration (alist-get 'max-time gfm-tables--stats)))
-  (setf (alist-get 'table-count gfm-tables--stats) table-count)
-  (when (> duration gfm-tables-slow-rebuild-threshold)
-    (message "gfm-tables: slow rebuild in %s: %.3fs"
+  (unless gfm-pretty-tables--stats (gfm-pretty-tables--init-stats))
+  (setf (alist-get 'rebuild-count gfm-pretty-tables--stats)
+        (1+ (alist-get 'rebuild-count gfm-pretty-tables--stats)))
+  (setf (alist-get 'total-time gfm-pretty-tables--stats)
+        (+ duration (alist-get 'total-time gfm-pretty-tables--stats)))
+  (setf (alist-get 'last-time gfm-pretty-tables--stats) duration)
+  (setf (alist-get 'max-time gfm-pretty-tables--stats)
+        (max duration (alist-get 'max-time gfm-pretty-tables--stats)))
+  (setf (alist-get 'table-count gfm-pretty-tables--stats) table-count)
+  (when (> duration gfm-pretty-tables-slow-rebuild-threshold)
+    (message "gfm-pretty-tables: slow rebuild in %s: %.3fs"
              (buffer-name) duration)))
 
-(defun gfm-tables--format-phase-totals (totals)
+(defun gfm-pretty-tables--format-phase-totals (totals)
   "Return a phase-by-phase summary string for TOTALS, sorted by total desc."
   (let ((sorted (sort (copy-sequence totals)
                       (lambda (a b) (> (cdr a) (cdr b))))))
     (mapconcat (lambda (p) (format "%s=%.3fs" (car p) (cdr p)))
                sorted " ")))
 
-(defun gfm-tables-stats ()
-  "Display the current buffer's gfm-tables rebuild statistics."
+(defun gfm-pretty-tables-stats ()
+  "Display the current buffer's gfm-pretty-tables rebuild statistics."
   (interactive)
-  (if (not gfm-tables--stats)
-      (message "gfm-tables: no stats yet")
-    (let-alist gfm-tables--stats
+  (if (not gfm-pretty-tables--stats)
+      (message "gfm-pretty-tables: no stats yet")
+    (let-alist gfm-pretty-tables--stats
       (message
-       "gfm-tables [%s]: rebuilds=%d total=%.3fs last=%.3fs max=%.3fs tables=%d | %s"
+       "gfm-pretty-tables [%s]: rebuilds=%d total=%.3fs last=%.3fs max=%.3fs tables=%d | %s"
        (buffer-name)
        .rebuild-count .total-time .last-time .max-time .table-count
-       (gfm-tables--format-phase-totals .phase-totals)))))
+       (gfm-pretty-tables--format-phase-totals .phase-totals)))))
 
 ;;; Rebuild scheduler
 
-(defvar-local gfm-tables--last-available-width nil
+(defvar-local gfm-pretty-tables--last-available-width nil
   "Available char width recorded on the last full rebuild.
 Single-window legacy: kept for the regression test that pokes at it.
-Real check uses `gfm-tables--last-window-state'.")
+Real check uses `gfm-pretty-tables--last-window-state'.")
 
-(defvar-local gfm-tables--last-window-state nil
+(defvar-local gfm-pretty-tables--last-window-state nil
   "Snapshot of the windows showing the buffer at the last rebuild.
 List of (WINDOW . MAX-CHARS-PER-LINE) pairs.  Compared in
-`gfm-tables--schedule-full-rebuild' so window-config changes that
+`gfm-pretty-tables--schedule-full-rebuild' so window-config changes that
 leave every window's width unchanged (minibuffer activity, focus
 shifts) skip the rebuild, while a new or resized window — and so a
 genuinely new rendering need — triggers one.")
 
-(defun gfm-tables--window-state ()
+(defun gfm-pretty-tables--window-state ()
   "Return the (WINDOW . WIDTH) snapshot used to detect rendering drift."
-  (mapcar (lambda (w) (cons w (gfm-tables--available-width w)))
-          (gfm-tables--display-windows)))
+  (mapcar (lambda (w) (cons w (gfm-pretty-tables--available-width w)))
+          (gfm-pretty-tables--display-windows)))
 
-(defun gfm-tables--rebuild ()
-  "Remove and recreate all gfm-tables overlays.
+(defun gfm-pretty-tables--rebuild ()
+  "Remove and recreate all gfm-pretty-tables overlays.
 Re-applies the active-cell highlight afterwards so cell selection
 survives window-configuration changes and other rebuild triggers."
   (let ((start (current-time))
-        (gfm-tables--width-cache (make-hash-table :test 'eq)))
-    (gfm-tables--remove-overlays)
-    (setq gfm-tables--dirty-region nil)
-    (let ((n (gfm-tables--apply-overlays)))
-      (gfm-tables--record-stats (float-time (time-since start)) n))
-    (setq gfm-tables--last-available-width (gfm-tables--available-width)
-          gfm-tables--last-window-state (gfm-tables--window-state))
-    (gfm-tables--update-cursor-highlight)))
+        (gfm-pretty-tables--width-cache (make-hash-table :test 'eq)))
+    (gfm-pretty-tables--remove-overlays)
+    (setq gfm-pretty-tables--dirty-region nil)
+    (let ((n (gfm-pretty-tables--apply-overlays)))
+      (gfm-pretty-tables--record-stats (float-time (time-since start)) n))
+    (setq gfm-pretty-tables--last-available-width (gfm-pretty-tables--available-width)
+          gfm-pretty-tables--last-window-state (gfm-pretty-tables--window-state))
+    (gfm-pretty-tables--update-cursor-highlight)))
 
-(defun gfm-tables--rebuild-block (block)
+(defun gfm-pretty-tables--rebuild-block (block)
   "Tear down BLOCK's overlays and re-apply just that table."
   (let ((start (current-time))
-        (gfm-tables--width-cache (make-hash-table :test 'eq)))
-    (gfm-tables--remove-overlays-in-block block)
+        (gfm-pretty-tables--width-cache (make-hash-table :test 'eq)))
+    (gfm-pretty-tables--remove-overlays-in-block block)
     (cl-destructuring-bind (h d bb be) block
-      (gfm-tables--apply-table h d bb be))
-    (gfm-tables--record-stats (float-time (time-since start)) 1))
-  (gfm-tables--update-cursor-highlight))
+      (gfm-pretty-tables--apply-table h d bb be))
+    (gfm-pretty-tables--record-stats (float-time (time-since start)) 1))
+  (gfm-pretty-tables--update-cursor-highlight))
 
-(defun gfm-tables--rebuild-blocks (blocks)
+(defun gfm-pretty-tables--rebuild-blocks (blocks)
   "Tear down each block in BLOCKS and re-apply those tables in one pass.
 Stats record one rebuild covering all BLOCKS, so callers can rebuild
 several tables (e.g. all visible-window tables) without `n' separate
 stat entries."
   (let ((start (current-time))
-        (gfm-tables--width-cache (make-hash-table :test 'eq)))
+        (gfm-pretty-tables--width-cache (make-hash-table :test 'eq)))
     (dolist (block blocks)
-      (gfm-tables--remove-overlays-in-block block)
+      (gfm-pretty-tables--remove-overlays-in-block block)
       (cl-destructuring-bind (h d bb be) block
-        (gfm-tables--apply-table h d bb be)))
-    (gfm-tables--record-stats (float-time (time-since start)) (length blocks))))
+        (gfm-pretty-tables--apply-table h d bb be)))
+    (gfm-pretty-tables--record-stats (float-time (time-since start)) (length blocks))))
 
-(defun gfm-tables--block-visible-p (block ranges)
+(defun gfm-pretty-tables--block-visible-p (block ranges)
   "Non-nil if BLOCK's source range overlaps any (VSTART . VEND) in RANGES."
   (let ((header-beg (nth 0 block))
         (body-end (nth 3 block)))
@@ -1247,7 +1251,7 @@ stat entries."
                     (>= body-end (car r))))
              ranges)))
 
-(defun gfm-tables--visible-window-ranges ()
+(defun gfm-pretty-tables--visible-window-ranges ()
   "Return (VSTART . VEND) pairs for every window currently showing this buffer.
 Walks all visible (and iconified) frames so a buffer split across two
 windows treats both viewports as on-screen.  `window-end' is asked for
@@ -1256,71 +1260,71 @@ the live value (second arg t), since we're driven by
   (mapcar (lambda (w) (cons (window-start w) (window-end w t)))
           (get-buffer-window-list (current-buffer) nil t)))
 
-(defun gfm-tables--rebuild-prioritised ()
+(defun gfm-pretty-tables--rebuild-prioritised ()
   "Rebuild visible-window tables first; schedule off-screen on next idle.
 Used for width-affecting changes (window resize) so the user's view
 catches up immediately and tables they can't see take their own tick.
 Falls back to a full one-shot rebuild when no window shows the buffer."
-  (let ((ranges (gfm-tables--visible-window-ranges)))
+  (let ((ranges (gfm-pretty-tables--visible-window-ranges)))
     (cond
      ((null ranges)
-      (gfm-tables--rebuild))
+      (gfm-pretty-tables--rebuild))
      (t
-      (let* ((blocks (gfm-tables--find-blocks (gfm-tables--fenced-ranges)))
+      (let* ((blocks (gfm-pretty-tables--find-blocks (gfm-pretty-tables--fenced-ranges)))
              (visible (cl-remove-if-not
-                       (lambda (b) (gfm-tables--block-visible-p b ranges))
+                       (lambda (b) (gfm-pretty-tables--block-visible-p b ranges))
                        blocks))
              (offscreen (cl-set-difference blocks visible)))
         (when visible
-          (gfm-tables--rebuild-blocks visible))
-        (setq gfm-tables--dirty-region nil
-              gfm-tables--last-available-width (gfm-tables--available-width)
-              gfm-tables--last-window-state (gfm-tables--window-state))
-        (gfm-tables--update-cursor-highlight)
+          (gfm-pretty-tables--rebuild-blocks visible))
+        (setq gfm-pretty-tables--dirty-region nil
+              gfm-pretty-tables--last-available-width (gfm-pretty-tables--available-width)
+              gfm-pretty-tables--last-window-state (gfm-pretty-tables--window-state))
+        (gfm-pretty-tables--update-cursor-highlight)
         (when offscreen
           (run-with-idle-timer
            0 nil
            (lambda (buf bs)
              (when (buffer-live-p buf)
                (with-current-buffer buf
-                 (when gfm-tables-mode
-                   (gfm-tables--rebuild-blocks bs)))))
+                 (when gfm-pretty-tables-mode
+                   (gfm-pretty-tables--rebuild-blocks bs)))))
            (current-buffer) offscreen)))))))
 
-(defun gfm-tables--rebuild-window-prioritised (window)
+(defun gfm-pretty-tables--rebuild-window-prioritised (window)
   "Visible-first / off-screen-deferred rebuild of WINDOW's display overlays.
 Anchors and other windows' overlays are not touched.  Used by
-`gfm-tables--reconcile-windows' when WINDOW is newly showing the
+`gfm-pretty-tables--reconcile-windows' when WINDOW is newly showing the
 buffer or has been resized."
   (when (window-live-p window)
-    (let* ((blocks (gfm-tables--find-blocks (gfm-tables--fenced-ranges)))
+    (let* ((blocks (gfm-pretty-tables--find-blocks (gfm-pretty-tables--fenced-ranges)))
            (vstart (window-start window))
            (vend (window-end window t))
            (ranges (list (cons vstart vend)))
            (visible (cl-remove-if-not
-                     (lambda (b) (gfm-tables--block-visible-p b ranges))
+                     (lambda (b) (gfm-pretty-tables--block-visible-p b ranges))
                      blocks))
            (offscreen (cl-set-difference blocks visible))
-           (gfm-tables--width-cache (make-hash-table :test 'eq)))
+           (gfm-pretty-tables--width-cache (make-hash-table :test 'eq)))
       (dolist (b visible)
-        (gfm-tables--rebuild-block-for-window b window))
+        (gfm-pretty-tables--rebuild-block-for-window b window))
       (when offscreen
         (run-with-idle-timer
          0 nil
          (lambda (buf bs win)
            (when (and (buffer-live-p buf) (window-live-p win))
              (with-current-buffer buf
-               (when gfm-tables-mode
-                 (let ((gfm-tables--width-cache
+               (when gfm-pretty-tables-mode
+                 (let ((gfm-pretty-tables--width-cache
                         (make-hash-table :test 'eq)))
                    (dolist (b bs)
-                     (gfm-tables--rebuild-block-for-window b win)))))))
+                     (gfm-pretty-tables--rebuild-block-for-window b win)))))))
          (current-buffer) offscreen window)))))
 
-(defun gfm-tables--reconcile-windows ()
+(defun gfm-pretty-tables--reconcile-windows ()
   "Reconcile display overlays with current window state.
 Compares the current `(WIN . WIDTH)' snapshot to the one cached in
-`gfm-tables--last-window-state' and acts only on the diff:
+`gfm-pretty-tables--last-window-state' and acts only on the diff:
 
 - Windows now showing the buffer (added) get a prioritised rebuild
   for that window only.
@@ -1329,16 +1333,16 @@ Compares the current `(WIN . WIDTH)' snapshot to the one cached in
 - Windows whose width changed (resized) get a prioritised rebuild.
 
 Anchors and untouched windows' display overlays are not disturbed.
-Falls back to a full `gfm-tables--rebuild' when called for the first
+Falls back to a full `gfm-pretty-tables--rebuild' when called for the first
 time (no prior state cached) or when an anchor is missing."
   (cond
-   ((or (null gfm-tables--last-window-state)
-        (null (cl-some (lambda (o) (overlay-get o 'gfm-tables-anchor))
-                       gfm-tables--overlays)))
-    (gfm-tables--rebuild))
+   ((or (null gfm-pretty-tables--last-window-state)
+        (null (cl-some (lambda (o) (overlay-get o 'gfm-pretty-tables-anchor))
+                       gfm-pretty-tables--overlays)))
+    (gfm-pretty-tables--rebuild))
    (t
-    (let* ((prev gfm-tables--last-window-state)
-           (curr (gfm-tables--window-state))
+    (let* ((prev gfm-pretty-tables--last-window-state)
+           (curr (gfm-pretty-tables--window-state))
            (prev-keys (mapcar #'car prev))
            (curr-keys (mapcar #'car curr))
            (added (cl-remove-if (lambda (e) (memq (car e) prev-keys)) curr))
@@ -1349,42 +1353,42 @@ time (no prior state cached) or when an anchor is missing."
                          (and old (not (eql (cdr e) (cdr old))))))
                      curr)))
       (dolist (w removed)
-        (gfm-tables--remove-display-overlays-for-window w))
+        (gfm-pretty-tables--remove-display-overlays-for-window w))
       (dolist (entry (append added resized))
-        (gfm-tables--rebuild-window-prioritised (car entry)))
-      (setq gfm-tables--last-window-state curr
-            gfm-tables--last-available-width (gfm-tables--available-width))
-      (gfm-tables--update-cursor-highlight)))))
+        (gfm-pretty-tables--rebuild-window-prioritised (car entry)))
+      (setq gfm-pretty-tables--last-window-state curr
+            gfm-pretty-tables--last-available-width (gfm-pretty-tables--available-width))
+      (gfm-pretty-tables--update-cursor-highlight)))))
 
-(defun gfm-tables--extend-dirty-region (beg end)
+(defun gfm-pretty-tables--extend-dirty-region (beg end)
   "Extend the buffer's dirty region to cover BEG..END."
   (cond
-   ((null gfm-tables--dirty-region)
-    (setq gfm-tables--dirty-region (cons beg end)))
+   ((null gfm-pretty-tables--dirty-region)
+    (setq gfm-pretty-tables--dirty-region (cons beg end)))
    (t
-    (setcar gfm-tables--dirty-region
-            (min (car gfm-tables--dirty-region) beg))
-    (setcdr gfm-tables--dirty-region
-            (max (cdr gfm-tables--dirty-region) end)))))
+    (setcar gfm-pretty-tables--dirty-region
+            (min (car gfm-pretty-tables--dirty-region) beg))
+    (setcdr gfm-pretty-tables--dirty-region
+            (max (cdr gfm-pretty-tables--dirty-region) end)))))
 
-(defun gfm-tables--region-overlaps-p (a b)
+(defun gfm-pretty-tables--region-overlaps-p (a b)
   "Non-nil if (BEG . END) ranges A and B overlap."
   (and (<= (car a) (cdr b)) (>= (cdr a) (car b))))
 
-(defun gfm-tables--block-line-range (block)
+(defun gfm-pretty-tables--block-line-range (block)
   "Return (HEADER-BEG . BODY-END+1) for BLOCK."
   (cons (nth 0 block) (1+ (nth 3 block))))
 
-(defun gfm-tables--block-fully-contains-p (block region)
+(defun gfm-pretty-tables--block-fully-contains-p (block region)
   "Non-nil if REGION lies inside BLOCK's HEADER-BEG..BODY-END+1 range."
-  (let ((br (gfm-tables--block-line-range block)))
+  (let ((br (gfm-pretty-tables--block-line-range block)))
     (and (>= (car region) (car br))
          (<= (cdr region) (cdr br)))))
 
-(defun gfm-tables--fence-line-ranges ()
+(defun gfm-pretty-tables--fence-line-ranges ()
   "Return per-line (BEG . END) ranges for opening/closing code-fence lines."
-  (when (fboundp 'gfm-code-fences--find-blocks)
-    (cl-loop for b in (gfm-code-fences--find-blocks)
+  (when (fboundp 'gfm-pretty-fences--find-blocks)
+    (cl-loop for b in (gfm-pretty-fences--find-blocks)
              for open-beg = (nth 0 b)
              for close-end = (nth 3 b)
              nconc (list
@@ -1397,66 +1401,66 @@ time (no prior state cached) or when an anchor is missing."
                           (save-excursion
                             (goto-char close-end) (line-end-position)))))))
 
-(defun gfm-tables--region-overlaps-fence-line-p (region)
+(defun gfm-pretty-tables--region-overlaps-fence-line-p (region)
   "Non-nil if REGION overlaps a fenced-code-block fence line."
-  (cl-some (lambda (r) (gfm-tables--region-overlaps-p region r))
-           (gfm-tables--fence-line-ranges)))
+  (cl-some (lambda (r) (gfm-pretty-tables--region-overlaps-p region r))
+           (gfm-pretty-tables--fence-line-ranges)))
 
-(defun gfm-tables--rebuild-scoped ()
-  "Rebuild only what `gfm-tables--dirty-region' demands.
+(defun gfm-pretty-tables--rebuild-scoped ()
+  "Rebuild only what `gfm-pretty-tables--dirty-region' demands.
 No-op when the region intersects no decorated table; falls back to a
 full rebuild when the region spans a table boundary, multiple tables,
 or any code-fence line."
-  (let ((dirty gfm-tables--dirty-region))
-    (setq gfm-tables--dirty-region nil)
+  (let ((dirty gfm-pretty-tables--dirty-region))
+    (setq gfm-pretty-tables--dirty-region nil)
     (cond
      ((null dirty) nil)
-     ((gfm-tables--region-overlaps-fence-line-p dirty)
-      (gfm-tables--rebuild))
+     ((gfm-pretty-tables--region-overlaps-fence-line-p dirty)
+      (gfm-pretty-tables--rebuild))
      (t
-      (let* ((excluded (gfm-tables--fenced-ranges))
-             (blocks (gfm-tables--find-blocks excluded))
+      (let* ((excluded (gfm-pretty-tables--fenced-ranges))
+             (blocks (gfm-pretty-tables--find-blocks excluded))
              (matching (cl-loop for b in blocks
-                                when (gfm-tables--region-overlaps-p
+                                when (gfm-pretty-tables--region-overlaps-p
                                       dirty
-                                      (gfm-tables--block-line-range b))
+                                      (gfm-pretty-tables--block-line-range b))
                                 collect b)))
         (cond
          ((null matching) nil)
          ((and (null (cdr matching))
-               (gfm-tables--block-fully-contains-p (car matching) dirty))
-          (gfm-tables--rebuild-block (car matching)))
+               (gfm-pretty-tables--block-fully-contains-p (car matching) dirty))
+          (gfm-pretty-tables--rebuild-block (car matching)))
          (t
-          (gfm-tables--rebuild))))))))
+          (gfm-pretty-tables--rebuild))))))))
 
-(defvar-local gfm-tables--rebuild-timer nil
+(defvar-local gfm-pretty-tables--rebuild-timer nil
   "Idle timer for debounced overlay rebuilds.")
 
-(defvar gfm-tables-mode)
+(defvar gfm-pretty-tables-mode)
 
-(defun gfm-tables--arm-rebuild-timer (callback)
+(defun gfm-pretty-tables--arm-rebuild-timer (callback)
   "Cancel any pending rebuild timer and schedule CALLBACK after idle."
-  (when (timerp gfm-tables--rebuild-timer)
-    (cancel-timer gfm-tables--rebuild-timer))
-  (setq gfm-tables--rebuild-timer
+  (when (timerp gfm-pretty-tables--rebuild-timer)
+    (cancel-timer gfm-pretty-tables--rebuild-timer))
+  (setq gfm-pretty-tables--rebuild-timer
         (run-with-idle-timer
          0.2 nil
          (lambda (buf cb)
            (when (buffer-live-p buf)
              (with-current-buffer buf
-               (when gfm-tables-mode
+               (when gfm-pretty-tables-mode
                  (funcall cb)))))
          (current-buffer) callback)))
 
-(defun gfm-tables--schedule-rebuild (&optional beg end _len)
+(defun gfm-pretty-tables--schedule-rebuild (&optional beg end _len)
   "Merge BEG..END into the dirty region and arm the rebuild timer.
 Skips indirect buffers since base buffer overlays already cover them."
   (unless (buffer-base-buffer)
     (when (and beg end)
-      (gfm-tables--extend-dirty-region beg end))
-    (gfm-tables--arm-rebuild-timer #'gfm-tables--rebuild-scoped)))
+      (gfm-pretty-tables--extend-dirty-region beg end))
+    (gfm-pretty-tables--arm-rebuild-timer #'gfm-pretty-tables--rebuild-scoped)))
 
-(defun gfm-tables--schedule-full-rebuild (&rest _)
+(defun gfm-pretty-tables--schedule-full-rebuild (&rest _)
   "Schedule a rebuild on next idle if the window state has changed.
 Window-configuration-change-hook fires for many reasons that don't
 affect rendering (minibuffer activity, focus, scroll-margin), so we
@@ -1467,37 +1471,37 @@ trips the comparison and triggers the prioritised rebuilder, which
 updates visible-window tables immediately and lets off-screen tables
 catch up on the following idle tick."
   (unless (buffer-base-buffer)
-    (let ((state (gfm-tables--window-state)))
-      (unless (equal state gfm-tables--last-window-state)
-        (gfm-tables--arm-rebuild-timer #'gfm-tables--reconcile-windows)))))
+    (let ((state (gfm-pretty-tables--window-state)))
+      (unless (equal state gfm-pretty-tables--last-window-state)
+        (gfm-pretty-tables--arm-rebuild-timer #'gfm-pretty-tables--reconcile-windows)))))
 
 ;;; Minor mode
 
 ;;;###autoload
-(define-minor-mode gfm-tables-mode
+(define-minor-mode gfm-pretty-tables-mode
   "Adorn GFM tables with bordered, zebra-striped overlays."
   :lighter " gfm-tb"
-  :keymap gfm-tables-mode-map
-  (if gfm-tables-mode
+  :keymap gfm-pretty-tables-mode-map
+  (if gfm-pretty-tables-mode
       (progn
-        (gfm-tables--init-stats)
-        (gfm-tables--rebuild)
+        (gfm-pretty-tables--init-stats)
+        (gfm-pretty-tables--rebuild)
         (add-hook 'after-change-functions
-                  #'gfm-tables--schedule-rebuild nil t)
+                  #'gfm-pretty-tables--schedule-rebuild nil t)
         (add-hook 'window-configuration-change-hook
-                  #'gfm-tables--schedule-full-rebuild nil t)
+                  #'gfm-pretty-tables--schedule-full-rebuild nil t)
         (add-hook 'post-command-hook
-                  #'gfm-tables--update-cursor-highlight nil t))
+                  #'gfm-pretty-tables--update-cursor-highlight nil t))
     (remove-hook 'after-change-functions
-                 #'gfm-tables--schedule-rebuild t)
+                 #'gfm-pretty-tables--schedule-rebuild t)
     (remove-hook 'window-configuration-change-hook
-                 #'gfm-tables--schedule-full-rebuild t)
+                 #'gfm-pretty-tables--schedule-full-rebuild t)
     (remove-hook 'post-command-hook
-                 #'gfm-tables--update-cursor-highlight t)
-    (when (timerp gfm-tables--rebuild-timer)
-      (cancel-timer gfm-tables--rebuild-timer))
-    (gfm-tables--hide-cursor-highlight)
-    (gfm-tables--remove-overlays)))
+                 #'gfm-pretty-tables--update-cursor-highlight t)
+    (when (timerp gfm-pretty-tables--rebuild-timer)
+      (cancel-timer gfm-pretty-tables--rebuild-timer))
+    (gfm-pretty-tables--hide-cursor-highlight)
+    (gfm-pretty-tables--remove-overlays)))
 
 ;;; Indirect editing
 
@@ -1505,28 +1509,28 @@ catch up on the following idle tick."
 (declare-function orgtbl-mode "org-table")
 (declare-function markdown-mode "markdown-mode")
 
-(defun gfm-tables--block-at-point ()
+(defun gfm-pretty-tables--block-at-point ()
   "Return (BEG . END) of the table block containing point, or nil."
   (let ((pt (point)))
     (cl-loop for (header-beg _delim-beg _body-beg body-end)
-             in (gfm-tables--find-blocks)
+             in (gfm-pretty-tables--find-blocks)
              when (and (>= pt header-beg) (<= pt body-end))
              return (cons header-beg body-end))))
 
-(defvar-local gfm-tables--edit-source-buffer nil
+(defvar-local gfm-pretty-tables--edit-source-buffer nil
   "Buffer-local in the indirect edit buffer; points to the parent buffer.")
 
-(defvar-local gfm-tables--edit-pending-cell-info nil
+(defvar-local gfm-pretty-tables--edit-pending-cell-info nil
   "Stashed (LINE-OFFSET . CELL-IDX) captured before edit-indirect commits.
-Set on the parent buffer by `gfm-tables--edit-before-commit', consumed
-by `gfm-tables--edit-after-commit' which runs in the parent.")
+Set on the parent buffer by `gfm-pretty-tables--edit-before-commit', consumed
+by `gfm-pretty-tables--edit-after-commit' which runs in the parent.")
 
-(defun gfm-tables--edit-cell-info-here (&optional region-beg)
+(defun gfm-pretty-tables--edit-cell-info-here (&optional region-beg)
   "Return (LINE-OFFSET . CELL-IDX) for point on the current line.
 LINE-OFFSET is counted from REGION-BEG (defaulting to `point-min'),
 so the value is comparable between a source buffer (passing the table's
 start) and an indirect edit buffer (whose `point-min' is that start)."
-  (let* ((cb (gfm-tables--cell-bounds (line-beginning-position)
+  (let* ((cb (gfm-pretty-tables--cell-bounds (line-beginning-position)
                                       (line-end-position)))
          (idx (or (and cb
                        (cl-position-if
@@ -1539,33 +1543,33 @@ start) and an indirect edit buffer (whose `point-min' is that start)."
                                    (line-beginning-position))))
     (cons line-offset idx)))
 
-(defun gfm-tables--goto-cell-on-current-line (idx)
+(defun gfm-pretty-tables--goto-cell-on-current-line (idx)
   "Move point to the start of cell IDX on the current line, if it exists."
-  (let ((cb (gfm-tables--cell-bounds (line-beginning-position)
+  (let ((cb (gfm-pretty-tables--cell-bounds (line-beginning-position)
                                      (line-end-position))))
     (when (and cb (< idx (length cb)))
       (goto-char (car (nth idx cb))))))
 
-(defun gfm-tables--edit-before-commit ()
+(defun gfm-pretty-tables--edit-before-commit ()
   "Capture indirect-buffer cell position into the parent buffer."
-  (let ((info (gfm-tables--edit-cell-info-here))
-        (parent gfm-tables--edit-source-buffer))
+  (let ((info (gfm-pretty-tables--edit-cell-info-here))
+        (parent gfm-pretty-tables--edit-source-buffer))
     (when (and parent (buffer-live-p parent))
       (with-current-buffer parent
-        (setq gfm-tables--edit-pending-cell-info info)))))
+        (setq gfm-pretty-tables--edit-pending-cell-info info)))))
 
-(defun gfm-tables--edit-after-commit (beg _end)
+(defun gfm-pretty-tables--edit-after-commit (beg _end)
   "After commit, move point to the captured cell starting from BEG.
 Recenters if off-screen.  The actual move is deferred to the next
 event-loop tick so it runs after any after-advice on
 `edit-indirect-commit' (e.g. the one `markdown-mode' installs to track
 committed positions)."
-  (when gfm-tables--edit-pending-cell-info
-    (let* ((info gfm-tables--edit-pending-cell-info)
+  (when gfm-pretty-tables--edit-pending-cell-info
+    (let* ((info gfm-pretty-tables--edit-pending-cell-info)
            (line-offset (car info))
            (cell-idx (cdr info))
            (buf (current-buffer)))
-      (setq gfm-tables--edit-pending-cell-info nil)
+      (setq gfm-pretty-tables--edit-pending-cell-info nil)
       (run-at-time
        0 nil
        (lambda ()
@@ -1573,18 +1577,18 @@ committed positions)."
            (with-current-buffer buf
              (goto-char beg)
              (forward-line line-offset)
-             (gfm-tables--goto-cell-on-current-line cell-idx)
+             (gfm-pretty-tables--goto-cell-on-current-line cell-idx)
              (let ((win (get-buffer-window buf)))
                (when (window-live-p win)
                  (set-window-point win (point))
                  (unless (pos-visible-in-window-p (point) win)
                    (with-selected-window win (recenter)))))
-             (when (bound-and-true-p gfm-tables-mode)
-               (gfm-tables--update-cursor-highlight)))))))))
+             (when (bound-and-true-p gfm-pretty-tables-mode)
+               (gfm-pretty-tables--update-cursor-highlight)))))))))
 
-(defun gfm-tables--cell-content-bounds (row-ov idx)
+(defun gfm-pretty-tables--cell-content-bounds (row-ov idx)
   "Return (BEG . END) of cell IDX inside ROW-OV, trimmed of whitespace."
-  (let* ((cb (overlay-get row-ov 'gfm-tables-cell-bounds))
+  (let* ((cb (overlay-get row-ov 'gfm-pretty-tables-cell-bounds))
          (cell (nth idx cb))
          (raw-beg (car cell))
          (raw-end (cdr cell)))
@@ -1596,11 +1600,11 @@ committed positions)."
         (skip-chars-backward " \t" raw-beg)
         (cons b (point))))))
 
-(defun gfm-tables--cell-link-pos (row-ov idx)
+(defun gfm-pretty-tables--cell-link-pos (row-ov idx)
   "Return the buffer position of the first link inside cell IDX of ROW-OV.
 Searches for inline `[text](url)', reference `[text][ref]', and bare URI
 forms within the cell's source range.  Returns nil if none is found."
-  (let* ((bounds (gfm-tables--cell-content-bounds row-ov idx))
+  (let* ((bounds (gfm-pretty-tables--cell-content-bounds row-ov idx))
          (beg (car bounds))
          (end (cdr bounds)))
     (cl-loop for re in (list markdown-regex-link-inline
@@ -1613,13 +1617,13 @@ forms within the cell's source range.  Returns nil if none is found."
                               (match-beginning 0)))
              when hit return hit)))
 
-(defun gfm-tables--edit-header-line (label)
+(defun gfm-pretty-tables--edit-header-line (label)
   "Return a header-line string for an indirect edit buffer titled LABEL."
   (concat (propertize (concat " " label) 'face 'mode-line-emphasis)
           (propertize "  C-c C-c" 'face 'help-key-binding) " commit"
           (propertize "  C-c C-k" 'face 'help-key-binding) " abort"))
 
-(defun gfm-tables--cell-edit-sanitise ()
+(defun gfm-pretty-tables--cell-edit-sanitise ()
   "Strip newlines and escape unescaped `|' in the current buffer.
 Run in the indirect cell edit buffer just before commit."
   (save-excursion
@@ -1630,48 +1634,48 @@ Run in the indirect cell edit buffer just before commit."
     (while (re-search-forward "\\(\\`\\|[^\\\\]\\)\\(|\\)" nil t)
       (replace-match "\\1\\\\|" t nil))))
 
-(defvar-local gfm-tables--cell-edit-pending nil
+(defvar-local gfm-pretty-tables--cell-edit-pending nil
   "Non-nil between a cell-edit's before-commit and after-commit hooks.
 Set buffer-locally on the parent (markdown) buffer.  Tells
-`gfm-tables--cell-edit-after-commit' to strip the stray trailing
+`gfm-pretty-tables--cell-edit-after-commit' to strip the stray trailing
 newline that `markdown--edit-indirect-after-commit-function' inserts
 \(it treats every committed region as a code block, but a cell edit
 commits raw cell content with no terminating newline).")
 
-(defun gfm-tables--cell-edit-mark-pending ()
+(defun gfm-pretty-tables--cell-edit-mark-pending ()
   "Indirect-buffer before-commit hook: mark the parent for cleanup."
   (let ((parent (and (boundp 'edit-indirect--overlay)
                      edit-indirect--overlay
                      (overlay-buffer edit-indirect--overlay))))
     (when (buffer-live-p parent)
       (with-current-buffer parent
-        (setq gfm-tables--cell-edit-pending t)))))
+        (setq gfm-pretty-tables--cell-edit-pending t)))))
 
-(defun gfm-tables--cell-edit-after-commit (_beg end)
-  "Parent after-commit hook: drop a stray trailing newline if a cell-edit just committed.
+(defun gfm-pretty-tables--cell-edit-after-commit (_beg end)
+  "After-commit hook: drop the stray trailing newline left by a cell edit.
 The end position is the cell-content-end marker passed to markdown's
 hook; after markdown inserts `\\n' at that position, the marker stays
 just *before* the new newline (default insertion-type), so we look at
 `char-after' rather than `char-before'."
-  (when gfm-tables--cell-edit-pending
-    (setq gfm-tables--cell-edit-pending nil)
+  (when gfm-pretty-tables--cell-edit-pending
+    (setq gfm-pretty-tables--cell-edit-pending nil)
     (when (and (< end (point-max)) (eq (char-after end) ?\n))
       (let ((inhibit-read-only t))
         (delete-region end (1+ end))))))
 
 ;;;###autoload
-(defun gfm-tables-edit-cell-at-point ()
+(defun gfm-pretty-tables-edit-cell-at-point ()
   "Open the active table cell in an indirect markdown edit buffer.
 On commit, embedded newlines are replaced with spaces and any
 unescaped `|' is escaped to `\\|'."
   (interactive)
   (require 'edit-indirect)
-  (let ((info (gfm-tables--cell-info-at-point)))
+  (let ((info (gfm-pretty-tables--cell-info-at-point)))
     (unless info
       (user-error "Point is not in a table cell"))
     (let* ((row-ov (car info))
            (idx (cdr info))
-           (bounds (gfm-tables--cell-content-bounds row-ov idx))
+           (bounds (gfm-pretty-tables--cell-content-bounds row-ov idx))
            (src-buf (current-buffer))
            (edit-indirect-guess-mode-function
             (lambda (_parent _beg _end) (markdown-mode)))
@@ -1680,20 +1684,20 @@ unescaped `|' is escaped to `\\|'."
         (setq-local require-final-newline nil)
         (setq-local mode-require-final-newline nil)
         (setq-local header-line-format
-                    (gfm-tables--edit-header-line "Edit cell"))
+                    (gfm-pretty-tables--edit-header-line "Edit cell"))
         (add-hook 'edit-indirect-before-commit-hook
-                  #'gfm-tables--cell-edit-mark-pending nil t)
+                  #'gfm-pretty-tables--cell-edit-mark-pending nil t)
         (add-hook 'edit-indirect-before-commit-hook
-                  #'gfm-tables--cell-edit-sanitise nil t))
+                  #'gfm-pretty-tables--cell-edit-sanitise nil t))
       (with-current-buffer src-buf
         ;; Append so this runs *after* `markdown--edit-indirect-after-commit-function',
         ;; which is what inserts the spurious newline we need to strip.
         (add-hook 'edit-indirect-after-commit-functions
-                  #'gfm-tables--cell-edit-after-commit
+                  #'gfm-pretty-tables--cell-edit-after-commit
                   'append 'local)))))
 
 ;;;###autoload
-(defun gfm-tables-edit-table-at-point ()
+(defun gfm-pretty-tables-edit-table-at-point ()
   "Open the GFM table containing point in an indirect edit buffer.
 The edit buffer uses `markdown-mode' with `orgtbl-mode' enabled, so
 TAB navigates cells, edits auto-align columns, and M-<right>/<left>
@@ -1703,11 +1707,11 @@ committed, point in the parent is moved to the cell point was on
 in the indirect buffer (recentering if it has scrolled off-screen)."
   (interactive)
   (require 'edit-indirect)
-  (let ((bounds (gfm-tables--block-at-point))
+  (let ((bounds (gfm-pretty-tables--block-at-point))
         (src-buf (current-buffer)))
     (unless bounds
       (user-error "Point is not inside a GFM table"))
-    (let* ((info (gfm-tables--edit-cell-info-here (car bounds)))
+    (let* ((info (gfm-pretty-tables--edit-cell-info-here (car bounds)))
            (line-offset (car info))
            (cell-idx (cdr info))
            ;; Extend region to include the trailing newline so markdown-mode's
@@ -1725,77 +1729,77 @@ in the indirect buffer (recentering if it has scrolled off-screen)."
         (setq-local require-final-newline nil)
         (setq-local mode-require-final-newline nil)
         (setq-local header-line-format
-                    (gfm-tables--edit-header-line "Edit table"))
-        (setq gfm-tables--edit-source-buffer src-buf)
+                    (gfm-pretty-tables--edit-header-line "Edit table"))
+        (setq gfm-pretty-tables--edit-source-buffer src-buf)
         (goto-char (point-min))
         (forward-line line-offset)
-        (gfm-tables--goto-cell-on-current-line cell-idx)
+        (gfm-pretty-tables--goto-cell-on-current-line cell-idx)
         (add-hook 'edit-indirect-before-commit-hook
-                  #'gfm-tables--edit-before-commit nil t))
+                  #'gfm-pretty-tables--edit-before-commit nil t))
       (with-current-buffer src-buf
         (add-hook 'edit-indirect-after-commit-functions
-                  #'gfm-tables--edit-after-commit nil t)))))
+                  #'gfm-pretty-tables--edit-after-commit nil t)))))
 
 ;;; Active-cell highlight
 
-(defvar-local gfm-tables--highlighted-anchor nil
+(defvar-local gfm-pretty-tables--highlighted-anchor nil
   "Anchor overlay whose row currently carries the active-cell highlight.")
 
-(defvar-local gfm-tables--highlighted-row-ov nil
+(defvar-local gfm-pretty-tables--highlighted-row-ov nil
   "Display overlay whose `display' currently carries the active-cell paint.
 Kept for the legacy name expected by tests; tracks the rendering layer
-that `gfm-tables--hide-cursor-highlight' must restore.")
+that `gfm-pretty-tables--hide-cursor-highlight' must restore.")
 
-(defvar-local gfm-tables--current-highlight-key nil
+(defvar-local gfm-pretty-tables--current-highlight-key nil
   "The (ANCHOR . IDX) currently rendered as the active-cell highlight.
-Compared by `equal' in `gfm-tables--update-cursor-highlight' so motion
+Compared by `equal' in `gfm-pretty-tables--update-cursor-highlight' so motion
 that lands on the same cell can skip the display repaint.")
 
-(defvar-local gfm-tables--cursor-anchor nil
+(defvar-local gfm-pretty-tables--cursor-anchor nil
   "Buffer position currently flagged with the `cursor' text property.
 Used to anchor the visible terminal cursor at the active cell's first
 char rather than at the right edge of the overlay's display range.")
 
-(defvar-local gfm-tables--saved-cursor-type 'gfm-tables-unset
+(defvar-local gfm-pretty-tables--saved-cursor-type 'gfm-pretty-tables-unset
   "Stashed `cursor-type' captured before being hidden over a table.
-The sentinel `gfm-tables-unset' means no value is stashed; the
-sentinel `gfm-tables-global' means the variable was not buffer-local
+The sentinel `gfm-pretty-tables-unset' means no value is stashed; the
+sentinel `gfm-pretty-tables-global' means the variable was not buffer-local
 when we stashed it.")
 
-(defun gfm-tables--save-and-hide-cursor ()
+(defun gfm-pretty-tables--save-and-hide-cursor ()
   "Hide the buffer cursor, stashing the previous value for restoration.
 Reliable on graphical frames; tty cursor visibility is left as-is
 because tmux + post-redisplay re-shows from Emacs's own internals
 make it impractical to keep hidden in a terminal without intrusive
 hacks."
-  (when (eq gfm-tables--saved-cursor-type 'gfm-tables-unset)
-    (setq gfm-tables--saved-cursor-type
+  (when (eq gfm-pretty-tables--saved-cursor-type 'gfm-pretty-tables-unset)
+    (setq gfm-pretty-tables--saved-cursor-type
           (if (local-variable-p 'cursor-type)
               cursor-type
-            'gfm-tables-global)))
+            'gfm-pretty-tables-global)))
   (setq-local cursor-type nil))
 
-(defun gfm-tables--restore-cursor ()
+(defun gfm-pretty-tables--restore-cursor ()
   "Restore the stashed `cursor-type', if any."
-  (unless (eq gfm-tables--saved-cursor-type 'gfm-tables-unset)
-    (if (eq gfm-tables--saved-cursor-type 'gfm-tables-global)
+  (unless (eq gfm-pretty-tables--saved-cursor-type 'gfm-pretty-tables-unset)
+    (if (eq gfm-pretty-tables--saved-cursor-type 'gfm-pretty-tables-global)
         (kill-local-variable 'cursor-type)
-      (setq-local cursor-type gfm-tables--saved-cursor-type))
-    (setq gfm-tables--saved-cursor-type 'gfm-tables-unset)))
+      (setq-local cursor-type gfm-pretty-tables--saved-cursor-type))
+    (setq gfm-pretty-tables--saved-cursor-type 'gfm-pretty-tables-unset)))
 
-(defconst gfm-tables--hint-groups
+(defconst gfm-pretty-tables--hint-groups
   `(("Edit"
      (((evil-forward-word-end) . "cell")
       ((evil-insert)           . "table"))
      (((evil-yank-line)        . "copy")))
-    ("Columns" :when ,#'gfm-tables--in-header-p
-     (((gfm-tables-swap-column-left gfm-tables-swap-column-right) . "swap"))))
+    ("Columns" :when ,#'gfm-pretty-tables--in-header-p
+     (((gfm-pretty-tables-swap-column-left gfm-pretty-tables-swap-column-right) . "swap"))))
   "Transient-style key hint groups shown while in a GFM table cell.
 Each entry is (HEADING [KEYWORD VALUE...] ROW...) where ROW is a list of
 \(CMDS . LABEL).  Supported keywords: `:when' PREDICATE — group is shown
 only if PREDICATE returns non-nil.")
 
-(defun gfm-tables--group-split (group)
+(defun gfm-pretty-tables--group-split (group)
   "Return (PROPS . ROWS) for GROUP, peeling leading plist keywords."
   (let ((tail (cdr group))
         (props nil))
@@ -1805,12 +1809,12 @@ only if PREDICATE returns non-nil.")
       (setq tail (cddr tail)))
     (cons (nreverse props) tail)))
 
-(defun gfm-tables--group-applicable-p (group)
+(defun gfm-pretty-tables--group-applicable-p (group)
   "Return non-nil if GROUP's `:when' predicate (if any) passes."
-  (let* ((pred (plist-get (car (gfm-tables--group-split group)) :when)))
+  (let* ((pred (plist-get (car (gfm-pretty-tables--group-split group)) :when)))
     (or (null pred) (funcall pred))))
 
-(defun gfm-tables--key-desc (cmds)
+(defun gfm-pretty-tables--key-desc (cmds)
   "Return CMDS' shortest active keys joined by `/' as a propertised string."
   (let ((parts (delq nil
                      (mapcar (lambda (c)
@@ -1821,64 +1825,64 @@ only if PREDICATE returns non-nil.")
          (propertize (mapconcat #'identity parts "/")
                      'face 'transient-key))))
 
-(defun gfm-tables--render-hint-items (rows)
+(defun gfm-pretty-tables--render-hint-items (rows)
   "Flatten ROWS (list of `((CMDS . LABEL) ...)') to `\"k1 lbl  k2 lbl\"'."
   (let ((items (cl-loop for row in rows
                         append (cl-loop for (cmds . label) in row
-                                        for keys = (gfm-tables--key-desc cmds)
+                                        for keys = (gfm-pretty-tables--key-desc cmds)
                                         when keys
                                         collect (concat keys " " label)))))
     (mapconcat #'identity items "  ")))
 
-(defun gfm-tables--render-hint-group (group)
+(defun gfm-pretty-tables--render-hint-group (group)
   "Render GROUP as a single line: heading followed by all key/label items."
   (let ((heading (propertize (car group) 'face 'transient-heading))
-        (items (gfm-tables--render-hint-items
-                (cdr (gfm-tables--group-split group)))))
+        (items (gfm-pretty-tables--render-hint-items
+                (cdr (gfm-pretty-tables--group-split group)))))
     (if (string-empty-p items) heading (concat heading " " items))))
 
-(defvar-local gfm-tables--last-hinted-cell nil
+(defvar-local gfm-pretty-tables--last-hinted-cell nil
   "Last (LINE-BEG . IDX) for which hints were echoed.
 Indexed by row line position rather than overlay identity so a rebuild
 \(which replaces row overlays) does not spuriously re-trigger the echo
 and clobber another command's message (e.g. `Copied:').")
 
-(defun gfm-tables--cell-key (info)
+(defun gfm-pretty-tables--cell-key (info)
   "Return a stable (LINE-BEG . IDX) key for cell-info INFO, or nil."
   (and info (cons (overlay-start (car info)) (cdr info))))
 
-(defun gfm-tables--echo-hints ()
+(defun gfm-pretty-tables--echo-hints ()
   "Echo the transient-style table key hints without logging to `*Messages*'."
-  (let* ((groups (seq-filter #'gfm-tables--group-applicable-p
-                             gfm-tables--hint-groups))
-         (line (mapconcat #'gfm-tables--render-hint-group groups "   "))
+  (let* ((groups (seq-filter #'gfm-pretty-tables--group-applicable-p
+                             gfm-pretty-tables--hint-groups))
+         (line (mapconcat #'gfm-pretty-tables--render-hint-group groups "   "))
          (message-log-max nil))
     (message "%s" line)))
 
-(defun gfm-tables--clear-cursor-anchor ()
+(defun gfm-pretty-tables--clear-cursor-anchor ()
   "Remove the `cursor' text property previously set by us, if any."
-  (when (and gfm-tables--cursor-anchor
-             (< gfm-tables--cursor-anchor (point-max)))
+  (when (and gfm-pretty-tables--cursor-anchor
+             (< gfm-pretty-tables--cursor-anchor (point-max)))
     (with-silent-modifications
-      (remove-text-properties gfm-tables--cursor-anchor
-                              (1+ gfm-tables--cursor-anchor)
+      (remove-text-properties gfm-pretty-tables--cursor-anchor
+                              (1+ gfm-pretty-tables--cursor-anchor)
                               '(cursor nil))))
-  (setq gfm-tables--cursor-anchor nil))
+  (setq gfm-pretty-tables--cursor-anchor nil))
 
-(defun gfm-tables--set-cursor-anchor (pos)
+(defun gfm-pretty-tables--set-cursor-anchor (pos)
   "Move the `cursor' text-property anchor to buffer position POS."
-  (gfm-tables--clear-cursor-anchor)
+  (gfm-pretty-tables--clear-cursor-anchor)
   (when (and pos (< pos (point-max)))
     (with-silent-modifications
       (put-text-property pos (1+ pos) 'cursor t))
-    (setq gfm-tables--cursor-anchor pos)))
+    (setq gfm-pretty-tables--cursor-anchor pos)))
 
-(defun gfm-tables--cell-info-at-point ()
+(defun gfm-pretty-tables--cell-info-at-point ()
   "Return (ROW-OV . CELL-IDX) for point inside a navigable table row, else nil."
   (let* ((ov (cl-find-if (lambda (o)
-                           (overlay-get o 'gfm-tables-cell-bounds))
+                           (overlay-get o 'gfm-pretty-tables-cell-bounds))
                          (overlays-at (point))))
-         (cb (and ov (overlay-get ov 'gfm-tables-cell-bounds))))
+         (cb (and ov (overlay-get ov 'gfm-pretty-tables-cell-bounds))))
     (when cb
       (cons ov
             (or (cl-position-if (lambda (b)
@@ -1887,9 +1891,9 @@ and clobber another command's message (e.g. `Copied:').")
                                 cb)
                 0)))))
 
-(defun gfm-tables--apply-cell-highlight (display dcb idx)
+(defun gfm-pretty-tables--apply-cell-highlight (display dcb idx)
   "Return a copy of DISPLAY with cell IDX painted with the active-cell face.
-DCB is the row's `gfm-tables-display-cell-bounds' overlay property: a
+DCB is the row's `gfm-pretty-tables-display-cell-bounds' overlay property: a
 \(N-CELLS . BOUNDS-VEC) cons where BOUNDS-VEC is a flat fixnum vector
 holding (BEG END) pairs in row-major (line, cell) order.  The highlight
 repeats on every visual line.  The first cell-beg on the first visual
@@ -1912,7 +1916,7 @@ instead of at the right edge of the overlay's display range."
              (cell-end (min nl (+ line-start range-end))))
         (when (< cell-beg cell-end)
           (add-face-text-property cell-beg cell-end
-                                  'gfm-tables-active-cell-face nil s)
+                                  'gfm-pretty-tables-active-cell-face nil s)
           (when first-line
             (put-text-property cell-beg (1+ cell-beg) 'cursor t s)
             (setq first-line nil)))
@@ -1920,86 +1924,86 @@ instead of at the right edge of the overlay's display range."
         (setq line-idx (1+ line-idx))))
     s))
 
-(defun gfm-tables--show-cell-highlight (anchor idx)
+(defun gfm-pretty-tables--show-cell-highlight (anchor idx)
   "Repaint ANCHOR's paired display overlay so cell IDX shows the active-cell face.
 Also anchors the visible cursor at the cell's first buffer char."
-  (let* ((display-ov (gfm-tables--display-overlay-for-anchor anchor))
-         (cb (overlay-get anchor 'gfm-tables-cell-bounds)))
+  (let* ((display-ov (gfm-pretty-tables--display-overlay-for-anchor anchor))
+         (cb (overlay-get anchor 'gfm-pretty-tables-cell-bounds)))
     (when display-ov
-      (let ((orig (or (overlay-get display-ov 'gfm-tables-saved-display)
+      (let ((orig (or (overlay-get display-ov 'gfm-pretty-tables-saved-display)
                       (overlay-get display-ov 'display)))
-            (dcb (overlay-get display-ov 'gfm-tables-display-cell-bounds)))
-        (overlay-put display-ov 'gfm-tables-saved-display orig)
+            (dcb (overlay-get display-ov 'gfm-pretty-tables-display-cell-bounds)))
+        (overlay-put display-ov 'gfm-pretty-tables-saved-display orig)
         (overlay-put display-ov 'display
-                     (gfm-tables--apply-cell-highlight orig dcb idx))
-        (setq gfm-tables--highlighted-anchor anchor
-              gfm-tables--highlighted-row-ov display-ov)))
+                     (gfm-pretty-tables--apply-cell-highlight orig dcb idx))
+        (setq gfm-pretty-tables--highlighted-anchor anchor
+              gfm-pretty-tables--highlighted-row-ov display-ov)))
     (when (and cb (< idx (length cb)))
-      (gfm-tables--set-cursor-anchor (car (nth idx cb))))))
+      (gfm-pretty-tables--set-cursor-anchor (car (nth idx cb))))))
 
-(defun gfm-tables--hide-cursor-highlight ()
+(defun gfm-pretty-tables--hide-cursor-highlight ()
   "Restore the row's original display, clear the cursor anchor, and the cursor."
-  (when (and gfm-tables--highlighted-row-ov
-             (overlay-buffer gfm-tables--highlighted-row-ov))
-    (let* ((ov gfm-tables--highlighted-row-ov)
-           (orig (overlay-get ov 'gfm-tables-saved-display)))
+  (when (and gfm-pretty-tables--highlighted-row-ov
+             (overlay-buffer gfm-pretty-tables--highlighted-row-ov))
+    (let* ((ov gfm-pretty-tables--highlighted-row-ov)
+           (orig (overlay-get ov 'gfm-pretty-tables-saved-display)))
       (when orig
         (overlay-put ov 'display orig))
-      (overlay-put ov 'gfm-tables-saved-display nil)))
-  (gfm-tables--clear-cursor-anchor)
-  (gfm-tables--restore-cursor)
-  (setq gfm-tables--highlighted-anchor nil
-        gfm-tables--highlighted-row-ov nil
-        gfm-tables--current-highlight-key nil))
+      (overlay-put ov 'gfm-pretty-tables-saved-display nil)))
+  (gfm-pretty-tables--clear-cursor-anchor)
+  (gfm-pretty-tables--restore-cursor)
+  (setq gfm-pretty-tables--highlighted-anchor nil
+        gfm-pretty-tables--highlighted-row-ov nil
+        gfm-pretty-tables--current-highlight-key nil))
 
-(defun gfm-tables--update-cursor-highlight ()
+(defun gfm-pretty-tables--update-cursor-highlight ()
   "Highlight the active cell at point and hide the buffer cursor.
 The cursor is hidden because tty Emacs always renders it at the
 overlay's right edge regardless of any `cursor' positioning hints, so
 the highlight alone conveys cell selection."
-  (gfm-tables--maybe-snap-to-cell)
-  (let ((info (gfm-tables--cell-info-at-point)))
+  (gfm-pretty-tables--maybe-snap-to-cell)
+  (let ((info (gfm-pretty-tables--cell-info-at-point)))
     (cond
      (info
       (let* ((anchor (car info))
              (idx (cdr info))
              (key (cons anchor idx)))
-        (unless (equal key gfm-tables--current-highlight-key)
-          (unless (eq anchor gfm-tables--highlighted-anchor)
-            (gfm-tables--hide-cursor-highlight))
-          (gfm-tables--show-cell-highlight anchor idx)
-          (setq gfm-tables--current-highlight-key key)))
-      (gfm-tables--save-and-hide-cursor)
-      (let ((cell-key (gfm-tables--cell-key info)))
-        (unless (equal cell-key gfm-tables--last-hinted-cell)
-          (gfm-tables--echo-hints)
-          (setq gfm-tables--last-hinted-cell cell-key))))
+        (unless (equal key gfm-pretty-tables--current-highlight-key)
+          (unless (eq anchor gfm-pretty-tables--highlighted-anchor)
+            (gfm-pretty-tables--hide-cursor-highlight))
+          (gfm-pretty-tables--show-cell-highlight anchor idx)
+          (setq gfm-pretty-tables--current-highlight-key key)))
+      (gfm-pretty-tables--save-and-hide-cursor)
+      (let ((cell-key (gfm-pretty-tables--cell-key info)))
+        (unless (equal cell-key gfm-pretty-tables--last-hinted-cell)
+          (gfm-pretty-tables--echo-hints)
+          (setq gfm-pretty-tables--last-hinted-cell cell-key))))
      (t
-      (when gfm-tables--current-highlight-key
-        (gfm-tables--hide-cursor-highlight)
-        (setq gfm-tables--current-highlight-key nil
-              gfm-tables--last-hinted-cell nil))))))
+      (when gfm-pretty-tables--current-highlight-key
+        (gfm-pretty-tables--hide-cursor-highlight)
+        (setq gfm-pretty-tables--current-highlight-key nil
+              gfm-pretty-tables--last-hinted-cell nil))))))
 
 ;;; Cell-wise navigation
 
-(defun gfm-tables--goto-cell (row-ov idx)
+(defun gfm-pretty-tables--goto-cell (row-ov idx)
   "Move point to the start of cell IDX in ROW-OV.
 IDX is clamped to the row's valid range.  Sets
 `disable-point-adjustment' so Emacs does not snap point to the
 end of the row-overlay's `display' range after the command."
-  (let* ((cb (overlay-get row-ov 'gfm-tables-cell-bounds))
+  (let* ((cb (overlay-get row-ov 'gfm-pretty-tables-cell-bounds))
          (n (length cb))
          (clamped (max 0 (min (1- n) idx))))
     (goto-char (car (nth clamped cb)))
     (setq disable-point-adjustment t)))
 
-(defun gfm-tables--row-on-relative-line (direction)
-  "Return the gfm-tables navigable row overlay DIRECTION lines from point.
+(defun gfm-pretty-tables--row-on-relative-line (direction)
+  "Return the gfm-pretty-tables navigable row overlay DIRECTION lines from point.
 DIRECTION is 1 for the next row, -1 for the previous row.  Skips
 non-navigable rows (e.g. the delimiter).  Confined to the current
 table block so motion at a table edge yields nil instead of jumping
 into a neighbouring table."
-  (when-let* ((block (gfm-tables--current-block)))
+  (when-let* ((block (gfm-pretty-tables--current-block)))
     (let ((block-beg (nth 0 block))
           (block-end (nth 3 block)))
       (save-excursion
@@ -2014,149 +2018,150 @@ into a neighbouring table."
                (t
                 (let ((ov (cl-find-if
                            (lambda (o)
-                             (overlay-get o 'gfm-tables-cell-bounds))
+                             (overlay-get o 'gfm-pretty-tables-cell-bounds))
                            (overlays-at lbeg))))
                   (when ov (setq found ov)))))))
           found)))))
 
-(defun gfm-tables-cell-forward ()
+(defun gfm-pretty-tables-cell-forward ()
   "Move to the next cell in the current table row.
 Returns non-nil on success, nil when point is already on the last cell."
   (interactive)
-  (let* ((info (gfm-tables--cell-info-at-point))
-         (cb (and info (overlay-get (car info) 'gfm-tables-cell-bounds)))
+  (let* ((info (gfm-pretty-tables--cell-info-at-point))
+         (cb (and info (overlay-get (car info) 'gfm-pretty-tables-cell-bounds)))
          (next-idx (and info (1+ (cdr info)))))
     (when (and info (< next-idx (length cb)))
-      (gfm-tables--goto-cell (car info) next-idx)
+      (gfm-pretty-tables--goto-cell (car info) next-idx)
       t)))
 
-(defun gfm-tables-cell-backward ()
+(defun gfm-pretty-tables-cell-backward ()
   "Move to the previous cell in the current table row.
 Returns non-nil on success, nil when point is already on the first cell."
   (interactive)
-  (let* ((info (gfm-tables--cell-info-at-point))
+  (let* ((info (gfm-pretty-tables--cell-info-at-point))
          (prev-idx (and info (1- (cdr info)))))
     (when (and info (>= prev-idx 0))
-      (gfm-tables--goto-cell (car info) prev-idx)
+      (gfm-pretty-tables--goto-cell (car info) prev-idx)
       t)))
 
-(defun gfm-tables-row-down ()
+(defun gfm-pretty-tables-row-down ()
   "Move to the same cell in the next table row.
 Returns non-nil on success, nil when there is no next table row."
   (interactive)
-  (let* ((info (gfm-tables--cell-info-at-point))
-         (next (and info (gfm-tables--row-on-relative-line 1))))
+  (let* ((info (gfm-pretty-tables--cell-info-at-point))
+         (next (and info (gfm-pretty-tables--row-on-relative-line 1))))
     (when next
-      (gfm-tables--goto-cell next (cdr info))
+      (gfm-pretty-tables--goto-cell next (cdr info))
       t)))
 
-(defun gfm-tables-row-up ()
+(defun gfm-pretty-tables-row-up ()
   "Move to the same cell in the previous table row.
 Returns non-nil on success, nil when there is no previous table row."
   (interactive)
-  (let* ((info (gfm-tables--cell-info-at-point))
-         (prev (and info (gfm-tables--row-on-relative-line -1))))
+  (let* ((info (gfm-pretty-tables--cell-info-at-point))
+         (prev (and info (gfm-pretty-tables--row-on-relative-line -1))))
     (when prev
-      (gfm-tables--goto-cell prev (cdr info))
+      (gfm-pretty-tables--goto-cell prev (cdr info))
       t)))
 
-(defun gfm-tables-row-first-cell ()
+(defun gfm-pretty-tables-row-first-cell ()
   "Move to the first cell in the current table row."
   (interactive)
-  (let ((info (gfm-tables--cell-info-at-point)))
-    (when info (gfm-tables--goto-cell (car info) 0))))
+  (let ((info (gfm-pretty-tables--cell-info-at-point)))
+    (when info (gfm-pretty-tables--goto-cell (car info) 0))))
 
-(defun gfm-tables-row-last-cell ()
+(defun gfm-pretty-tables-row-last-cell ()
   "Move to the last cell in the current table row."
   (interactive)
-  (let ((info (gfm-tables--cell-info-at-point)))
+  (let ((info (gfm-pretty-tables--cell-info-at-point)))
     (when info
-      (gfm-tables--goto-cell (car info) most-positive-fixnum))))
+      (gfm-pretty-tables--goto-cell (car info) most-positive-fixnum))))
 
-(defun gfm-tables-cell-copy ()
+(defun gfm-pretty-tables-cell-copy ()
   "Copy the active table cell's content to the kill ring."
   (interactive)
-  (let ((info (gfm-tables--cell-info-at-point)))
+  (let ((info (gfm-pretty-tables--cell-info-at-point)))
     (unless info
       (user-error "Point is not in a table cell"))
-    (let* ((bounds (gfm-tables--cell-content-bounds (car info) (cdr info)))
+    (let* ((bounds (gfm-pretty-tables--cell-content-bounds (car info) (cdr info)))
            (text (buffer-substring-no-properties (car bounds) (cdr bounds))))
       (kill-new text)
       (message "Copied: %s"
                (truncate-string-to-width text 60 nil nil t)))))
 
-(defun gfm-tables-do-at-cell ()
+(defun gfm-pretty-tables-do-at-cell ()
   "Dispatch `markdown-do' on the active cell's contents.
 If the cell contains a link, point is moved onto it first so
 `markdown-do' follows the link instead of acting at the row's
 left edge."
   (interactive)
-  (let ((info (gfm-tables--cell-info-at-point)))
+  (let ((info (gfm-pretty-tables--cell-info-at-point)))
     (unless info
       (user-error "Point is not in a table cell"))
     (let* ((row-ov (car info))
            (idx (cdr info))
-           (link-pos (gfm-tables--cell-link-pos row-ov idx))
-           (bounds (gfm-tables--cell-content-bounds row-ov idx)))
+           (link-pos (gfm-pretty-tables--cell-link-pos row-ov idx))
+           (bounds (gfm-pretty-tables--cell-content-bounds row-ov idx)))
       (goto-char (or link-pos (car bounds)))
       (call-interactively #'markdown-do))))
 
-(defun gfm-tables--insert-new-row-after-current ()
+(defun gfm-pretty-tables--insert-new-row-after-current ()
   "Insert an empty row after the current one and put point in cell 0."
-  (let* ((info (gfm-tables--cell-info-at-point))
+  (let* ((info (gfm-pretty-tables--cell-info-at-point))
          (row-ov (car info))
-         (n (length (overlay-get row-ov 'gfm-tables-cell-bounds))))
+         (n (length (overlay-get row-ov 'gfm-pretty-tables-cell-bounds))))
     (goto-char (line-end-position))
     (insert "\n|"
             (apply #'concat (make-list n "  |")))
-    (gfm-tables--rebuild)
+    (gfm-pretty-tables--rebuild)
     (let ((new-row (cl-find-if
-                    (lambda (o) (overlay-get o 'gfm-tables-cell-bounds))
+                    (lambda (o) (overlay-get o 'gfm-pretty-tables-cell-bounds))
                     (overlays-at (line-beginning-position)))))
       (when new-row
-        (gfm-tables--goto-cell new-row 0)))))
+        (gfm-pretty-tables--goto-cell new-row 0)))))
 
-(defun gfm-tables-cell-tab ()
+(defun gfm-pretty-tables-cell-tab ()
   "Move to the next cell.
 At end of a row, wrap to the next row's first cell.  At end of the
 last row, insert a fresh empty row and land in its first cell."
   (interactive)
   (cond
-   ((gfm-tables-cell-forward) t)
-   ((let ((next (gfm-tables--row-on-relative-line 1)))
-      (when next (gfm-tables--goto-cell next 0) t)))
-   (t (gfm-tables--insert-new-row-after-current))))
+   ((gfm-pretty-tables-cell-forward) t)
+   ((let ((next (gfm-pretty-tables--row-on-relative-line 1)))
+      (when next (gfm-pretty-tables--goto-cell next 0) t)))
+   (t (gfm-pretty-tables--insert-new-row-after-current))))
 
-(defun gfm-tables-cell-backtab ()
-  "Move to the previous cell, wrapping to the previous row's last cell at row start."
+(defun gfm-pretty-tables-cell-backtab ()
+  "Move to the previous cell.
+At a row start, wrap to the previous row's last cell."
   (interactive)
-  (unless (gfm-tables-cell-backward)
-    (let ((prev-row (gfm-tables--row-on-relative-line -1)))
+  (unless (gfm-pretty-tables-cell-backward)
+    (let ((prev-row (gfm-pretty-tables--row-on-relative-line -1)))
       (when prev-row
-        (gfm-tables--goto-cell prev-row most-positive-fixnum)))))
+        (gfm-pretty-tables--goto-cell prev-row most-positive-fixnum)))))
 
 ;;; Header column reordering
 
-(defun gfm-tables--current-block ()
+(defun gfm-pretty-tables--current-block ()
   "Return the table block (HEADER-BEG DELIM-BEG BODY-BEG BODY-END) at point."
   (let ((pt (point)))
-    (cl-loop for block in (gfm-tables--find-blocks)
+    (cl-loop for block in (gfm-pretty-tables--find-blocks)
              when (and (>= pt (nth 0 block)) (<= pt (nth 3 block)))
              return block)))
 
-(defun gfm-tables--in-header-p ()
+(defun gfm-pretty-tables--in-header-p ()
   "Non-nil if point is on the header row of a table."
-  (let ((block (gfm-tables--current-block)))
+  (let ((block (gfm-pretty-tables--current-block)))
     (and block (= (line-beginning-position) (nth 0 block)))))
 
-(defun gfm-tables--swap-cells-in-line (line-pos a b)
+(defun gfm-pretty-tables--swap-cells-in-line (line-pos a b)
   "On the line containing LINE-POS, swap cell A with cell B by index.
 A and B are zero-based.  No-op if either index is out of range."
   (save-excursion
     (goto-char line-pos)
     (let* ((lb (line-beginning-position))
            (le (line-end-position))
-           (cb (gfm-tables--cell-bounds lb le))
+           (cb (gfm-pretty-tables--cell-bounds lb le))
            (n (length cb)))
       (when (and (< a n) (< b n) (/= a b))
         (let* ((lo (min a b))
@@ -2175,48 +2180,48 @@ A and B are zero-based.  No-op if either index is out of range."
           (goto-char lo-beg)
           (insert hi-text))))))
 
-(defun gfm-tables--swap-columns (direction)
+(defun gfm-pretty-tables--swap-columns (direction)
   "Swap the active cell's column with its DIRECTION (-1 or 1) neighbour.
 Silently no-op when point is not on a header row, or when the
 neighbour column is out of range."
-  (let* ((info (and (gfm-tables--in-header-p)
-                    (gfm-tables--cell-info-at-point)))
-         (block (and info (gfm-tables--current-block)))
+  (let* ((info (and (gfm-pretty-tables--in-header-p)
+                    (gfm-pretty-tables--cell-info-at-point)))
+         (block (and info (gfm-pretty-tables--current-block)))
          (src-idx (and info (cdr info)))
          (dst-idx (and info (+ src-idx direction)))
          (n-cols (and info
                       (length (overlay-get (car info)
-                                           'gfm-tables-cell-bounds)))))
+                                           'gfm-pretty-tables-cell-bounds)))))
     (when (and info (>= dst-idx 0) (< dst-idx n-cols))
       (let ((header-beg (nth 0 block))
             (delim-beg (nth 1 block))
             (body-beg  (nth 2 block))
             (body-end  (nth 3 block)))
         (save-excursion
-          (gfm-tables--swap-cells-in-line header-beg src-idx dst-idx)
-          (gfm-tables--swap-cells-in-line delim-beg src-idx dst-idx)
+          (gfm-pretty-tables--swap-cells-in-line header-beg src-idx dst-idx)
+          (gfm-pretty-tables--swap-cells-in-line delim-beg src-idx dst-idx)
           (goto-char body-beg)
           (while (and (< (point) body-end) (looking-at-p "^|"))
-            (gfm-tables--swap-cells-in-line (point) src-idx dst-idx)
+            (gfm-pretty-tables--swap-cells-in-line (point) src-idx dst-idx)
             (forward-line 1))))
-      (gfm-tables--rebuild)
+      (gfm-pretty-tables--rebuild)
       (let ((row-ov (cl-find-if (lambda (o)
-                                  (overlay-get o 'gfm-tables-cell-bounds))
+                                  (overlay-get o 'gfm-pretty-tables-cell-bounds))
                                 (overlays-at (line-beginning-position)))))
         (when row-ov
-          (gfm-tables--goto-cell row-ov dst-idx))))))
+          (gfm-pretty-tables--goto-cell row-ov dst-idx))))))
 
-(defun gfm-tables-swap-column-left ()
+(defun gfm-pretty-tables-swap-column-left ()
   "Swap the active header column with the column to its left."
   (interactive)
-  (gfm-tables--swap-columns -1))
+  (gfm-pretty-tables--swap-columns -1))
 
-(defun gfm-tables-swap-column-right ()
+(defun gfm-pretty-tables-swap-column-right ()
   "Swap the active header column with the column to its right."
   (interactive)
-  (gfm-tables--swap-columns 1))
+  (gfm-pretty-tables--swap-columns 1))
 
-(defconst gfm-tables--snap-suppressing-command-re
+(defconst gfm-pretty-tables--snap-suppressing-command-re
   (rx bos (or "isearch-" "evil-search-" "evil-ex-search-"))
   "Regex on `this-command' name; matched commands suppress snap-to-cell.
 Search-style commands park point at an exact match position (which
@@ -2224,7 +2229,7 @@ may be a column gap or border) and must not have the post-command
 snap yank point back to cell 0 — that would make the next repeat
 re-find the same match and trap isearch in an infinite loop.")
 
-(defun gfm-tables--maybe-snap-to-cell ()
+(defun gfm-pretty-tables--maybe-snap-to-cell ()
   "If point is on a table row but outside any cell range, snap to cell 0.
 Idempotent when point already sits in a cell so it is safe to call
 unconditionally (e.g. from `post-command-hook').  Skipped when the
@@ -2235,23 +2240,23 @@ search-style command so search results that land on a column gap
 or border are not rewound."
   (let* ((lbeg (line-beginning-position))
          (row-ov (cl-find-if
-                  (lambda (o) (overlay-get o 'gfm-tables-cell-bounds))
+                  (lambda (o) (overlay-get o 'gfm-pretty-tables-cell-bounds))
                   (overlays-at lbeg))))
     (when (and row-ov
                (not (invisible-p lbeg))
                (not (bound-and-true-p isearch-mode))
                (not (and (symbolp this-command)
-                         (string-match-p gfm-tables--snap-suppressing-command-re
+                         (string-match-p gfm-pretty-tables--snap-suppressing-command-re
                                          (symbol-name this-command)))))
-      (let* ((cb (overlay-get row-ov 'gfm-tables-cell-bounds))
+      (let* ((cb (overlay-get row-ov 'gfm-pretty-tables-cell-bounds))
              (in-cell (cl-find-if
                        (lambda (b) (and (>= (point) (car b))
                                         (< (point) (cdr b))))
                        cb)))
         (unless in-cell
-          (gfm-tables--goto-cell row-ov 0))))))
+          (gfm-pretty-tables--goto-cell row-ov 0))))))
 
-(defmacro gfm-tables--define-evil-motion (name table-fn evil-fn fall-through)
+(defmacro gfm-pretty-tables--define-evil-motion (name table-fn evil-fn fall-through)
   "Define NAME as a wrapper dispatching between TABLE-FN and EVIL-FN.
 When point is in a table, TABLE-FN runs first.  If it returns nil
 \(no-op at an edge) and FALL-THROUGH is non-nil, EVIL-FN runs as a
@@ -2262,86 +2267,96 @@ the symbol `snap', a post-call landing in a table snaps to cell 0."
      ,(format "Cell-aware shim for `%s'." evil-fn)
      (interactive)
      (cond
-      ((gfm-tables--cell-info-at-point)
+      ((gfm-pretty-tables--cell-info-at-point)
        (or (,table-fn)
            ,(when fall-through
               `(progn (call-interactively #',evil-fn)
                       ,(when (eq fall-through 'snap)
-                         '(gfm-tables--maybe-snap-to-cell))))))
+                         '(gfm-pretty-tables--maybe-snap-to-cell))))))
       (t (call-interactively #',evil-fn)
          ,(when (eq fall-through 'snap)
-            '(gfm-tables--maybe-snap-to-cell))))))
+            '(gfm-pretty-tables--maybe-snap-to-cell))))))
 
-(gfm-tables--define-evil-motion gfm-tables--evil-h gfm-tables-cell-backward  evil-backward-char           nil)
-(gfm-tables--define-evil-motion gfm-tables--evil-l gfm-tables-cell-forward   evil-forward-char            nil)
-(gfm-tables--define-evil-motion gfm-tables--evil-j gfm-tables-row-down       evil-next-line               snap)
-(gfm-tables--define-evil-motion gfm-tables--evil-k gfm-tables-row-up         evil-previous-line           snap)
-(gfm-tables--define-evil-motion gfm-tables--evil-^ gfm-tables-row-first-cell evil-first-non-blank         nil)
-(gfm-tables--define-evil-motion gfm-tables--evil-$ gfm-tables-row-last-cell  evil-end-of-line             nil)
-(gfm-tables--define-evil-motion gfm-tables--evil-w gfm-tables-cell-forward   evil-forward-word-begin      nil)
-(gfm-tables--define-evil-motion gfm-tables--evil-W gfm-tables-cell-forward   evil-forward-WORD-begin      nil)
-(gfm-tables--define-evil-motion gfm-tables--evil-e gfm-tables-cell-forward   evil-forward-word-end        nil)
-(gfm-tables--define-evil-motion gfm-tables--evil-E gfm-tables-cell-forward   evil-forward-WORD-end        nil)
-(gfm-tables--define-evil-motion gfm-tables--evil-b gfm-tables-cell-backward  evil-backward-word-begin     nil)
-(gfm-tables--define-evil-motion gfm-tables--evil-B gfm-tables-cell-backward  evil-backward-WORD-begin     nil)
-(gfm-tables--define-evil-motion gfm-tables--evil-0 gfm-tables-row-first-cell evil-beginning-of-line       nil)
+(gfm-pretty-tables--define-evil-motion gfm-pretty-tables--evil-h gfm-pretty-tables-cell-backward  evil-backward-char           nil)
+(gfm-pretty-tables--define-evil-motion gfm-pretty-tables--evil-l gfm-pretty-tables-cell-forward   evil-forward-char            nil)
+(gfm-pretty-tables--define-evil-motion gfm-pretty-tables--evil-j gfm-pretty-tables-row-down       evil-next-line               snap)
+(gfm-pretty-tables--define-evil-motion gfm-pretty-tables--evil-k gfm-pretty-tables-row-up         evil-previous-line           snap)
+(gfm-pretty-tables--define-evil-motion gfm-pretty-tables--evil-^ gfm-pretty-tables-row-first-cell evil-first-non-blank         nil)
+(gfm-pretty-tables--define-evil-motion gfm-pretty-tables--evil-$ gfm-pretty-tables-row-last-cell  evil-end-of-line             nil)
+(gfm-pretty-tables--define-evil-motion gfm-pretty-tables--evil-w gfm-pretty-tables-cell-forward   evil-forward-word-begin      nil)
+(gfm-pretty-tables--define-evil-motion gfm-pretty-tables--evil-W gfm-pretty-tables-cell-forward   evil-forward-WORD-begin      nil)
+(gfm-pretty-tables--define-evil-motion gfm-pretty-tables--evil-e gfm-pretty-tables-cell-forward   evil-forward-word-end        nil)
+(gfm-pretty-tables--define-evil-motion gfm-pretty-tables--evil-E gfm-pretty-tables-cell-forward   evil-forward-WORD-end        nil)
+(gfm-pretty-tables--define-evil-motion gfm-pretty-tables--evil-b gfm-pretty-tables-cell-backward  evil-backward-word-begin     nil)
+(gfm-pretty-tables--define-evil-motion gfm-pretty-tables--evil-B gfm-pretty-tables-cell-backward  evil-backward-WORD-begin     nil)
+(gfm-pretty-tables--define-evil-motion gfm-pretty-tables--evil-0 gfm-pretty-tables-row-first-cell evil-beginning-of-line       nil)
 
-(defun gfm-tables--evil-Y ()
+(defun gfm-pretty-tables--evil-Y ()
   "Cell-aware shim for `evil-yank-line': copy the active cell when in a table."
   (interactive)
   (cond
-   ((gfm-tables--cell-info-at-point) (gfm-tables-cell-copy))
+   ((gfm-pretty-tables--cell-info-at-point) (gfm-pretty-tables-cell-copy))
    (t (call-interactively #'evil-yank-line))))
 
-(defvar gfm-tables--row-map
+(defvar gfm-pretty-tables--row-map
   (let ((m (make-sparse-keymap)))
-    (define-key m (kbd "TAB")          #'gfm-tables-cell-tab)
-    (define-key m (kbd "<tab>")        #'gfm-tables-cell-tab)
-    (define-key m (kbd "<backtab>")    #'gfm-tables-cell-backtab)
-    (define-key m (kbd "S-<tab>")      #'gfm-tables-cell-backtab)
-    (define-key m (kbd "RET")          #'gfm-tables-do-at-cell)
-    (define-key m (kbd "<return>")     #'gfm-tables-do-at-cell)
-    (define-key m (kbd "M-h")          #'gfm-tables-swap-column-left)
-    (define-key m (kbd "M-l")          #'gfm-tables-swap-column-right)
-    (define-key m [remap evil-backward-char]       #'gfm-tables--evil-h)
-    (define-key m [remap evil-forward-char]        #'gfm-tables--evil-l)
-    (define-key m [remap evil-next-line]           #'gfm-tables--evil-j)
-    (define-key m [remap evil-previous-line]       #'gfm-tables--evil-k)
-    (define-key m [remap evil-first-non-blank]     #'gfm-tables--evil-^)
-    (define-key m [remap evil-end-of-line]         #'gfm-tables--evil-$)
-    (define-key m [remap evil-forward-word-begin]  #'gfm-tables--evil-w)
-    (define-key m [remap evil-forward-WORD-begin]  #'gfm-tables--evil-W)
-    (define-key m [remap evil-forward-word-end]    #'gfm-tables-edit-cell-at-point)
-    (define-key m [remap evil-forward-WORD-end]    #'gfm-tables-edit-cell-at-point)
-    (define-key m [remap evil-backward-word-begin] #'gfm-tables--evil-b)
-    (define-key m [remap evil-backward-WORD-begin] #'gfm-tables--evil-B)
-    (define-key m [remap evil-beginning-of-line]   #'gfm-tables--evil-0)
-    (define-key m [remap evil-yank-line]           #'gfm-tables--evil-Y)
+    (define-key m (kbd "TAB")          #'gfm-pretty-tables-cell-tab)
+    (define-key m (kbd "<tab>")        #'gfm-pretty-tables-cell-tab)
+    (define-key m (kbd "<backtab>")    #'gfm-pretty-tables-cell-backtab)
+    (define-key m (kbd "S-<tab>")      #'gfm-pretty-tables-cell-backtab)
+    (define-key m (kbd "RET")          #'gfm-pretty-tables-do-at-cell)
+    (define-key m (kbd "<return>")     #'gfm-pretty-tables-do-at-cell)
+    (define-key m (kbd "M-h")          #'gfm-pretty-tables-swap-column-left)
+    (define-key m (kbd "M-l")          #'gfm-pretty-tables-swap-column-right)
+    (define-key m [remap evil-backward-char]       #'gfm-pretty-tables--evil-h)
+    (define-key m [remap evil-forward-char]        #'gfm-pretty-tables--evil-l)
+    (define-key m [remap evil-next-line]           #'gfm-pretty-tables--evil-j)
+    (define-key m [remap evil-previous-line]       #'gfm-pretty-tables--evil-k)
+    (define-key m [remap evil-first-non-blank]     #'gfm-pretty-tables--evil-^)
+    (define-key m [remap evil-end-of-line]         #'gfm-pretty-tables--evil-$)
+    (define-key m [remap evil-forward-word-begin]  #'gfm-pretty-tables--evil-w)
+    (define-key m [remap evil-forward-WORD-begin]  #'gfm-pretty-tables--evil-W)
+    (define-key m [remap evil-forward-word-end]    #'gfm-pretty-tables-edit-cell-at-point)
+    (define-key m [remap evil-forward-WORD-end]    #'gfm-pretty-tables-edit-cell-at-point)
+    (define-key m [remap evil-backward-word-begin] #'gfm-pretty-tables--evil-b)
+    (define-key m [remap evil-backward-WORD-begin] #'gfm-pretty-tables--evil-B)
+    (define-key m [remap evil-beginning-of-line]   #'gfm-pretty-tables--evil-0)
+    (define-key m [remap evil-yank-line]           #'gfm-pretty-tables--evil-Y)
     m)
   "Keymap attached to row overlays; bindings only fire inside a table.")
 
 ;;; Evil insert/replace shim
 
-(defconst gfm-tables--evil-edit-commands
+(defconst gfm-pretty-tables--evil-edit-commands
   '(evil-insert evil-append evil-insert-line evil-append-line
                 evil-substitute evil-change-whole-line
                 evil-open-below evil-open-above
                 evil-change evil-change-line
                 evil-replace evil-replace-state)
-  "Evil commands diverted to `gfm-tables-edit-table-at-point' in tables.")
+  "Evil commands diverted to `gfm-pretty-tables-edit-table-at-point' in tables.")
 
-(defun gfm-tables--maybe-edit-advice (orig &rest args)
+(defun gfm-pretty-tables--maybe-edit-advice (orig &rest args)
   "Around-advice: divert ORIG (called with ARGS) to the table editor in tables."
-  (if (and (bound-and-true-p gfm-tables-mode)
-           (gfm-tables--block-at-point))
-      (gfm-tables-edit-table-at-point)
+  (if (and (bound-and-true-p gfm-pretty-tables-mode)
+           (gfm-pretty-tables--block-at-point))
+      (gfm-pretty-tables-edit-table-at-point)
     (apply orig args)))
 
 (with-eval-after-load 'evil
-  (dolist (cmd gfm-tables--evil-edit-commands)
+  (dolist (cmd gfm-pretty-tables--evil-edit-commands)
     (when (fboundp cmd)
-      (advice-add cmd :around #'gfm-tables--maybe-edit-advice))))
+      (advice-add cmd :around #'gfm-pretty-tables--maybe-edit-advice))))
 
-(provide '+gfm-tables)
+;;; gfm-pretty decorator registration
 
-;;; +gfm-tables.el ends here
+(with-eval-after-load 'gfm-pretty
+  (gfm-pretty-define-decorator 'tables
+    :enable-fn         (lambda () (gfm-pretty-tables-mode 1))
+    :disable-fn        (lambda () (gfm-pretty-tables-mode -1))
+    :enabled-p-fn      (lambda () (bound-and-true-p gfm-pretty-tables-mode))
+    :block-at-point-fn (lambda () (gfm-pretty-tables--block-at-point))
+    :edit-at-point-fn  (lambda () (gfm-pretty-tables-edit-table-at-point))))
+
+(provide 'gfm-pretty-tables)
+
+;;; gfm-pretty-tables.el ends here

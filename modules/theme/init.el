@@ -29,7 +29,7 @@
                         '(font-lock-doc-face ((((background dark))
                                                (:foreground "#84898e"))))
                         ;; Drop the pre/code-block background on light themes;
-                        ;; the gfm-code-fences border replaces it visually.
+                        ;; the gfm-pretty-fences border replaces it visually.
                         '(markdown-pre-face ((((background light))
                                               (:background unspecified))))
                         '(markdown-code-face ((((background light))

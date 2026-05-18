@@ -82,9 +82,9 @@
         (equal (buffer-name) "*Edit Formulas*") #'org-table-fedit-finish
         (derived-mode-p 'org-mode) #'org-edit-special
         (and (derived-mode-p 'markdown-mode)
-             (fboundp 'gfm-tables--block-at-point)
-             (gfm-tables--block-at-point))
-        #'gfm-tables-edit-table-at-point
+             (fboundp 'gfm-pretty-block-at-point)
+             (gfm-pretty-block-at-point))
+        #'gfm-pretty-edit-block-at-point
 
         (and (derived-mode-p 'markdown-mode) (markdown-code-block-at-point-p)) 'markdown-edit-code-block)
 

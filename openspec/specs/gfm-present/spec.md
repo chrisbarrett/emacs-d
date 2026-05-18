@@ -1,12 +1,15 @@
-# presentation Specification
+# gfm-present Specification
 
 ## Purpose
 
-The `presentation` capability lets a Claude Code agent and the user
+Lives at `lisp/gfm/gfm-present.el` (library axis). Cross-references
+the `gfm-pretty` axis for the visual decoration the slides rely on.
+
+The `gfm-present` capability lets a Claude Code agent and the user
 walk through a single markdown document slide-by-slide.  The agent
-authors a markdown file and invokes `(+present-markdown PATH)` via
+authors a markdown file and invokes `(gfm-present-markdown PATH)` via
 `emacsclient -e`; Emacs enables a buffer-local minor mode
-(`+presentation-mode`) that narrows the buffer to the H1 region
+(`gfm-present-mode`) that narrows the buffer to the H1 region
 containing point and binds keys for stepping through headings.
 
 There is no deck data structure: the document is the deck and
@@ -24,11 +27,11 @@ their standard back-jump bindings.
 
 ## Requirements
 
-### Requirement: Public entry point `+present-markdown`
+### Requirement: Public entry point `gfm-present-markdown`
 
 The system SHALL expose a single public function
-`+present-markdown FILE`, autoloaded, that opens FILE via `find-file`
-and enables `+presentation-mode` in the resulting buffer.  The
+`gfm-present-markdown FILE`, autoloaded, that opens FILE via `find-file`
+and enables `gfm-present-mode` in the resulting buffer.  The
 function SHALL accept FILE as a string path (absolute or relative to
 `default-directory` at call time) and SHALL signal a `user-error`
 when FILE does not exist or cannot be opened as a regular file.
@@ -39,21 +42,21 @@ tools.
 
 #### Scenario: emacsclient invocation enables the mode
 
-- **WHEN** a caller evaluates `(+present-markdown "/abs/path/doc.md")`
+- **WHEN** a caller evaluates `(gfm-present-markdown "/abs/path/doc.md")`
 - **AND** the file exists and is readable
 - **THEN** the buffer visiting `/abs/path/doc.md` becomes the current
   buffer
-- **AND** `+presentation-mode` is enabled in that buffer
+- **AND** `gfm-present-mode` is enabled in that buffer
 - **AND** the buffer is narrowed to the first H1 region (or remains
   widened if the document has no H1 headings)
 
 #### Scenario: missing file rejected
 
-- **WHEN** `+present-markdown` is called with a path that does not
+- **WHEN** `gfm-present-markdown` is called with a path that does not
   exist
 - **THEN** a `user-error` is signalled whose message names the path
 - **AND** no buffer is created
-- **AND** `+presentation-mode` is not enabled
+- **AND** `gfm-present-mode` is not enabled
 
 #### Scenario: no MCP tools registered
 
@@ -63,9 +66,9 @@ tools.
   `push_slide`, `replace_slide`, `truncate_after`, `goto_slide`, or
   `get_deck` is added to `claude-code-ide-mcp-server-tools`
 
-### Requirement: `+presentation-mode` buffer-local minor mode
+### Requirement: `gfm-present-mode` buffer-local minor mode
 
-The system SHALL define `+presentation-mode` as a buffer-local minor
+The system SHALL define `gfm-present-mode` as a buffer-local minor
 mode.  Enabling the mode SHALL narrow the buffer to the H1 region
 containing point (or the first H1 region when point is before the
 first H1, or the last H1 region when point is after the last H1).
@@ -75,10 +78,10 @@ The mode keymap SHALL bind:
 
 | Key            | Command                          |
 | :------------- | :------------------------------- |
-| `C-n` / `C-f`  | `+presentation-next-slide`       |
-| `C-p` / `C-b`  | `+presentation-previous-slide`   |
-| `C-c q`        | `+presentation-quit`             |
-| `RET`          | `+presentation-follow-link`      |
+| `C-n` / `C-f`  | `gfm-present-next-slide`       |
+| `C-p` / `C-b`  | `gfm-present-previous-slide`   |
+| `C-c q`        | `gfm-present-quit`             |
+| `RET`          | `gfm-present-follow-link`      |
 
 The keymap SHALL take precedence over the buffer's major-mode
 bindings for the keys it owns.  Bindings SHALL be callable from any
@@ -86,7 +89,7 @@ evil state.
 
 #### Scenario: enabling narrows to first heading
 
-- **WHEN** `+presentation-mode` is enabled in a buffer containing
+- **WHEN** `gfm-present-mode` is enabled in a buffer containing
   three H1 headings and point is at `point-min`
 - **THEN** the buffer is narrowed to the region from the first H1's
   beginning to the second H1's beginning (exclusive)
@@ -94,22 +97,22 @@ evil state.
 #### Scenario: enabling narrows to enclosing heading when point is mid-slide
 
 - **WHEN** point is on a line inside the second H1's region
-- **AND** `+presentation-mode` is enabled
+- **AND** `gfm-present-mode` is enabled
 - **THEN** the buffer is narrowed to the second H1's region
 
 #### Scenario: disabling widens
 
-- **WHEN** `+presentation-mode` is enabled and the buffer is
+- **WHEN** `gfm-present-mode` is enabled and the buffer is
   narrowed
 - **AND** the user disables the mode
 - **THEN** the buffer is widened
 
 #### Scenario: keymap is callable from evil normal state
 
-- **WHEN** point is in a `+presentation-mode` buffer
+- **WHEN** point is in a `gfm-present-mode` buffer
 - **AND** the active evil state is `normal`
 - **AND** the user types `C-n`
-- **THEN** `+presentation-next-slide` is invoked
+- **THEN** `gfm-present-next-slide` is invoked
 
 ### Requirement: Heading-narrowed slide model
 
@@ -141,12 +144,12 @@ Heading detection SHALL ignore lines inside fenced code blocks.
 
 ### Requirement: Heading navigation commands
 
-`+presentation-next-slide` SHALL widen the buffer, locate the H1
+`gfm-present-next-slide` SHALL widen the buffer, locate the H1
 that follows the current narrowing's H1, and re-narrow to that H1's
 region.  Calling the command at the last slide SHALL be a silent
 no-op.
 
-`+presentation-previous-slide` SHALL widen the buffer, locate the
+`gfm-present-previous-slide` SHALL widen the buffer, locate the
 H1 that precedes the current narrowing's H1, and re-narrow to that
 H1's region.  Calling the command at the first slide SHALL be a
 silent no-op.
@@ -158,49 +161,49 @@ the new narrowing.
 
 - **WHEN** the buffer is narrowed to slide N (0-based)
 - **AND** the document has more than N+1 H1 headings
-- **AND** the user invokes `+presentation-next-slide`
+- **AND** the user invokes `gfm-present-next-slide`
 - **THEN** the buffer is narrowed to slide N+1
 
 #### Scenario: next-slide at last slide is a no-op
 
 - **WHEN** the buffer is narrowed to the last H1's region
-- **AND** the user invokes `+presentation-next-slide`
+- **AND** the user invokes `gfm-present-next-slide`
 - **THEN** the narrowing is unchanged
 - **AND** no error is signalled
 
 #### Scenario: previous-slide retreats narrowing
 
 - **WHEN** the buffer is narrowed to slide N (N >= 1)
-- **AND** the user invokes `+presentation-previous-slide`
+- **AND** the user invokes `gfm-present-previous-slide`
 - **THEN** the buffer is narrowed to slide N-1
 
 #### Scenario: previous-slide at first slide is a no-op
 
 - **WHEN** the buffer is narrowed to slide 0
-- **AND** the user invokes `+presentation-previous-slide`
+- **AND** the user invokes `gfm-present-previous-slide`
 - **THEN** the narrowing is unchanged
 - **AND** no error is signalled
 
 ### Requirement: Quit command
 
-`+presentation-quit` SHALL disable `+presentation-mode` in the
+`gfm-present-quit` SHALL disable `gfm-present-mode` in the
 current buffer (which widens it) and SHALL bury the buffer.  When the
-buffer was created by `+present-markdown` with no prior visit (i.e.
-the buffer-local `+presentation--owned-buffer` flag is non-nil), the
+buffer was created by `gfm-present-markdown` with no prior visit (i.e.
+the buffer-local `gfm-present--owned-buffer` flag is non-nil), the
 command SHALL kill the buffer instead of burying it.
 
 #### Scenario: quit widens and buries
 
-- **WHEN** the user invokes `+presentation-quit` in a buffer that
-  was already visiting the file before `+present-markdown` ran
-- **THEN** `+presentation-mode` is disabled in that buffer
+- **WHEN** the user invokes `gfm-present-quit` in a buffer that
+  was already visiting the file before `gfm-present-markdown` ran
+- **THEN** `gfm-present-mode` is disabled in that buffer
 - **AND** the buffer is widened
 - **AND** the buffer is buried (not killed)
 
 #### Scenario: quit kills owned buffer
 
-- **WHEN** the user invokes `+presentation-quit` in a buffer that
-  was opened solely by `+present-markdown`
+- **WHEN** the user invokes `gfm-present-quit` in a buffer that
+  was opened solely by `gfm-present-markdown`
 - **THEN** the buffer is killed
 
 ### Requirement: Heading-text in-doc link follow
@@ -361,11 +364,11 @@ prefixed with `(git error: …)`.
 
 The system SHALL clear all preview overlays in the buffer
 (`delete-overlay` on each member of
-`+presentation--preview-overlays`) and rebuild them by scanning the
+`gfm-present--preview-overlays`) and rebuild them by scanning the
 new narrowed region whenever the narrowing changes via any of:
 
-- `+presentation-mode` enable.
-- `+presentation-next-slide` / `+presentation-previous-slide`.
+- `gfm-present-mode` enable.
+- `gfm-present-next-slide` / `gfm-present-previous-slide`.
 - Heading-text in-doc link follow.
 - Buffer revert (post-`after-revert-hook`).
 
@@ -374,8 +377,8 @@ any other passive refresh mechanism for preview overlays.
 
 #### Scenario: navigating rebuilds overlays
 
-- **WHEN** the user invokes `+presentation-next-slide`
-- **THEN** every overlay in `+presentation--preview-overlays` is
+- **WHEN** the user invokes `gfm-present-next-slide`
+- **THEN** every overlay in `gfm-present--preview-overlays` is
   deleted
 - **AND** previews are rebuilt by scanning the new slide's region
 
@@ -400,7 +403,7 @@ when no range was given) and SHALL be displayed via `display-buffer`,
 honouring `other-window-prefix` for split control.  A focus overlay
 covering the requested range SHALL be applied via the existing
 file-render machinery, and the buffer SHALL be made read-only with a
-restorer that runs on buffer kill.  `+presentation-mode` SHALL NOT
+restorer that runs on buffer kill.  `gfm-present-mode` SHALL NOT
 be enabled in the destination buffer.
 
 #### Scenario: click opens narrowed file with focus overlay
@@ -477,23 +480,23 @@ presentation-side dispatch.
 #### Scenario: http link passes through
 
 - **WHEN** the user follows a `[example](https://example.com)` link
-  in a `+presentation-mode` buffer
+  in a `gfm-present-mode` buffer
 - **THEN** `markdown-mode`'s default link handler runs
 - **AND** no narrowing change occurs in the doc buffer
 
 #### Scenario: plain path passes through
 
 - **WHEN** the user follows a `[file](modules/auth.rs)` link (no
-  `#L` anchor) in a `+presentation-mode` buffer
+  `#L` anchor) in a `gfm-present-mode` buffer
 - **THEN** `markdown-mode`'s default link handler runs
 
 ### Requirement: Document revert resilience
 
 The system SHALL install buffer-local hooks on `before-revert-hook`
-and `after-revert-hook` while `+presentation-mode` is enabled.
+and `after-revert-hook` while `gfm-present-mode` is enabled.
 
 The `before-revert-hook` handler SHALL capture, into a buffer-local
-plist `+presentation--revert-anchor`:
+plist `gfm-present--revert-anchor`:
 
 - `:slug` — slugified text of the H1 currently containing the
   narrowing.
@@ -589,7 +592,7 @@ line range, and an optional focus sub-range, and:
 
 - Narrows the buffer to the line range.
 - Applies a focus overlay over the focus sub-range when given,
-  using `+presentation-focus-face` (one overlay per line covering
+  using `gfm-present-focus-face` (one overlay per line covering
   exactly `point-at-bol` to `point-at-eol`; the face SHALL NOT
   use `:extend t`).
 - Sets `buffer-read-only` to t and registers a restorer that
@@ -624,7 +627,7 @@ link is clicked.
 The narrowed-source view SHALL implement focus highlight as one
 overlay per line covered by the focus range, each spanning exactly
 the line's `point-at-bol` to `point-at-eol`.  The overlays SHALL carry
-`+presentation-focus-face`, which SHALL NOT use `:extend t` and
+`gfm-present-focus-face`, which SHALL NOT use `:extend t` and
 SHALL use a theme-aware muted background colour.
 
 The face SHALL paint only over real text glyphs; lines shorter than

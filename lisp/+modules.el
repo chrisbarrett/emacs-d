@@ -197,14 +197,32 @@ if FORM is not a recognized definition type."
     ;; Unrecognized form
     (_ nil)))
 
+(defun +modules--lisp-family-lib-files ()
+  "Discover library files under `lisp/<family>/' subdirectories.
+
+Returns a flat list of absolute paths to .el files (excluding
+-tests.el) in each immediate subdirectory of `+lisp-dir'. Library
+families live under `lisp/' as a sibling structure to `modules/'."
+  (when (file-directory-p +lisp-dir)
+    (let (files)
+      (dolist (dir (directory-files +lisp-dir t "\\`[^.]"))
+        (when (file-directory-p dir)
+          (dolist (file (directory-files dir t "\\.el\\'" t))
+            (unless (string-suffix-p "-tests.el" file)
+              (push file files)))))
+      (nreverse files))))
+
 (defun +modules--collect-autoloads ()
-  "Collect all autoload entries from discovered modules.
+  "Collect all autoload entries from discovered modules and lisp libraries.
 
 Returns an alist of (FORM . SOURCE-FILE) pairs for all
-autoload-annotated definitions in module lib files."
-    (seq-mapcat (lambda (module-dir)
-                  (seq-mapcat #'+modules--extract-autoloads (+modules--discover-lib-files module-dir)))
-                (+modules-discover)))
+autoload-annotated definitions in module lib files and in
+`lisp/<family>/' library files."
+  (append
+   (seq-mapcat (lambda (module-dir)
+                 (seq-mapcat #'+modules--extract-autoloads (+modules--discover-lib-files module-dir)))
+               (+modules-discover))
+   (seq-mapcat #'+modules--extract-autoloads (+modules--lisp-family-lib-files))))
 
 (defun +modules--register-autoloads (autoload-entries)
   "Register AUTOLOAD-ENTRIES with Emacs.

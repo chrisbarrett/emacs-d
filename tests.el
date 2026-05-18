@@ -47,9 +47,12 @@ Also sets `user-emacs-directory' to the test root for module tests."
         (lib-dir (expand-file-name "lib" +test-runner-root-dir))
         (modules-dir (expand-file-name "modules" +test-runner-root-dir))
         (elpaca-builds-dir (expand-file-name "elpaca/builds" +test-runner-root-dir)))
-    ;; Add lisp/ directory
+    ;; Add lisp/ directory and library-family subdirectories
     (when (file-directory-p lisp-dir)
-      (add-to-list 'load-path lisp-dir))
+      (add-to-list 'load-path lisp-dir)
+      (dolist (dir (directory-files lisp-dir t "\\`[^.]"))
+        (when (file-directory-p dir)
+          (add-to-list 'load-path dir))))
     ;; Add lib/ subdirectories (each package in lib/ is its own directory)
     (when (file-directory-p lib-dir)
       (dolist (dir (directory-files lib-dir t "\\`[^.]"))
