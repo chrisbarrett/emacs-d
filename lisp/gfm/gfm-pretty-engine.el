@@ -2,16 +2,18 @@
 
 ;;; Commentary:
 
-;; Lifecycle engine shared across every gfm-pretty decorator: overlay
-;; registry, scheduler primitives, window-state tracking, and the
-;; per-window reconciler.  The graphics toolkit
-;; (`gfm-pretty-borders.el') is decorator-neutral and depended upon
-;; here for window-width helpers.
+;; Lifecycle engine shared across every gfm-pretty decorator.  Owns
+;; the decorator registry, the overlay registry primitives, the
+;; reconciler, and the single set of lifecycle hooks per buffer:
+;; one `after-change-functions' handler, one
+;; `window-configuration-change-hook' handler, one `post-command-hook'
+;; reveal handler, and one idle rebuild timer.
 ;;
-;; Decorators register an overlay tag and reconciler callbacks via the
-;; structures defined in this file; future passes will absorb the
-;; remaining per-decorator lifecycle (after-change hooks,
-;; post-command-hook reveal, idle rebuild timer) into the engine.
+;; Decorators register intent (block discovery, range, anchor/display
+;; application, optional scoped-rebuild, optional reveal participation,
+;; on-enable / on-disable extras) via `gfm-pretty-define-decorator';
+;; the engine drives the lifecycle.  The graphics toolkit lives in
+;; `gfm-pretty-borders.el'.
 
 ;;; Code:
 
@@ -23,6 +25,113 @@
 (defun gfm-pretty--display-windows ()
   "Return windows currently displaying the buffer."
   (get-buffer-window-list (current-buffer) nil t))
+
+;;; Buffer-local engine state
+
+(defvar-local gfm-pretty--state nil
+  "Alist (NAME . PLIST) of per-decorator buffer-local state.
+PLIST keys:
+- `enabled-p'         decorator on in this buffer
+- `dirty-region'      (BEG . END) of accumulated unrebuilt edits
+- `last-window-state' window-state snapshot used by the reconciler
+- `blocks-cache'      (TICK . BLOCKS) memoised collect result (pass 3)
+- `overlays'          decorator's overlays (pass 4)
+- `hidden-ovs'        revealable overlays whose display is suppressed (pass 4)")
+
+(defvar-local gfm-pretty--rebuild-timer nil
+  "Single idle rebuild timer driving engine-scheduled rebuilds.")
+
+(defun gfm-pretty--state-get (name slot)
+  "Return SLOT from decorator NAME's state plist."
+  (plist-get (alist-get name gfm-pretty--state) slot))
+
+(defun gfm-pretty--state-set (name slot val)
+  "Set SLOT to VAL in decorator NAME's state plist."
+  (setf (alist-get name gfm-pretty--state)
+        (plist-put (alist-get name gfm-pretty--state) slot val)))
+
+;;; Decorator registry
+
+(cl-defstruct gfm-pretty--decorator
+  "Metadata for a registered gfm-pretty decorator.
+Fields populated via `gfm-pretty-define-decorator'."
+  name
+  registry
+  block-at-point-fn
+  edit-at-point-fn
+  collect-fn
+  range-fn
+  apply-anchors-fn
+  apply-display-fn
+  font-lock
+  revealable-prop
+  saved-display-prop
+  revealable-p-fn
+  on-enable-fn
+  on-disable-fn
+  rebuild-fn
+  scoped-rebuild-fn
+  reconcile-windows-fn
+  reveal-fn)
+
+(defvar gfm-pretty--decorators nil
+  "Alist of NAME -> `gfm-pretty--decorator' struct.")
+
+(defun gfm-pretty--get (name)
+  "Return the registered decorator for NAME, or signal a `user-error'."
+  (or (alist-get name gfm-pretty--decorators)
+      (user-error "gfm-pretty: unknown decorator %s" name)))
+
+;;;###autoload
+(defmacro gfm-pretty-define-decorator (name &rest plist)
+  "Register decorator NAME with PLIST keys.
+
+Recognised keys:
+
+  :registry            `gfm-pretty--registry' for the decorator's
+                       overlay tag and per-decorator buffer-locals.
+  :collect-fn          (no-arg) returns the buffer's blocks, widened.
+  :range-fn            (block) returns the block's (BEG . END) source range.
+  :apply-anchors-fn    (block) applies width-independent anchor overlays.
+  :apply-display-fn    (block window) applies WINDOW's display overlays.
+  :rebuild-fn          optional (no-arg) full rebuild; engine-generic
+                       teardown + reapply when nil.
+  :scoped-rebuild-fn   optional (dirty-cons) scoped rebuild; engine
+                       falls back to a full rebuild when nil.
+  :font-lock           optional font-lock keywords list installed by the
+                       engine via `:on-enable-fn'.
+  :revealable-prop     overlay property symbol carried by revealable
+                       overlays; nil opts the decorator out of reveal.
+  :saved-display-prop  overlay property symbol used to stash the
+                       overlay's `display' while revealed.
+  :revealable-p-fn     optional predicate (overlay) overriding the
+                       default property-presence check.
+  :on-enable-fn        optional (no-arg) thunk run when decorator turns
+                       on (font-lock install, theme hook, etc.).
+  :on-disable-fn       optional (no-arg) thunk run on disable.
+  :block-at-point-fn   optional (no-arg) returns enclosing block, or nil.
+  :edit-at-point-fn    optional (no-arg) opens an editor for the block."
+  (declare (indent 1))
+  `(setf (alist-get ,name gfm-pretty--decorators)
+         (make-gfm-pretty--decorator
+          :name              ,name
+          :registry          ,(plist-get plist :registry)
+          :block-at-point-fn ,(plist-get plist :block-at-point-fn)
+          :edit-at-point-fn  ,(plist-get plist :edit-at-point-fn)
+          :collect-fn        ,(plist-get plist :collect-fn)
+          :range-fn          ,(plist-get plist :range-fn)
+          :apply-anchors-fn  ,(plist-get plist :apply-anchors-fn)
+          :apply-display-fn  ,(plist-get plist :apply-display-fn)
+          :font-lock         ,(plist-get plist :font-lock)
+          :revealable-prop   ,(plist-get plist :revealable-prop)
+          :saved-display-prop ,(plist-get plist :saved-display-prop)
+          :revealable-p-fn   ,(plist-get plist :revealable-p-fn)
+          :on-enable-fn      ,(plist-get plist :on-enable-fn)
+          :on-disable-fn     ,(plist-get plist :on-disable-fn)
+          :rebuild-fn        ,(plist-get plist :rebuild-fn)
+          :scoped-rebuild-fn ,(plist-get plist :scoped-rebuild-fn)
+          :reconcile-windows-fn ,(plist-get plist :reconcile-windows-fn)
+          :reveal-fn         ,(plist-get plist :reveal-fn))))
 
 ;;; Overlay registry
 
@@ -207,87 +316,60 @@ during a `C-x 3' transient.  Windows whose end is nil are dropped."
                     (and s e (cons s e))))
                 (get-buffer-window-list (current-buffer) nil t))))
 
-(cl-defstruct (gfm-pretty--reconciler
-               (:constructor gfm-pretty--make-reconciler)
-               (:copier nil))
-  "Per-mode reconciliation context.
+;;; Per-decorator reconciler (engine-driven)
 
-REGISTRY is the mode's overlay registry.  STATE-SYMBOL,
-DIRTY-REGION-SYMBOL, and TIMER-SYMBOL are buffer-local variable names.
-MODE-SYMBOL names the minor mode toggle.
-
-COLLECT-FN returns the buffer's blocks (a list).  RANGE-FN extracts
-\(BEG . END) from a block.  APPLY-DISPLAY-FN takes (block window) and
-materialises that window's display overlays for the block.  REBUILD-FN
-takes no args and performs a full rebuild (anchors + displays).
-APPLY-ANCHORS-FN applies a single block's anchors (used in scoped or
-visible-first rebuilds)."
-  registry
-  state-symbol
-  dirty-region-symbol
-  timer-symbol
-  mode-symbol
-  collect-fn
-  range-fn
-  apply-anchors-fn
-  apply-display-fn
-  rebuild-fn)
-
-(defun gfm-pretty--rebuild-blocks (rec blocks)
-  "Tear down and re-apply BLOCKS using reconciler REC.
-Removes overlays in each block's range, then re-applies anchors and
-per-window displays.  No stats; consumers track those themselves."
-  (let ((registry (gfm-pretty--reconciler-registry rec))
-        (range-fn (gfm-pretty--reconciler-range-fn rec))
-        (apply-anchors (gfm-pretty--reconciler-apply-anchors-fn rec))
-        (apply-display (gfm-pretty--reconciler-apply-display-fn rec))
+(defun gfm-pretty--rebuild-blocks (decorator blocks)
+  "Tear down and re-apply BLOCKS using DECORATOR's apply functions."
+  (let ((registry (gfm-pretty--decorator-registry decorator))
+        (range-fn (gfm-pretty--decorator-range-fn decorator))
+        (apply-anchors (gfm-pretty--decorator-apply-anchors-fn decorator))
+        (apply-display (gfm-pretty--decorator-apply-display-fn decorator))
         (windows (or (gfm-pretty--display-windows) (list nil))))
     (dolist (block blocks)
       (let ((range (funcall range-fn block)))
         (gfm-pretty--remove-overlays
          registry (car range) (cdr range)))
-      (funcall apply-anchors block)
+      (when apply-anchors (funcall apply-anchors block))
       (dolist (window windows)
         (funcall apply-display block window)))))
 
-(defun gfm-pretty--rebuild-block-for-window (rec block window)
+(defun gfm-pretty--rebuild-block-for-window (decorator block window)
   "Replace WINDOW's display overlays for BLOCK at the current width."
-  (let* ((registry (gfm-pretty--reconciler-registry rec))
-         (range-fn (gfm-pretty--reconciler-range-fn rec))
-         (apply-display (gfm-pretty--reconciler-apply-display-fn rec))
+  (let* ((registry (gfm-pretty--decorator-registry decorator))
+         (range-fn (gfm-pretty--decorator-range-fn decorator))
+         (apply-display (gfm-pretty--decorator-apply-display-fn decorator))
          (range (funcall range-fn block)))
     (gfm-pretty--remove-display-overlays-in-range
      registry (car range) (cdr range) window)
     (funcall apply-display block window)
     (gfm-pretty--prune-dead-overlays registry)))
 
-(defun gfm-pretty--pace-window-rebuild (rec buf queue window)
-  "Render the next BLOCK in QUEUE for WINDOW in BUF, then re-arm idle.
+(defun gfm-pretty--pace-window-rebuild (decorator buf queue window)
+  "Render the next block in QUEUE for WINDOW in BUF using DECORATOR.
 One block per idle tick keeps `C-x 3' / resize transients responsive."
   (run-with-idle-timer
    0 nil
    (lambda ()
      (when (and (buffer-live-p buf) (window-live-p window))
        (with-current-buffer buf
-         (when (symbol-value (gfm-pretty--reconciler-mode-symbol rec))
+         (when (gfm-pretty--state-get
+                (gfm-pretty--decorator-name decorator) 'enabled-p)
            (let ((b (car queue))
                  (rest (cdr queue)))
-             (gfm-pretty--rebuild-block-for-window rec b window)
+             (gfm-pretty--rebuild-block-for-window decorator b window)
              (cond
               (rest
-               (gfm-pretty--pace-window-rebuild rec buf rest window))
+               (gfm-pretty--pace-window-rebuild decorator buf rest window))
               (t
                (gfm-pretty--prune-dead-overlays
-                (gfm-pretty--reconciler-registry rec)))))))))))
+                (gfm-pretty--decorator-registry decorator)))))))))))
 
-(defun gfm-pretty--rebuild-window-prioritised (rec window)
-  "Per-block, idle-paced rebuild of WINDOW's display overlays via REC.
-Visible blocks first, off-screen ones after, one per idle tick.
-`window-end' is read WITHOUT the force-redisplay flag — forcing
-redisplay on a freshly-split window is itself expensive."
+(defun gfm-pretty--rebuild-window-prioritised (decorator window)
+  "Per-block, idle-paced rebuild of WINDOW's display overlays for DECORATOR.
+Visible blocks first, off-screen ones after, one per idle tick."
   (when (window-live-p window)
-    (let* ((collect (gfm-pretty--reconciler-collect-fn rec))
-           (range-fn (gfm-pretty--reconciler-range-fn rec))
+    (let* ((collect (gfm-pretty--decorator-collect-fn decorator))
+           (range-fn (gfm-pretty--decorator-range-fn decorator))
            (blocks (funcall collect))
            (vstart (window-start window))
            (vend (window-end window))
@@ -302,27 +384,27 @@ redisplay on a freshly-split window is itself expensive."
            (queue (append visible offscreen)))
       (when queue
         (gfm-pretty--pace-window-rebuild
-         rec (current-buffer) queue window)))))
+         decorator (current-buffer) queue window)))))
 
-(defun gfm-pretty--reconcile-windows (rec)
-  "Reconcile display overlays with current window state via REC.
+(defun gfm-pretty--reconcile-windows (decorator)
+  "Reconcile display overlays with current window state for DECORATOR.
 Removed windows have their display overlays deleted synchronously;
 added or resized windows have their rebuild deferred to the next idle
 tick.  Falls through to a full rebuild when no anchors are present
 yet (first call) or no prior state was recorded."
-  (let* ((registry (gfm-pretty--reconciler-registry rec))
+  (let* ((name (gfm-pretty--decorator-name decorator))
+         (registry (gfm-pretty--decorator-registry decorator))
          (anchor-prop (gfm-pretty--registry-anchor registry))
-         (state-sym (gfm-pretty--reconciler-state-symbol rec))
          (overlays (symbol-value
-                    (gfm-pretty--registry-overlays-symbol registry))))
+                    (gfm-pretty--registry-overlays-symbol registry)))
+         (prev (gfm-pretty--state-get name 'last-window-state)))
     (cond
-     ((or (null (symbol-value state-sym))
+     ((or (null prev)
           (null (cl-some (lambda (o) (overlay-get o anchor-prop))
                          overlays)))
-      (funcall (gfm-pretty--reconciler-rebuild-fn rec)))
+      (gfm-pretty--rebuild decorator))
      (t
-      (let* ((prev (symbol-value state-sym))
-             (curr (gfm-pretty--window-state))
+      (let* ((curr (gfm-pretty--window-state))
              (prev-keys (mapcar #'car prev))
              (curr-keys (mapcar #'car curr))
              (added (cl-remove-if (lambda (e) (memq (car e) prev-keys)) curr))
@@ -332,24 +414,185 @@ yet (first call) or no prior state was recorded."
                          (let ((old (assq (car e) prev)))
                            (and old (not (eql (cdr e) (cdr old))))))
                        curr))
-             (touched-windows (mapcar #'car (append added resized)))
-             (mode-symbol (gfm-pretty--reconciler-mode-symbol rec)))
+             (touched-windows (mapcar #'car (append added resized))))
         (dolist (w removed)
           (gfm-pretty--remove-display-overlays-for-window registry w))
         (gfm-pretty--prune-dead-overlays registry)
-        (set state-sym curr)
+        (gfm-pretty--state-set name 'last-window-state curr)
         (when touched-windows
           (run-with-idle-timer
            0 nil
            (lambda (buf wins)
              (when (buffer-live-p buf)
                (with-current-buffer buf
-                 (when (symbol-value mode-symbol)
+                 (when (gfm-pretty--state-get name 'enabled-p)
                    (dolist (w wins)
                      (when (window-live-p w)
                        (gfm-pretty--rebuild-window-prioritised
-                        rec w)))))))
+                        decorator w)))))))
            (current-buffer) touched-windows)))))))
+
+(defun gfm-pretty--rebuild (decorator)
+  "Full rebuild of DECORATOR.
+Calls the decorator's `:rebuild-fn' if registered; otherwise performs
+a generic teardown + re-apply using `:collect-fn', `:apply-anchors-fn',
+and `:apply-display-fn'."
+  (let ((rebuild-fn (gfm-pretty--decorator-rebuild-fn decorator))
+        (name (gfm-pretty--decorator-name decorator)))
+    (cond
+     (rebuild-fn (funcall rebuild-fn))
+     (t
+      (let ((registry (gfm-pretty--decorator-registry decorator))
+            (collect (gfm-pretty--decorator-collect-fn decorator))
+            (apply-anchors (gfm-pretty--decorator-apply-anchors-fn decorator))
+            (apply-display (gfm-pretty--decorator-apply-display-fn decorator)))
+        (gfm-pretty--remove-overlays registry)
+        (let ((blocks (funcall collect))
+              (windows (or (gfm-pretty--display-windows) (list nil))))
+          (dolist (block blocks)
+            (when apply-anchors (funcall apply-anchors block)))
+          (dolist (window windows)
+            (dolist (block blocks)
+              (funcall apply-display block window)))))))
+    (gfm-pretty--state-set name 'dirty-region nil)
+    (gfm-pretty--state-set name 'last-window-state
+                           (gfm-pretty--window-state))))
+
+(defun gfm-pretty--rebuild-scoped (decorator dirty)
+  "Scoped rebuild of DECORATOR over DIRTY (cons BEG . END).
+Calls the decorator's `:scoped-rebuild-fn' with DIRTY when registered;
+otherwise falls back to a full rebuild."
+  (let ((scoped-fn (gfm-pretty--decorator-scoped-rebuild-fn decorator)))
+    (cond
+     (scoped-fn (funcall scoped-fn dirty))
+     (t (gfm-pretty--rebuild decorator)))))
+
+;;; Engine lifecycle hooks
+
+(defvar gfm-pretty-mode)
+
+(defun gfm-pretty--enabled-decorators ()
+  "Return decorators whose engine-tracked `enabled-p' is non-nil."
+  (cl-loop for (name . d) in gfm-pretty--decorators
+           when (gfm-pretty--state-get name 'enabled-p)
+           collect d))
+
+(defun gfm-pretty--after-change (beg end _len)
+  "Engine `after-change-functions' handler.
+Extends each enabled decorator's dirty region to cover BEG..END and
+arms the single engine idle timer."
+  (unless (buffer-base-buffer)
+    (dolist (decorator (gfm-pretty--enabled-decorators))
+      (let* ((name (gfm-pretty--decorator-name decorator))
+             (cur (gfm-pretty--state-get name 'dirty-region)))
+        (gfm-pretty--state-set
+         name 'dirty-region
+         (cond
+          ((null cur) (cons beg end))
+          (t (cons (min (car cur) beg) (max (cdr cur) end)))))))
+    (gfm-pretty--arm-engine-timer)))
+
+(defun gfm-pretty--arm-engine-timer ()
+  "Cancel and re-arm the engine idle rebuild timer."
+  (when (timerp gfm-pretty--rebuild-timer)
+    (cancel-timer gfm-pretty--rebuild-timer))
+  (setq gfm-pretty--rebuild-timer
+        (run-with-idle-timer
+         0.2 nil
+         (lambda (buf)
+           (when (buffer-live-p buf)
+             (with-current-buffer buf
+               (when gfm-pretty-mode
+                 (gfm-pretty--scheduled-rebuild)))))
+         (current-buffer))))
+
+(defun gfm-pretty--scheduled-rebuild ()
+  "Engine timer callback.
+Iterates enabled decorators; calls `:scoped-rebuild-fn' (via
+`gfm-pretty--rebuild-scoped') when a dirty region is set, otherwise
+performs a full rebuild.  Clears the dirty region per decorator
+afterwards."
+  (dolist (decorator (gfm-pretty--enabled-decorators))
+    (let* ((name (gfm-pretty--decorator-name decorator))
+           (dirty (gfm-pretty--state-get name 'dirty-region)))
+      (gfm-pretty--state-set name 'dirty-region nil)
+      (cond
+       (dirty (gfm-pretty--rebuild-scoped decorator dirty))
+       (t (gfm-pretty--rebuild decorator))))))
+
+(defun gfm-pretty--wcc (&rest _)
+  "Engine `window-configuration-change-hook' handler.
+Reconciles per-decorator display overlays with the current window
+state, deferring rebuilds for added or resized windows by one idle
+tick.  Decorators with a `:reconcile-windows-fn' take over the
+reconcile entirely (e.g. tables)."
+  (unless (buffer-base-buffer)
+    (let ((state (gfm-pretty--window-state)))
+      (dolist (decorator (gfm-pretty--enabled-decorators))
+        (let* ((name (gfm-pretty--decorator-name decorator))
+               (custom (gfm-pretty--decorator-reconcile-windows-fn decorator))
+               (prev (gfm-pretty--state-get name 'last-window-state)))
+          (unless (equal state prev)
+            (cond
+             (custom (funcall custom))
+             (t (gfm-pretty--reconcile-windows decorator)))))))))
+
+(defun gfm-pretty--reveal ()
+  "Engine `post-command-hook' reveal handler.
+Pass-2 dispatch: iterates enabled decorators and calls each one's
+`:reveal-fn'.  Pass 4 absorbs the per-decorator reveal logic into
+the engine and removes `:reveal-fn'."
+  (dolist (decorator (gfm-pretty--enabled-decorators))
+    (let ((reveal-fn (gfm-pretty--decorator-reveal-fn decorator)))
+      (when reveal-fn (funcall reveal-fn)))))
+
+;;; Public lifecycle entry points (used by `gfm-pretty-mode')
+
+(defun gfm-pretty--install-engine-hooks ()
+  "Install the engine's three lifecycle hooks once per buffer."
+  (add-hook 'after-change-functions #'gfm-pretty--after-change nil t)
+  (add-hook 'window-configuration-change-hook #'gfm-pretty--wcc nil t)
+  (add-hook 'post-command-hook #'gfm-pretty--reveal nil t))
+
+(defun gfm-pretty--remove-engine-hooks ()
+  "Remove the engine's three lifecycle hooks; cancel the rebuild timer."
+  (remove-hook 'after-change-functions #'gfm-pretty--after-change t)
+  (remove-hook 'window-configuration-change-hook #'gfm-pretty--wcc t)
+  (remove-hook 'post-command-hook #'gfm-pretty--reveal t)
+  (when (timerp gfm-pretty--rebuild-timer)
+    (cancel-timer gfm-pretty--rebuild-timer)
+    (setq gfm-pretty--rebuild-timer nil)))
+
+(defun gfm-pretty--set-compat-mode-var (name value)
+  "Mirror the engine `enabled-p' bit onto the compat minor-mode variable.
+Each decorator currently ships a `define-minor-mode' compat shim
+named `gfm-pretty-NAME-mode'; setting the variable keeps callers
+that probe it via `bound-and-true-p' consistent with the engine's
+own state.  Removed once those compat shims are deleted."
+  (let ((var (intern-soft (format "gfm-pretty-%s-mode" name))))
+    (when (and var (boundp var))
+      (set var value))))
+
+(defun gfm-pretty--enable-decorator (decorator)
+  "Mark DECORATOR enabled, run its `:on-enable-fn', schedule initial rebuild."
+  (let ((name (gfm-pretty--decorator-name decorator))
+        (on-enable (gfm-pretty--decorator-on-enable-fn decorator)))
+    (gfm-pretty--state-set name 'enabled-p t)
+    (gfm-pretty--set-compat-mode-var name t)
+    (when on-enable (funcall on-enable))
+    (gfm-pretty--rebuild decorator)))
+
+(defun gfm-pretty--disable-decorator (decorator)
+  "Mark DECORATOR disabled, tear down overlays, run its `:on-disable-fn'."
+  (let ((name (gfm-pretty--decorator-name decorator))
+        (on-disable (gfm-pretty--decorator-on-disable-fn decorator))
+        (registry (gfm-pretty--decorator-registry decorator)))
+    (gfm-pretty--state-set name 'enabled-p nil)
+    (gfm-pretty--set-compat-mode-var name nil)
+    (gfm-pretty--state-set name 'dirty-region nil)
+    (gfm-pretty--state-set name 'last-window-state nil)
+    (when on-disable (funcall on-disable))
+    (when registry (gfm-pretty--remove-overlays registry))))
 
 (provide 'gfm-pretty-engine)
 

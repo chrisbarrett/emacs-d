@@ -14,16 +14,16 @@
 
 ## 2. Pass 2 — Engine owns lifecycle hooks
 
-- [ ] 2.1 In `gfm-pretty-engine.el`, extend `gfm-pretty--decorator` struct with fields: `collect-fn`, `range-fn`, `apply-anchors-fn`, `apply-display-fn`, `font-lock`, `revealable-prop`, `saved-display-prop`, `revealable-p-fn`, `on-enable-fn`, `on-disable-fn`. Keep existing dispatch fields (`enable-fn`, `disable-fn`, `enabled-p-fn`, `block-at-point-fn`, `edit-at-point-fn`) for backward-compat during the migration; mark them deprecated in commentary, remove after pass 2 settles.
-- [ ] 2.2 Update `gfm-pretty-define-decorator` macro to recognise the new kwargs alongside the old. Existing 5-callback registrations still work; new full registrations populate the engine-owned fields.
-- [ ] 2.3 Define `defvar-local gfm-pretty--state nil` (alist `(NAME . plist)` of buffer-local decorator state: `overlays`, `hidden-ovs`, `dirty-region`, `last-window-state`, `blocks-cache`, `rebuild-timer`, `enabled-p`). Helpers `gfm-pretty--state-get name slot` and `gfm-pretty--state-set name slot val`.
-- [ ] 2.4 Define `gfm-pretty--after-change BEG END LEN`: iterates enabled decorators, extends each one's dirty region under `gfm-pretty--state`, arms the single engine idle timer.
-- [ ] 2.5 Define `gfm-pretty--wcc`: iterates enabled decorators, calls `gfm-pretty--reconcile-windows` for each (the engine-level reconciler now uses per-decorator state from `gfm-pretty--state`, not from decorator-owned defvar-locals).
-- [ ] 2.6 Define `gfm-pretty--scheduled-rebuild`: the timer callback. Iterates enabled decorators, for each one calls either `gfm-pretty--rebuild-scoped` (if dirty-region set) or `gfm-pretty--rebuild` (full). Resets dirty-region per decorator afterwards.
-- [ ] 2.7 Rework `gfm-pretty-mode`'s body: on enable, install one `after-change-functions` handler (`gfm-pretty--after-change`), one `window-configuration-change-hook` (`gfm-pretty--wcc`), one `post-command-hook` (`gfm-pretty--reveal` — stub in pass 2, completed in pass 4), initialise `gfm-pretty--state` from the decorator registry (every decorator's `enabled-p` set to t for the umbrella), then call each decorator's `:on-enable-fn` in registration order. On disable: reverse — call `:on-disable-fn` in reverse order, remove the three hooks, cancel the timer, remove all overlays.
-- [ ] 2.8 Rework `gfm-pretty-toggle-decorator NAME`: flips `(gfm-pretty--state-get name 'enabled-p)`. On enable, calls `:on-enable-fn` and schedules a rebuild for that decorator. On disable, calls `:on-disable-fn` and removes that decorator's overlays.
-- [ ] 2.9 Rework `gfm-pretty-block-at-point` to consult `gfm-pretty--state-get name 'enabled-p` (engine-tracked bit) instead of the decorator's own `enabled-p-fn`.
-- [ ] 2.10 Convert each decorator's registration from the 5-callback shim to the full kwargs. For callouts:
+- [x] 2.1 In `gfm-pretty-engine.el`, extend `gfm-pretty--decorator` struct with fields: `collect-fn`, `range-fn`, `apply-anchors-fn`, `apply-display-fn`, `font-lock`, `revealable-prop`, `saved-display-prop`, `revealable-p-fn`, `on-enable-fn`, `on-disable-fn`. Keep existing dispatch fields (`enable-fn`, `disable-fn`, `enabled-p-fn`, `block-at-point-fn`, `edit-at-point-fn`) for backward-compat during the migration; mark them deprecated in commentary, remove after pass 2 settles.
+- [x] 2.2 Update `gfm-pretty-define-decorator` macro to recognise the new kwargs alongside the old. Existing 5-callback registrations still work; new full registrations populate the engine-owned fields.
+- [x] 2.3 Define `defvar-local gfm-pretty--state nil` (alist `(NAME . plist)` of buffer-local decorator state: `overlays`, `hidden-ovs`, `dirty-region`, `last-window-state`, `blocks-cache`, `rebuild-timer`, `enabled-p`). Helpers `gfm-pretty--state-get name slot` and `gfm-pretty--state-set name slot val`.
+- [x] 2.4 Define `gfm-pretty--after-change BEG END LEN`: iterates enabled decorators, extends each one's dirty region under `gfm-pretty--state`, arms the single engine idle timer.
+- [x] 2.5 Define `gfm-pretty--wcc`: iterates enabled decorators, calls `gfm-pretty--reconcile-windows` for each (the engine-level reconciler now uses per-decorator state from `gfm-pretty--state`, not from decorator-owned defvar-locals).
+- [x] 2.6 Define `gfm-pretty--scheduled-rebuild`: the timer callback. Iterates enabled decorators, for each one calls either `gfm-pretty--rebuild-scoped` (if dirty-region set) or `gfm-pretty--rebuild` (full). Resets dirty-region per decorator afterwards.
+- [x] 2.7 Rework `gfm-pretty-mode`'s body: on enable, install one `after-change-functions` handler (`gfm-pretty--after-change`), one `window-configuration-change-hook` (`gfm-pretty--wcc`), one `post-command-hook` (`gfm-pretty--reveal` — stub in pass 2, completed in pass 4), initialise `gfm-pretty--state` from the decorator registry (every decorator's `enabled-p` set to t for the umbrella), then call each decorator's `:on-enable-fn` in registration order. On disable: reverse — call `:on-disable-fn` in reverse order, remove the three hooks, cancel the timer, remove all overlays.
+- [x] 2.8 Rework `gfm-pretty-toggle-decorator NAME`: flips `(gfm-pretty--state-get name 'enabled-p)`. On enable, calls `:on-enable-fn` and schedules a rebuild for that decorator. On disable, calls `:on-disable-fn` and removes that decorator's overlays.
+- [x] 2.9 Rework `gfm-pretty-block-at-point` to consult `gfm-pretty--state-get name 'enabled-p` (engine-tracked bit) instead of the decorator's own `enabled-p-fn`.
+- [x] 2.10 Convert each decorator's registration from the 5-callback shim to the full kwargs. For callouts:
   ```elisp
   (gfm-pretty-define-decorator 'callouts
     :collect-fn          #'gfm-pretty-callouts--find-blocks-1  ; uncached, widened
@@ -36,18 +36,18 @@
     :on-disable-fn       #'gfm-pretty-callouts--on-disable) ; reverse
   ```
   Similar for fences, hrule, links. Tables omits `:revealable-prop` and `:saved-display-prop` (uses its own cursor model); registers `:on-enable-fn` that installs the keymap, evil edit advice, cursor highlight handler.
-- [ ] 2.11 Move each decorator's `:on-enable-fn` body — the side effects that today live in `define-minor-mode` ENABLE branch — into a new `--on-enable` function. Symmetrically for `:on-disable-fn`. Examples:
+- [x] 2.11 Move each decorator's `:on-enable-fn` body — the side effects that today live in `define-minor-mode` ENABLE branch — into a new `--on-enable` function. Symmetrically for `:on-disable-fn`. Examples:
   - Callouts on-enable: install font-lock keywords, add `+theme-changed-hook` watcher, call `--refresh-body-faces`, call `--neutralise-blockquote-face` if not already done.
   - Fences on-enable: install `cursor-intangible-mode 1`.
   - Links on-enable: install xref backend, eldoc function, suppress-compose-region advice, `markdown-hide-urls` watcher.
   - Tables on-enable: install keymap, evil edit advice, cursor handler.
-- [ ] 2.12 Delete the five per-decorator `define-minor-mode` bodies (`gfm-pretty-callouts-mode`, `gfm-pretty-fences-mode`, `gfm-pretty-tables-mode`, `gfm-pretty-hrule-mode`, `gfm-pretty-links-mode`). Provide thin `define-obsolete-function-alias` shims if any caller exists (verify via `git grep`); otherwise just delete.
-- [ ] 2.13 Delete the per-decorator scheduler helpers from each file: `--schedule-rebuild`, `--schedule-full-rebuild`, the `--dirty-region` defvar-local, the `--rebuild-timer` defvar-local, the `--last-window-state` defvar-local, `--arm-rebuild-timer`, `--extend-dirty-region`. Their roles move to engine state.
-- [ ] 2.14 Delete the per-decorator `--rebuild`, `--rebuild-block`, `--rebuild-blocks`, `--rebuild-block-for-window`, `--rebuild-prioritised`, `--reconcile-windows`, `--rebuild-scoped`, `--rebuild-window-prioritised` thin shims; engine functions take their place.
-- [ ] 2.15 Update `gfm-pretty-define-decorator` to remove the deprecated 5-callback fields after migration (`enable-fn`, `disable-fn`, `enabled-p-fn` go away; `block-at-point-fn` and `edit-at-point-fn` survive). Update doc-string.
-- [ ] 2.16 Update tests in `lisp/gfm/gfm-pretty-tests.el` that toggle per-decorator modes (`gfm-pretty-callouts-mode 1`, etc.) to toggle via the engine: enable `gfm-pretty-mode`, then optionally `(gfm-pretty-toggle-decorator 'NAME)` for per-decorator scenarios.
-- [ ] 2.17 Run `make test`. Full ERT suite passes including narrowing-regression. Any failure localises to engine wiring.
-- [ ] 2.18 Commit pass 2: `gfm-pretty: collapse decorator lifecycle into engine`.
+- [x] 2.12 Delete the five per-decorator `define-minor-mode` bodies (`gfm-pretty-callouts-mode`, `gfm-pretty-fences-mode`, `gfm-pretty-tables-mode`, `gfm-pretty-hrule-mode`, `gfm-pretty-links-mode`). Provide thin `define-obsolete-function-alias` shims if any caller exists (verify via `git grep`); otherwise just delete.
+- [x] 2.13 Delete the per-decorator scheduler helpers from each file: `--schedule-rebuild`, `--schedule-full-rebuild`, the `--dirty-region` defvar-local, the `--rebuild-timer` defvar-local, the `--last-window-state` defvar-local, `--arm-rebuild-timer`, `--extend-dirty-region`. Their roles move to engine state.
+- [x] 2.14 Delete the per-decorator `--rebuild`, `--rebuild-block`, `--rebuild-blocks`, `--rebuild-block-for-window`, `--rebuild-prioritised`, `--reconcile-windows`, `--rebuild-scoped`, `--rebuild-window-prioritised` thin shims; engine functions take their place.
+- [x] 2.15 Update `gfm-pretty-define-decorator` to remove the deprecated 5-callback fields after migration (`enable-fn`, `disable-fn`, `enabled-p-fn` go away; `block-at-point-fn` and `edit-at-point-fn` survive). Update doc-string.
+- [x] 2.16 Update tests in `lisp/gfm/gfm-pretty-tests.el` that toggle per-decorator modes (`gfm-pretty-callouts-mode 1`, etc.) to toggle via the engine: enable `gfm-pretty-mode`, then optionally `(gfm-pretty-toggle-decorator 'NAME)` for per-decorator scenarios.
+- [x] 2.17 Run `make test`. Full ERT suite passes including narrowing-regression. Any failure localises to engine wiring.
+- [x] 2.18 Commit pass 2: `gfm-pretty: collapse decorator lifecycle into engine`.
 
 ## 3. Pass 3 — Engine memoises `:collect-fn`
 

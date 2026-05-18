@@ -6,64 +6,19 @@
 ;; registry that exposes a public API for block introspection and
 ;; per-decorator toggling.
 ;;
-;; The umbrella mode enables / disables the five built-in decorators
-;; (callouts, fences, tables, hrule, links) — currently realised as
-;; per-decorator minor modes registered via `gfm-pretty-define-decorator'.
-;; Future work may collapse the shared lifecycle hooks
-;; (`after-change-functions', `window-configuration-change-hook',
-;; `post-command-hook', idle timer) into a single engine.
+;; The umbrella mode installs the engine's lifecycle hooks
+;; (`gfm-pretty-engine.el') and runs every registered decorator's
+;; `:on-enable' hook in registration order.  Disabling reverses the
+;; order and removes the hooks.
 
 ;;; Code:
 
 (require 'cl-lib)
+(require 'gfm-pretty-engine)
 
 (defgroup gfm-pretty nil
   "Overlay + font-lock visual decoration for GFM markdown buffers."
   :group 'markdown-faces)
-
-
-;;; Decorator registry
-
-(cl-defstruct gfm-pretty--decorator
-  "Metadata for a registered gfm-pretty decorator."
-  name
-  enable-fn
-  disable-fn
-  enabled-p-fn
-  block-at-point-fn
-  edit-at-point-fn)
-
-(defvar gfm-pretty--decorators nil
-  "Alist of NAME -> `gfm-pretty--decorator' struct.")
-
-(defun gfm-pretty--get (name)
-  "Return the registered decorator for NAME, or signal a `user-error'."
-  (or (alist-get name gfm-pretty--decorators)
-      (user-error "gfm-pretty: unknown decorator %s" name)))
-
-;;;###autoload
-(defmacro gfm-pretty-define-decorator (name &rest plist)
-  "Register decorator NAME with PLIST keys.
-
-Recognised keys:
-
-  :enable-fn         function called to enable the decorator in the
-                     current buffer.
-  :disable-fn        function called to disable it.
-  :enabled-p-fn      predicate returning non-nil when the decorator is
-                     active in the current buffer.
-  :block-at-point-fn optional; returns the decorator's block enclosing
-                     point, or nil.
-  :edit-at-point-fn  optional; opens an editor on the block at point."
-  (declare (indent 1))
-  `(setf (alist-get ,name gfm-pretty--decorators)
-         (make-gfm-pretty--decorator
-          :name ,name
-          :enable-fn         ,(plist-get plist :enable-fn)
-          :disable-fn        ,(plist-get plist :disable-fn)
-          :enabled-p-fn      ,(plist-get plist :enabled-p-fn)
-          :block-at-point-fn ,(plist-get plist :block-at-point-fn)
-          :edit-at-point-fn  ,(plist-get plist :edit-at-point-fn))))
 
 
 ;;; Lazy-load all decorators
@@ -95,10 +50,10 @@ Without prefix arg, prompts for NAME from the registry."
                          nil t)))))
   (gfm-pretty--require-all)
   (let* ((d (gfm-pretty--get name))
-         (enabled (funcall (gfm-pretty--decorator-enabled-p-fn d))))
-    (if enabled
-        (funcall (gfm-pretty--decorator-disable-fn d))
-      (funcall (gfm-pretty--decorator-enable-fn d)))
+         (enabled (gfm-pretty--state-get name 'enabled-p)))
+    (cond
+     (enabled (gfm-pretty--disable-decorator d))
+     (t (gfm-pretty--enable-decorator d)))
     (message "gfm-pretty decorator %s: %s"
              name (if enabled "off" "on"))))
 
@@ -115,8 +70,7 @@ returns non-nil wins."
   (gfm-pretty--require-all)
   (cl-loop for (name . d) in gfm-pretty--decorators
            for fn = (gfm-pretty--decorator-block-at-point-fn d)
-           for enabled-p = (gfm-pretty--decorator-enabled-p-fn d)
-           when (and fn enabled-p (funcall enabled-p))
+           when (and fn (gfm-pretty--state-get name 'enabled-p))
            for block = (funcall fn)
            when block
            return (cons name block)))
@@ -146,17 +100,21 @@ matching decorator does not provide an editor."
 (define-minor-mode gfm-pretty-mode
   "Umbrella mode for GFM visual decoration.
 
-Enables every registered decorator (callouts, fences, tables, hrule,
-links) in the current buffer.  Disabling reverses everything."
+Installs the engine's lifecycle hooks once per buffer and enables every
+registered decorator (callouts, fences, tables, hrule, links) in
+registration order.  Disabling tears them down in reverse order and
+removes the hooks."
   :lighter " gfmp"
   (gfm-pretty--require-all)
-  (dolist (entry gfm-pretty--decorators)
-    (let* ((d (cdr entry))
-           (enable  (gfm-pretty--decorator-enable-fn d))
-           (disable (gfm-pretty--decorator-disable-fn d)))
-      (if gfm-pretty-mode
-          (when enable (funcall enable))
-        (when disable (funcall disable))))))
+  (cond
+   (gfm-pretty-mode
+    (gfm-pretty--install-engine-hooks)
+    (dolist (entry gfm-pretty--decorators)
+      (gfm-pretty--enable-decorator (cdr entry))))
+   (t
+    (dolist (entry (reverse gfm-pretty--decorators))
+      (gfm-pretty--disable-decorator (cdr entry)))
+    (gfm-pretty--remove-engine-hooks))))
 
 (provide 'gfm-pretty)
 ;;; gfm-pretty.el ends here

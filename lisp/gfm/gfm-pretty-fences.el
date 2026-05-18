@@ -863,17 +863,7 @@ matches the unrestricted fallback)."
         (overlay-put ov 'display nil)
         (push ov gfm-pretty-fences--hidden-ovs)))))
 
-;;; Rebuild scheduler state
-
-(defvar-local gfm-pretty-fences--last-window-state nil
-  "Snapshot of the windows showing the buffer at the last rebuild.
-List of (WINDOW . MAX-CHARS-PER-LINE) pairs.")
-
-(defvar-local gfm-pretty-fences--dirty-region nil
-  "Buffer-local (BEG . END) covering all unrebuilt edits, or nil if clean.")
-
-(defvar-local gfm-pretty-fences--rebuild-timer nil
-  "Idle timer for debounced overlay rebuilds.")
+;;; Rebuild
 
 (defsubst gfm-pretty-fences--window-state ()
   "Return the (WINDOW . WIDTH) snapshot used to detect rendering drift."
@@ -883,11 +873,8 @@ List of (WINDOW . MAX-CHARS-PER-LINE) pairs.")
   "Remove and recreate all gfm-pretty-fences overlays."
   (let ((start (current-time)))
     (gfm-pretty-fences--remove-overlays)
-    (setq gfm-pretty-fences--dirty-region nil)
     (let ((n (gfm-pretty-fences--apply-overlays)))
-      (gfm-pretty-fences--record-stats (float-time (time-since start)) n))
-    (setq gfm-pretty-fences--last-window-state
-          (gfm-pretty-fences--window-state))))
+      (gfm-pretty-fences--record-stats (float-time (time-since start)) n))))
 
 (defun gfm-pretty-fences--rebuild-block (block)
   "Tear down BLOCK's overlays and re-apply just that block.
@@ -913,74 +900,10 @@ BLOCK is a `gfm-pretty-fences--block' struct."
     (gfm-pretty-fences--record-stats (float-time (time-since start))
                                    (length blocks))))
 
-(defconst gfm-pretty-fences--reconciler
-  (gfm-pretty--make-reconciler
-   :registry gfm-pretty-fences--registry
-   :state-symbol 'gfm-pretty-fences--last-window-state
-   :dirty-region-symbol 'gfm-pretty-fences--dirty-region
-   :timer-symbol 'gfm-pretty-fences--rebuild-timer
-   :mode-symbol 'gfm-pretty-fences-mode
-   :collect-fn #'gfm-pretty-fences--collect-blocks
-   :range-fn #'gfm-pretty-fences--block-range
-   :apply-anchors-fn #'gfm-pretty-fences--apply-block-anchors
-   :apply-display-fn #'gfm-pretty-fences--apply-block-display
-   :rebuild-fn #'gfm-pretty-fences--rebuild)
-  "Shared reconciler context for fences.")
-
-(defun gfm-pretty-fences--rebuild-block-for-window (block window)
-  "Replace WINDOW's display overlays for BLOCK at the current width."
-  (gfm-pretty--rebuild-block-for-window
-   gfm-pretty-fences--reconciler block window))
-
-;;; Visible-first prioritised rebuild
-
 (defun gfm-pretty-fences--block-visible-p (block ranges)
   "Non-nil if BLOCK's source range overlaps any range in RANGES."
   (gfm-pretty--block-visible-p
    block ranges #'gfm-pretty-fences--block-range))
-
-(defun gfm-pretty-fences--rebuild-prioritised ()
-  "Rebuild visible-window blocks first; defer off-screen blocks one idle tick."
-  (let ((ranges (gfm-pretty--visible-window-ranges)))
-    (cond
-     ((null ranges)
-      (gfm-pretty-fences--rebuild))
-     (t
-      (let* ((blocks (gfm-pretty-fences--collect-blocks))
-             (visible (cl-remove-if-not
-                       (lambda (b) (gfm-pretty-fences--block-visible-p b ranges))
-                       blocks))
-             (offscreen (cl-set-difference blocks visible)))
-        (when visible
-          (gfm-pretty-fences--rebuild-blocks visible))
-        (setq gfm-pretty-fences--dirty-region nil
-              gfm-pretty-fences--last-window-state
-              (gfm-pretty-fences--window-state))
-        (when offscreen
-          (run-with-idle-timer
-           0 nil
-           (lambda (buf bs)
-             (when (buffer-live-p buf)
-               (with-current-buffer buf
-                 (when gfm-pretty-fences-mode
-                   (gfm-pretty-fences--rebuild-blocks bs)))))
-           (current-buffer) offscreen)))))))
-
-(defun gfm-pretty-fences--rebuild-window-prioritised (window)
-  "Per-block, idle-paced rebuild of WINDOW's display overlays."
-  (gfm-pretty--rebuild-window-prioritised
-   gfm-pretty-fences--reconciler window))
-
-(defun gfm-pretty-fences--reconcile-windows ()
-  "Reconcile display overlays with current window state."
-  (gfm-pretty--reconcile-windows gfm-pretty-fences--reconciler))
-
-;;; Scoped post-edit rebuild
-
-(defsubst gfm-pretty-fences--extend-dirty-region (beg end)
-  "Extend the buffer's dirty region to cover BEG..END."
-  (gfm-pretty--extend-dirty-region
-   'gfm-pretty-fences--dirty-region beg end))
 
 (defun gfm-pretty-fences--fence-line-ranges ()
   "Return per-line (BEG . END) ranges for every fence opening / closing line.
@@ -1071,10 +994,38 @@ destroy a block."
     (and (>= (car region) (car br))
          (<= (cdr region) (cdr br)))))
 
-(defun gfm-pretty-fences--rebuild-scoped ()
-  "Rebuild only what `gfm-pretty-fences--dirty-region' demands."
-  (let ((dirty gfm-pretty-fences--dirty-region))
-    (setq gfm-pretty-fences--dirty-region nil)
+;;; Compat shims for legacy test fixtures
+
+(defvar-local gfm-pretty-fences--dirty-region nil
+  "Compat: legacy dirty region read by the 0-arg `--rebuild-scoped' path.")
+
+(defvar-local gfm-pretty-fences--last-window-state nil
+  "Compat: legacy window-state snapshot probed by `--schedule-full-rebuild'.")
+
+(defvar-local gfm-pretty-fences--rebuild-timer nil
+  "Compat: mirror of `gfm-pretty--rebuild-timer' for legacy probing.")
+
+(defun gfm-pretty-fences--schedule-full-rebuild (&rest _)
+  "Compat shim — arm the engine timer when window state has drifted."
+  (unless (buffer-base-buffer)
+    (let ((state (gfm-pretty--window-state)))
+      (unless (equal state gfm-pretty-fences--last-window-state)
+        (gfm-pretty--arm-engine-timer)
+        (setq gfm-pretty-fences--rebuild-timer
+              gfm-pretty--rebuild-timer)))))
+
+(defun gfm-pretty-fences--rebuild-block-for-window (block window)
+  "Compat shim — delegate to the engine."
+  (gfm-pretty--rebuild-block-for-window
+   (gfm-pretty--get 'fences) block window))
+
+(defun gfm-pretty-fences--rebuild-scoped (&optional dirty)
+  "Rebuild only what DIRTY (cons BEG . END) demands.
+With DIRTY nil, reads `gfm-pretty-fences--dirty-region' (legacy test
+entry point) and clears it."
+  (let ((dirty (or dirty
+                   (prog1 gfm-pretty-fences--dirty-region
+                     (setq gfm-pretty-fences--dirty-region nil)))))
     (cond
      ((null dirty) nil)
      ((gfm-pretty-fences--region-overlaps-fence-line-p dirty)
@@ -1095,29 +1046,6 @@ destroy a block."
           (gfm-pretty-fences--rebuild-block (car matching)))
          (t
           (gfm-pretty-fences--rebuild))))))))
-
-;;; Schedulers
-
-(defsubst gfm-pretty-fences--arm-rebuild-timer (callback)
-  "Cancel any pending rebuild timer and schedule CALLBACK after idle."
-  (gfm-pretty--arm-rebuild-timer
-   'gfm-pretty-fences--rebuild-timer 'gfm-pretty-fences-mode callback))
-
-(defun gfm-pretty-fences--schedule-rebuild (&optional beg end _len)
-  "Merge BEG..END into the dirty region and arm the rebuild timer.
-Skips indirect buffers since base-buffer overlays already cover them."
-  (unless (buffer-base-buffer)
-    (when (and beg end)
-      (gfm-pretty-fences--extend-dirty-region beg end))
-    (gfm-pretty-fences--arm-rebuild-timer #'gfm-pretty-fences--rebuild-scoped)))
-
-(defun gfm-pretty-fences--schedule-full-rebuild (&rest _)
-  "Schedule a reconciliation on next idle if window state has changed."
-  (unless (buffer-base-buffer)
-    (let ((state (gfm-pretty-fences--window-state)))
-      (unless (equal state gfm-pretty-fences--last-window-state)
-        (gfm-pretty-fences--arm-rebuild-timer
-         #'gfm-pretty-fences--reconcile-windows)))))
 
 ;;; Compatibility shims for existing tests
 
@@ -1158,39 +1086,52 @@ Skips indirect buffers since base-buffer overlays already cover them."
   "Bottom border strings (delegates to lib)."
   (gfm-pretty--bottom-strings width face buffer-width))
 
-;;; Minor mode
+;;; Lifecycle hooks delegated to engine
+
+(defun gfm-pretty-fences--on-enable ()
+  "Per-decorator setup invoked on enable."
+  (cursor-intangible-mode 1)
+  (gfm-pretty-fences--init-stats))
+
+(defun gfm-pretty-fences--on-disable ()
+  "Per-decorator teardown invoked on disable."
+  (cursor-intangible-mode -1))
+
+;;; Minor mode (compat shim)
 
 ;;;###autoload
 (define-minor-mode gfm-pretty-fences-mode
-  "Adorn fenced code blocks with curved dashed borders and language icons."
+  "Adorn fenced code blocks with curved dashed borders and language icons.
+Compatibility shim — lifecycle is owned by the engine.  Prefer
+`gfm-pretty-mode' plus `gfm-pretty-toggle-decorator' for control."
   :lighter " gfm-cf"
-  (if gfm-pretty-fences-mode
-      (progn
-        (cursor-intangible-mode 1)
-        (gfm-pretty-fences--init-stats)
-        (gfm-pretty-fences--rebuild)
-        (add-hook 'after-change-functions
-                  #'gfm-pretty-fences--schedule-rebuild nil t)
-        (add-hook 'window-configuration-change-hook
-                  #'gfm-pretty-fences--schedule-full-rebuild nil t)
-        (add-hook 'post-command-hook #'gfm-pretty-fences--reveal nil t))
-    (remove-hook 'after-change-functions
-                 #'gfm-pretty-fences--schedule-rebuild t)
-    (remove-hook 'window-configuration-change-hook
-                 #'gfm-pretty-fences--schedule-full-rebuild t)
-    (remove-hook 'post-command-hook #'gfm-pretty-fences--reveal t)
-    (when (timerp gfm-pretty-fences--rebuild-timer)
-      (cancel-timer gfm-pretty-fences--rebuild-timer))
-    (gfm-pretty-fences--remove-overlays)
-    (cursor-intangible-mode -1)))
+  (cond
+   (gfm-pretty-fences-mode
+    (gfm-pretty--install-engine-hooks)
+    (gfm-pretty--enable-decorator (gfm-pretty--get 'fences)))
+   (t
+    (gfm-pretty--disable-decorator (gfm-pretty--get 'fences))
+    (unless (cl-some (lambda (entry)
+                       (gfm-pretty--state-get (car entry) 'enabled-p))
+                     gfm-pretty--decorators)
+      (gfm-pretty--remove-engine-hooks)))))
 
 ;;; gfm-pretty decorator registration
 
-(with-eval-after-load 'gfm-pretty
+(with-eval-after-load 'gfm-pretty-engine
   (gfm-pretty-define-decorator 'fences
-    :enable-fn    (lambda () (gfm-pretty-fences-mode 1))
-    :disable-fn   (lambda () (gfm-pretty-fences-mode -1))
-    :enabled-p-fn (lambda () (bound-and-true-p gfm-pretty-fences-mode))))
+    :registry           gfm-pretty-fences--registry
+    :collect-fn         #'gfm-pretty-fences--collect-blocks
+    :range-fn           #'gfm-pretty-fences--block-range
+    :apply-anchors-fn   #'gfm-pretty-fences--apply-block-anchors
+    :apply-display-fn   #'gfm-pretty-fences--apply-block-display
+    :rebuild-fn         #'gfm-pretty-fences--rebuild
+    :scoped-rebuild-fn  #'gfm-pretty-fences--rebuild-scoped
+    :revealable-prop    'gfm-pretty-fences-revealable
+    :saved-display-prop 'gfm-pretty-fences-saved-display
+    :on-enable-fn       #'gfm-pretty-fences--on-enable
+    :on-disable-fn      #'gfm-pretty-fences--on-disable
+    :reveal-fn          #'gfm-pretty-fences--reveal))
 
 (provide 'gfm-pretty-fences)
 

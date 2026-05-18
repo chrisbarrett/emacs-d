@@ -514,26 +514,14 @@ toggled, so cursor in window A does not expose source in window B."
         (overlay-put ov 'display nil)
         (push ov gfm-pretty-callouts--hidden-ovs)))))
 
-;;; Rebuild scheduler state
-
-(defvar-local gfm-pretty-callouts--last-window-state nil
-  "Snapshot of the windows showing the buffer at the last rebuild.")
-
-(defvar-local gfm-pretty-callouts--dirty-region nil
-  "Buffer-local (BEG . END) covering all unrebuilt edits.")
-
-(defvar-local gfm-pretty-callouts--rebuild-timer nil
-  "Idle timer for debounced overlay rebuilds.")
+;;; Rebuild
 
 (defun gfm-pretty-callouts--rebuild ()
   "Remove and recreate all gfm-pretty-callouts overlays."
   (let ((start (current-time)))
     (gfm-pretty-callouts--remove-overlays)
-    (setq gfm-pretty-callouts--dirty-region nil)
     (gfm-pretty-callouts--apply-overlays)
-    (gfm-pretty-callouts--record-stats (float-time (time-since start)))
-    (setq gfm-pretty-callouts--last-window-state
-          (gfm-pretty--window-state))))
+    (gfm-pretty-callouts--record-stats (float-time (time-since start)))))
 
 (defun gfm-pretty-callouts--rebuild-block (block)
   "Tear down BLOCK's overlays and re-apply just that block."
@@ -557,68 +545,10 @@ toggled, so cursor in window A does not expose source in window B."
         (gfm-pretty-callouts--apply-block-display block window)))
     (gfm-pretty-callouts--record-stats (float-time (time-since start)))))
 
-(defconst gfm-pretty-callouts--reconciler
-  (gfm-pretty--make-reconciler
-   :registry gfm-pretty-callouts--registry
-   :state-symbol 'gfm-pretty-callouts--last-window-state
-   :dirty-region-symbol 'gfm-pretty-callouts--dirty-region
-   :timer-symbol 'gfm-pretty-callouts--rebuild-timer
-   :mode-symbol 'gfm-pretty-callouts-mode
-   :collect-fn #'gfm-pretty-callouts--collect-blocks
-   :range-fn #'gfm-pretty-callouts--block-range
-   :apply-anchors-fn #'gfm-pretty-callouts--apply-block-anchors
-   :apply-display-fn #'gfm-pretty-callouts--apply-block-display
-   :rebuild-fn #'gfm-pretty-callouts--rebuild)
-  "Shared reconciler context for callouts.")
-
-(defun gfm-pretty-callouts--rebuild-block-for-window (block window)
-  "Replace WINDOW's display overlays for BLOCK at the current width."
-  (gfm-pretty--rebuild-block-for-window
-   gfm-pretty-callouts--reconciler block window))
-
-;;; Visible-first prioritised rebuild
-
 (defun gfm-pretty-callouts--block-visible-p (block ranges)
   "Non-nil if BLOCK's source range overlaps any range in RANGES."
   (gfm-pretty--block-visible-p
    block ranges #'gfm-pretty-callouts--block-range))
-
-(defun gfm-pretty-callouts--rebuild-prioritised ()
-  "Rebuild visible-window blocks first; defer off-screen ones one idle tick."
-  (let ((ranges (gfm-pretty--visible-window-ranges)))
-    (cond
-     ((null ranges) (gfm-pretty-callouts--rebuild))
-     (t
-      (let* ((blocks (gfm-pretty-callouts--collect-blocks))
-             (visible (cl-remove-if-not
-                       (lambda (b) (gfm-pretty-callouts--block-visible-p b ranges))
-                       blocks))
-             (offscreen (cl-set-difference blocks visible)))
-        (when visible
-          (gfm-pretty-callouts--rebuild-blocks visible))
-        (setq gfm-pretty-callouts--dirty-region nil
-              gfm-pretty-callouts--last-window-state
-              (gfm-pretty--window-state))
-        (when offscreen
-          (run-with-idle-timer
-           0 nil
-           (lambda (buf bs)
-             (when (buffer-live-p buf)
-               (with-current-buffer buf
-                 (when gfm-pretty-callouts-mode
-                   (gfm-pretty-callouts--rebuild-blocks bs)))))
-           (current-buffer) offscreen)))))))
-
-(defun gfm-pretty-callouts--reconcile-windows ()
-  "Reconcile display overlays with current window state."
-  (gfm-pretty--reconcile-windows gfm-pretty-callouts--reconciler))
-
-;;; Scoped post-edit rebuild
-
-(defsubst gfm-pretty-callouts--extend-dirty-region (beg end)
-  "Extend the buffer's dirty region to cover BEG..END."
-  (gfm-pretty--extend-dirty-region
-   'gfm-pretty-callouts--dirty-region beg end))
 
 (defun gfm-pretty-callouts--marker-line-ranges ()
   "Return per-line (BEG . END) ranges for every `> [!TYPE]' line."
@@ -666,75 +596,95 @@ Edits there can create or destroy block boundaries."
     (and (>= (car region) (car br))
          (<= (cdr region) (cdr br)))))
 
-(defun gfm-pretty-callouts--rebuild-scoped ()
-  "Rebuild only what `gfm-pretty-callouts--dirty-region' demands."
-  (let ((dirty gfm-pretty-callouts--dirty-region))
-    (setq gfm-pretty-callouts--dirty-region nil)
-    (cond
-     ((null dirty) nil)
-     ((gfm-pretty-callouts--region-overlaps-marker-line-p dirty)
-      (gfm-pretty-callouts--rebuild))
-     ((gfm-pretty-callouts--region-adjacent-to-callout-p dirty)
-      (gfm-pretty-callouts--rebuild))
-     (t
-      (let* ((blocks (gfm-pretty-callouts--collect-blocks))
-             (matching (cl-loop for b in blocks
-                                when (gfm-pretty--region-overlaps-p
-                                      dirty
-                                      (gfm-pretty-callouts--block-range b))
-                                collect b)))
-        (cond
-         ((null matching) nil)
-         ((and (null (cdr matching))
-               (gfm-pretty-callouts--block-fully-contains-p (car matching) dirty))
-          (gfm-pretty-callouts--rebuild-block (car matching)))
-         (t (gfm-pretty-callouts--rebuild))))))))
+;;; Compat shims for legacy test fixtures
+;;
+;; Pre-engine code stored per-decorator scheduler state in these
+;; buffer-locals; the engine now owns the equivalents in
+;; `gfm-pretty--state' / `gfm-pretty--rebuild-timer'.  The shims below
+;; let the still-extant test suite drive scoped rebuilds and probe
+;; window-state diff scheduling without exposing the engine
+;; internals.  Remove once the tests migrate.
 
-;;; Schedulers
+(defvar-local gfm-pretty-callouts--dirty-region nil
+  "Compat: legacy dirty region read by the 0-arg `--rebuild-scoped' path.")
 
-(defsubst gfm-pretty-callouts--arm-rebuild-timer (callback)
-  "Cancel any pending rebuild timer and schedule CALLBACK after idle."
-  (gfm-pretty--arm-rebuild-timer
-   'gfm-pretty-callouts--rebuild-timer 'gfm-pretty-callouts-mode callback))
+(defvar-local gfm-pretty-callouts--last-window-state nil
+  "Compat: legacy window-state snapshot probed by `--schedule-full-rebuild'.")
 
-(defun gfm-pretty-callouts--schedule-rebuild (&optional beg end _len)
-  "Merge BEG..END into the dirty region and arm the rebuild timer."
-  (unless (buffer-base-buffer)
-    (when (and beg end)
-      (gfm-pretty-callouts--extend-dirty-region beg end))
-    (gfm-pretty-callouts--arm-rebuild-timer #'gfm-pretty-callouts--rebuild-scoped)))
+(defvar-local gfm-pretty-callouts--rebuild-timer nil
+  "Compat: mirror of `gfm-pretty--rebuild-timer' for legacy probing.")
 
 (defun gfm-pretty-callouts--schedule-full-rebuild (&rest _)
-  "Schedule a window reconciliation if window state has changed."
+  "Compat shim — arm the engine timer when window state has drifted."
   (unless (buffer-base-buffer)
     (let ((state (gfm-pretty--window-state)))
       (unless (equal state gfm-pretty-callouts--last-window-state)
-        (gfm-pretty-callouts--arm-rebuild-timer
-         #'gfm-pretty-callouts--reconcile-windows)))))
+        (gfm-pretty--arm-engine-timer)
+        (setq gfm-pretty-callouts--rebuild-timer
+              gfm-pretty--rebuild-timer)))))
 
-;;; Minor mode
+(defun gfm-pretty-callouts--rebuild-block-for-window (block window)
+  "Compat shim — delegate to the engine."
+  (gfm-pretty--rebuild-block-for-window
+   (gfm-pretty--get 'callouts) block window))
+
+(defun gfm-pretty-callouts--rebuild-scoped (&optional dirty)
+  "Rebuild only what DIRTY (cons BEG . END) demands.
+With DIRTY nil, reads `gfm-pretty-callouts--dirty-region' (legacy test
+entry point) and clears it."
+  (let ((dirty (or dirty
+                   (prog1 gfm-pretty-callouts--dirty-region
+                     (setq gfm-pretty-callouts--dirty-region nil)))))
+  (cond
+   ((null dirty) nil)
+   ((gfm-pretty-callouts--region-overlaps-marker-line-p dirty)
+    (gfm-pretty-callouts--rebuild))
+   ((gfm-pretty-callouts--region-adjacent-to-callout-p dirty)
+    (gfm-pretty-callouts--rebuild))
+   (t
+    (let* ((blocks (gfm-pretty-callouts--collect-blocks))
+           (matching (cl-loop for b in blocks
+                              when (gfm-pretty--region-overlaps-p
+                                    dirty
+                                    (gfm-pretty-callouts--block-range b))
+                              collect b)))
+      (cond
+       ((null matching) nil)
+       ((and (null (cdr matching))
+             (gfm-pretty-callouts--block-fully-contains-p (car matching) dirty))
+        (gfm-pretty-callouts--rebuild-block (car matching)))
+       (t (gfm-pretty-callouts--rebuild))))))))
+
+;;; Lifecycle hooks delegated to engine
+
+(defun gfm-pretty-callouts--on-enable ()
+  "Per-decorator setup invoked on enable: stats reset only.
+Font-lock / face refresh are installed at load time."
+  (gfm-pretty-callouts--init-stats))
+
+(defun gfm-pretty-callouts--on-disable ()
+  "Per-decorator teardown invoked on disable.
+Engine handles overlay teardown."
+  nil)
+
+;;; Minor mode (compat shim)
 
 ;;;###autoload
 (define-minor-mode gfm-pretty-callouts-mode
-  "Render GFM callout blockquotes as boxes."
+  "Render GFM callout blockquotes as boxes.
+Compatibility shim — lifecycle is owned by the engine.  Prefer
+`gfm-pretty-mode' plus `gfm-pretty-toggle-decorator' for control."
   :lighter " gfm-cb"
-  (if gfm-pretty-callouts-mode
-      (progn
-        (gfm-pretty-callouts--init-stats)
-        (gfm-pretty-callouts--rebuild)
-        (add-hook 'after-change-functions
-                  #'gfm-pretty-callouts--schedule-rebuild nil t)
-        (add-hook 'window-configuration-change-hook
-                  #'gfm-pretty-callouts--schedule-full-rebuild nil t)
-        (add-hook 'post-command-hook #'gfm-pretty-callouts--reveal nil t))
-    (remove-hook 'after-change-functions
-                 #'gfm-pretty-callouts--schedule-rebuild t)
-    (remove-hook 'window-configuration-change-hook
-                 #'gfm-pretty-callouts--schedule-full-rebuild t)
-    (remove-hook 'post-command-hook #'gfm-pretty-callouts--reveal t)
-    (when (timerp gfm-pretty-callouts--rebuild-timer)
-      (cancel-timer gfm-pretty-callouts--rebuild-timer))
-    (gfm-pretty-callouts--remove-overlays)))
+  (cond
+   (gfm-pretty-callouts-mode
+    (gfm-pretty--install-engine-hooks)
+    (gfm-pretty--enable-decorator (gfm-pretty--get 'callouts)))
+   (t
+    (gfm-pretty--disable-decorator (gfm-pretty--get 'callouts))
+    (unless (cl-some (lambda (entry)
+                       (gfm-pretty--state-get (car entry) 'enabled-p))
+                     gfm-pretty--decorators)
+      (gfm-pretty--remove-engine-hooks)))))
 
 ;;; Callout faces (moved from modules/lang-markdown/lib.el)
 
@@ -1016,11 +966,20 @@ only that line, missing the multi-line matcher's anchor."
 
 ;;; gfm-pretty decorator registration
 
-(with-eval-after-load 'gfm-pretty
+(with-eval-after-load 'gfm-pretty-engine
   (gfm-pretty-define-decorator 'callouts
-    :enable-fn    (lambda () (gfm-pretty-callouts-mode 1))
-    :disable-fn   (lambda () (gfm-pretty-callouts-mode -1))
-    :enabled-p-fn (lambda () (bound-and-true-p gfm-pretty-callouts-mode))))
+    :registry           gfm-pretty-callouts--registry
+    :collect-fn         #'gfm-pretty-callouts--collect-blocks
+    :range-fn           #'gfm-pretty-callouts--block-range
+    :apply-anchors-fn   #'gfm-pretty-callouts--apply-block-anchors
+    :apply-display-fn   #'gfm-pretty-callouts--apply-block-display
+    :rebuild-fn         #'gfm-pretty-callouts--rebuild
+    :scoped-rebuild-fn  #'gfm-pretty-callouts--rebuild-scoped
+    :revealable-prop    'gfm-pretty-callouts-revealable
+    :saved-display-prop 'gfm-pretty-callouts-saved-display
+    :on-enable-fn       #'gfm-pretty-callouts--on-enable
+    :on-disable-fn      #'gfm-pretty-callouts--on-disable
+    :reveal-fn          #'gfm-pretty-callouts--reveal))
 
 (provide 'gfm-pretty-callouts)
 

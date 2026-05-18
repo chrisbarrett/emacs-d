@@ -2477,14 +2477,12 @@ window holding point."
       (kill-buffer buf))))
 
 (ert-deftest lang-markdown/gfm-pretty-tables-window-config-change-wired-to-full-rebuild ()
-  "`window-configuration-change-hook' is wired to the full-rebuild scheduler."
+  "`window-configuration-change-hook' carries the engine's single handler."
   (with-temp-buffer
     (insert "| A | B |\n| - | - |\n| 1 | 2 |\n")
     (gfm-pretty-tables-mode 1)
-    (should (memq 'gfm-pretty-tables--schedule-full-rebuild
-                  window-configuration-change-hook))
-    (should-not (memq 'gfm-pretty-tables--schedule-rebuild
-                      window-configuration-change-hook))))
+    (should (memq 'gfm-pretty--wcc
+                  window-configuration-change-hook))))
 
 (ert-deftest lang-markdown/gfm-pretty-tables-block-visible-p ()
   "`gfm-pretty-tables--block-visible-p' detects overlap with any window range."

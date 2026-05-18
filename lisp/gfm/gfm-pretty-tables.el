@@ -1407,13 +1407,30 @@ time (no prior state cached) or when an anchor is missing."
   (cl-some (lambda (r) (gfm-pretty-tables--region-overlaps-p region r))
            (gfm-pretty-tables--fence-line-ranges)))
 
-(defun gfm-pretty-tables--rebuild-scoped ()
-  "Rebuild only what `gfm-pretty-tables--dirty-region' demands.
+;;; Compat shims for legacy test fixtures
+
+(defvar-local gfm-pretty-tables--rebuild-timer nil
+  "Compat: mirror of `gfm-pretty--rebuild-timer' for legacy probing.")
+
+(defun gfm-pretty-tables--schedule-full-rebuild (&rest _)
+  "Compat shim — arm the engine timer when window state has drifted."
+  (unless (buffer-base-buffer)
+    (let ((state (gfm-pretty-tables--window-state)))
+      (unless (equal state gfm-pretty-tables--last-window-state)
+        (gfm-pretty--arm-engine-timer)
+        (setq gfm-pretty-tables--rebuild-timer
+              gfm-pretty--rebuild-timer)))))
+
+(defun gfm-pretty-tables--rebuild-scoped (&optional dirty)
+  "Rebuild only what DIRTY (cons BEG . END) demands.
+With DIRTY nil, reads `gfm-pretty-tables--dirty-region' (legacy test
+entry point) and clears it.
 No-op when the region intersects no decorated table; falls back to a
 full rebuild when the region spans a table boundary, multiple tables,
 or any code-fence line."
-  (let ((dirty gfm-pretty-tables--dirty-region))
-    (setq gfm-pretty-tables--dirty-region nil)
+  (let ((dirty (or dirty
+                   (prog1 gfm-pretty-tables--dirty-region
+                     (setq gfm-pretty-tables--dirty-region nil)))))
     (cond
      ((null dirty) nil)
      ((gfm-pretty-tables--region-overlaps-fence-line-p dirty)
@@ -1434,75 +1451,58 @@ or any code-fence line."
          (t
           (gfm-pretty-tables--rebuild))))))))
 
-(defvar-local gfm-pretty-tables--rebuild-timer nil
-  "Idle timer for debounced overlay rebuilds.")
-
 (defvar gfm-pretty-tables-mode)
 
-(defun gfm-pretty-tables--arm-rebuild-timer (callback)
-  "Cancel any pending rebuild timer and schedule CALLBACK after idle."
-  (when (timerp gfm-pretty-tables--rebuild-timer)
-    (cancel-timer gfm-pretty-tables--rebuild-timer))
-  (setq gfm-pretty-tables--rebuild-timer
-        (run-with-idle-timer
-         0.2 nil
-         (lambda (buf cb)
-           (when (buffer-live-p buf)
-             (with-current-buffer buf
-               (when gfm-pretty-tables-mode
-                 (funcall cb)))))
-         (current-buffer) callback)))
+;;; Engine adapter helpers
 
-(defun gfm-pretty-tables--schedule-rebuild (&optional beg end _len)
-  "Merge BEG..END into the dirty region and arm the rebuild timer.
-Skips indirect buffers since base buffer overlays already cover them."
-  (unless (buffer-base-buffer)
-    (when (and beg end)
-      (gfm-pretty-tables--extend-dirty-region beg end))
-    (gfm-pretty-tables--arm-rebuild-timer #'gfm-pretty-tables--rebuild-scoped)))
+(defun gfm-pretty-tables--collect-blocks ()
+  "Engine `:collect-fn' — return tagged tables for the engine reconciler."
+  (gfm-pretty-tables--find-blocks (gfm-pretty-tables--fenced-ranges)))
 
-(defun gfm-pretty-tables--schedule-full-rebuild (&rest _)
-  "Schedule a rebuild on next idle if the window state has changed.
-Window-configuration-change-hook fires for many reasons that don't
-affect rendering (minibuffer activity, focus, scroll-margin), so we
-compare the current per-window (WIN . WIDTH) snapshot against the one
-recorded on the last rebuild and skip when they're equal.  Any size
-change, new window showing the buffer, or window now no-longer-shown
-trips the comparison and triggers the prioritised rebuilder, which
-updates visible-window tables immediately and lets off-screen tables
-catch up on the following idle tick."
-  (unless (buffer-base-buffer)
-    (let ((state (gfm-pretty-tables--window-state)))
-      (unless (equal state gfm-pretty-tables--last-window-state)
-        (gfm-pretty-tables--arm-rebuild-timer #'gfm-pretty-tables--reconcile-windows)))))
+(defun gfm-pretty-tables--block-range (block)
+  "Engine `:range-fn' — extract (BEG . END) from BLOCK."
+  (gfm-pretty-tables--block-line-range block))
 
-;;; Minor mode
+(defun gfm-pretty-tables--apply-block-anchors (_block)
+  "Engine `:apply-anchors-fn' — anchors are created by `--apply-table'.")
+
+(defun gfm-pretty-tables--apply-block-display (block window)
+  "Engine `:apply-display-fn' — apply WINDOW's display overlays for BLOCK."
+  (gfm-pretty-tables--rebuild-block-for-window block window))
+
+;;; Lifecycle hooks delegated to engine
+
+(defun gfm-pretty-tables--on-enable ()
+  "Per-decorator setup invoked on enable."
+  (gfm-pretty-tables--init-stats)
+  (add-hook 'post-command-hook
+            #'gfm-pretty-tables--update-cursor-highlight nil t))
+
+(defun gfm-pretty-tables--on-disable ()
+  "Per-decorator teardown invoked on disable."
+  (remove-hook 'post-command-hook
+               #'gfm-pretty-tables--update-cursor-highlight t)
+  (gfm-pretty-tables--hide-cursor-highlight))
+
+;;; Minor mode (compat shim)
 
 ;;;###autoload
 (define-minor-mode gfm-pretty-tables-mode
-  "Adorn GFM tables with bordered, zebra-striped overlays."
+  "Adorn GFM tables with bordered, zebra-striped overlays.
+Compatibility shim — lifecycle is owned by the engine.  Prefer
+`gfm-pretty-mode' plus `gfm-pretty-toggle-decorator' for control."
   :lighter " gfm-tb"
   :keymap gfm-pretty-tables-mode-map
-  (if gfm-pretty-tables-mode
-      (progn
-        (gfm-pretty-tables--init-stats)
-        (gfm-pretty-tables--rebuild)
-        (add-hook 'after-change-functions
-                  #'gfm-pretty-tables--schedule-rebuild nil t)
-        (add-hook 'window-configuration-change-hook
-                  #'gfm-pretty-tables--schedule-full-rebuild nil t)
-        (add-hook 'post-command-hook
-                  #'gfm-pretty-tables--update-cursor-highlight nil t))
-    (remove-hook 'after-change-functions
-                 #'gfm-pretty-tables--schedule-rebuild t)
-    (remove-hook 'window-configuration-change-hook
-                 #'gfm-pretty-tables--schedule-full-rebuild t)
-    (remove-hook 'post-command-hook
-                 #'gfm-pretty-tables--update-cursor-highlight t)
-    (when (timerp gfm-pretty-tables--rebuild-timer)
-      (cancel-timer gfm-pretty-tables--rebuild-timer))
-    (gfm-pretty-tables--hide-cursor-highlight)
-    (gfm-pretty-tables--remove-overlays)))
+  (cond
+   (gfm-pretty-tables-mode
+    (gfm-pretty--install-engine-hooks)
+    (gfm-pretty--enable-decorator (gfm-pretty--get 'tables)))
+   (t
+    (gfm-pretty--disable-decorator (gfm-pretty--get 'tables))
+    (unless (cl-some (lambda (entry)
+                       (gfm-pretty--state-get (car entry) 'enabled-p))
+                     gfm-pretty--decorators)
+      (gfm-pretty--remove-engine-hooks)))))
 
 ;;; Indirect editing
 
@@ -2350,11 +2350,18 @@ the symbol `snap', a post-call landing in a table snaps to cell 0."
 
 ;;; gfm-pretty decorator registration
 
-(with-eval-after-load 'gfm-pretty
+(with-eval-after-load 'gfm-pretty-engine
   (gfm-pretty-define-decorator 'tables
-    :enable-fn         (lambda () (gfm-pretty-tables-mode 1))
-    :disable-fn        (lambda () (gfm-pretty-tables-mode -1))
-    :enabled-p-fn      (lambda () (bound-and-true-p gfm-pretty-tables-mode))
+    :registry              gfm-pretty-tables--registry
+    :collect-fn            #'gfm-pretty-tables--collect-blocks
+    :range-fn              #'gfm-pretty-tables--block-range
+    :apply-anchors-fn      #'gfm-pretty-tables--apply-block-anchors
+    :apply-display-fn      #'gfm-pretty-tables--apply-block-display
+    :rebuild-fn            #'gfm-pretty-tables--rebuild
+    :scoped-rebuild-fn     #'gfm-pretty-tables--rebuild-scoped
+    :reconcile-windows-fn  #'gfm-pretty-tables--reconcile-windows
+    :on-enable-fn          #'gfm-pretty-tables--on-enable
+    :on-disable-fn         #'gfm-pretty-tables--on-disable
     :block-at-point-fn (lambda () (gfm-pretty-tables--block-at-point))
     :edit-at-point-fn  (lambda () (gfm-pretty-tables-edit-table-at-point))))
 

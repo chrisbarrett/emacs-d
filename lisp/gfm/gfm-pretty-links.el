@@ -76,9 +76,6 @@ definition for a duplicate label wins.")
 (defvar-local gfm-pretty-links--hidden-ovs nil
   "Revealable gfm-pretty-links overlays whose display is currently suppressed.")
 
-(defvar-local gfm-pretty-links--rebuild-timer nil
-  "Idle timer for the debounced overlay rebuild.")
-
 (defvar-local gfm-pretty-links--id-counter 0
   "Monotonic counter backing `gfm-pretty-links--next-id'.")
 
@@ -469,11 +466,26 @@ is recomputed first so reference links resolve against current state."
           (dolist (record blocks)
             (gfm-pretty-links--decorate-link record window)))))))
 
-(defun gfm-pretty-links--schedule-rebuild (&rest _)
-  "Arm the debounced rebuild timer after a buffer change."
-  (unless (buffer-base-buffer)
-    (gfm-pretty--arm-rebuild-timer
-     'gfm-pretty-links--rebuild-timer 'gfm-pretty-links-mode #'gfm-pretty-links--rebuild)))
+(defun gfm-pretty-links--collect-blocks ()
+  "Return link records widened over the whole buffer.
+Engine entry point — the engine's reconciler reads ranges from these."
+  (save-restriction
+    (widen)
+    (gfm-pretty-links--build-ref-def-alist)
+    (gfm-pretty-links--blocks-in-range (point-min) (point-max))))
+
+(defun gfm-pretty-links--block-range (record)
+  "Engine `:range-fn' — return RECORD's full span as (BEG . END)."
+  (gfm-pretty-links--record-span record))
+
+(defun gfm-pretty-links--apply-block-anchors (_record)
+  "Links carry no anchor overlays; placeholder for the reconciler.")
+
+(defun gfm-pretty-links--apply-block-display (record window)
+  "Engine `:apply-display-fn' — decorate RECORD in WINDOW."
+  (save-restriction
+    (widen)
+    (gfm-pretty-links--decorate-link record window)))
 
 ;;; Cursor-driven reveal (per-window, whole-link)
 
@@ -600,38 +612,39 @@ decorated link so other eldoc providers are not blocked."
           (format "%s — %s" url title)
         url))))
 
-;;; Minor mode
+;;; Lifecycle hooks delegated to engine
+
+(defun gfm-pretty-links--on-enable ()
+  "Install link-decorator-specific hooks (xref + eldoc)."
+  (add-hook 'xref-backend-functions #'gfm-pretty-links--xref-backend nil t)
+  (add-hook 'eldoc-documentation-functions
+            #'gfm-pretty-links--eldoc-function nil t))
+
+(defun gfm-pretty-links--on-disable ()
+  "Remove the link-decorator-specific hooks and reset reference cache."
+  (remove-hook 'xref-backend-functions #'gfm-pretty-links--xref-backend t)
+  (remove-hook 'eldoc-documentation-functions
+               #'gfm-pretty-links--eldoc-function t)
+  (setq gfm-pretty-links--ref-def-alist nil))
+
+;;; Minor mode (compat shim)
 
 ;;;###autoload
 (define-minor-mode gfm-pretty-links-mode
   "Decorate Markdown links with per-window overlays.
-Replaces the bracket scaffolding of inline, reference, autolink,
-bare-URL, and wiki links with a title label and a host-aware icon.
-See the file commentary for the full behaviour."
+Compatibility shim — lifecycle is owned by the engine.  Prefer
+`gfm-pretty-mode' plus `gfm-pretty-toggle-decorator' for control."
   :lighter " gfm-ln"
-  (if gfm-pretty-links-mode
-      (progn
-        (gfm-pretty-links--rebuild)
-        (add-hook 'after-change-functions
-                  #'gfm-pretty-links--schedule-rebuild nil t)
-        (add-hook 'window-configuration-change-hook
-                  #'gfm-pretty-links--schedule-rebuild nil t)
-        (add-hook 'post-command-hook #'gfm-pretty-links--reveal nil t)
-        (add-hook 'xref-backend-functions #'gfm-pretty-links--xref-backend nil t)
-        (add-hook 'eldoc-documentation-functions
-                  #'gfm-pretty-links--eldoc-function nil t))
-    (remove-hook 'after-change-functions #'gfm-pretty-links--schedule-rebuild t)
-    (remove-hook 'window-configuration-change-hook
-                 #'gfm-pretty-links--schedule-rebuild t)
-    (remove-hook 'post-command-hook #'gfm-pretty-links--reveal t)
-    (remove-hook 'xref-backend-functions #'gfm-pretty-links--xref-backend t)
-    (remove-hook 'eldoc-documentation-functions
-                 #'gfm-pretty-links--eldoc-function t)
-    (when (timerp gfm-pretty-links--rebuild-timer)
-      (cancel-timer gfm-pretty-links--rebuild-timer))
-    (setq gfm-pretty-links--rebuild-timer nil
-          gfm-pretty-links--ref-def-alist nil)
-    (gfm-pretty-links--remove-overlays)))
+  (cond
+   (gfm-pretty-links-mode
+    (gfm-pretty--install-engine-hooks)
+    (gfm-pretty--enable-decorator (gfm-pretty--get 'links)))
+   (t
+    (gfm-pretty--disable-decorator (gfm-pretty--get 'links))
+    (unless (cl-some (lambda (entry)
+                       (gfm-pretty--state-get (car entry) 'enabled-p))
+                     gfm-pretty--decorators)
+      (gfm-pretty--remove-engine-hooks)))))
 
 ;;; markdown-hide-urls integration
 
@@ -662,11 +675,19 @@ variable toggle the mode."
 
 ;;; gfm-pretty decorator registration
 
-(with-eval-after-load 'gfm-pretty
+(with-eval-after-load 'gfm-pretty-engine
   (gfm-pretty-define-decorator 'links
-    :enable-fn    (lambda () (gfm-pretty-links--maybe-enable))
-    :disable-fn   (lambda () (gfm-pretty-links-mode -1))
-    :enabled-p-fn (lambda () (bound-and-true-p gfm-pretty-links-mode))))
+    :registry           gfm-pretty-links--registry
+    :collect-fn         #'gfm-pretty-links--collect-blocks
+    :range-fn           #'gfm-pretty-links--block-range
+    :apply-anchors-fn   #'gfm-pretty-links--apply-block-anchors
+    :apply-display-fn   #'gfm-pretty-links--apply-block-display
+    :rebuild-fn         #'gfm-pretty-links--rebuild
+    :revealable-prop    'gfm-pretty-links-revealable
+    :saved-display-prop 'gfm-pretty-links-saved-display
+    :on-enable-fn       #'gfm-pretty-links--on-enable
+    :on-disable-fn      #'gfm-pretty-links--on-disable
+    :reveal-fn          #'gfm-pretty-links--reveal))
 
 (provide 'gfm-pretty-links)
 
