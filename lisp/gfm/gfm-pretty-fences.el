@@ -60,7 +60,7 @@
   (rx bol "---" (* blank) eol)
   "Line consisting of `---' (with optional trailing whitespace).")
 
-(defconst gfm-pretty-fences--border-face '+markdown-overlay-border-face
+(defconst gfm-pretty-fences--border-face 'gfm-pretty-border-face
   "Face for the box border around pre blocks.")
 
 ;;; Language resolution

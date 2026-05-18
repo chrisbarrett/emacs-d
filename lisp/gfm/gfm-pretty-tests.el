@@ -280,11 +280,11 @@ emphasis faces on buffer text merge through."
 body chars with `font-lock-prepend-text-property', so any attribute
 they specify sits at the top of the face merge and shadows lower
 faces."
-  (dolist (face '(+markdown-gfm-callout-note-body-face
-                  +markdown-gfm-callout-tip-body-face
-                  +markdown-gfm-callout-important-body-face
-                  +markdown-gfm-callout-warning-body-face
-                  +markdown-gfm-callout-caution-body-face))
+  (dolist (face '(gfm-pretty-callouts-note-body-face
+                  gfm-pretty-callouts-tip-body-face
+                  gfm-pretty-callouts-important-body-face
+                  gfm-pretty-callouts-warning-body-face
+                  gfm-pretty-callouts-caution-body-face))
     (should (eq (face-attribute face :slant nil) 'unspecified))
     (should (eq (face-attribute face :weight nil) 'unspecified))
     (should (eq (face-attribute face :underline nil) 'unspecified))))

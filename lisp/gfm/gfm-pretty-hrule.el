@@ -24,10 +24,13 @@
   "Full-width unicode bar overlays for GFM thematic breaks."
   :group 'markdown-faces)
 
-(defface +markdown-gfm-pretty-hrule-face
+(defface gfm-pretty-hrule-face
   '((t :inherit shadow))
   "Face for the unicode bar rendered over GFM dash-form HR lines."
   :group 'gfm-pretty-hrule)
+
+(define-obsolete-face-alias '+markdown-gfm-pretty-hrule-face
+  'gfm-pretty-hrule-face "29.1")
 
 ;;; Block discovery
 
@@ -125,14 +128,14 @@ intervening edit reuse the cached scan."
 (defun gfm-pretty-hrule--apply-block-display (block window)
   "Apply a per-WINDOW display overlay for HR BLOCK.
 The overlay's `display' is `(make-string WIDTH ?─)' propertized with
-`+markdown-gfm-pretty-hrule-face', where WIDTH is the window's available
+`gfm-pretty-hrule-face', where WIDTH is the window's available
 character width."
   (save-restriction
     (widen)
     (cl-destructuring-bind (beg end) (gfm-pretty-hrule--block-payload block)
       (let* ((width (gfm-pretty--available-width window))
              (bar (propertize (make-string (max 1 width) ?─)
-                              'face '+markdown-gfm-pretty-hrule-face)))
+                              'face 'gfm-pretty-hrule-face)))
         (gfm-pretty--make-display
          gfm-pretty-hrule--registry
          beg end window

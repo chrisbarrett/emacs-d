@@ -72,7 +72,7 @@
 
 ## 5. Pass 5 — Rename `+markdown-` faces
 
-- [ ] 5.1 Rename callout faces in `gfm-pretty-callouts.el`:
+- [x] 5.1 Rename callout faces in `gfm-pretty-callouts.el`:
   - `+markdown-gfm-callout-note-face` → `gfm-pretty-callouts-note-face`
   - `+markdown-gfm-callout-tip-face` → `gfm-pretty-callouts-tip-face`
   - `+markdown-gfm-callout-important-face` → `gfm-pretty-callouts-important-face`
@@ -85,17 +85,17 @@
   - `+markdown-gfm-callout-warning-body-face` → `gfm-pretty-callouts-warning-body-face`
   - `+markdown-gfm-callout-caution-body-face` → `gfm-pretty-callouts-caution-body-face`
   - `+markdown-prettier-ignore-comment-face` → `gfm-pretty-callouts-prettier-ignore-comment-face` (or move to a shared misc face if used elsewhere; verify via grep)
-- [ ] 5.2 Rename the refresh function:
+- [x] 5.2 Rename the refresh function:
   - `+markdown-gfm-callout-refresh-body-faces` → `gfm-pretty-callouts--refresh-body-faces`
   - Update `:on-enable-fn` body and its `+theme-changed-hook` registration.
-- [ ] 5.3 Rename misc faces in other decorator files (verify via grep):
+- [x] 5.3 Rename misc faces in other decorator files (verify via grep):
   - `+markdown-overlay-border-face` → `gfm-pretty-border-face` (lives in `gfm-pretty-borders.el`)
   - `+markdown-gfm-hrule-face` → `gfm-pretty-hrule-face` (lives in `gfm-pretty-hrule.el`)
-- [ ] 5.4 Add `define-obsolete-face-alias` entries for each renamed face (one per face) pointing the old name at the new. Use the current emacs-version string as the deprecation marker.
-- [ ] 5.5 Update spec scenario at `openspec/specs/gfm-pretty/spec.md` "Theme change responsiveness" — the MODIFIED requirement in this change's delta already names the new symbols; pass 5 makes the code match.
-- [ ] 5.6 Update test fixtures in `lisp/gfm/gfm-pretty-tests.el` that reference old face names (grep for `+markdown-gfm-callout`).
-- [ ] 5.7 Run `make test`. Full ERT suite passes.
-- [ ] 5.8 Commit pass 5: `gfm-pretty: rename +markdown- internal faces to gfm-pretty-`.
+- [x] 5.4 Add `define-obsolete-face-alias` entries for each renamed face (one per face) pointing the old name at the new. Use the current emacs-version string as the deprecation marker.
+- [x] 5.5 Update spec scenario at `openspec/specs/gfm-pretty/spec.md` "Theme change responsiveness" — the MODIFIED requirement in this change's delta already names the new symbols; pass 5 makes the code match.
+- [x] 5.6 Update test fixtures in `lisp/gfm/gfm-pretty-tests.el` that reference old face names (grep for `+markdown-gfm-callout`).
+- [x] 5.7 Run `make test`. Full ERT suite passes.
+- [x] 5.8 Commit pass 5: `gfm-pretty: rename +markdown- internal faces to gfm-pretty-`.
 
 ## 6. Spec deltas apply
 
@@ -109,13 +109,13 @@
 
 ## 7. Verification
 
-- [ ] 7.1 Run `make test`. Full ERT suite passes including all narrowing-regression tags.
-- [ ] 7.2 `emacs -Q --batch -L lisp -L lisp/gfm --eval "(require 'gfm-pretty)" --eval "(message \"OK\")"`. Confirms the library loads cleanly with the new file structure.
+- [x] 7.1 Run `make test`. Full ERT suite passes including all narrowing-regression tags.
+- [x] 7.2 `emacs -Q --batch -L lisp -L lisp/gfm --eval "(require 'gfm-pretty)" --eval "(message \"OK\")"`. Confirms the library loads cleanly with the new file structure.
 - [ ] 7.3 Open a `.md` file in a fresh `emacs` session loaded with this config. Inspect with `M-x describe-mode` — `gfm-pretty-mode` is active. Confirm: callouts, fenced code blocks, tables, HRs, links all decorated. Toggle each decorator via `M-x gfm-pretty-toggle-decorator NAME`; confirm clean enable/disable.
 - [ ] 7.4 Open the buffer in two side-by-side windows of different widths (`C-x 3`). Confirm per-window rendering preserved (each box sized to its window).
 - [ ] 7.5 Verify only one of each lifecycle hook installed: `(length after-change-functions)`, `(length window-configuration-change-hook)`, `(length post-command-hook)` each grew by 1 over the disabled state.
 - [ ] 7.6 Verify only one idle timer: `(length timer-idle-list)` includes at most one `gfm-pretty--*` timer.
 - [ ] 7.7 Activate `gfm-present-mode` on a multi-heading markdown buffer. Confirm slide navigation works and decorations render inside narrowed slides without zombie overlays after navigation. (gfm-present is unchanged by this refactor — should keep working.)
 - [ ] 7.8 With point inside a GFM table, invoke the local-leader `t` binding. Confirm `(gfm-pretty-toggle-decorator 'tables)` toggles the tables decorator. With point inside a cell, `gfm-pretty-edit-block-at-point` opens the indirect editor (tables decorator's `:edit-at-point-fn`).
-- [ ] 7.9 Run `openspec validate deepen-gfm-pretty-engine --strict`. No errors.
-- [ ] 7.10 Run `make test-integration` if separate from `make test`.
+- [x] 7.9 Run `openspec validate deepen-gfm-pretty-engine --strict`. No errors.
+- [x] 7.10 Run `make test-integration` if separate from `make test`. (No separate target; integration tests run as part of `make test`.)

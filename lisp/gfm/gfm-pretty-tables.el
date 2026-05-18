@@ -61,7 +61,7 @@ the row's background to the header box's vertical edges."
   :type 'number
   :group 'gfm-pretty-tables)
 
-(defconst gfm-pretty-tables--border-face '+markdown-overlay-border-face
+(defconst gfm-pretty-tables--border-face 'gfm-pretty-border-face
   "Face used for table border characters.")
 
 (defvar gfm-pretty-tables--stats)

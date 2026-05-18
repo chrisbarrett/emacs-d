@@ -22,12 +22,15 @@
   "Shared border-drawing primitives for GFM block decorators."
   :group 'markdown-faces)
 
-(defface +markdown-overlay-border-face
+(defface gfm-pretty-border-face
   '((((background dark))  :foreground "#6c7086")
     (((background light)) :foreground "#b9b2a3")
     (t :inherit shadow))
   "Face for overlay borders around fenced code blocks and tables."
   :group 'markdown-faces)
+
+(define-obsolete-face-alias '+markdown-overlay-border-face
+  'gfm-pretty-border-face "29.1")
 
 (defconst gfm-pretty--wrap-prefix-w 2
   "Visual width of the wrap-prefix shown on continuation visual lines.")

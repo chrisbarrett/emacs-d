@@ -57,12 +57,12 @@
   :group 'gfm-pretty-callouts)
 
 (defconst gfm-pretty-callouts--type-faces
-  '(("NOTE"      . +markdown-gfm-callout-note-face)
-    ("TIP"       . +markdown-gfm-callout-tip-face)
-    ("IMPORTANT" . +markdown-gfm-callout-important-face)
-    ("WARNING"   . +markdown-gfm-callout-warning-face)
-    ("CAUTION"   . +markdown-gfm-callout-caution-face)
-    ("CRITICAL"  . +markdown-gfm-callout-caution-face))
+  '(("NOTE"      . gfm-pretty-callouts-note-face)
+    ("TIP"       . gfm-pretty-callouts-tip-face)
+    ("IMPORTANT" . gfm-pretty-callouts-important-face)
+    ("WARNING"   . gfm-pretty-callouts-warning-face)
+    ("CAUTION"   . gfm-pretty-callouts-caution-face)
+    ("CRITICAL"  . gfm-pretty-callouts-caution-face))
   "Map of callout type to face used for box border and label.")
 
 (defconst gfm-pretty-callouts--marker-re
@@ -688,47 +688,47 @@ Compatibility shim — lifecycle is owned by the engine.  Prefer
 
 ;;; Callout faces (moved from modules/lang-markdown/lib.el)
 
-(defface +markdown-gfm-callout-note-face
+(defface gfm-pretty-callouts-note-face
   '((((background dark))  :foreground "#89b4fa" :slant normal)
     (((background light)) :foreground "#1e66f5" :slant normal)
     (t :inherit font-lock-keyword-face :slant normal))
   "Header face for [!NOTE] callouts (blue)."
   :group 'markdown-faces)
 
-(defface +markdown-gfm-callout-tip-face
+(defface gfm-pretty-callouts-tip-face
   '((((background dark))  :foreground "#a6e3a1" :slant normal)
     (((background light)) :foreground "#40a02b" :slant normal)
     (t :inherit success :slant normal))
   "Header face for [!TIP] callouts (green)."
   :group 'markdown-faces)
 
-(defface +markdown-gfm-callout-important-face
+(defface gfm-pretty-callouts-important-face
   '((((background dark))  :foreground "#cba6f7" :slant normal)
     (((background light)) :foreground "#8839ef" :slant normal)
     (t :inherit font-lock-keyword-face :slant normal))
   "Header face for [!IMPORTANT] callouts (purple)."
   :group 'markdown-faces)
 
-(defface +markdown-gfm-callout-warning-face
+(defface gfm-pretty-callouts-warning-face
   '((((background dark))  :foreground "#fab387" :slant normal)
     (((background light)) :foreground "#fe640b" :slant normal)
     (t :inherit warning :slant normal))
   "Header face for [!WARNING] callouts (orange)."
   :group 'markdown-faces)
 
-(defface +markdown-gfm-callout-caution-face
+(defface gfm-pretty-callouts-caution-face
   '((((background dark))  :foreground "#f38ba8" :slant normal)
     (((background light)) :foreground "#d20f39" :slant normal)
     (t :inherit error :slant normal))
   "Header face for [!CAUTION]/[!CRITICAL] callouts (red)."
   :group 'markdown-faces)
 
-(defface +markdown-gfm-callout-header-face
+(defface gfm-pretty-callouts-header-face
   '((t :weight semibold))
   "Face merged onto callout marker lines on top of the block face."
   :group 'markdown-faces)
 
-(defface +markdown-gfm-callout-note-body-face
+(defface gfm-pretty-callouts-note-body-face
   '((t))
   "Body face for [!NOTE] callouts; `:background' set dynamically from theme.
 Default spec is intentionally empty so inline-markup emphasis (italic,
@@ -736,35 +736,61 @@ bold, underline, link, inline code) merged in from `markdown-italic-face'
 et al. is not clobbered when this face is prepended to body chars."
   :group 'markdown-faces)
 
-(defface +markdown-gfm-callout-tip-body-face
+(defface gfm-pretty-callouts-tip-body-face
   '((t))
   "Body face for [!TIP] callouts; `:background' set dynamically from theme.
-See `+markdown-gfm-callout-note-body-face' for the empty-spec rationale."
+See `gfm-pretty-callouts-note-body-face' for the empty-spec rationale."
   :group 'markdown-faces)
 
-(defface +markdown-gfm-callout-important-body-face
+(defface gfm-pretty-callouts-important-body-face
   '((t))
   "Body face for [!IMPORTANT] callouts; `:background' set dynamically from theme.
-See `+markdown-gfm-callout-note-body-face' for the empty-spec rationale."
+See `gfm-pretty-callouts-note-body-face' for the empty-spec rationale."
   :group 'markdown-faces)
 
-(defface +markdown-gfm-callout-warning-body-face
+(defface gfm-pretty-callouts-warning-body-face
   '((t))
   "Body face for [!WARNING] callouts; `:background' set dynamically from theme.
-See `+markdown-gfm-callout-note-body-face' for the empty-spec rationale."
+See `gfm-pretty-callouts-note-body-face' for the empty-spec rationale."
   :group 'markdown-faces)
 
-(defface +markdown-gfm-callout-caution-body-face
+(defface gfm-pretty-callouts-caution-body-face
   '((t))
   "Body face for [!CAUTION]/[!CRITICAL] callouts.
 `:background' is set dynamically from the active theme.  See
-`+markdown-gfm-callout-note-body-face' for the empty-spec rationale."
+`gfm-pretty-callouts-note-body-face' for the empty-spec rationale."
   :group 'markdown-faces)
 
-(defface +markdown-prettier-ignore-comment-face
+(defface gfm-pretty-callouts-prettier-ignore-comment-face
   '((t :inherit shadow :weight light))
   "Face for prettier-ignore comments."
   :group 'markdown-faces)
+
+;; Backwards-compatible face aliases for the old `+markdown-' names.
+(define-obsolete-face-alias '+markdown-gfm-callout-note-face
+  'gfm-pretty-callouts-note-face "29.1")
+(define-obsolete-face-alias '+markdown-gfm-callout-tip-face
+  'gfm-pretty-callouts-tip-face "29.1")
+(define-obsolete-face-alias '+markdown-gfm-callout-important-face
+  'gfm-pretty-callouts-important-face "29.1")
+(define-obsolete-face-alias '+markdown-gfm-callout-warning-face
+  'gfm-pretty-callouts-warning-face "29.1")
+(define-obsolete-face-alias '+markdown-gfm-callout-caution-face
+  'gfm-pretty-callouts-caution-face "29.1")
+(define-obsolete-face-alias '+markdown-gfm-callout-header-face
+  'gfm-pretty-callouts-header-face "29.1")
+(define-obsolete-face-alias '+markdown-gfm-callout-note-body-face
+  'gfm-pretty-callouts-note-body-face "29.1")
+(define-obsolete-face-alias '+markdown-gfm-callout-tip-body-face
+  'gfm-pretty-callouts-tip-body-face "29.1")
+(define-obsolete-face-alias '+markdown-gfm-callout-important-body-face
+  'gfm-pretty-callouts-important-body-face "29.1")
+(define-obsolete-face-alias '+markdown-gfm-callout-warning-body-face
+  'gfm-pretty-callouts-warning-body-face "29.1")
+(define-obsolete-face-alias '+markdown-gfm-callout-caution-body-face
+  'gfm-pretty-callouts-caution-body-face "29.1")
+(define-obsolete-face-alias '+markdown-prettier-ignore-comment-face
+  'gfm-pretty-callouts-prettier-ignore-comment-face "29.1")
 
 ;;;###autoload
 (defun +markdown-style-header-faces ()
@@ -783,21 +809,21 @@ bold there to keep the headings legible."
       (face-spec-set face spec))))
 
 (defconst +markdown-gfm-callout-type-face-alist
-  '(("NOTE"      . +markdown-gfm-callout-note-face)
-    ("TIP"       . +markdown-gfm-callout-tip-face)
-    ("IMPORTANT" . +markdown-gfm-callout-important-face)
-    ("WARNING"   . +markdown-gfm-callout-warning-face)
-    ("CAUTION"   . +markdown-gfm-callout-caution-face)
-    ("CRITICAL"  . +markdown-gfm-callout-caution-face))
+  '(("NOTE"      . gfm-pretty-callouts-note-face)
+    ("TIP"       . gfm-pretty-callouts-tip-face)
+    ("IMPORTANT" . gfm-pretty-callouts-important-face)
+    ("WARNING"   . gfm-pretty-callouts-warning-face)
+    ("CAUTION"   . gfm-pretty-callouts-caution-face)
+    ("CRITICAL"  . gfm-pretty-callouts-caution-face))
   "Map of GFM callout type label to its header face.")
 
 (defconst +markdown-gfm-callout-type-body-face-alist
-  '(("NOTE"      . +markdown-gfm-callout-note-body-face)
-    ("TIP"       . +markdown-gfm-callout-tip-body-face)
-    ("IMPORTANT" . +markdown-gfm-callout-important-body-face)
-    ("WARNING"   . +markdown-gfm-callout-warning-body-face)
-    ("CAUTION"   . +markdown-gfm-callout-caution-body-face)
-    ("CRITICAL"  . +markdown-gfm-callout-caution-body-face))
+  '(("NOTE"      . gfm-pretty-callouts-note-body-face)
+    ("TIP"       . gfm-pretty-callouts-tip-body-face)
+    ("IMPORTANT" . gfm-pretty-callouts-important-body-face)
+    ("WARNING"   . gfm-pretty-callouts-warning-body-face)
+    ("CAUTION"   . gfm-pretty-callouts-caution-body-face)
+    ("CRITICAL"  . gfm-pretty-callouts-caution-body-face))
   "Map of GFM callout type label to its body (tinted background) face.")
 
 (defun +markdown-gfm-callout--tint-bg (face)
@@ -818,7 +844,7 @@ overlay's tinted panel.  Returns nil if either colour is unresolvable."
                      '(2))))))
 
 ;;;###autoload
-(defun +markdown-gfm-callout-refresh-body-faces (&rest _)
+(defun gfm-pretty-callouts--refresh-body-faces (&rest _)
   "Recompute `:background' on each callout body face from the current theme.
 Also clears `:slant', `:weight', and `:underline' on each body face.
 Body faces are prepended to body chars via `font-lock-prepend-text-property',
@@ -839,9 +865,9 @@ bodies."
       (when tint
         (set-face-background body-face tint)))))
 
-(+markdown-gfm-callout-refresh-body-faces)
+(gfm-pretty-callouts--refresh-body-faces)
 
-(add-hook '+theme-changed-hook #'+markdown-gfm-callout-refresh-body-faces)
+(add-hook '+theme-changed-hook #'gfm-pretty-callouts--refresh-body-faces)
 
 (defconst +markdown-gfm-callout--marker-re
   (rx bol "> " "[!"
@@ -936,16 +962,16 @@ only that line, missing the multi-line matcher's anchor."
                     +markdown-gfm-callout-type-face-alist
                     nil nil #'string=)
          prepend)
-      (2 '+markdown-gfm-callout-header-face prepend)
+      (2 'gfm-pretty-callouts-header-face prepend)
       (0 (progn (+markdown-gfm-callout--paint-body
                  (match-string-no-properties 1)
                  (match-beginning 0)
                  (match-end 0))
                 nil)))
      (,(rx bol (* space) "<!--" (1+ space) "prettier-ignore-start" (1+ space) "-->")
-      0 '+markdown-prettier-ignore-comment-face prepend)
+      0 'gfm-pretty-callouts-prettier-ignore-comment-face prepend)
      (,(rx bol (* space) "<!--" (1+ space) "prettier-ignore-end" (1+ space) "-->")
-      0 '+markdown-prettier-ignore-comment-face prepend)
+      0 'gfm-pretty-callouts-prettier-ignore-comment-face prepend)
      (,(rx (group "$" (or (seq "{" (1+ (any alnum "_")) "}")
                           (seq (any upper "_") (1+ (any upper digit "_"))))))
       1 'font-lock-constant-face prepend))))
