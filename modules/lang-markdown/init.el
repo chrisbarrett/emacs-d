@@ -32,7 +32,8 @@
 
   :hook
   (gfm-mode-hook . visual-line-mode)
-  (gfm-mode-hook . +markdown--enable-gfm-pretty)
+  (gfm-mode-hook . +markdown--gfm-prelude)
+  (gfm-mode-hook . gfm-pretty-mode)
 
   :custom
   (markdown-fontify-code-blocks-natively t)
@@ -186,29 +187,21 @@
      ("latex"         . texinfo-mode)))
 
   :config
-  (defun +markdown--enable-gfm-pretty ()
-    "Load `gfm-pretty' and enable the five built-in decorators.
+  (defun +markdown--gfm-prelude ()
+    "Install GFM font-lock + face styling.
 
-Pass-1 stage of unify-gfm-visual-behaviour: replaces the per-decorator
-`gfm-mode-hook' entries.  Pass 2 will collapse this to a single
-`(gfm-pretty-mode 1)' call."
+Loads `gfm-pretty' (the decorator registry) and applies the
+header-face weights and callout font-lock keywords.  The decorators
+themselves are activated by `gfm-pretty-mode' on the same hook."
     (require 'gfm-pretty)
     (require 'gfm-pretty-callouts)
-    (require 'gfm-pretty-fences)
-    (require 'gfm-pretty-tables)
-    (require 'gfm-pretty-hrule)
-    (require 'gfm-pretty-links)
     (+markdown-style-header-faces)
-    (+markdown-fontify-gfm-pretty-callouts)
-    (gfm-pretty-callouts-mode 1)
-    (gfm-pretty-fences-mode 1)
-    (gfm-pretty-tables-mode 1)
-    (gfm-pretty-hrule-mode 1)
-    (gfm-pretty-links--maybe-enable))
+    (+markdown-fontify-gfm-pretty-callouts))
   (+local-leader-set-key 'markdown-mode-map
     "l" '(markdown-toggle-url-hiding :wk "toggle URLs")
     "f" '(markdown-insert-footnote :wk "insert footnote")
-    "t" '(gfm-pretty-tables-mode :wk "toggle table rendering")))
+    "t" '((lambda () (interactive) (gfm-pretty-toggle-decorator 'tables))
+          :wk "toggle table rendering")))
 
 ;;; Formatting
 

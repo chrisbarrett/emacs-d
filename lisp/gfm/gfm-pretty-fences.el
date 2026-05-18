@@ -1183,6 +1183,14 @@ Skips indirect buffers since base-buffer overlays already cover them."
     (gfm-pretty-fences--remove-overlays)
     (cursor-intangible-mode -1)))
 
+;;; gfm-pretty decorator registration
+
+(with-eval-after-load 'gfm-pretty
+  (gfm-pretty-define-decorator 'fences
+    :enable-fn    (lambda () (gfm-pretty-fences-mode 1))
+    :disable-fn   (lambda () (gfm-pretty-fences-mode -1))
+    :enabled-p-fn (lambda () (bound-and-true-p gfm-pretty-fences-mode))))
+
 (provide 'gfm-pretty-fences)
 
 ;;; gfm-pretty-fences.el ends here

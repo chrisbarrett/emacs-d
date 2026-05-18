@@ -7,6 +7,7 @@
 ;;; Code:
 
 (require 'ert)
+(require 'gfm-pretty)
 (require 'gfm-pretty-borders)
 
 ;; Load lang-markdown composition (config of `markdown-code-lang-modes',
@@ -833,7 +834,7 @@ when both `gfm-pretty-callouts-mode' and `gfm-pretty-fences-mode' are active."
                          (overlays-in (point-min) (point-max))))))
 
 (ert-deftest lang-markdown/gfm-pretty-fences-enabled-via-gfm-mode-hook ()
-  (should (memq '+markdown--enable-gfm-pretty gfm-mode-hook)))
+  (should (memq 'gfm-pretty-mode gfm-mode-hook)))
 
 ;;; Narrowing-resilient discovery and teardown — code fences
 
@@ -2125,7 +2126,7 @@ suppression, the hook moves point back to cell 0 and the next
                          (overlays-in (point-min) (point-max))))))
 
 (ert-deftest lang-markdown/gfm-pretty-tables-enabled-via-gfm-mode-hook ()
-  (should (memq '+markdown--enable-gfm-pretty gfm-mode-hook)))
+  (should (memq 'gfm-pretty-mode gfm-mode-hook)))
 
 ;;; Narrowing-resilient discovery and teardown — tables
 
@@ -2608,8 +2609,8 @@ window holding point."
     (should-not gfm-pretty-links--overlays)))
 
 (ert-deftest lang-markdown/gfm-pretty-links-enabled-via-gfm-mode-hook ()
-  "Links activation runs via the `+markdown--enable-gfm-pretty' hook."
-  (should (memq '+markdown--enable-gfm-pretty gfm-mode-hook)))
+  "Links activation runs via the `gfm-pretty-mode' hook."
+  (should (memq 'gfm-pretty-mode gfm-mode-hook)))
 
 ;;; 14.1 Per-shape decoration
 
@@ -3122,7 +3123,7 @@ decoration must be baked into the cell string itself."
 
 (ert-deftest lang-markdown/gfm-pretty-hrule-enabled-via-gfm-mode-hook ()
   "`gfm-pretty-hrule-mode' is wired into `gfm-mode-hook'."
-  (should (memq '+markdown--enable-gfm-pretty gfm-mode-hook)))
+  (should (memq 'gfm-pretty-mode gfm-mode-hook)))
 
 ;;; Narrowing-regression — gfm-pretty-hrule
 
@@ -3152,6 +3153,49 @@ decoration must be baked into the cell string itself."
       (should (equal baseline
                      (lang-markdown-tests--tagged-source-positions
                       'gfm-pretty-hrule))))))
+
+;;; gfm-pretty umbrella mode
+
+(ert-deftest gfm-pretty/umbrella-enables-all-decorators ()
+  "Enabling `gfm-pretty-mode' turns on each registered decorator."
+  (require 'gfm-pretty-callouts)
+  (require 'gfm-pretty-fences)
+  (require 'gfm-pretty-tables)
+  (require 'gfm-pretty-hrule)
+  (with-temp-buffer
+    (gfm-pretty-mode 1)
+    (should gfm-pretty-callouts-mode)
+    (should gfm-pretty-fences-mode)
+    (should gfm-pretty-tables-mode)
+    (should gfm-pretty-hrule-mode)
+    (gfm-pretty-mode -1)
+    (should-not gfm-pretty-callouts-mode)
+    (should-not gfm-pretty-fences-mode)
+    (should-not gfm-pretty-tables-mode)
+    (should-not gfm-pretty-hrule-mode)))
+
+(ert-deftest gfm-pretty/toggle-decorator-flips ()
+  "`gfm-pretty-toggle-decorator' toggles a single decorator."
+  (require 'gfm-pretty-fences)
+  (with-temp-buffer
+    (should-not gfm-pretty-fences-mode)
+    (gfm-pretty-toggle-decorator 'fences)
+    (should gfm-pretty-fences-mode)
+    (gfm-pretty-toggle-decorator 'fences)
+    (should-not gfm-pretty-fences-mode)))
+
+(ert-deftest gfm-pretty/block-at-point-dispatches-to-tables ()
+  "`gfm-pretty-block-at-point' returns (tables . BLOCK) inside a table."
+  (require 'gfm-pretty-tables)
+  (require 'markdown-mode)
+  (with-temp-buffer
+    (gfm-mode)
+    (insert "| a | b |\n|---|---|\n| 1 | 2 |\n")
+    (gfm-pretty-tables-mode 1)
+    (goto-char (point-min))
+    (let ((hit (gfm-pretty-block-at-point)))
+      (should hit)
+      (should (eq 'tables (car hit))))))
 
 (provide 'gfm-pretty-tests)
 

@@ -660,6 +660,14 @@ variable toggle the mode."
   (when (bound-and-true-p markdown-hide-urls)
     (gfm-pretty-links-mode 1)))
 
+;;; gfm-pretty decorator registration
+
+(with-eval-after-load 'gfm-pretty
+  (gfm-pretty-define-decorator 'links
+    :enable-fn    (lambda () (gfm-pretty-links--maybe-enable))
+    :disable-fn   (lambda () (gfm-pretty-links-mode -1))
+    :enabled-p-fn (lambda () (bound-and-true-p gfm-pretty-links-mode))))
+
 (provide 'gfm-pretty-links)
 
 ;;; gfm-pretty-links.el ends here

@@ -326,6 +326,14 @@ lazily; we depend on it being populated before discovery."
       (cancel-timer gfm-pretty-hrule--rebuild-timer))
     (gfm-pretty-hrule--remove-overlays)))
 
+;;; gfm-pretty decorator registration
+
+(with-eval-after-load 'gfm-pretty
+  (gfm-pretty-define-decorator 'hrule
+    :enable-fn    (lambda () (gfm-pretty-hrule-mode 1))
+    :disable-fn   (lambda () (gfm-pretty-hrule-mode -1))
+    :enabled-p-fn (lambda () (bound-and-true-p gfm-pretty-hrule-mode))))
+
 (provide 'gfm-pretty-hrule)
 
 ;;; gfm-pretty-hrule.el ends here

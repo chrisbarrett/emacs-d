@@ -2347,6 +2347,16 @@ the symbol `snap', a post-call landing in a table snaps to cell 0."
     (when (fboundp cmd)
       (advice-add cmd :around #'gfm-pretty-tables--maybe-edit-advice))))
 
+;;; gfm-pretty decorator registration
+
+(with-eval-after-load 'gfm-pretty
+  (gfm-pretty-define-decorator 'tables
+    :enable-fn         (lambda () (gfm-pretty-tables-mode 1))
+    :disable-fn        (lambda () (gfm-pretty-tables-mode -1))
+    :enabled-p-fn      (lambda () (bound-and-true-p gfm-pretty-tables-mode))
+    :block-at-point-fn (lambda () (gfm-pretty-tables--block-at-point))
+    :edit-at-point-fn  (lambda () (gfm-pretty-tables-edit-table-at-point))))
+
 (provide 'gfm-pretty-tables)
 
 ;;; gfm-pretty-tables.el ends here

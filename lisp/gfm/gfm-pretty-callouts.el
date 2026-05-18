@@ -1013,6 +1013,14 @@ only that line, missing the multi-line matcher's anchor."
                   :stipple :extend :inherit))
     (set-face-attribute 'markdown-blockquote-face nil attr 'unspecified)))
 
+;;; gfm-pretty decorator registration
+
+(with-eval-after-load 'gfm-pretty
+  (gfm-pretty-define-decorator 'callouts
+    :enable-fn    (lambda () (gfm-pretty-callouts-mode 1))
+    :disable-fn   (lambda () (gfm-pretty-callouts-mode -1))
+    :enabled-p-fn (lambda () (bound-and-true-p gfm-pretty-callouts-mode))))
+
 (provide 'gfm-pretty-callouts)
 
 ;;; gfm-pretty-callouts.el ends here
