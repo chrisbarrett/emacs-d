@@ -429,7 +429,8 @@
 
 (ert-deftest modules--collect-autoloads--collects-from-modules ()
   "Collects autoloads from all discovered modules."
-  (let ((+modules-directory (make-temp-file "modules-" t)))
+  (let ((+modules-directory (make-temp-file "modules-" t))
+        (+lisp-dir (make-temp-file "lisp-" t)))
     (unwind-protect
         (let ((module-dir (expand-file-name "my-module" +modules-directory)))
           (make-directory module-dir)
@@ -438,18 +439,21 @@
           (let ((result (+modules--collect-autoloads)))
             (should (= 1 (length result)))
             (should (eq 'my-func (cadr (car (car result)))))))
-      (delete-directory +modules-directory t))))
+      (delete-directory +modules-directory t)
+      (delete-directory +lisp-dir t))))
 
 (ert-deftest modules--collect-autoloads--empty-when-no-autoloads ()
   "Returns empty list when no autoloads found."
-  (let ((+modules-directory (make-temp-file "modules-" t)))
+  (let ((+modules-directory (make-temp-file "modules-" t))
+        (+lisp-dir (make-temp-file "lisp-" t)))
     (unwind-protect
         (let ((module-dir (expand-file-name "my-module" +modules-directory)))
           (make-directory module-dir)
           (write-region "(defun not-autoloaded () nil)"
                         nil (expand-file-name "lib.el" module-dir))
           (should (null (+modules--collect-autoloads))))
-      (delete-directory +modules-directory t))))
+      (delete-directory +modules-directory t)
+      (delete-directory +lisp-dir t))))
 
 
 ;;; Tests for +modules--register-autoloads

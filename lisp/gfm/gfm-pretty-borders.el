@@ -1,18 +1,18 @@
-;;; +gfm-block-borders.el --- Shared block-border primitives -*- lexical-binding: t; -*-
+;;; gfm-pretty-borders.el --- Shared block-border primitives -*- lexical-binding: t; -*-
 
 ;;; Commentary:
 
 ;; Shared primitives for the GFM markdown decorators
-;; (`+gfm-code-fences.el', `+gfm-callouts.el').  Hosts the box-drawing
+;; (`gfm-pretty-fences.el', `gfm-pretty-callouts.el').  Hosts the box-drawing
 ;; primitives (top/bottom border builders, right-edge after-strings,
 ;; wrap simulator), an overlay registry parameterised by a tag prefix,
 ;; the debounced rebuild scheduler, and the per-window state
 ;; reconciler.
 ;;
-;; Consumers create a `gfm-block-borders-registry' instance bound to
+;; Consumers create a `gfm-pretty--registry' instance bound to
 ;; their own buffer-local overlay list and pass it through to the
 ;; registry helpers.  Window reconciliation is parameterised via a
-;; `gfm-block-borders-reconciler' carrying the mode-specific callbacks
+;; `gfm-pretty--reconciler' carrying the mode-specific callbacks
 ;; (`collect-blocks', `rebuild-window-block', `rebuild-all') so the
 ;; same machinery serves both consumers without leaking either one's
 ;; data shape.
@@ -21,33 +21,40 @@
 
 (require 'cl-lib)
 
-(defgroup gfm-block-borders nil
+(defgroup gfm-pretty-borders nil
   "Shared border-drawing primitives for GFM block decorators."
   :group 'markdown-faces)
 
-(defconst gfm-block-borders--wrap-prefix-w 2
+(defface +markdown-overlay-border-face
+  '((((background dark))  :foreground "#6c7086")
+    (((background light)) :foreground "#b9b2a3")
+    (t :inherit shadow))
+  "Face for overlay borders around fenced code blocks and tables."
+  :group 'markdown-faces)
+
+(defconst gfm-pretty--wrap-prefix-w 2
   "Visual width of the wrap-prefix shown on continuation visual lines.")
 
-(defcustom gfm-block-borders-icon-gui-nudge 0.25
+(defcustom gfm-pretty--icon-gui-nudge 0.25
   "Fractional columns to shift the language icon leftward on GUI frames.
 Compensates for icon-font glyphs whose pixel width exceeds the
 `string-width' cell count.  Ignored on TTY frames."
   :type 'number
-  :group 'gfm-block-borders)
+  :group 'gfm-pretty-borders)
 
 ;;; Range helpers
 
-(defun gfm-block-borders--in-ranges-p (pos ranges)
+(defun gfm-pretty--in-ranges-p (pos ranges)
   "Non-nil if POS lies in any (BEG . END) range in RANGES."
   (cl-some (lambda (r) (and (>= pos (car r)) (<= pos (cdr r)))) ranges))
 
-(defun gfm-block-borders--region-overlaps-p (a b)
+(defun gfm-pretty--region-overlaps-p (a b)
   "Non-nil if (BEG . END) ranges A and B overlap."
   (and (<= (car a) (cdr b)) (>= (cdr a) (car b))))
 
 ;;; Width helpers
 
-(defun gfm-block-borders--available-width (&optional window)
+(defun gfm-pretty--available-width (&optional window)
   "Return the available char width for a block in WINDOW.
 Falls back to a window currently showing the buffer, then to
 `fill-column' or 80."
@@ -58,16 +65,16 @@ Falls back to a window currently showing the buffer, then to
         fill-column
         80)))
 
-(defun gfm-block-borders--text-width (&optional window)
+(defun gfm-pretty--text-width (&optional window)
   "Return WINDOW's max chars per visual line.
-Compatibility alias for `gfm-block-borders--available-width'."
-  (gfm-block-borders--available-width window))
+Compatibility alias for `gfm-pretty--available-width'."
+  (gfm-pretty--available-width window))
 
-(defun gfm-block-borders--display-windows ()
+(defun gfm-pretty--display-windows ()
   "Return windows currently displaying the buffer."
   (get-buffer-window-list (current-buffer) nil t))
 
-(defun gfm-block-borders--max-line-width (beg end &optional indent)
+(defun gfm-pretty--max-line-width (beg end &optional indent)
   "Maximum line width between BEG and END, subtracting INDENT from each line."
   (let ((max-col 0)
         (indent (or indent 0)))
@@ -83,7 +90,7 @@ Compatibility alias for `gfm-block-borders--available-width'."
 
 ;;; Border primitives
 
-(defun gfm-block-borders--normalised-border-face (face)
+(defun gfm-pretty--normalised-border-face (face)
   "Return a face spec that inherits FACE but resets text-styling attrs.
 Border glyphs share buffer regions with prose whose font-lock face
 carries `:slant italic', `:underline t', etc.  Without an explicit
@@ -101,12 +108,12 @@ would otherwise be unspecified and inherit from below."
     :underline nil :overline nil :strike-through nil :box nil
     :background "unspecified-bg"))
 
-(defun gfm-block-borders--top-strings (width face buffer-width &optional icon)
+(defun gfm-pretty--top-strings (width face buffer-width &optional icon)
   "Return (LEADING . TRAILING) split of the top border WIDTH cols wide.
 LEADING covers BUFFER-WIDTH cols (matching the marker line's char count) so
 the buffer text shows in place of LEADING when it is revealed; TRAILING
 covers the remaining decoration. ICON, if non-nil, is right-aligned."
-  (let* ((face (gfm-block-borders--normalised-border-face face))
+  (let* ((face (gfm-pretty--normalised-border-face face))
          (l (propertize "┌" 'face face))
          (r (propertize "┐" 'face face))
          (gap (propertize " " 'face face))
@@ -118,7 +125,7 @@ covers the remaining decoration. ICON, if non-nil, is right-aligned."
      (icon
       (let* ((icon-w (string-width icon))
              (nudge (if (display-graphic-p)
-                        (max 0 (min 0.99 gfm-block-borders-icon-gui-nudge))
+                        (max 0 (min 0.99 gfm-pretty--icon-gui-nudge))
                       0))
              (total-fill-w (max 1 (- width 4 icon-w)))
              (rem-fill-w (max 1 (- total-fill-w leading-dash-w)))
@@ -135,10 +142,10 @@ covers the remaining decoration. ICON, if non-nil, is right-aligned."
              (rem-fill (propertize (make-string rem-fill-w ?─) 'face face)))
         (cons leading (concat rem-fill r)))))))
 
-(defun gfm-block-borders--bottom-strings (width face buffer-width)
+(defun gfm-pretty--bottom-strings (width face buffer-width)
   "Return (LEADING . TRAILING) split of the bottom border WIDTH cols wide.
 LEADING covers BUFFER-WIDTH cols matching the marker line's char count."
-  (let* ((face (gfm-block-borders--normalised-border-face face))
+  (let* ((face (gfm-pretty--normalised-border-face face))
          (leading-dash-w (max 0 (1- buffer-width)))
          (leading (concat (propertize "└" 'face face)
                           (propertize (make-string leading-dash-w ?─)
@@ -148,7 +155,7 @@ LEADING covers BUFFER-WIDTH cols matching the marker line's char count."
          (rem-fill (propertize (make-string rem-fill-w ?─) 'face face)))
     (cons leading (concat rem-fill (propertize "┘" 'face face)))))
 
-(defun gfm-block-borders--right-after (box-width face &optional bg)
+(defun gfm-pretty--right-after (box-width face &optional bg)
   "Build the after-string that draws the right border at column BOX-WIDTH.
 When BG is non-nil, the padding before the border `│' is painted
 with `:background BG' so a body line's highlight band fills up to
@@ -169,7 +176,7 @@ NOT clip such a leak — the C-level past-EOL face merge in
 `face_at_buffer_position' simply skips faces that opt out, leaving
 the leaking face's background intact.  Filling the visual line so
 there is no past-EOL region to fill is the working idiom."
-  (let* ((face (gfm-block-borders--normalised-border-face face))
+  (let* ((face (gfm-pretty--normalised-border-face face))
          ;; `face' already pins `:background "unspecified-bg"' so the
          ;; border / sep / pipe paint the system bg.  When BG is non-nil
          ;; the pad replaces that pin with the highlight colour, and
@@ -188,7 +195,7 @@ there is no past-EOL region to fill is the working idiom."
     (put-text-property 0 1 'cursor t str)
     str))
 
-(defun gfm-block-borders--simulate-wrap (text width &optional cont-prefix-w)
+(defun gfm-pretty--simulate-wrap (text width &optional cont-prefix-w)
   "Simulate word-wrap of TEXT in a WIDTH-col window.
 CONT-PREFIX-W is the width of the wrap-prefix shown on continuation
 visual lines (default 0).  Returns (LAST-COL . WRAP-POSITIONS).
@@ -224,39 +231,39 @@ width)."
     (cons (if first-line col (+ col cont-prefix-w))
           (nreverse wraps))))
 
-(defun gfm-block-borders--last-visual-col (text width &optional cont-prefix-w)
+(defun gfm-pretty--last-visual-col (text width &optional cont-prefix-w)
   "Estimate last visual column TEXT reaches.
-See `gfm-block-borders--simulate-wrap'."
-  (car (gfm-block-borders--simulate-wrap text width cont-prefix-w)))
+See `gfm-pretty--simulate-wrap'."
+  (car (gfm-pretty--simulate-wrap text width cont-prefix-w)))
 
-(defun gfm-block-borders--wrap-prefix (face &optional glyph)
+(defun gfm-pretty--wrap-prefix (face &optional glyph)
   "Wrap-prefix string for continuation lines using FACE.
 GLYPH defaults to `⋱ ' (fences).  Callers wanting the box's left edge
 on continuation rows pass `│ '."
   (propertize (or glyph "⋱ ") 'face
-              (gfm-block-borders--normalised-border-face face)))
+              (gfm-pretty--normalised-border-face face)))
 
-(defun gfm-block-borders--right-after-overflow (face line-text window
+(defun gfm-pretty--right-after-overflow (face line-text window
                                                      &optional cont-prefix-w bg)
   "After-string padding the right border to WINDOW's edge for a wrapped line.
 LINE-TEXT is the line's buffer content; the function simulates word-wrap
 to work out where the line ends visually, accounting for the wrap-prefix
 on continuation lines.  WINDOW selects the width; nil falls back to a
 sane default.  CONT-PREFIX-W defaults to
-`gfm-block-borders--wrap-prefix-w'.  When BG is non-nil the padding is
+`gfm-pretty--wrap-prefix-w'.  When BG is non-nil the padding is
 painted with `:background BG' so the highlight band fills the gap up
 to the border.
 
 A trailing `(space :align-to right)' in the default face fills the
 last wrapped visual row from `│' to the window's right edge — see
-`gfm-block-borders--right-after' for why."
-  (let* ((face (gfm-block-borders--normalised-border-face face))
+`gfm-pretty--right-after' for why."
+  (let* ((face (gfm-pretty--normalised-border-face face))
          (pad-face (if bg (plist-put (copy-sequence face) :background bg)
                      face))
-         (text-width (gfm-block-borders--available-width window))
-         (cpw (or cont-prefix-w gfm-block-borders--wrap-prefix-w))
+         (text-width (gfm-pretty--available-width window))
+         (cpw (or cont-prefix-w gfm-pretty--wrap-prefix-w))
          ;; +2 for the `│ ' before-string contribution to the first visual line.
-         (visual-col (gfm-block-borders--last-visual-col
+         (visual-col (gfm-pretty--last-visual-col
                       (concat "│ " line-text) text-width cpw))
          ;; Pad runs to the col before `│' regardless of BG; the
          ;; non-overflow path collapses its 1-col `sep' when BG is
@@ -274,8 +281,8 @@ last wrapped visual row from `│' to the window's right edge — see
 
 ;;; Overlay registry
 
-(cl-defstruct (gfm-block-borders-registry
-               (:constructor gfm-block-borders-make-registry)
+(cl-defstruct (gfm-pretty--registry
+               (:constructor gfm-pretty--make-registry)
                (:copier nil))
   "Per-mode overlay registry context.
 
@@ -297,13 +304,13 @@ recomputing the symbol on every overlay creation."
   revealable
   saved-display)
 
-(defun gfm-block-borders-registry-for (tag overlays-symbol
+(defun gfm-pretty--registry-for (tag overlays-symbol
                                            &optional hidden-ovs-symbol)
-  "Build a `gfm-block-borders-registry' from TAG and OVERLAYS-SYMBOL.
+  "Build a `gfm-pretty--registry' from TAG and OVERLAYS-SYMBOL.
 Sub-property symbols are derived by suffixing TAG (`<tag>-anchor', etc.).
 HIDDEN-OVS-SYMBOL is the symbol of the buffer-local list used by reveal."
   (let ((name (symbol-name tag)))
-    (gfm-block-borders-make-registry
+    (gfm-pretty--make-registry
      :tag tag
      :overlays-symbol overlays-symbol
      :hidden-ovs-symbol hidden-ovs-symbol
@@ -312,22 +319,22 @@ HIDDEN-OVS-SYMBOL is the symbol of the buffer-local list used by reveal."
      :revealable (intern (concat name "-revealable"))
      :saved-display (intern (concat name "-saved-display")))))
 
-(defun gfm-block-borders--register (registry ov)
+(defun gfm-pretty--register (registry ov)
   "Tag OV with REGISTRY's tag and remember it for bulk cleanup."
-  (overlay-put ov (gfm-block-borders-registry-tag registry) t)
-  (push ov (symbol-value (gfm-block-borders-registry-overlays-symbol registry)))
+  (overlay-put ov (gfm-pretty--registry-tag registry) t)
+  (push ov (symbol-value (gfm-pretty--registry-overlays-symbol registry)))
   ov)
 
-(defun gfm-block-borders--remove-overlays (registry &optional beg end)
+(defun gfm-pretty--remove-overlays (registry &optional beg end)
   "Remove all REGISTRY-tagged overlays between BEG and END.
 With both BEG and END nil, widen for the duration of the clear so the
 registry list and the on-buffer overlay set stay in lockstep regardless
 of any current narrowing; also clear the registry's overlay list and
 hidden-ovs list (full reset).  Scoped calls (BEG and/or END non-nil)
 operate on the literal range — callers pass real buffer positions."
-  (let ((tag (gfm-block-borders-registry-tag registry))
-        (list-sym (gfm-block-borders-registry-overlays-symbol registry))
-        (hidden-sym (gfm-block-borders-registry-hidden-ovs-symbol registry)))
+  (let ((tag (gfm-pretty--registry-tag registry))
+        (list-sym (gfm-pretty--registry-overlays-symbol registry))
+        (hidden-sym (gfm-pretty--registry-hidden-ovs-symbol registry)))
     (cond
      ((or beg end)
       (remove-overlays (or beg (point-min)) (or end (point-max)) tag t)
@@ -339,41 +346,41 @@ operate on the literal range — callers pass real buffer positions."
       (set list-sym nil)
       (when hidden-sym (set hidden-sym nil))))))
 
-(defun gfm-block-borders--prune-dead-overlays (registry)
+(defun gfm-pretty--prune-dead-overlays (registry)
   "Drop overlays from REGISTRY whose buffer is gone."
-  (let ((list-sym (gfm-block-borders-registry-overlays-symbol registry)))
+  (let ((list-sym (gfm-pretty--registry-overlays-symbol registry)))
     (set list-sym (cl-remove-if-not #'overlay-buffer (symbol-value list-sym)))))
 
-(defun gfm-block-borders--remove-display-overlays-in-range
+(defun gfm-pretty--remove-display-overlays-in-range
     (registry beg end window)
   "Delete display overlays in [BEG, END] for WINDOW under REGISTRY.
 WINDOW non-nil matches only that window's overlays; nil matches every
 display overlay.  The registry list is NOT pruned here — call
-`gfm-block-borders--prune-dead-overlays' once after a batch."
-  (let ((display-prop (gfm-block-borders-registry-display registry)))
+`gfm-pretty--prune-dead-overlays' once after a batch."
+  (let ((display-prop (gfm-pretty--registry-display registry)))
     (dolist (ov (overlays-in beg end))
       (when (and (overlay-get ov display-prop)
                  (or (null window)
                      (eq (overlay-get ov 'window) window)))
         (delete-overlay ov)))))
 
-(defun gfm-block-borders--remove-display-overlays-for-window (registry window)
+(defun gfm-pretty--remove-display-overlays-for-window (registry window)
   "Delete every display overlay restricted to WINDOW under REGISTRY."
-  (let ((display-prop (gfm-block-borders-registry-display registry))
-        (list-sym (gfm-block-borders-registry-overlays-symbol registry)))
+  (let ((display-prop (gfm-pretty--registry-display registry))
+        (list-sym (gfm-pretty--registry-overlays-symbol registry)))
     (dolist (ov (symbol-value list-sym))
       (when (and (overlay-buffer ov)
                  (overlay-get ov display-prop)
                  (eq (overlay-get ov 'window) window))
         (delete-overlay ov)))
-    (gfm-block-borders--prune-dead-overlays registry)))
+    (gfm-pretty--prune-dead-overlays registry)))
 
-(defun gfm-block-borders--make-anchor (registry beg end &rest props)
+(defun gfm-pretty--make-anchor (registry beg end &rest props)
   "Make an anchor overlay over [BEG, END] under REGISTRY with PROPS."
   (let ((ov (make-overlay beg end nil nil t))
-        (tag (gfm-block-borders-registry-tag registry))
-        (anchor (gfm-block-borders-registry-anchor registry))
-        (list-sym (gfm-block-borders-registry-overlays-symbol registry)))
+        (tag (gfm-pretty--registry-tag registry))
+        (anchor (gfm-pretty--registry-anchor registry))
+        (list-sym (gfm-pretty--registry-overlays-symbol registry)))
     (overlay-put ov tag t)
     (overlay-put ov anchor t)
     (while props
@@ -381,13 +388,13 @@ display overlay.  The registry list is NOT pruned here — call
     (push ov (symbol-value list-sym))
     ov))
 
-(defun gfm-block-borders--make-display (registry beg end window &rest props)
+(defun gfm-pretty--make-display (registry beg end window &rest props)
   "Make a display overlay over [BEG, END] for WINDOW under REGISTRY with PROPS.
 WINDOW non-nil restricts the overlay to that window only."
   (let ((ov (make-overlay beg end nil nil t))
-        (tag (gfm-block-borders-registry-tag registry))
-        (display (gfm-block-borders-registry-display registry))
-        (list-sym (gfm-block-borders-registry-overlays-symbol registry)))
+        (tag (gfm-pretty--registry-tag registry))
+        (display (gfm-pretty--registry-display registry))
+        (list-sym (gfm-pretty--registry-overlays-symbol registry)))
     (overlay-put ov tag t)
     (overlay-put ov display t)
     (when window (overlay-put ov 'window window))
@@ -398,7 +405,7 @@ WINDOW non-nil restricts the overlay to that window only."
 
 ;;; Scheduler primitives
 
-(defun gfm-block-borders--extend-dirty-region (region-symbol beg end)
+(defun gfm-pretty--extend-dirty-region (region-symbol beg end)
   "Extend the buffer-local cons cell in REGION-SYMBOL to cover BEG..END."
   (let ((current (symbol-value region-symbol)))
     (cond
@@ -408,7 +415,7 @@ WINDOW non-nil restricts the overlay to that window only."
       (setcar current (min (car current) beg))
       (setcdr current (max (cdr current) end))))))
 
-(defun gfm-block-borders--arm-rebuild-timer (timer-symbol mode-symbol callback)
+(defun gfm-pretty--arm-rebuild-timer (timer-symbol mode-symbol callback)
   "Cancel the timer in TIMER-SYMBOL and schedule CALLBACK after idle.
 The timer fires CALLBACK in the originating buffer iff MODE-SYMBOL's
 value is non-nil there.  CALLBACK takes no arguments."
@@ -426,24 +433,24 @@ value is non-nil there.  CALLBACK takes no arguments."
 
 ;;; Window-state tracking
 
-(defun gfm-block-borders--window-state ()
+(defun gfm-pretty--window-state ()
   "Return the (WINDOW . WIDTH) snapshot used to detect rendering drift."
-  (mapcar (lambda (w) (cons w (gfm-block-borders--available-width w)))
-          (gfm-block-borders--display-windows)))
+  (mapcar (lambda (w) (cons w (gfm-pretty--available-width w)))
+          (gfm-pretty--display-windows)))
 
-(defun gfm-block-borders--range-visible-p (range ranges)
+(defun gfm-pretty--range-visible-p (range ranges)
   "Non-nil if (BEG . END) RANGE overlaps any (BEG . END) range in RANGES."
   (cl-some (lambda (r)
              (and (<= (car range) (cdr r))
                   (>= (cdr range) (car r))))
            ranges))
 
-(defun gfm-block-borders--block-visible-p (block ranges range-fn)
+(defun gfm-pretty--block-visible-p (block ranges range-fn)
   "Non-nil if BLOCK's source range overlaps any range in RANGES.
 RANGE-FN extracts (BEG . END) from BLOCK."
-  (gfm-block-borders--range-visible-p (funcall range-fn block) ranges))
+  (gfm-pretty--range-visible-p (funcall range-fn block) ranges))
 
-(defun gfm-block-borders--visible-window-ranges ()
+(defun gfm-pretty--visible-window-ranges ()
   "Return (VSTART . VEND) pairs for every window currently showing this buffer.
 Uses cached `window-end' (no force-update) since forcing redisplay on
 a brand-new split window with stale overlays is the dominant cost
@@ -455,8 +462,8 @@ during a `C-x 3' transient.  Windows whose end is nil are dropped."
                     (and s e (cons s e))))
                 (get-buffer-window-list (current-buffer) nil t))))
 
-(cl-defstruct (gfm-block-borders-reconciler
-               (:constructor gfm-block-borders-make-reconciler)
+(cl-defstruct (gfm-pretty--reconciler
+               (:constructor gfm-pretty--make-reconciler)
                (:copier nil))
   "Per-mode reconciliation context.
 
@@ -481,35 +488,35 @@ visible-first rebuilds)."
   apply-display-fn
   rebuild-fn)
 
-(defun gfm-block-borders--rebuild-blocks (rec blocks)
+(defun gfm-pretty--rebuild-blocks (rec blocks)
   "Tear down and re-apply BLOCKS using reconciler REC.
 Removes overlays in each block's range, then re-applies anchors and
 per-window displays.  No stats; consumers track those themselves."
-  (let ((registry (gfm-block-borders-reconciler-registry rec))
-        (range-fn (gfm-block-borders-reconciler-range-fn rec))
-        (apply-anchors (gfm-block-borders-reconciler-apply-anchors-fn rec))
-        (apply-display (gfm-block-borders-reconciler-apply-display-fn rec))
-        (windows (or (gfm-block-borders--display-windows) (list nil))))
+  (let ((registry (gfm-pretty--reconciler-registry rec))
+        (range-fn (gfm-pretty--reconciler-range-fn rec))
+        (apply-anchors (gfm-pretty--reconciler-apply-anchors-fn rec))
+        (apply-display (gfm-pretty--reconciler-apply-display-fn rec))
+        (windows (or (gfm-pretty--display-windows) (list nil))))
     (dolist (block blocks)
       (let ((range (funcall range-fn block)))
-        (gfm-block-borders--remove-overlays
+        (gfm-pretty--remove-overlays
          registry (car range) (cdr range)))
       (funcall apply-anchors block)
       (dolist (window windows)
         (funcall apply-display block window)))))
 
-(defun gfm-block-borders--rebuild-block-for-window (rec block window)
+(defun gfm-pretty--rebuild-block-for-window (rec block window)
   "Replace WINDOW's display overlays for BLOCK at the current width."
-  (let* ((registry (gfm-block-borders-reconciler-registry rec))
-         (range-fn (gfm-block-borders-reconciler-range-fn rec))
-         (apply-display (gfm-block-borders-reconciler-apply-display-fn rec))
+  (let* ((registry (gfm-pretty--reconciler-registry rec))
+         (range-fn (gfm-pretty--reconciler-range-fn rec))
+         (apply-display (gfm-pretty--reconciler-apply-display-fn rec))
          (range (funcall range-fn block)))
-    (gfm-block-borders--remove-display-overlays-in-range
+    (gfm-pretty--remove-display-overlays-in-range
      registry (car range) (cdr range) window)
     (funcall apply-display block window)
-    (gfm-block-borders--prune-dead-overlays registry)))
+    (gfm-pretty--prune-dead-overlays registry)))
 
-(defun gfm-block-borders--pace-window-rebuild (rec buf queue window)
+(defun gfm-pretty--pace-window-rebuild (rec buf queue window)
   "Render the next BLOCK in QUEUE for WINDOW in BUF, then re-arm idle.
 One block per idle tick keeps `C-x 3' / resize transients responsive."
   (run-with-idle-timer
@@ -517,25 +524,25 @@ One block per idle tick keeps `C-x 3' / resize transients responsive."
    (lambda ()
      (when (and (buffer-live-p buf) (window-live-p window))
        (with-current-buffer buf
-         (when (symbol-value (gfm-block-borders-reconciler-mode-symbol rec))
+         (when (symbol-value (gfm-pretty--reconciler-mode-symbol rec))
            (let ((b (car queue))
                  (rest (cdr queue)))
-             (gfm-block-borders--rebuild-block-for-window rec b window)
+             (gfm-pretty--rebuild-block-for-window rec b window)
              (cond
               (rest
-               (gfm-block-borders--pace-window-rebuild rec buf rest window))
+               (gfm-pretty--pace-window-rebuild rec buf rest window))
               (t
-               (gfm-block-borders--prune-dead-overlays
-                (gfm-block-borders-reconciler-registry rec)))))))))))
+               (gfm-pretty--prune-dead-overlays
+                (gfm-pretty--reconciler-registry rec)))))))))))
 
-(defun gfm-block-borders--rebuild-window-prioritised (rec window)
+(defun gfm-pretty--rebuild-window-prioritised (rec window)
   "Per-block, idle-paced rebuild of WINDOW's display overlays via REC.
 Visible blocks first, off-screen ones after, one per idle tick.
 `window-end' is read WITHOUT the force-redisplay flag — forcing
 redisplay on a freshly-split window is itself expensive."
   (when (window-live-p window)
-    (let* ((collect (gfm-block-borders-reconciler-collect-fn rec))
-           (range-fn (gfm-block-borders-reconciler-range-fn rec))
+    (let* ((collect (gfm-pretty--reconciler-collect-fn rec))
+           (range-fn (gfm-pretty--reconciler-range-fn rec))
            (blocks (funcall collect))
            (vstart (window-start window))
            (vend (window-end window))
@@ -543,34 +550,34 @@ redisplay on a freshly-split window is itself expensive."
            (visible (and ranges
                          (cl-remove-if-not
                           (lambda (b)
-                            (gfm-block-borders--block-visible-p
+                            (gfm-pretty--block-visible-p
                              b ranges range-fn))
                           blocks)))
            (offscreen (cl-set-difference blocks visible))
            (queue (append visible offscreen)))
       (when queue
-        (gfm-block-borders--pace-window-rebuild
+        (gfm-pretty--pace-window-rebuild
          rec (current-buffer) queue window)))))
 
-(defun gfm-block-borders--reconcile-windows (rec)
+(defun gfm-pretty--reconcile-windows (rec)
   "Reconcile display overlays with current window state via REC.
 Removed windows have their display overlays deleted synchronously;
 added or resized windows have their rebuild deferred to the next idle
 tick.  Falls through to a full rebuild when no anchors are present
 yet (first call) or no prior state was recorded."
-  (let* ((registry (gfm-block-borders-reconciler-registry rec))
-         (anchor-prop (gfm-block-borders-registry-anchor registry))
-         (state-sym (gfm-block-borders-reconciler-state-symbol rec))
+  (let* ((registry (gfm-pretty--reconciler-registry rec))
+         (anchor-prop (gfm-pretty--registry-anchor registry))
+         (state-sym (gfm-pretty--reconciler-state-symbol rec))
          (overlays (symbol-value
-                    (gfm-block-borders-registry-overlays-symbol registry))))
+                    (gfm-pretty--registry-overlays-symbol registry))))
     (cond
      ((or (null (symbol-value state-sym))
           (null (cl-some (lambda (o) (overlay-get o anchor-prop))
                          overlays)))
-      (funcall (gfm-block-borders-reconciler-rebuild-fn rec)))
+      (funcall (gfm-pretty--reconciler-rebuild-fn rec)))
      (t
       (let* ((prev (symbol-value state-sym))
-             (curr (gfm-block-borders--window-state))
+             (curr (gfm-pretty--window-state))
              (prev-keys (mapcar #'car prev))
              (curr-keys (mapcar #'car curr))
              (added (cl-remove-if (lambda (e) (memq (car e) prev-keys)) curr))
@@ -581,10 +588,10 @@ yet (first call) or no prior state was recorded."
                            (and old (not (eql (cdr e) (cdr old))))))
                        curr))
              (touched-windows (mapcar #'car (append added resized)))
-             (mode-symbol (gfm-block-borders-reconciler-mode-symbol rec)))
+             (mode-symbol (gfm-pretty--reconciler-mode-symbol rec)))
         (dolist (w removed)
-          (gfm-block-borders--remove-display-overlays-for-window registry w))
-        (gfm-block-borders--prune-dead-overlays registry)
+          (gfm-pretty--remove-display-overlays-for-window registry w))
+        (gfm-pretty--prune-dead-overlays registry)
         (set state-sym curr)
         (when touched-windows
           (run-with-idle-timer
@@ -595,10 +602,10 @@ yet (first call) or no prior state was recorded."
                  (when (symbol-value mode-symbol)
                    (dolist (w wins)
                      (when (window-live-p w)
-                       (gfm-block-borders--rebuild-window-prioritised
+                       (gfm-pretty--rebuild-window-prioritised
                         rec w)))))))
            (current-buffer) touched-windows)))))))
 
-(provide '+gfm-block-borders)
+(provide 'gfm-pretty-borders)
 
-;;; +gfm-block-borders.el ends here
+;;; gfm-pretty-borders.el ends here

@@ -3,7 +3,8 @@
 # Module lib files that contribute to autoloads
 MODULE_LIB_FILES := $(wildcard modules/*/lib.el) \
                     $(wildcard modules/*/*-lib.el) \
-                    $(wildcard modules/*/lib/*.el)
+                    $(wildcard modules/*/lib/*.el) \
+                    $(wildcard lisp/*/*.el)
 
 help:
 	@echo "Targets:"

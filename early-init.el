@@ -23,6 +23,11 @@
 (add-to-list 'load-path +lisp-dir)
 (add-to-list 'load-path +config-dir)
 
+;; Add lisp/ subdirectories (library families) to load-path.
+(dolist (dir (directory-files +lisp-dir t "\\`[^.]"))
+  (when (file-directory-p dir)
+    (add-to-list 'load-path dir)))
+
 ;; Add module directories to load-path so module files (e.g. theme-lib) are
 ;; available before the full module system initializes in init.el.
 (defun +module-directory-p (dir)

@@ -32,21 +32,14 @@
 
   :hook
   (gfm-mode-hook . visual-line-mode)
-  (gfm-mode-hook . +markdown-fontify-gfm-callouts)
-  (gfm-mode-hook . gfm-callouts-mode)
-  (gfm-mode-hook . gfm-code-fences-mode)
-  (gfm-mode-hook . gfm-tables-mode)
-  (gfm-mode-hook . gfm-hrule-mode)
-  ;; `gfm-links--maybe-enable' turns on `gfm-links-mode' when
-  ;; `markdown-hide-urls' is non-nil and tracks later changes to it.
-  (gfm-mode-hook . gfm-links--maybe-enable)
+  (gfm-mode-hook . +markdown--enable-gfm-pretty)
 
   :custom
   (markdown-fontify-code-blocks-natively t)
   (markdown-hide-urls t)
   ;; Map GitHub-recognised language tags to major-mode symbols. Used by
   ;; `markdown-get-lang-mode' for native fontification, and (without the
-  ;; `fboundp' filter) by `gfm-code-fences--lang-mode' for icon lookup.
+  ;; `fboundp' filter) by `gfm-pretty-fences--lang-mode' for icon lookup.
   (markdown-code-lang-modes
    '(;; Defaults shipped by markdown-mode that we want to keep.
      ("asymptote"     . asy-mode)
@@ -193,23 +186,29 @@
      ("latex"         . texinfo-mode)))
 
   :config
-  (+markdown-style-header-faces)
-  ;; Neutralise `markdown-blockquote-face' so the face contributes nothing
-  ;; — no italic, no theme-imposed foreground/background, no extend.  The
-  ;; default face wins for plain blockquote chars; emphasis faces merge
-  ;; through cleanly inside callout boxes (see
-  ;; `gfm-callouts--apply-block-anchors').  Themes like catppuccin set
-  ;; `:foreground'/`:background'/`:slant' directly on this face, so
-  ;; `:inherit'-only fixes don't suffice — every attribute must be cleared.
-  (dolist (attr '(:family :foundry :width :height :weight :slant
-                  :underline :overline :strike-through :box
-                  :inverse-video :foreground :background
-                  :stipple :extend :inherit))
-    (set-face-attribute 'markdown-blockquote-face nil attr 'unspecified))
+  (defun +markdown--enable-gfm-pretty ()
+    "Load `gfm-pretty' and enable the five built-in decorators.
+
+Pass-1 stage of unify-gfm-visual-behaviour: replaces the per-decorator
+`gfm-mode-hook' entries.  Pass 2 will collapse this to a single
+`(gfm-pretty-mode 1)' call."
+    (require 'gfm-pretty)
+    (require 'gfm-pretty-callouts)
+    (require 'gfm-pretty-fences)
+    (require 'gfm-pretty-tables)
+    (require 'gfm-pretty-hrule)
+    (require 'gfm-pretty-links)
+    (+markdown-style-header-faces)
+    (+markdown-fontify-gfm-pretty-callouts)
+    (gfm-pretty-callouts-mode 1)
+    (gfm-pretty-fences-mode 1)
+    (gfm-pretty-tables-mode 1)
+    (gfm-pretty-hrule-mode 1)
+    (gfm-pretty-links--maybe-enable))
   (+local-leader-set-key 'markdown-mode-map
     "l" '(markdown-toggle-url-hiding :wk "toggle URLs")
     "f" '(markdown-insert-footnote :wk "insert footnote")
-    "t" '(gfm-tables-mode :wk "toggle table rendering")))
+    "t" '(gfm-pretty-tables-mode :wk "toggle table rendering")))
 
 ;;; Formatting
 

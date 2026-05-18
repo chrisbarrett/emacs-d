@@ -19,7 +19,7 @@ if [[ $# -eq 1 && "$1" == "--affected" ]]; then
     fi
     if [[ "${affected[0]}" == "all" ]]; then
         # Run full compilation
-        mapfile -t files < <(git ls-files 'lisp/*.el' | grep -v -e '-tests\.el$')
+        mapfile -t files < <(git ls-files 'lisp/*.el' 'lisp/*/*.el' | grep -v -e '-tests\.el$')
     elif [[ "${affected[0]}" == "none" ]]; then
         echo "No files to compile for affected changes"
         exit 0
@@ -28,7 +28,7 @@ if [[ $# -eq 1 && "$1" == "--affected" ]]; then
         mapfile -t files < <(printf '%s\n' "${affected[@]}" | grep -E '^lisp/' | grep -v -e '-tests\.el$' || true)
     fi
 elif [[ $# -eq 0 ]]; then
-    mapfile -t files < <(git ls-files 'lisp/*.el' | grep -v -e '-tests\.el$')
+    mapfile -t files < <(git ls-files 'lisp/*.el' 'lisp/*/*.el' | grep -v -e '-tests\.el$')
 else
     files=("$@")
 fi
@@ -40,6 +40,9 @@ fi
 
 emacs -Q --batch \
     --eval "(add-to-list 'load-path \"$ROOT/lisp\")" \
+    --eval "(dolist (dir (directory-files \"$ROOT/lisp\" t \"^[^.]\"))
+              (when (file-directory-p dir)
+                (add-to-list 'load-path dir)))" \
     --eval "(when (file-directory-p \"$ROOT/elpaca/builds\")
               (dolist (dir (directory-files \"$ROOT/elpaca/builds\" t \"^[^.]\"))
                 (when (file-directory-p dir)
