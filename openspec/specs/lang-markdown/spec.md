@@ -49,7 +49,8 @@ under the `gfm-pretty` axis.
 
 - **WHEN** the user opens a file named `notes.md`
 - **THEN** `gfm-mode` is the major mode
-- **AND** `gfm-pretty-mode` is enabled via `gfm-mode-hook`
+- **AND** `gfm-pretty-mode` is enabled via `gfm-mode-hook` (defined in
+  `gfm-pretty`)
 
 #### Scenario: Visual decoration concerns are out of scope here
 
