@@ -2656,6 +2656,106 @@ window holding point."
       "[d]: https://example.com\n"
     (should-not (gfm-pretty--state-get 'links 'overlays))))
 
+;;; 14.1b Code-region exclusion
+
+(ert-deftest lang-markdown/gfm-pretty-links-in-code-p-fenced ()
+  "`gfm-pretty-links--in-code-p' is non-nil inside a fenced code block."
+  (with-temp-buffer
+    (delay-mode-hooks (markdown-mode))
+    (insert "Prose line.\n\n```\n[foo](bar)\n```\n\nMore prose.\n")
+    (font-lock-ensure)
+    (goto-char (point-min))
+    (search-forward "[foo")
+    (should (gfm-pretty-links--in-code-p (match-beginning 0)))))
+
+(ert-deftest lang-markdown/gfm-pretty-links-in-code-p-indented ()
+  "`gfm-pretty-links--in-code-p' is non-nil inside an indented code block."
+  (with-temp-buffer
+    (delay-mode-hooks (markdown-mode))
+    (insert "Prose line.\n\n    [foo](bar)\n\nMore prose.\n")
+    (font-lock-ensure)
+    (goto-char (point-min))
+    (search-forward "[foo")
+    (should (gfm-pretty-links--in-code-p (match-beginning 0)))))
+
+(ert-deftest lang-markdown/gfm-pretty-links-in-code-p-inline ()
+  "`gfm-pretty-links--in-code-p' is non-nil inside an inline code span."
+  (with-temp-buffer
+    (delay-mode-hooks (markdown-mode))
+    (insert "Prose `[foo](bar)` end.\n")
+    (font-lock-ensure)
+    (goto-char (point-min))
+    (search-forward "[foo")
+    (should (gfm-pretty-links--in-code-p (match-beginning 0)))))
+
+(ert-deftest lang-markdown/gfm-pretty-links-in-code-p-prose ()
+  "`gfm-pretty-links--in-code-p' is nil for ordinary prose."
+  (with-temp-buffer
+    (delay-mode-hooks (markdown-mode))
+    (insert "See [foo](bar) here.\n")
+    (font-lock-ensure)
+    (goto-char (point-min))
+    (search-forward "[foo")
+    (should-not (gfm-pretty-links--in-code-p (match-beginning 0)))))
+
+(ert-deftest lang-markdown/gfm-pretty-links-in-code-p-adjacent ()
+  "`gfm-pretty-links--in-code-p' is nil immediately outside a code span."
+  (with-temp-buffer
+    (delay-mode-hooks (markdown-mode))
+    (insert "See [foo](bar) and `code` end.\n")
+    (font-lock-ensure)
+    (goto-char (point-min))
+    (search-forward "[foo")
+    (should-not (gfm-pretty-links--in-code-p (match-beginning 0)))))
+
+(ert-deftest lang-markdown/gfm-pretty-links-skip-fenced-block ()
+  "`[foo](bar)' inside a fenced code block is not decorated."
+  (with-temp-buffer
+    (delay-mode-hooks (markdown-mode))
+    (setq-local markdown-hide-urls t)
+    (insert "Prose line.\n\n```\n[foo](bar)\n```\n\nMore prose.\n")
+    (font-lock-ensure)
+    (gfm-pretty-mode 1)
+    (goto-char (point-min))
+    (search-forward "[foo")
+    (should-not (lang-markdown-tests--link-overlay-at (match-beginning 0)))))
+
+(ert-deftest lang-markdown/gfm-pretty-links-skip-indented-block ()
+  "`[foo](bar)' inside an indented code block is not decorated."
+  (with-temp-buffer
+    (delay-mode-hooks (markdown-mode))
+    (setq-local markdown-hide-urls t)
+    (insert "Prose line.\n\n    [foo](bar)\n\nMore prose.\n")
+    (font-lock-ensure)
+    (gfm-pretty-mode 1)
+    (goto-char (point-min))
+    (search-forward "[foo")
+    (should-not (lang-markdown-tests--link-overlay-at (match-beginning 0)))))
+
+(ert-deftest lang-markdown/gfm-pretty-links-skip-inline-code ()
+  "`[foo](bar)' inside an inline code span is not decorated."
+  (with-temp-buffer
+    (delay-mode-hooks (markdown-mode))
+    (setq-local markdown-hide-urls t)
+    (insert "Prose `[foo](bar)` end.\n")
+    (font-lock-ensure)
+    (gfm-pretty-mode 1)
+    (goto-char (point-min))
+    (search-forward "[foo")
+    (should-not (lang-markdown-tests--link-overlay-at (match-beginning 0)))))
+
+(ert-deftest lang-markdown/gfm-pretty-links-adjacent-code-still-decorates ()
+  "A link adjacent to but outside an inline code span decorates normally."
+  (with-temp-buffer
+    (delay-mode-hooks (markdown-mode))
+    (setq-local markdown-hide-urls t)
+    (insert "See [foo](https://x) and `code` end.\n")
+    (font-lock-ensure)
+    (gfm-pretty-mode 1)
+    (goto-char (point-min))
+    (search-forward "[foo")
+    (should (lang-markdown-tests--link-overlay-at (match-beginning 0) 'title))))
+
 ;;; 14.2 Reference resolution
 
 (ert-deftest lang-markdown/gfm-pretty-links-ref-def-alist-build ()
