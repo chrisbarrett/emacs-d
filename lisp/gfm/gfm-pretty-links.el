@@ -7,33 +7,40 @@
 ;; surface:
 ;;
 ;;   [Anthropic](https://anthropic.com)   ->   Anthropic <icon>
+;;   [Setup](#setup)                      ->   Setup
+;;   [ops](./scripts/foo.sh)              ->   ops
 ;;
-;; The title side (`[title]', brackets included) is display-replaced
-;; with the title text in `markdown-link-face'.  The URL side (`(url)',
-;; `[label]', the autolink span, …) is display-replaced with a single
-;; nerd-icons glyph resolved from the target.  Image links, reference
-;; definition lines, and footnote markers are deliberately left raw.
+;; Each link's resolved URL classifies as `web', `anchor', or `file'.
+;; The class drives:
 ;;
-;; Mirrors the other GFM decorators in this module:
+;; - Title-side face: `gfm-pretty-links-title-face' for web,
+;;   `gfm-pretty-links-anchor-face' for anchor,
+;;   `gfm-pretty-links-file-face' for file.  The two local-link faces
+;;   inherit `markdown-link-face' with `:underline nil' so the
+;;   underline affordance is reserved for "leaves the buffer".
+;; - URL-side overlay: only created for `web' links (a single
+;;   nerd-icons glyph).  `anchor' and `file' links render title-only.
+;; - RET behaviour: anchors jump to the matching heading in-buffer,
+;;   file paths open via `find-file' relative to the buffer's
+;;   directory, web URLs go through `markdown--browse-url'.
 ;;
-;; - Overlays are created per-window (via the `window' overlay
-;;   property) so two windows showing the same buffer decorate and
-;;   reveal independently.
-;; - A post-command reveal exposes the raw source of the whole link
-;;   (both the title-side and url-side overlays, matched by a shared
-;;   `gfm-pretty-links-id') while point is inside it.
-;; - Buffer edits arm a debounced rebuild.  Discovery widens, so the
-;;   rebuild is narrowing-resilient.
+;; Eldoc surfaces the formatted source of the link under point —
+;; `[title](url)' (or `[title][label]' for reference links) with
+;; `shadow' on scaffolding, the per-class face on the title, and
+;; `markdown-url-face' on the URL — so the user can read the target
+;; without disturbing rendering.
+;;
+;; Overlays are per-window (via the `window' overlay property) and
+;; carry the resolved metadata as overlay properties so RET, eldoc,
+;; and the xref backend read them without re-parsing.
 ;;
 ;; markdown-mode's built-in `markdown-hide-urls' compose-region URL
 ;; collapse is suppressed while the mode is on, via `:around' advice on
 ;; `markdown-fontify-inline-links' / `markdown-fontify-reference-links'
 ;; gated by the buffer-local mode variable.
 ;;
-;; Reference links resolve through a buffer-local definition alist.
-;; `RET' on a decorated link follows the URL; `M-.' jumps to the
-;; `[label]:' definition line via an `xref' backend; eldoc surfaces the
-;; resolved URL.
+;; `M-.' on a reference link jumps to the `[label]:' definition line
+;; via an `xref' backend.
 
 ;;; Code:
 
@@ -56,8 +63,18 @@
   :group 'markdown-faces)
 
 (defcustom gfm-pretty-links-title-face 'markdown-link-face
-  "Face used for the display text of a decorated link's title side."
+  "Face used for the display text of a decorated `web' link's title side."
   :type 'face
+  :group 'gfm-pretty-links)
+
+(defface gfm-pretty-links-anchor-face
+  '((t :inherit markdown-link-face :underline nil))
+  "Title-side face for links whose target is a buffer-internal anchor."
+  :group 'gfm-pretty-links)
+
+(defface gfm-pretty-links-file-face
+  '((t :inherit markdown-link-face :underline nil))
+  "Title-side face for links whose target is a relative or absolute path."
   :group 'gfm-pretty-links)
 
 (defvar-keymap gfm-pretty-links--overlay-keymap
@@ -73,9 +90,6 @@ optional title attribute, and the buffer position of the `[label]:'
 definition line.  Recomputed at the start of every rebuild; the first
 definition for a duplicate label wins.")
 
-(defvar-local gfm-pretty-links--id-counter 0
-  "Monotonic counter backing `gfm-pretty-links--next-id'.")
-
 (defvar-local gfm-pretty-links--watching nil
   "Non-nil in buffers that opted into `markdown-hide-urls' tracking.
 Set by `gfm-pretty-links--maybe-enable'.  The global `markdown-hide-urls'
@@ -83,12 +97,6 @@ variable watcher only toggles the mode in buffers carrying this flag,
 which keeps the watcher effectively buffer-local: a plain
 `markdown-mode' buffer that never ran `gfm-pretty-links--maybe-enable' is
 left alone.")
-
-(defun gfm-pretty-links--next-id ()
-  "Return a fresh per-link identifier, unique within this buffer.
-The title-side and url-side overlays of one link share this id so the
-reveal hook can find the partner overlay."
-  (cl-incf gfm-pretty-links--id-counter))
 
 (defconst gfm-pretty-links--registry
   (gfm-pretty--registry-for 'links 'gfm-pretty-links)
@@ -98,6 +106,30 @@ reveal hook can find the partner overlay."
   "Remove all gfm-pretty-links overlays between BEG and END (full reset when nil)."
   (gfm-pretty--remove-overlays gfm-pretty-links--registry beg end))
 
+;;; URL classification
+
+(defconst gfm-pretty-links--file-prefix-re
+  (rx bos (or "./" "../" "/" "file:"))
+  "URL prefix that classifies a link target as `file'.")
+
+(defun gfm-pretty-links--classify-url (url)
+  "Return the target class of URL: one of `web', `anchor', `file'.
+Pure function of the URL string.  `#…' is anchor; `./', `../', `/',
+`file:' is file; everything else (any scheme, host-relative URL,
+empty / nil) is web."
+  (cond
+   ((or (null url) (string-empty-p url)) 'web)
+   ((eq (aref url 0) ?#) 'anchor)
+   ((string-match-p gfm-pretty-links--file-prefix-re url) 'file)
+   (t 'web)))
+
+(defun gfm-pretty-links--title-face-for-class (class)
+  "Return the title-side face for link CLASS."
+  (pcase class
+    ('anchor 'gfm-pretty-links-anchor-face)
+    ('file   'gfm-pretty-links-file-face)
+    (_       gfm-pretty-links-title-face)))
+
 ;;; Link records
 
 (cl-defstruct (gfm-pretty-links--link
@@ -105,12 +137,13 @@ reveal hook can find the partner overlay."
                (:copier nil))
   "One decorated link.
 KIND is one of `inline', `reference', `autolink', `bare-url', `wiki'.
+CLASS is one of `web', `anchor', `file' — the resolved-URL target class.
 TBEG/TEND bound the title-side overlay; LABEL is its display string.
 UBEG/UEND bound the url-side overlay.  URL is the resolved target.
 TITLE-ATTR is the inline title attribute, when present.  REF-LABEL is
 the reference label (reference links only); REF-DEF-POS is the buffer
 position of its `[label]:' definition line."
-  kind tbeg tend label ubeg uend url title-attr ref-label ref-def-pos)
+  kind class tbeg tend label ubeg uend url title-attr ref-label ref-def-pos)
 
 ;;; Reference-definition alist
 
@@ -215,14 +248,16 @@ Image links (`![alt](url)') are rejected via the leading-bang group."
         (goto-char beg)
         (while (re-search-forward markdown-regex-link-inline end t)
           (unless (match-beginning 1)   ; leading `!' => image, skip
-            (let ((label (match-string-no-properties 3))
-                  (url (string-trim (or (match-string-no-properties 6) "")))
-                  (title (gfm-pretty-links--strip-title-quotes
-                          (match-string-no-properties 7)))
-                  (tbeg (match-beginning 2)) (tend (match-end 4))
-                  (ubeg (match-beginning 5)) (uend (match-end 8)))
+            (let* ((label (match-string-no-properties 3))
+                   (url (string-trim (or (match-string-no-properties 6) "")))
+                   (title (gfm-pretty-links--strip-title-quotes
+                           (match-string-no-properties 7)))
+                   (tbeg (match-beginning 2)) (tend (match-end 4))
+                   (ubeg (match-beginning 5)) (uend (match-end 8))
+                   (class (gfm-pretty-links--classify-url url)))
               (push (gfm-pretty-links--make-link
                      :kind 'inline
+                     :class class
                      :tbeg tbeg :tend tend
                      :label (if (string-empty-p label) url label)
                      :ubeg ubeg :uend uend
@@ -245,16 +280,18 @@ dropped (the raw `[title][label]' shows through unchanged)."
                    (ref-label (if (string-empty-p raw-label) text raw-label))
                    (entry (gfm-pretty-links--resolve-ref ref-label)))
               (when entry
-                (push (gfm-pretty-links--make-link
-                       :kind 'reference
-                       :tbeg (match-beginning 2) :tend (match-end 4)
-                       :label (if (string-empty-p text) ref-label text)
-                       :ubeg (match-beginning 5) :uend (match-end 7)
-                       :url (nth 0 entry)
-                       :title-attr (nth 1 entry)
-                       :ref-label ref-label
-                       :ref-def-pos (nth 2 entry))
-                      records)))))))
+                (let ((url (nth 0 entry)))
+                  (push (gfm-pretty-links--make-link
+                         :kind 'reference
+                         :class (gfm-pretty-links--classify-url url)
+                         :tbeg (match-beginning 2) :tend (match-end 4)
+                         :label (if (string-empty-p text) ref-label text)
+                         :ubeg (match-beginning 5) :uend (match-end 7)
+                         :url url
+                         :title-attr (nth 1 entry)
+                         :ref-label ref-label
+                         :ref-def-pos (nth 2 entry))
+                        records))))))))
     (nreverse records)))
 
 (defconst gfm-pretty-links--shortcut-re
@@ -285,18 +322,20 @@ REF-DEF-RANGES is the result of `gfm-pretty-links--ref-def-line-ranges'."
                        (not (gfm-pretty-links--pos-in-ranges-p mbeg ref-def-ranges)))
               (let ((entry (gfm-pretty-links--resolve-ref label)))
                 (when entry
-                  (push (gfm-pretty-links--make-link
-                         :kind 'reference
-                         :tbeg mbeg :tend mend
-                         :label label
-                         ;; No second bracket pair: hang the icon off
-                         ;; the closing `]'.
-                         :ubeg (1- mend) :uend mend
-                         :url (nth 0 entry)
-                         :title-attr (nth 1 entry)
-                         :ref-label label
-                         :ref-def-pos (nth 2 entry))
-                        records))))))))
+                  (let ((url (nth 0 entry)))
+                    (push (gfm-pretty-links--make-link
+                           :kind 'reference
+                           :class (gfm-pretty-links--classify-url url)
+                           :tbeg mbeg :tend mend
+                           :label label
+                           ;; No second bracket pair: hang the icon off
+                           ;; the closing `]'.
+                           :ubeg (1- mend) :uend mend
+                           :url url
+                           :title-attr (nth 1 entry)
+                           :ref-label label
+                           :ref-def-pos (nth 2 entry))
+                          records)))))))))
     (nreverse records)))
 
 (defun gfm-pretty-links--naked-record (kind beg span-end url)
@@ -308,6 +347,7 @@ when the span is too short to split."
          (split (if (> (- span-end beg) 1) (1- span-end) span-end)))
     (gfm-pretty-links--make-link
      :kind kind
+     :class (gfm-pretty-links--classify-url url)
      :tbeg beg :tend split :label label
      :ubeg split :uend span-end
      :url url)))
@@ -355,6 +395,7 @@ Only scans when `markdown-enable-wiki-links' is non-nil."
                    (split (if (> (- send sbeg) 1) (1- send) send)))
               (push (gfm-pretty-links--make-link
                      :kind 'wiki
+                     :class (gfm-pretty-links--classify-url target)
                      :tbeg sbeg :tend split :label label
                      :ubeg split :uend send
                      :url target)
@@ -395,25 +436,25 @@ lines are excluded entirely."
 
 ;;; Overlay construction
 
-(defun gfm-pretty-links--make-overlay (beg end window side record id)
+(defun gfm-pretty-links--make-overlay (beg end window side record)
   "Create one gfm-pretty-links overlay over [BEG, END) for WINDOW.
-SIDE is `title' or `url'.  RECORD is the `gfm-pretty-links--link' it belongs
-to; ID is the shared per-link identifier.  The overlay carries the
-link's resolved metadata so reveal, RET, eldoc, and the xref backend
-can read it without re-parsing."
-  (let ((display
-         (if (eq side 'title)
-             (propertize (gfm-pretty-links--link-label record)
-                         'face gfm-pretty-links-title-face)
-           (or (gfm-pretty-links--icon-for-target (gfm-pretty-links--link-url record))
-               ""))))
+SIDE is `title' or `url'.  RECORD is the `gfm-pretty-links--link' it
+belongs to.  The overlay carries the link's resolved metadata so RET,
+eldoc, and the xref backend can read it without re-parsing."
+  (let* ((class (gfm-pretty-links--link-class record))
+         (display
+          (if (eq side 'title)
+              (propertize (gfm-pretty-links--link-label record)
+                          'face (gfm-pretty-links--title-face-for-class class))
+            (or (gfm-pretty-links--icon-for-target (gfm-pretty-links--link-url record))
+                ""))))
     (apply #'gfm-pretty--make-display
            gfm-pretty-links--registry beg end window
-           'gfm-pretty-links-revealable t
-           'gfm-pretty-links-id id
+           'gfm-pretty-links-class class
            'gfm-pretty-links-side side
            'gfm-pretty-links-kind (gfm-pretty-links--link-kind record)
            'gfm-pretty-links-url (gfm-pretty-links--link-url record)
+           'gfm-pretty-links-label (gfm-pretty-links--link-label record)
            'gfm-pretty-links-title-attr (gfm-pretty-links--link-title-attr record)
            'gfm-pretty-links-ref-label (gfm-pretty-links--link-ref-label record)
            'gfm-pretty-links-ref-def-pos (gfm-pretty-links--link-ref-def-pos record)
@@ -422,26 +463,28 @@ can read it without re-parsing."
            (when (eq side 'title)
              (list 'keymap gfm-pretty-links--overlay-keymap)))))
 
-(defun gfm-pretty-links--make-title-overlay (record window id)
-  "Create RECORD's title-side overlay for WINDOW with shared id ID."
+(defun gfm-pretty-links--make-title-overlay (record window)
+  "Create RECORD's title-side overlay for WINDOW."
   (gfm-pretty-links--make-overlay (gfm-pretty-links--link-tbeg record)
                            (gfm-pretty-links--link-tend record)
-                           window 'title record id))
+                           window 'title record))
 
-(defun gfm-pretty-links--make-url-overlay (record window id)
-  "Create RECORD's url-side overlay for WINDOW with shared id ID."
+(defun gfm-pretty-links--make-url-overlay (record window)
+  "Create RECORD's url-side overlay for WINDOW."
   (gfm-pretty-links--make-overlay (gfm-pretty-links--link-ubeg record)
                            (gfm-pretty-links--link-uend record)
-                           window 'url record id))
+                           window 'url record))
 
 (defun gfm-pretty-links--decorate-link (record window)
-  "Create the title-side and url-side overlays for RECORD in WINDOW.
-Degenerate records (empty title span) are skipped."
+  "Create RECORD's per-side overlays in WINDOW.
+Degenerate records (empty title span) are skipped.  Anchor and file
+links produce only a title-side overlay; the URL span is left to
+markdown-mode's own rendering."
   (when (< (gfm-pretty-links--link-tbeg record) (gfm-pretty-links--link-tend record))
-    (let ((id (gfm-pretty-links--next-id)))
-      (gfm-pretty-links--make-title-overlay record window id)
-      (when (< (gfm-pretty-links--link-ubeg record) (gfm-pretty-links--link-uend record))
-        (gfm-pretty-links--make-url-overlay record window id)))))
+    (gfm-pretty-links--make-title-overlay record window)
+    (when (and (eq (gfm-pretty-links--link-class record) 'web)
+               (< (gfm-pretty-links--link-ubeg record) (gfm-pretty-links--link-uend record)))
+      (gfm-pretty-links--make-url-overlay record window))))
 
 ;;; Rebuild
 
@@ -480,56 +523,6 @@ Engine entry point — the engine's reconciler reads ranges from these."
     (widen)
     (gfm-pretty-links--decorate-link record window)))
 
-;;; Cursor-driven reveal (per-window, whole-link)
-
-(defun gfm-pretty-links--link-id-at (pos window)
-  "Return the `gfm-pretty-links-id' of a revealable overlay covering POS in WINDOW.
-Only overlays whose `window' property is nil or WINDOW are considered."
-  (cl-loop for ov in (overlays-in pos (min (1+ pos) (point-max)))
-           when (and (overlay-get ov 'gfm-pretty-links-revealable)
-                     (let ((w (overlay-get ov 'window)))
-                       (or (null w) (eq w window))))
-           return (overlay-get ov 'gfm-pretty-links-id)))
-
-(defun gfm-pretty-links--restore-overlay (ov)
-  "Restore OV's suppressed display property."
-  (when (overlay-buffer ov)
-    (overlay-put ov 'display (overlay-get ov 'gfm-pretty-links-saved-display))
-    (overlay-put ov 'gfm-pretty-links-saved-display nil)))
-
-(defun gfm-pretty-links--reveal ()
-  "Reveal the whole link under point in the selected window.
-Suppresses `display' on both the title-side and url-side overlays
-\(matched by `gfm-pretty-links-id') of the link at point, and restores any
-previously-revealed link once point leaves it.  Per-window: overlays
-scoped to another window are never touched."
-  (let* ((pos (point))
-         (win (selected-window))
-         (active-id (gfm-pretty-links--link-id-at pos win))
-         (hidden (gfm-pretty--state-get 'links 'hidden-ovs)))
-    (setq hidden
-          (cl-loop for ov in hidden
-                   if (and (overlay-buffer ov)
-                           active-id
-                           (eq (overlay-get ov 'gfm-pretty-links-id) active-id)
-                           (let ((w (overlay-get ov 'window)))
-                             (or (null w) (eq w win))))
-                   collect ov
-                   else do (gfm-pretty-links--restore-overlay ov)))
-    (when active-id
-      (dolist (ov (gfm-pretty--state-get 'links 'overlays))
-        (when (and (overlay-buffer ov)
-                   (eq (overlay-get ov 'gfm-pretty-links-id) active-id)
-                   (overlay-get ov 'gfm-pretty-links-revealable)
-                   (overlay-get ov 'display)
-                   (let ((w (overlay-get ov 'window)))
-                     (or (null w) (eq w win)))
-                   (not (memq ov hidden)))
-          (overlay-put ov 'gfm-pretty-links-saved-display (overlay-get ov 'display))
-          (overlay-put ov 'display nil)
-          (push ov hidden))))
-    (gfm-pretty--state-set 'links 'hidden-ovs hidden)))
-
 ;;; Suppression of the built-in compose path
 
 (define-advice markdown-fontify-inline-links
@@ -550,27 +543,81 @@ See `markdown-fontify-inline-links@gfm-pretty-links-suppress-compose'."
       (let ((markdown-hide-urls nil)) (apply orig args))
     (apply orig args)))
 
-;;; RET / follow-link
+;;; Overlay lookup at point
 
 (defun gfm-pretty-links--overlay-at-point ()
-  "Return a gfm-pretty-links overlay covering point in the selected window, or nil."
+  "Return a gfm-pretty-links overlay covering point in the selected window, or nil.
+Marker prop is `gfm-pretty-links-class' — every overlay this decorator
+creates carries it, on both title and url sides."
   (let ((win (selected-window)))
     (cl-find-if (lambda (ov)
-                  (and (overlay-get ov 'gfm-pretty-links-revealable)
+                  (and (overlay-get ov 'gfm-pretty-links-class)
                        (let ((w (overlay-get ov 'window)))
                          (or (null w) (eq w win)))))
                 (overlays-in (point) (min (1+ (point)) (point-max))))))
 
+;;; RET / follow-link
+
+(defun gfm-pretty-links--heading-slug (text)
+  "Return a GitHub-flavoured anchor slug for heading TEXT.
+Lower-case; ASCII alphanumerics, hyphens, and underscores are kept;
+runs of whitespace fold to a single hyphen; everything else drops."
+  (let* ((s (downcase (string-trim text)))
+         (s (replace-regexp-in-string "[^[:alnum:][:space:]_-]" "" s))
+         (s (replace-regexp-in-string "[[:space:]]+" "-" s)))
+    s))
+
+(defun gfm-pretty-links--jump-to-anchor (anchor)
+  "Move point to the heading whose generated slug matches ANCHOR (no `#').
+Walks atx and setext headings from `point-min'.  Signals `user-error'
+when no matching heading is found.  Pushes the prior position onto the
+mark ring."
+  (let ((slug (string-remove-prefix "#" anchor))
+        (start (point))
+        (found nil))
+    (save-excursion
+      (goto-char (point-min))
+      (save-match-data
+        (while (and (not found)
+                    (re-search-forward markdown-regex-header nil t))
+          (let* ((text (or (match-string-no-properties 5)
+                           (match-string-no-properties 1))))
+            (when (and text
+                       (equal slug (gfm-pretty-links--heading-slug text)))
+              (setq found (match-beginning 0)))))))
+    (if found
+        (progn (push-mark start)
+               (goto-char found))
+      (user-error "No heading matches anchor: #%s" slug))))
+
+(defun gfm-pretty-links--follow-file (url)
+  "Open file at URL via `find-file', expanded against the buffer's directory.
+URL is a path beginning with `./', `../', `/', or a `file:' URI."
+  (let* ((path (if (string-prefix-p "file:" url)
+                   (string-remove-prefix "file:" url)
+                 url))
+         (base (or (and buffer-file-name
+                        (file-name-directory buffer-file-name))
+                   default-directory)))
+    (find-file (expand-file-name path base))))
+
 (defun gfm-pretty-links-follow-link-at-point ()
-  "Follow the decorated link at point via `markdown--browse-url'.
-Bound to `RET' through the title-side overlay's `keymap' property, so
-off any decorated link `RET' keeps its global binding."
+  "Follow the decorated link at point, dispatched by target class.
+Web URLs go through `markdown--browse-url'; anchor links jump to the
+heading whose generated slug matches; file links open via `find-file'
+relative to the buffer's directory.  Bound to `RET' through the
+title-side overlay's `keymap' property, so off any decorated link
+`RET' keeps its global binding."
   (interactive)
   (let* ((ov (gfm-pretty-links--overlay-at-point))
-         (url (and ov (overlay-get ov 'gfm-pretty-links-url))))
-    (if (and url (not (string-empty-p url)))
-        (markdown--browse-url url)
-      (user-error "Point is not on a decorated link"))))
+         (url (and ov (overlay-get ov 'gfm-pretty-links-url)))
+         (class (and ov (overlay-get ov 'gfm-pretty-links-class))))
+    (unless (and url (not (string-empty-p url)))
+      (user-error "Point is not on a decorated link"))
+    (pcase class
+      ('anchor (gfm-pretty-links--jump-to-anchor url))
+      ('file   (gfm-pretty-links--follow-file url))
+      (_       (markdown--browse-url url)))))
 
 ;;; Reference goto-definition via xref
 
@@ -593,19 +640,76 @@ Returns nil otherwise so other xref backends are consulted."
              identifier
              (xref-make-buffer-location (current-buffer) (nth 2 entry)))))))
 
-;;; Eldoc URL exposure
+;;; Eldoc: formatted-source surface
+
+(defun gfm-pretty-links--shadow (s)
+  "Return scaffolding string S faced with `shadow'."
+  (propertize s 'face 'shadow))
+
+(defun gfm-pretty-links--titled (text class)
+  "Return TEXT faced with the title face for CLASS."
+  (propertize text 'face (gfm-pretty-links--title-face-for-class class)))
+
+(defun gfm-pretty-links--urlised (url)
+  "Return URL faced with `markdown-url-face'."
+  (propertize url 'face 'markdown-url-face))
+
+(defun gfm-pretty-links--title-suffix (title-attr)
+  "Return the eldoc tail for a non-empty TITLE-ATTR, or empty string."
+  (if (and title-attr (not (string-empty-p title-attr)))
+      (concat (gfm-pretty-links--shadow " — ")
+              (propertize (format "\"%s\"" title-attr) 'face 'italic))
+    ""))
+
+(defun gfm-pretty-links--eldoc-format (kind class label url title-attr ref-label)
+  "Return the propertised eldoc string for a link with the given fields.
+KIND is the link kind; CLASS its target class; LABEL the displayed
+title; URL the resolved target; TITLE-ATTR an optional inline title
+attribute; REF-LABEL the reference label (reference kind only)."
+  (pcase kind
+    ('inline
+     (concat (gfm-pretty-links--shadow "[")
+             (gfm-pretty-links--titled label class)
+             (gfm-pretty-links--shadow "](")
+             (gfm-pretty-links--urlised url)
+             (gfm-pretty-links--shadow ")")
+             (gfm-pretty-links--title-suffix title-attr)))
+    ('reference
+     (if (and ref-label (string= label ref-label))
+         ;; Shortcut (or `[name]==[label]') reference.
+         (concat (gfm-pretty-links--shadow "[")
+                 (gfm-pretty-links--titled label class)
+                 (gfm-pretty-links--shadow "]"))
+       (concat (gfm-pretty-links--shadow "[")
+               (gfm-pretty-links--titled label class)
+               (gfm-pretty-links--shadow "][")
+               (gfm-pretty-links--titled (or ref-label "") class)
+               (gfm-pretty-links--shadow "]"))))
+    ('autolink
+     (concat (gfm-pretty-links--shadow "<")
+             (gfm-pretty-links--urlised url)
+             (gfm-pretty-links--shadow ">")))
+    ('bare-url
+     (gfm-pretty-links--urlised url))
+    ('wiki
+     (concat (gfm-pretty-links--shadow "[[")
+             (gfm-pretty-links--titled label class)
+             (gfm-pretty-links--shadow "]]")))
+    (_ url)))
 
 (defun gfm-pretty-links--eldoc-function (&rest _)
-  "Return the resolved URL of the decorated link at point for eldoc.
-Includes the inline title attribute when present.  Returns nil off any
-decorated link so other eldoc providers are not blocked."
-  (let* ((ov (gfm-pretty-links--overlay-at-point))
-         (url (and ov (overlay-get ov 'gfm-pretty-links-url)))
-         (title (and ov (overlay-get ov 'gfm-pretty-links-title-attr))))
-    (when (and url (not (string-empty-p url)))
-      (if (and title (not (string-empty-p title)))
-          (format "%s — %s" url title)
-        url))))
+  "Return the propertised source of the decorated link at point for eldoc.
+Returns nil off any decorated link so other eldoc providers are not blocked."
+  (let ((ov (gfm-pretty-links--overlay-at-point)))
+    (when ov
+      (let ((kind (overlay-get ov 'gfm-pretty-links-kind))
+            (class (overlay-get ov 'gfm-pretty-links-class))
+            (label (overlay-get ov 'gfm-pretty-links-label))
+            (url (overlay-get ov 'gfm-pretty-links-url))
+            (title-attr (overlay-get ov 'gfm-pretty-links-title-attr))
+            (ref-label (overlay-get ov 'gfm-pretty-links-ref-label)))
+        (when (and kind url (not (string-empty-p url)))
+          (gfm-pretty-links--eldoc-format kind class label url title-attr ref-label))))))
 
 ;;; Lifecycle hooks delegated to engine
 
@@ -673,8 +777,7 @@ decorator's enable bit via `gfm-pretty-toggle-decorator'."
     :apply-block-fn     #'gfm-pretty-links--apply-block
     :rebuild-fn         #'gfm-pretty-links--rebuild
     :on-enable-fn       #'gfm-pretty-links--on-enable
-    :on-disable-fn      #'gfm-pretty-links--on-disable
-    :reveal-fn          #'gfm-pretty-links--reveal))
+    :on-disable-fn      #'gfm-pretty-links--on-disable))
 
 (provide 'gfm-pretty-links)
 

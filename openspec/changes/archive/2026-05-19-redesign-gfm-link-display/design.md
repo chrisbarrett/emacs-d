@@ -244,10 +244,12 @@ Verified at `openspec/specs/gfm-pretty/spec.md:421-432`.
   at `modules/lang-markdown/init.el:201`).
 
 - **[Trade-off]** File-path resolution relative to `buffer-file-name`
-  fails for buffers without a backing file (e.g. `M-x gfm-mode` in
-  `*scratch*-like` buffers). RET on a path link in those buffers
-  raises `user-error`. Acceptable — the path is meaningless without a
-  base.
+  is undefined in buffers without a backing file (e.g. `M-x gfm-mode`
+  in `*scratch*-like` buffers). RET on a path link in those buffers
+  falls back to `default-directory`, matching the spec scenario; the
+  path may resolve to a meaningless location, but `find-file` on a
+  non-existent target is consistent with markdown-mode's own
+  `markdown-follow-thing-at-point` behaviour.
 
 - **[Trade-off]** Anchor resolution walks headings from `point-min`
   on each RET press. Linear in heading count; for documents with
