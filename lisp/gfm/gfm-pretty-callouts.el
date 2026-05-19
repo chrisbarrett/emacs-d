@@ -167,14 +167,17 @@ The engine memoises this via `gfm-pretty--collect'."
 
 ;;; Rendering
 
-(defun gfm-pretty-callouts--upright (str face &optional bg)
+(defun gfm-pretty-callouts--upright (str face &optional bg weight)
   "Propertize STR with FACE forced upright; optionally set background BG.
 The display string sits over buffer text whose face may carry
 `:slant italic'; unspecified attributes leak from the underlying face,
 so anchor `:slant normal'.  BG paints the box's tinted background onto
-each decoration char."
+each decoration char.  WEIGHT, when non-nil, pins `:weight' (use
+`light' for hairline box chars; leave nil for the title so its weight
+inherits from FACE)."
   (let* ((spec `(:inherit ,face :slant normal))
-         (spec (if bg (append spec (list :background bg)) spec)))
+         (spec (if bg (append spec (list :background bg)) spec))
+         (spec (if weight (append spec (list :weight weight)) spec)))
     (propertize str 'face spec)))
 
 (defun gfm-pretty-callouts--callout-top-strings (width title face buffer-width &optional bg)
@@ -192,11 +195,11 @@ line-end as an after-string."
          ;; line is the title and trailing dash fill.
          (dash-fill (max 1 (- width 5 title-w)))
          (full (concat
-                (gfm-pretty-callouts--upright "┌─ " face bg)
+                (gfm-pretty-callouts--upright "┌─ " face bg 'light)
                 (gfm-pretty-callouts--upright title face bg)
                 (gfm-pretty-callouts--upright " " face bg)
-                (gfm-pretty-callouts--upright (make-string dash-fill ?─) face bg)
-                (gfm-pretty-callouts--upright "┐" face bg)))
+                (gfm-pretty-callouts--upright (make-string dash-fill ?─) face bg 'light)
+                (gfm-pretty-callouts--upright "┐" face bg 'light)))
          (full-len (length full))
          (split-at (min buffer-width full-len)))
     (cons (substring full 0 split-at)
@@ -204,9 +207,9 @@ line-end as an after-string."
 
 (defun gfm-pretty-callouts--callout-bottom-string (width face &optional bg)
   "Build the bottom border string of WIDTH cols, tinted with BG."
-  (concat (gfm-pretty-callouts--upright "└" face bg)
-          (gfm-pretty-callouts--upright (make-string (max 1 (- width 2)) ?─) face bg)
-          (gfm-pretty-callouts--upright "┘" face bg)))
+  (concat (gfm-pretty-callouts--upright "└" face bg 'light)
+          (gfm-pretty-callouts--upright (make-string (max 1 (- width 2)) ?─) face bg 'light)
+          (gfm-pretty-callouts--upright "┘" face bg 'light)))
 
 (defun gfm-pretty-callouts--right-after (box-width face bg)
   "Build the body-line right-edge after-string.
@@ -225,7 +228,7 @@ visual line from `│' to the window's right edge, masking any
                            'display `(space :align-to ,(- box-width 2))
                            'face align-face)
                (gfm-pretty-callouts--upright " " face bg)
-               (gfm-pretty-callouts--upright "│" face bg)
+               (gfm-pretty-callouts--upright "│" face bg 'light)
                (propertize " "
                            'display '(space :align-to right)
                            'face 'default))))
@@ -248,7 +251,7 @@ extends the last wrapped row to the window edge, suppressing past-EOL
          (face-spec (let ((s `(:inherit ,face :slant normal)))
                       (if bg (append s (list :background bg)) s)))
          (pad (propertize (make-string pad-len ?\s) 'face face-spec))
-         (pipe (gfm-pretty-callouts--upright "│" face bg))
+         (pipe (gfm-pretty-callouts--upright "│" face bg 'light))
          (tail (propertize " " 'display '(space :align-to right)
                            'face 'default))
          (str (concat pad pipe tail)))
@@ -284,7 +287,8 @@ overlay engine."
                         `(:background ,tint :extend t)
                       '(:extend t)))
            (wrap (propertize "│ " 'face
-                             (let ((s `(:inherit ,border-face :slant normal)))
+                             (let ((s `(:inherit ,border-face
+                                        :slant normal :weight light)))
                                (if tint
                                    (append s (list :background tint))
                                  s)))))

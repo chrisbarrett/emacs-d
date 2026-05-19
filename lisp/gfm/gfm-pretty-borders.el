@@ -20,9 +20,9 @@
   :group 'markdown-faces)
 
 (defface gfm-pretty-border-face
-  '((((background dark))  :foreground "#6c7086")
-    (((background light)) :foreground "#b9b2a3")
-    (t :inherit shadow))
+  '((((background dark))  :foreground "#6c7086" :weight light)
+    (((background light)) :foreground "#b9b2a3" :weight light)
+    (t :inherit shadow :weight light))
   "Face for overlay borders around fenced code blocks and tables."
   :group 'markdown-faces)
 
@@ -52,7 +52,7 @@ on the newline at the body line's end) from bleeding through into
 border / before-string / after-string chars whose `:background'
 would otherwise be unspecified and inherit from below."
   `(:inherit ,face
-    :slant normal :weight normal
+    :slant normal :weight light
     :underline nil :overline nil :strike-through nil :box nil
     :background "unspecified-bg"))
 
@@ -186,9 +186,9 @@ See `gfm-pretty--simulate-wrap'."
 
 (defun gfm-pretty--wrap-prefix (face &optional glyph)
   "Wrap-prefix string for continuation lines using FACE.
-GLYPH defaults to `⋱ ' (fences).  Callers wanting the box's left edge
+GLYPH defaults to `↪ ' (fences).  Callers wanting the box's left edge
 on continuation rows pass `│ '."
-  (propertize (or glyph "⋱ ") 'face
+  (propertize (or glyph "↪ ") 'face
               (gfm-pretty--normalised-border-face face)))
 
 (defun gfm-pretty--right-after-overflow (face line-text window

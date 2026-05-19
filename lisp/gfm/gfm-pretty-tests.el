@@ -78,15 +78,23 @@
   (should-not (gfm-pretty--in-ranges-p 12 '((1 . 4) (5 . 9)))))
 
 (ert-deftest lang-markdown/gfm-pretty--normalised-border-face-resets-styling ()
-  "Normalised face spec resets slant/weight/underline/etc."
+  "Normalised face spec resets slant/weight/underline/etc.
+`:weight light' to draw a hairline box; explicit so an inherited
+`:weight bold' (e.g. via font-lock) cannot leak through."
   (let ((spec (gfm-pretty--normalised-border-face 'italic)))
     (should (equal (plist-get spec :inherit) 'italic))
     (should (eq (plist-get spec :slant) 'normal))
-    (should (eq (plist-get spec :weight) 'normal))
+    (should (eq (plist-get spec :weight) 'light))
     (should (null (plist-get spec :underline)))
     (should (null (plist-get spec :overline)))
     (should (null (plist-get spec :strike-through)))
     (should (null (plist-get spec :box)))))
+
+(ert-deftest lang-markdown/gfm-pretty--wrap-prefix-uses-hook-arrow ()
+  "Continuation glyph is `↪'."
+  (let ((s (gfm-pretty--wrap-prefix 'default)))
+    (should (string-match-p "↪" s))
+    (should-not (string-match-p "⋱" s))))
 
 (ert-deftest lang-markdown/gfm-pretty--right-after-tail-fills-to-window-edge ()
   "`right-after' ends with `(space :align-to right)' in the default face.
@@ -939,11 +947,12 @@ inheriting (and bleeding through) the buffer text-property face's
 (ert-deftest lang-markdown/gfm-pretty-fences-border-face-resets-styling ()
   "Border face spec inherits the configured face but resets styling
 attrs that would otherwise leak from font-lock onto box edges (slant,
-weight, underline, overline, strike-through, box)."
+weight, underline, overline, strike-through, box).  Box weight is
+pinned to `light' for a hairline frame."
   (let ((spec (gfm-pretty--normalised-border-face 'italic)))
     (should (equal (plist-get spec :inherit) 'italic))
     (should (eq (plist-get spec :slant) 'normal))
-    (should (eq (plist-get spec :weight) 'normal))
+    (should (eq (plist-get spec :weight) 'light))
     (should (null (plist-get spec :underline)))
     (should (null (plist-get spec :overline)))
     (should (null (plist-get spec :strike-through)))

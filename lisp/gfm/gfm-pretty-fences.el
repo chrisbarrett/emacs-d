@@ -329,7 +329,7 @@ left-side mask is suppressed so the indicator keeps its own bg."
     (let ((lhs (propertize (if lhs-margin "│" "│ ") 'face
                            (gfm-pretty--normalised-border-face face)))
           (wrap (gfm-pretty--wrap-prefix
-                 face (and lhs-margin "⋱")))
+                 face (and lhs-margin "↪")))
           (p body-beg))
       (while (< p close-line-beg)
         (let* ((lbeg p)
