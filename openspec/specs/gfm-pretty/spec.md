@@ -262,10 +262,12 @@ When toggled back on, the decorator's overlays SHALL be rebuilt.
 The system SHALL expose `gfm-pretty-block-at-point` and
 `gfm-pretty-edit-block-at-point` as the only public block-aware
 entry points. `gfm-pretty-block-at-point` SHALL return
-`(DECORATOR-NAME . BLOCK)` for the first registered decorator whose
-`:block-at-point` returns non-nil, or nil if none matches.
-`gfm-pretty-edit-block-at-point` SHALL dispatch to the matched
-decorator's `:edit-at-point`.
+`(DECORATOR-NAME . BLOCK)` for the first enabled decorator whose
+`gfm-pretty-<name>--block-at-point` function returns non-nil, or nil
+if none matches. `gfm-pretty-edit-block-at-point` SHALL dispatch to
+the matched decorator's `gfm-pretty-<name>--edit-at-point` function.
+Participation in this dispatch is a naming convention — a decorator
+opts in by exporting both functions, with no registry slot involved.
 
 No `gfm-pretty--*` private symbol SHALL be relied upon by code outside
 the `gfm-pretty` module.
@@ -276,7 +278,7 @@ the `gfm-pretty` module.
   binding for "edit block at point"
 - **WHEN** point is inside a GFM table
 - **THEN** the binding calls `gfm-pretty-edit-block-at-point`
-- **AND** the tables decorator's `:edit-at-point` is invoked
+- **AND** `gfm-pretty-tables--edit-at-point` is invoked
 - **AND** no private `gfm-pretty--*` symbol is read
 
 ### Requirement: Rendering primitives are public
@@ -302,7 +304,7 @@ Every other engine symbol SHALL be `gfm-pretty--` private.
 
 #### Scenario: Decorator builds a bordered block
 
-- **GIVEN** a decorator's `:apply-display` callback
+- **GIVEN** a decorator's `:apply-block-fn` callback
 - **WHEN** it constructs a border for the current window
 - **THEN** it calls `gfm-pretty-available-width` and
   `gfm-pretty-top-border` / `gfm-pretty-bottom-border` /
@@ -324,11 +326,13 @@ within the buffer's accumulated dirty region. The engine SHALL
 cancel and re-arm the timer on every modification so a burst of
 edits produces one rebuild after the burst ends.
 
-Decorators SHALL NOT install their own `after-change-functions`,
-`window-configuration-change-hook`, or `post-command-hook` handlers
-for scheduling purposes. Decorators MAY use `:on-enable` /
-`:on-disable` to install decorator-specific hooks (e.g. the tables
-decorator's cursor handler, the links decorator's xref backend).
+Decorators SHALL NOT install their own `after-change-functions`
+or `post-command-hook` handlers for scheduling purposes. Decorators
+MAY use `:on-enable-fn` / `:on-disable-fn` to install
+decorator-specific hooks — for example, the tables decorator
+installs its own buffer-local `window-configuration-change-hook`
+handler for its bespoke per-window reconciler, and the links
+decorator installs an xref backend.
 
 #### Scenario: Burst of edits causes one rebuild
 
@@ -336,8 +340,8 @@ decorator's cursor handler, the links decorator's xref backend).
 - **WHEN** the user types ten characters in rapid succession
 - **THEN** the engine SHALL cancel and re-arm the timer on each edit
 - **AND** the rebuild SHALL run once, 0.2 s after the last edit
-- **AND** every decorator's `:apply-anchors` / `:apply-display`
-  contributions SHALL be invoked over the dirty region
+- **AND** every decorator's `:apply-block-fn` SHALL be invoked over
+  the dirty region
 
 #### Scenario: One handler per hook regardless of decorator count
 
@@ -345,8 +349,6 @@ decorator's cursor handler, the links decorator's xref backend).
 - **WHEN** the engine installs lifecycle hooks
 - **THEN** `(length after-change-functions)` SHALL increase by one
   (engine handler only)
-- **AND** `(length window-configuration-change-hook)` SHALL increase
-  by one
 - **AND** `(length post-command-hook)` SHALL increase by one
 - **AND** at most one buffer-local idle timer SHALL be live
 
@@ -609,7 +611,7 @@ Discovery SHALL widen before scanning so a narrowed buffer (e.g. under
 
 ### Requirement: Callout bordered-block rendering
 
-The callouts decorator's `:apply-display` SHALL render a bordered
+The callouts decorator's `:apply-block-fn` SHALL render a bordered
 callout box with:
 
 - A top border using the type's coloured face and the type label as
@@ -624,9 +626,12 @@ callout box with:
   computed by `gfm-pretty-callouts--tint-bg` (10% from the type
   face foreground toward the theme background).
 
-Anchor overlays SHALL carry the body-face property and a
-`wrap-prefix` of `│ `; display overlays SHALL carry the borders and
-right-edge after-strings.
+The decorator's `:apply-block-fn` SHALL call
+`gfm-pretty-borders--apply-with-anchors` so anchor overlays
+(carrying the body-face property and a `wrap-prefix` of `│ `) are
+laid at most once per (block, rebuild pass) while per-window
+display overlays (borders and right-edge after-strings) apply once
+per window.
 
 #### Scenario: NOTE callout
 
@@ -676,14 +681,14 @@ how the line wraps.
 
 ### Requirement: Callout marker line and body prefix reveal
 
-The callouts decorator's `:revealable-p` predicate SHALL return
-non-nil for display overlays carrying the engine's revealable flag.
-When point lies on the marker line, the engine SHALL hide the marker's
-display overlay so the raw `> [!TYPE]` text shows. When point lies on
-a body line, the engine SHALL hide that body line's `│ ` prefix
-substitution so the raw `> ` shows.
-
-Reveal SHALL be scoped to the selected window.
+The callouts decorator SHALL carry the engine's revealable property
+(`gfm-pretty-callouts-revealable`) on the marker-line top and on
+each per-line `> ` → `│ ` body-prefix display overlay. The engine's
+reveal walker SHALL hide those overlays in the selected window when
+point lies on them, exposing the raw `> [!TYPE]` or `> ` source.
+The property name SHALL be derived from the callouts registry's
+`tag`; the decorator SHALL NOT register it separately. Reveal SHALL
+be scoped to the selected window.
 
 #### Scenario: Point on marker
 
@@ -718,21 +723,22 @@ widened rebuild — the suite
 
 ### Requirement: Callout scoped post-edit rebuild
 
-The callouts decorator SHALL register `:structural-line-ranges`
-returning the `> [!TYPE]` marker line ranges, and `:edit-adjacency`
-returning non-nil when the dirty region overlaps a line directly
-above or below an existing callout. The engine's routing (see
-"Scoped post-edit rebuild routing") SHALL use these to choose between
-full rebuild, adjacency-driven full rebuild, and single-block
-scoped rebuild.
+The callouts decorator SHALL register
+`:full-rebuild-required-p` that returns non-nil when the dirty
+region overlaps a `> [!TYPE]` marker line (structural-line case) or
+overlaps a line directly above or below an existing callout
+(adjacency case). The two conditions are OR-combined inside the
+predicate. The engine's routing (see "Scoped post-edit rebuild
+routing") SHALL use the predicate to choose between full rebuild
+and single-block scoped rebuild.
 
-When the dirty region intersects a callout body line (not the marker
-and not adjacent to another callout), the engine SHALL rebuild only
-the containing callout via that block's `:apply-anchors` and
-`:apply-display` callbacks. When the dirty region does not overlap
-any callout block range or contribution from
-`:structural-line-ranges` / `:edit-adjacency`, the callouts decorator
-SHALL NOT contribute work to the rebuild iteration.
+When the dirty region intersects a callout body line (not the
+marker and not adjacent to another callout), the engine SHALL
+rebuild only the containing callout via its `:apply-block-fn`
+(per displayed window). When the dirty region does not overlap any
+callout block range and does not trigger the predicate, the
+callouts decorator SHALL NOT contribute work to the rebuild
+iteration.
 
 #### Scenario: Edit inside one callout body
 
@@ -745,16 +751,18 @@ SHALL NOT contribute work to the rebuild iteration.
 
 - **GIVEN** two callouts in a buffer
 - **WHEN** the user edits callout #1's `> [!NOTE]` marker line
-- **THEN** the engine detects the structural-line intersection
-- **AND** invokes the callouts decorator's `:rebuild` (full rebuild)
+- **THEN** `:full-rebuild-required-p` returns non-nil for the dirty
+  region
+- **AND** the engine invokes the callouts decorator's `:rebuild-fn`
+  (full rebuild)
 
 ### Requirement: Theme change responsiveness
 
-The callouts decorator's `:on-enable` SHALL add
+The callouts decorator's `:on-enable-fn` SHALL add
 `gfm-pretty-callouts--refresh-body-faces` to `+theme-changed-hook`.
-`:on-disable` SHALL remove it. The refresh function SHALL recompute
-each callout body face's `:background` from the current theme by
-tinting 10% toward the theme background.
+`:on-disable-fn` SHALL remove it. The refresh function SHALL
+recompute each callout body face's `:background` from the current
+theme by tinting 10% toward the theme background.
 
 #### Scenario: Theme switch
 
@@ -835,7 +843,8 @@ already covered by a fenced or YAML block.
 
 ### Requirement: Code-fence bordered-block rendering
 
-`:apply-display` SHALL render a curved-border box with:
+The fences decorator's `:apply-block-fn` SHALL render a
+curved-border box with:
 
 - A top border using the border face and (when resolvable) a
   language icon at the upper-right.
@@ -843,9 +852,12 @@ already covered by a fenced or YAML block.
   the box width.
 - A bottom border.
 
-Anchor overlays carry width-independent props (wrap-prefix, body
-background fill). Display overlays carry the borders and right-edge
-after-strings, restricted to `WINDOW`.
+The decorator's `:apply-block-fn` SHALL call
+`gfm-pretty-borders--apply-with-anchors` so anchor overlays
+(width-independent props such as the wrap-prefix and body
+background fill) are laid at most once per (block, rebuild pass)
+while per-window display overlays (borders and right-edge
+after-strings, restricted to `WINDOW`) apply once per window.
 
 #### Scenario: Fence with language
 
@@ -884,10 +896,13 @@ overflow after-string.
 
 ### Requirement: Code-fence marker line reveal
 
-The fences decorator's `:revealable-p` SHALL fire for display overlays
-covering the opening or closing fence marker. When point lies on a
-marker, the engine SHALL hide that overlay so the raw `\`\`\`lang`
-shows in the selected window.
+The fences decorator SHALL carry the engine's revealable property
+(`gfm-pretty-fences-revealable`) on the opening and closing fence
+marker display overlays. When point lies on a marker, the engine's
+reveal walker SHALL hide those overlays in the selected window so
+the raw `\`\`\`lang` shows. The property name SHALL be derived
+from the fences registry's `tag`; the decorator SHALL NOT register
+it separately.
 
 #### Scenario: Point on opening fence
 
@@ -942,32 +957,36 @@ SHALL converge.
 
 ### Requirement: Code-fence scoped post-edit rebuild
 
-The fences decorator SHALL register `:structural-line-ranges`
-returning every fence opening line, every fence closing line, and
-the YAML helmet's two `---` marker lines. It SHALL register
-`:edit-adjacency` returning non-nil when the dirty region overlaps
-a blank line directly above or below an indent code block (where
-discovery is blank-line-gated).
+The fences decorator SHALL register `:full-rebuild-required-p`
+that returns non-nil when the dirty region overlaps any of:
 
-The engine's routing (see "Scoped post-edit rebuild routing")
-SHALL use these so an edit on a fence line or a blank line adjacent
-to an indent block forces a full fences rebuild, an edit fully
-contained in one block scopes to that block, and edits outside
-every fences range produce no fences work.
+- a fence opening line,
+- a fence closing line,
+- a YAML helmet's `---` marker line, or
+- a blank line directly above or below an indent code block (where
+  discovery is blank-line-gated).
+
+The four conditions are OR-combined inside the predicate. The
+engine's routing (see "Scoped post-edit rebuild routing") SHALL
+use the predicate so an edit on any of those lines forces a full
+fences rebuild; an edit fully contained in one block scopes to that
+block; and edits outside every fences range produce no fences work.
 
 #### Scenario: Edit inside fenced body
 
 - **GIVEN** two fenced blocks
 - **WHEN** the user edits inside block #1's body (not a marker)
 - **THEN** only block #1 is rebuilt by the engine via the fences
-  decorator's apply callbacks
+  decorator's `:apply-block-fn`
 
 #### Scenario: Blank line above an indent block becomes non-blank
 
 - **GIVEN** an indent code block preceded by a blank line
 - **WHEN** the user types on that preceding blank line
-- **THEN** the engine detects adjacency
-- **AND** invokes the fences decorator's `:rebuild` (full rebuild)
+- **THEN** `:full-rebuild-required-p` returns non-nil for the dirty
+  region
+- **AND** the engine invokes the fences decorator's `:rebuild-fn`
+  (full rebuild)
 
 ### Requirement: Code-fence performance instrumentation
 
@@ -1354,9 +1373,12 @@ has been applied over the scanned region by calling
 
 ### Requirement: HR rendering
 
-`:apply-display` SHALL replace each collected HR line's display with
-`(make-string WIDTH ?─)` propertised with the hrule face. WIDTH comes
-from `gfm-pretty-available-width` for the rendering window.
+The hrule decorator's `:apply-block-fn` SHALL replace each
+collected HR line's display with `(make-string WIDTH ?─)`
+propertised with the hrule face. WIDTH comes from
+`gfm-pretty-available-width` for the rendering window. The
+overlay is per-window so two windows of different widths each see
+a bar sized to their own width.
 
 #### Scenario: HR in 100-cell window
 
@@ -1365,9 +1387,12 @@ from `gfm-pretty-available-width` for the rendering window.
 
 ### Requirement: HR cursor reveal
 
-The hrule decorator's `:revealable-p` SHALL fire for the HR display
-overlay. When point lies on the HR line, the engine SHALL hide the
-overlay so the raw `---` source shows in the selected window only.
+The hrule decorator SHALL carry the engine's revealable property
+(`gfm-pretty-hrule-revealable`) on the HR display overlay. When
+point lies on the HR line, the engine's reveal walker SHALL hide
+the overlay so the raw `---` source shows in the selected window
+only. The property name SHALL be derived from the hrule registry's
+`tag`; the decorator SHALL NOT register it separately.
 
 #### Scenario: Point on HR
 
@@ -1430,9 +1455,10 @@ excluded.
 
 ### Requirement: Title-side overlay rendering
 
-`:apply-display` SHALL replace the `[title]` span (brackets included)
-with the title text in `gfm-pretty-links-title-face` (default
-`markdown-link-face`), per window.
+The links decorator's `:apply-block-fn` SHALL replace the
+`[title]` span (brackets included) with the title text in
+`gfm-pretty-links-title-face` (default `markdown-link-face`), per
+window.
 
 #### Scenario: Title rendering
 
@@ -1442,10 +1468,11 @@ with the title text in `gfm-pretty-links-title-face` (default
 
 ### Requirement: URL-side icon rendering
 
-`:apply-display` SHALL replace the URL span (`(url)`, `[label]`, the
-autolink span, …) with a single nerd-icons glyph resolved from the
-target host or scheme. When `nerd-icons` is unavailable, the URL-side
-overlay SHALL be omitted (URL shows raw).
+The links decorator's `:apply-block-fn` SHALL replace the URL span
+(`(url)`, `[label]`, the autolink span, …) with a single
+nerd-icons glyph resolved from the target host or scheme. When
+`nerd-icons` is unavailable, the URL-side overlay SHALL be omitted
+(URL shows raw).
 
 #### Scenario: Github URL
 
@@ -1487,10 +1514,14 @@ markdown-mode's collapse.
 
 ### Requirement: Whole-link cursor reveal
 
-The links decorator's `:revealable-p` SHALL group the title-side and
-URL-side overlays via a shared `gfm-pretty-links-id` property. When
-point lies anywhere inside either span, the engine SHALL hide BOTH
-overlays in the selected window so the raw `[title](url)` shows.
+The links decorator SHALL carry the engine's revealable property
+(`gfm-pretty-links-revealable`) on both the title-side and
+URL-side display overlays, plus a shared `gfm-pretty-links-id`
+property. The decorator SHALL register `:reveal-fn` so its bespoke
+reveal handler — not the engine's default walker — runs for links.
+When point lies anywhere inside either span, the handler SHALL
+hide BOTH overlays in the selected window so the raw `[title](url)`
+shows.
 
 #### Scenario: Point inside title
 
