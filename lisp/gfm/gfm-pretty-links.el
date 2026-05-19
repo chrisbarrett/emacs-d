@@ -73,12 +73,6 @@ optional title attribute, and the buffer position of the `[label]:'
 definition line.  Recomputed at the start of every rebuild; the first
 definition for a duplicate label wins.")
 
-(defvar-local gfm-pretty-links--overlays nil
-  "All gfm-pretty-links overlays currently in this buffer.")
-
-(defvar-local gfm-pretty-links--hidden-ovs nil
-  "Revealable gfm-pretty-links overlays whose display is currently suppressed.")
-
 (defvar-local gfm-pretty-links--id-counter 0
   "Monotonic counter backing `gfm-pretty-links--next-id'.")
 
@@ -97,8 +91,7 @@ reveal hook can find the partner overlay."
   (cl-incf gfm-pretty-links--id-counter))
 
 (defconst gfm-pretty-links--registry
-  (gfm-pretty--registry-for
-   'gfm-pretty-links 'gfm-pretty-links--overlays 'gfm-pretty-links--hidden-ovs)
+  (gfm-pretty--registry-for 'links 'gfm-pretty-links)
   "Shared overlay-registry context for gfm-pretty-links.")
 
 (defsubst gfm-pretty-links--remove-overlays (&optional beg end)
@@ -481,11 +474,8 @@ Engine entry point — the engine's reconciler reads ranges from these."
   "Engine `:range-fn' — return RECORD's full span as (BEG . END)."
   (gfm-pretty-links--record-span record))
 
-(defun gfm-pretty-links--apply-block-anchors (_record)
-  "Links carry no anchor overlays; placeholder for the reconciler.")
-
-(defun gfm-pretty-links--apply-block-display (record window)
-  "Engine `:apply-display-fn' — decorate RECORD in WINDOW."
+(defun gfm-pretty-links--apply-block (record window)
+  "Engine `:apply-block-fn' — decorate RECORD in WINDOW."
   (save-restriction
     (widen)
     (gfm-pretty-links--decorate-link record window)))
@@ -515,9 +505,10 @@ previously-revealed link once point leaves it.  Per-window: overlays
 scoped to another window are never touched."
   (let* ((pos (point))
          (win (selected-window))
-         (active-id (gfm-pretty-links--link-id-at pos win)))
-    (setq gfm-pretty-links--hidden-ovs
-          (cl-loop for ov in gfm-pretty-links--hidden-ovs
+         (active-id (gfm-pretty-links--link-id-at pos win))
+         (hidden (gfm-pretty--state-get 'links 'hidden-ovs)))
+    (setq hidden
+          (cl-loop for ov in hidden
                    if (and (overlay-buffer ov)
                            active-id
                            (eq (overlay-get ov 'gfm-pretty-links-id) active-id)
@@ -526,17 +517,18 @@ scoped to another window are never touched."
                    collect ov
                    else do (gfm-pretty-links--restore-overlay ov)))
     (when active-id
-      (dolist (ov gfm-pretty-links--overlays)
+      (dolist (ov (gfm-pretty--state-get 'links 'overlays))
         (when (and (overlay-buffer ov)
                    (eq (overlay-get ov 'gfm-pretty-links-id) active-id)
                    (overlay-get ov 'gfm-pretty-links-revealable)
                    (overlay-get ov 'display)
                    (let ((w (overlay-get ov 'window)))
                      (or (null w) (eq w win)))
-                   (not (memq ov gfm-pretty-links--hidden-ovs)))
+                   (not (memq ov hidden)))
           (overlay-put ov 'gfm-pretty-links-saved-display (overlay-get ov 'display))
           (overlay-put ov 'display nil)
-          (push ov gfm-pretty-links--hidden-ovs))))))
+          (push ov hidden))))
+    (gfm-pretty--state-set 'links 'hidden-ovs hidden)))
 
 ;;; Suppression of the built-in compose path
 
@@ -678,11 +670,8 @@ decorator's enable bit via `gfm-pretty-toggle-decorator'."
     :registry           gfm-pretty-links--registry
     :collect-fn         #'gfm-pretty-links--collect-blocks
     :range-fn           #'gfm-pretty-links--block-range
-    :apply-anchors-fn   #'gfm-pretty-links--apply-block-anchors
-    :apply-display-fn   #'gfm-pretty-links--apply-block-display
+    :apply-block-fn     #'gfm-pretty-links--apply-block
     :rebuild-fn         #'gfm-pretty-links--rebuild
-    :revealable-prop    'gfm-pretty-links-revealable
-    :saved-display-prop 'gfm-pretty-links-saved-display
     :on-enable-fn       #'gfm-pretty-links--on-enable
     :on-disable-fn      #'gfm-pretty-links--on-disable
     :reveal-fn          #'gfm-pretty-links--reveal))

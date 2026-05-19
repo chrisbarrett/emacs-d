@@ -204,13 +204,8 @@ Widens for the duration of its body so the cache is narrowing-independent."
 
 ;;; Overlay registry
 
-(defvar-local gfm-pretty-fences--overlays nil
-  "All fence overlays currently in this buffer.")
-
 (defconst gfm-pretty-fences--registry
-  (gfm-pretty--registry-for
-   'gfm-pretty-fences
-   'gfm-pretty-fences--overlays)
+  (gfm-pretty--registry-for 'fences 'gfm-pretty-fences)
   "Shared overlay-registry context for fences.")
 
 (defsubst gfm-pretty-fences--register (ov)
@@ -656,6 +651,25 @@ See `gfm-pretty-fences--apply-block-anchors' for the widening rationale."
         (indent (gfm-pretty-fences--apply-indent-block-display
                  (gfm-pretty-fences--block-payload block) window))))))
 
+(defun gfm-pretty-fences--apply-block (block window)
+  "Engine `:apply-block-fn' — apply WINDOW's overlays for BLOCK.
+Routes through `gfm-pretty-borders--apply-with-anchors' so width-
+independent anchors are laid at most once per (block, rebuild pass)."
+  (gfm-pretty-borders--apply-with-anchors
+   block window
+   :registry gfm-pretty-fences--registry
+   :range (gfm-pretty-fences--block-range block)
+   :anchors-fn #'gfm-pretty-fences--apply-block-anchors
+   :display-fn #'gfm-pretty-fences--apply-block-display))
+
+(defun gfm-pretty-fences--full-rebuild-required-p (dirty)
+  "Engine `:full-rebuild-required-p' — fold structural + adjacency checks.
+Non-nil when DIRTY overlaps any fence / YAML marker line (structural)
+or a blank line adjacent to an indent block (adjacency)."
+  (or (cl-some (lambda (r) (gfm-pretty--region-overlaps-p dirty r))
+               (gfm-pretty-fences--fence-line-ranges))
+      (gfm-pretty-fences--blank-line-adjacent-to-indent-p dirty)))
+
 ;;; Visibility helper
 
 (defun gfm-pretty-fences--block-visible-p (block ranges)
@@ -768,12 +782,8 @@ destroy a block."
     :registry           gfm-pretty-fences--registry
     :collect-fn         #'gfm-pretty-fences--collect-blocks
     :range-fn           #'gfm-pretty-fences--block-range
-    :apply-anchors-fn   #'gfm-pretty-fences--apply-block-anchors
-    :apply-display-fn   #'gfm-pretty-fences--apply-block-display
-    :structural-line-ranges-fn #'gfm-pretty-fences--fence-line-ranges
-    :edit-adjacency-fn  #'gfm-pretty-fences--blank-line-adjacent-to-indent-p
-    :revealable-prop    'gfm-pretty-fences-revealable
-    :saved-display-prop 'gfm-pretty-fences-saved-display
+    :apply-block-fn     #'gfm-pretty-fences--apply-block
+    :full-rebuild-required-p #'gfm-pretty-fences--full-rebuild-required-p
     :on-enable-fn       #'gfm-pretty-fences--on-enable
     :on-disable-fn      #'gfm-pretty-fences--on-disable))
 

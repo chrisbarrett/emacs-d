@@ -60,16 +60,32 @@ Without prefix arg, prompts for NAME from the registry."
 
 ;;; Public block introspection
 
+(defun gfm-pretty--block-at-point-fn (name)
+  "Return decorator NAME's `<name>--block-at-point' function, or nil.
+The protocol exposes this as a naming convention: a decorator that
+wants to participate in `gfm-pretty-block-at-point' exports a
+function named `gfm-pretty-<name>--block-at-point' with no args."
+  (let ((sym (intern (format "gfm-pretty-%s--block-at-point" name))))
+    (and (fboundp sym) sym)))
+
+(defun gfm-pretty--edit-at-point-fn (name)
+  "Return decorator NAME's `<name>--edit-at-point' function, or nil.
+Naming convention twin of `gfm-pretty--block-at-point-fn'."
+  (let ((sym (intern (format "gfm-pretty-%s--edit-at-point" name))))
+    (and (fboundp sym) sym)))
+
 ;;;###autoload
 (defun gfm-pretty-block-at-point ()
   "Return (DECORATOR-NAME . BLOCK) for the block at point, or nil.
 
-Iterates active decorators; the first whose `:block-at-point-fn'
-returns non-nil wins."
+Iterates active decorators; the first whose
+`gfm-pretty-<name>--block-at-point' returns non-nil wins.  The
+contract is a naming convention rather than a registry slot — see
+`gfm-pretty--block-at-point-fn'."
   (interactive)
   (gfm-pretty--require-all)
-  (cl-loop for (name . d) in gfm-pretty--decorators
-           for fn = (gfm-pretty--decorator-block-at-point-fn d)
+  (cl-loop for (name . _d) in gfm-pretty--decorators
+           for fn = (gfm-pretty--block-at-point-fn name)
            when (and fn (gfm-pretty--state-get name 'enabled-p))
            for block = (funcall fn)
            when block
@@ -79,16 +95,16 @@ returns non-nil wins."
 (defun gfm-pretty-edit-block-at-point ()
   "Invoke the editor for the gfm-pretty block at point.
 
-Dispatches to the matching decorator's `:edit-at-point-fn'.  Signals a
-`user-error' when point is not inside any decorator's block, or the
-matching decorator does not provide an editor."
+Dispatches to the matching decorator's
+`gfm-pretty-<name>--edit-at-point'.  Signals a `user-error' when
+point is not inside any decorator's block, or the matching decorator
+does not provide an editor."
   (interactive)
   (gfm-pretty--require-all)
   (let ((hit (gfm-pretty-block-at-point)))
     (unless hit
       (user-error "gfm-pretty: no decorator block at point"))
-    (let* ((d (gfm-pretty--get (car hit)))
-           (fn (gfm-pretty--decorator-edit-at-point-fn d)))
+    (let ((fn (gfm-pretty--edit-at-point-fn (car hit))))
       (unless fn
         (user-error "gfm-pretty: decorator %s has no editor" (car hit)))
       (funcall fn))))

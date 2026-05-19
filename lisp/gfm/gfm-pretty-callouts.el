@@ -118,13 +118,8 @@ Returns a hex colour string, or nil if either colour is unresolvable."
 
 ;;; Overlay registry
 
-(defvar-local gfm-pretty-callouts--overlays nil
-  "All callout overlays currently in this buffer.")
-
 (defconst gfm-pretty-callouts--registry
-  (gfm-pretty--registry-for
-   'gfm-pretty-callouts
-   'gfm-pretty-callouts--overlays)
+  (gfm-pretty--registry-for 'callouts 'gfm-pretty-callouts)
   "Shared overlay-registry context for callouts.")
 
 (defsubst gfm-pretty-callouts--make-anchor (beg end &rest props)
@@ -428,7 +423,30 @@ See `gfm-pretty-callouts--apply-block-anchors' for the widening rationale."
   (gfm-pretty--block-visible-p
    block ranges #'gfm-pretty-callouts--block-range))
 
-;;; Structural-line + edit-adjacency hooks for engine routing
+;;; Per-block apply (engine seam)
+
+(defun gfm-pretty-callouts--apply-block (block window)
+  "Engine `:apply-block-fn' — apply WINDOW's overlays for BLOCK.
+Routes through `gfm-pretty-borders--apply-with-anchors' so width-
+independent anchors are laid at most once per (block, rebuild pass)."
+  (gfm-pretty-borders--apply-with-anchors
+   block window
+   :registry gfm-pretty-callouts--registry
+   :range (gfm-pretty-callouts--block-range block)
+   :anchors-fn #'gfm-pretty-callouts--apply-block-anchors
+   :display-fn #'gfm-pretty-callouts--apply-block-display))
+
+;;; Full-rebuild-required predicate (engine seam)
+
+(defun gfm-pretty-callouts--full-rebuild-required-p (dirty)
+  "Engine `:full-rebuild-required-p' — fold structural + adjacency checks.
+Non-nil when DIRTY overlaps a `> [!TYPE]' marker line (structural)
+or a line directly above / below a callout (adjacency)."
+  (or (cl-some (lambda (r) (gfm-pretty--region-overlaps-p dirty r))
+               (gfm-pretty-callouts--marker-line-ranges))
+      (gfm-pretty-callouts--region-adjacent-to-callout-p dirty)))
+
+;;; Structural-line + edit-adjacency helpers
 
 (defun gfm-pretty-callouts--marker-line-ranges ()
   "Return per-line (BEG . END) ranges for every `> [!TYPE]' line."
@@ -782,12 +800,8 @@ only that line, missing the multi-line matcher's anchor."
     :registry           gfm-pretty-callouts--registry
     :collect-fn         #'gfm-pretty-callouts--collect-blocks
     :range-fn           #'gfm-pretty-callouts--block-range
-    :apply-anchors-fn   #'gfm-pretty-callouts--apply-block-anchors
-    :apply-display-fn   #'gfm-pretty-callouts--apply-block-display
-    :structural-line-ranges-fn #'gfm-pretty-callouts--marker-line-ranges
-    :edit-adjacency-fn  #'gfm-pretty-callouts--region-adjacent-to-callout-p
-    :revealable-prop    'gfm-pretty-callouts-revealable
-    :saved-display-prop 'gfm-pretty-callouts-saved-display
+    :apply-block-fn     #'gfm-pretty-callouts--apply-block
+    :full-rebuild-required-p #'gfm-pretty-callouts--full-rebuild-required-p
     :on-enable-fn       #'gfm-pretty-callouts--on-enable
     :on-disable-fn      #'gfm-pretty-callouts--on-disable))
 

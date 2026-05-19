@@ -227,6 +227,27 @@ last wrapped visual row from `│' to the window's right edge — see
     (put-text-property 0 1 'cursor t str)
     str))
 
+;;; Anchor / display split helper
+
+(cl-defun gfm-pretty-borders--apply-with-anchors
+    (block window &key registry range anchors-fn display-fn)
+  "Apply WINDOW's overlays for BLOCK with the anchor / display split.
+ANCHORS-FN is `(block)' and applies width-independent overlays shared
+across every window; it runs at most once per (decorator, RANGE) per
+rebuild pass.  DISPLAY-FN is `(block window)' and applies the
+per-window display overlays; it runs unconditionally.
+
+REGISTRY is the decorator's `gfm-pretty--registry' (used to locate
+the decorator's state slot).  RANGE is the block's (BEG . END) source
+range; it doubles as the anchors-laid sentinel key and lets the
+engine prune the sentinel when overlapping ranges are torn down."
+  (let* ((name (gfm-pretty--registry-name registry))
+         (laid (gfm-pretty--state-get name 'anchors-laid)))
+    (unless (member range laid)
+      (when anchors-fn (funcall anchors-fn block))
+      (gfm-pretty--state-set name 'anchors-laid (cons range laid)))
+    (when display-fn (funcall display-fn block window))))
+
 (provide 'gfm-pretty-borders)
 
 ;;; gfm-pretty-borders.el ends here

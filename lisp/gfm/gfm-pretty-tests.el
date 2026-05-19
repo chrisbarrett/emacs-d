@@ -121,18 +121,16 @@ outside the restriction (zombies on widen).  See the
 fix-gfm-narrowing-safety change."
   :tags '(narrowing-regression)
   (let ((overlays nil))
-    (let* ((registry (gfm-pretty--registry-for
-                      'lm-test-tag
-                      (make-symbol "lm-test-overlays-1"))))
-      (set (gfm-pretty--registry-overlays-symbol registry) nil)
+    (let* ((name 'lm-test-decorator)
+           (registry (gfm-pretty--registry-for name 'lm-test-tag)))
       (with-temp-buffer
+        (gfm-pretty--state-set name 'overlays nil)
         (insert "first region\n\n--- divider ---\n\nsecond region\n")
         (let ((ov-a (make-overlay 1 5))
               (ov-b (make-overlay 30 35)))
           (overlay-put ov-a 'lm-test-tag t)
           (overlay-put ov-b 'lm-test-tag t)
-          (set (gfm-pretty--registry-overlays-symbol registry)
-               (list ov-a ov-b)))
+          (gfm-pretty--state-set name 'overlays (list ov-a ov-b)))
         (narrow-to-region 1 10)
         (gfm-pretty--remove-overlays registry)
         (widen)
@@ -412,7 +410,7 @@ no inherit chain — so emphasis faces and the default face show through."
       (let ((on-buffer (cl-count-if
                         (lambda (ov) (overlay-get ov 'gfm-pretty-callouts))
                         (overlays-in (point-min) (point-max)))))
-        (should (= (length gfm-pretty-callouts--overlays) on-buffer))))))
+        (should (= (length (gfm-pretty--state-get 'callouts 'overlays)) on-buffer))))))
 
 ;;; Cross-narrow partial-block coverage — overlay set converges across paths
 
@@ -618,7 +616,7 @@ line (last body line's after-string also carries the bottom border)."
                          (lambda (o)
                            (and (overlay-get o 'gfm-pretty-callouts-display)
                                 (eq (overlay-get o 'window) w)))
-                         gfm-pretty-callouts--overlays)))
+                         (gfm-pretty--state-get 'callouts 'overlays))))
                      (a-before (funcall displays-for win-a))
                      (b-before (funcall displays-for win-b)))
                 (gfm-pretty--state-set 'callouts 'last-window-state
@@ -780,7 +778,7 @@ when both `gfm-pretty-callouts-mode' and `gfm-pretty-fences-mode' are active."
                        (lambda (o)
                          (and (overlay-get o 'gfm-pretty-callouts-revealable)
                               (= (overlay-start o) (point-min))))
-                       gfm-pretty-callouts--overlays))
+                       (gfm-pretty--state-get 'callouts 'overlays)))
                      (a-ov (cl-find-if
                             (lambda (o) (eq (overlay-get o 'window) win-a))
                             revealable))
@@ -867,7 +865,7 @@ when both `gfm-pretty-callouts-mode' and `gfm-pretty-fences-mode' are active."
       (let ((on-buffer (cl-count-if
                         (lambda (ov) (overlay-get ov 'gfm-pretty-fences))
                         (overlays-in (point-min) (point-max)))))
-        (should (= (length gfm-pretty-fences--overlays) on-buffer))))))
+        (should (= (length (gfm-pretty--state-get 'fences 'overlays)) on-buffer))))))
 
 ;;; Body background fill — code fences
 
@@ -1134,7 +1132,7 @@ Anchors stay shared across windows; only display overlays carry a
                          (lambda (o)
                            (and (overlay-get o 'gfm-pretty-fences-display)
                                 (eq (overlay-get o 'window) w)))
-                         gfm-pretty-fences--overlays)))
+                         (gfm-pretty--state-get 'fences 'overlays))))
                      (a-before (funcall displays-for win-a))
                      (b-before (funcall displays-for win-b)))
                 ;; Forge a width change for win-a only.
@@ -2145,7 +2143,7 @@ off-narrowing overlays untracked."
       (let ((on-buffer (cl-count-if
                         (lambda (ov) (overlay-get ov 'gfm-pretty-tables))
                         (overlays-in (point-min) (point-max)))))
-        (should (= (length gfm-pretty-tables--overlays) on-buffer))))))
+        (should (= (length (gfm-pretty--state-get 'tables 'overlays)) on-buffer))))))
 
 ;;; Per-rebuild width cache
 
@@ -2398,7 +2396,7 @@ Untouched windows keep their existing display-overlay objects (eq)."
                                       (lambda (o)
                                         (and (overlay-get o 'gfm-pretty-tables-display)
                                              (eq (overlay-get o 'window) w)))
-                                      gfm-pretty-tables--overlays)))
+                                      (gfm-pretty--state-get 'tables 'overlays))))
                      (a-before (funcall displays-for win-a))
                      (b-before (funcall displays-for win-b)))
                 ;; Forge a width change for win-a only by mutating the cached
@@ -2521,7 +2519,7 @@ window holding point."
 
 (defun lang-markdown-tests--link-overlays ()
   "Return gfm-pretty-links overlays in the current buffer, sorted by start."
-  (sort (copy-sequence gfm-pretty-links--overlays)
+  (sort (copy-sequence (gfm-pretty--state-get 'links 'overlays))
         (lambda (a b) (< (overlay-start a) (overlay-start b)))))
 
 (defun lang-markdown-tests--link-overlay-at (pos &optional side)
@@ -2531,7 +2529,7 @@ window holding point."
                      (<= (overlay-start o) pos)
                      (< pos (overlay-end o))
                      (or (null side) (eq side (overlay-get o 'gfm-pretty-links-side)))))
-              gfm-pretty-links--overlays))
+              (gfm-pretty--state-get 'links 'overlays)))
 
 ;;; Mode toggle
 
@@ -2546,9 +2544,9 @@ window holding point."
   "Disabling the mode removes every overlay it created."
   (lang-markdown-tests--with-links-buffer
       "See [Anthropic](https://anthropic.com) here.\n"
-    (should gfm-pretty-links--overlays)
+    (should (gfm-pretty--state-get 'links 'overlays))
     (gfm-pretty-mode -1)
-    (should-not gfm-pretty-links--overlays)
+    (should-not (gfm-pretty--state-get 'links 'overlays))
     (should-not (cl-some (lambda (o) (overlay-get o 'gfm-pretty-links))
                          (overlays-in (point-min) (point-max))))))
 
@@ -2562,7 +2560,7 @@ window holding point."
     (should (gfm-pretty--state-get 'links 'enabled-p))
     (setq-local markdown-hide-urls nil)
     (should-not (gfm-pretty--state-get 'links 'enabled-p))
-    (should-not gfm-pretty-links--overlays)))
+    (should-not (gfm-pretty--state-get 'links 'overlays))))
 
 (ert-deftest lang-markdown/gfm-pretty-links-enabled-via-gfm-mode-hook ()
   "Links activation runs via the `gfm-pretty-mode' hook."
@@ -2650,13 +2648,13 @@ window holding point."
   "Image links are explicitly left raw."
   (lang-markdown-tests--with-links-buffer
       "![alt](./diagram.png)\n"
-    (should-not gfm-pretty-links--overlays)))
+    (should-not (gfm-pretty--state-get 'links 'overlays))))
 
 (ert-deftest lang-markdown/gfm-pretty-links-reference-definition-not-decorated ()
   "Reference-definition lines themselves are not decorated."
   (lang-markdown-tests--with-links-buffer
       "[d]: https://example.com\n"
-    (should-not gfm-pretty-links--overlays)))
+    (should-not (gfm-pretty--state-get 'links 'overlays))))
 
 ;;; 14.2 Reference resolution
 
@@ -2779,7 +2777,7 @@ window holding point."
               (let* ((title-ovs
                       (cl-remove-if-not
                        (lambda (o) (eq 'title (overlay-get o 'gfm-pretty-links-side)))
-                       gfm-pretty-links--overlays))
+                       (gfm-pretty--state-get 'links 'overlays)))
                      (a-ov (cl-find-if
                             (lambda (o) (eq (overlay-get o 'window) win-a))
                             title-ovs))

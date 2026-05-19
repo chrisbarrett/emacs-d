@@ -826,13 +826,8 @@ vector for callers (and tests) that depend on the older API."
 
 ;;; Overlay application
 
-(defvar-local gfm-pretty-tables--overlays nil
-  "All gfm-pretty-tables overlays currently in this buffer.")
-
 (defconst gfm-pretty-tables--registry
-  (gfm-pretty--registry-for
-   'gfm-pretty-tables
-   'gfm-pretty-tables--overlays)
+  (gfm-pretty--registry-for 'tables 'gfm-pretty-tables)
   "Shared overlay-registry context for tables.
 Routes the full-clear teardown through `gfm-pretty--remove-overlays'
 so it widens for the duration of the clear, matching the fences/callouts
@@ -841,7 +836,7 @@ contract.")
 (defun gfm-pretty-tables--register (ov)
   "Tag OV as a gfm-pretty-tables overlay and remember it for bulk cleanup."
   (overlay-put ov 'gfm-pretty-tables t)
-  (push ov gfm-pretty-tables--overlays)
+  (gfm-pretty--state-push 'tables 'overlays ov)
   ov)
 
 (defun gfm-pretty-tables--remove-overlays (&optional beg end)
@@ -862,7 +857,7 @@ buffer; the per-window rendering lives on display overlays."
     (overlay-put ov 'gfm-pretty-tables-anchor t)
     (overlay-put ov 'gfm-pretty-tables-cell-bounds cell-bounds)
     (overlay-put ov 'keymap gfm-pretty-tables--row-map)
-    (push ov gfm-pretty-tables--overlays)
+    (gfm-pretty--state-push 'tables 'overlays ov)
     ov))
 
 (defun gfm-pretty-tables--make-display (beg end window display before after col-widths dcb)
@@ -884,7 +879,7 @@ every window (used when no window currently shows the buffer)."
     (when after (overlay-put ov 'after-string after))
     (when col-widths (overlay-put ov 'gfm-pretty-tables-col-widths col-widths))
     (when dcb (overlay-put ov 'gfm-pretty-tables-display-cell-bounds dcb))
-    (push ov gfm-pretty-tables--overlays)
+    (gfm-pretty--state-push 'tables 'overlays ov)
     ov))
 
 (defun gfm-pretty-tables--display-overlay-for-anchor (anchor &optional window)
@@ -1033,18 +1028,16 @@ display overlay (used when wiping out an unrestricted fallback set)."
                  (or (null window)
                      (eq (overlay-get ov 'window) window)))
         (delete-overlay ov))))
-  (setq gfm-pretty-tables--overlays
-        (cl-remove-if-not #'overlay-buffer gfm-pretty-tables--overlays)))
+  (gfm-pretty--prune-dead-overlays gfm-pretty-tables--registry))
 
 (defun gfm-pretty-tables--remove-display-overlays-for-window (window)
   "Delete every display overlay restricted to WINDOW across the buffer."
-  (dolist (ov gfm-pretty-tables--overlays)
+  (dolist (ov (gfm-pretty--state-get 'tables 'overlays))
     (when (and (overlay-buffer ov)
                (overlay-get ov 'gfm-pretty-tables-display)
                (eq (overlay-get ov 'window) window))
       (delete-overlay ov)))
-  (setq gfm-pretty-tables--overlays
-        (cl-remove-if-not #'overlay-buffer gfm-pretty-tables--overlays)))
+  (gfm-pretty--prune-dead-overlays gfm-pretty-tables--registry))
 
 (defun gfm-pretty-tables--rebuild-block-for-window (block window)
   "Replace WINDOW's display overlays for BLOCK with fresh ones at current width.
@@ -1173,7 +1166,7 @@ anchor is missing."
     (cond
      ((or (null prev)
           (null (cl-some (lambda (o) (overlay-get o 'gfm-pretty-tables-anchor))
-                         gfm-pretty-tables--overlays)))
+                         (gfm-pretty--state-get 'tables 'overlays))))
       (gfm-pretty--rebuild (gfm-pretty--get 'tables)))
      (t
       (let* ((curr (gfm-pretty-tables--window-state))
@@ -1203,24 +1196,39 @@ anchor is missing."
   "Engine `:range-fn' — return (HEADER-BEG . BODY-END+1) for BLOCK."
   (cons (nth 0 block) (1+ (nth 3 block))))
 
-(defun gfm-pretty-tables--apply-block-anchors (_block)
-  "Engine `:apply-anchors-fn' — anchors are created by `--apply-table'.")
-
-(defun gfm-pretty-tables--apply-block-display (block window)
-  "Engine `:apply-display-fn' — apply WINDOW's display overlays for BLOCK."
+(defun gfm-pretty-tables--apply-block (block window)
+  "Engine `:apply-block-fn' — apply WINDOW's display overlays for BLOCK.
+Anchors are laid by the full `gfm-pretty-tables--apply-table' path
+during `--rebuild', so the per-window seam only re-renders the
+display layer here."
   (gfm-pretty-tables--rebuild-block-for-window block window))
 
 ;;; Lifecycle hooks delegated to engine
 
+(defun gfm-pretty-tables--wcc-handler (&rest _)
+  "Buffer-local `window-configuration-change-hook' handler.
+Invokes the tables-specific per-window reconciler when the tables
+decorator is enabled and the window state has changed."
+  (when (gfm-pretty--state-get 'tables 'enabled-p)
+    (gfm-pretty-tables--reconcile-windows)))
+
 (defun gfm-pretty-tables--on-enable ()
-  "Per-decorator setup invoked on enable."
+  "Per-decorator setup invoked on enable.
+Installs the active-cell cursor handler and a buffer-local
+`window-configuration-change-hook' that routes tables's bespoke
+per-window reconciler (the engine's generic reconciler is not used
+for tables)."
   (add-hook 'post-command-hook
-            #'gfm-pretty-tables--update-cursor-highlight nil t))
+            #'gfm-pretty-tables--update-cursor-highlight nil t)
+  (add-hook 'window-configuration-change-hook
+            #'gfm-pretty-tables--wcc-handler nil t))
 
 (defun gfm-pretty-tables--on-disable ()
   "Per-decorator teardown invoked on disable."
   (remove-hook 'post-command-hook
                #'gfm-pretty-tables--update-cursor-highlight t)
+  (remove-hook 'window-configuration-change-hook
+               #'gfm-pretty-tables--wcc-handler t)
   (gfm-pretty-tables--hide-cursor-highlight))
 
 ;;; Stats command (thin wrapper over engine)
@@ -2077,41 +2085,49 @@ the symbol `snap', a post-call landing in a table snaps to cell 0."
 
 ;;; gfm-pretty decorator registration
 
-(defun gfm-pretty-tables--structural-line-ranges ()
-  "Engine `:structural-line-ranges-fn' — code-fence open / close lines.
+(defun gfm-pretty-tables--full-rebuild-required-p (dirty)
+  "Engine `:full-rebuild-required-p' — non-nil on code-fence marker edits.
 Tables exclude content inside fenced code blocks; touching a fence
 line can create or destroy adjacent tables, so any such edit forces
 a full rebuild.  Edits inside a table's own header / delimiter /
 body fit within the block's source range and scope via the engine's
 block-containment fallback."
   (and (fboundp 'gfm-pretty-fences--find-blocks)
-       (cl-loop for b in (gfm-pretty-fences--find-blocks)
-                for open-beg = (nth 0 b)
-                for close-end = (nth 3 b)
-                nconc (list
-                       (cons (save-excursion
-                               (goto-char open-beg) (line-beginning-position))
-                             (save-excursion
-                               (goto-char open-beg) (line-end-position)))
-                       (cons (save-excursion
-                               (goto-char close-end) (line-beginning-position))
-                             (save-excursion
-                               (goto-char close-end) (line-end-position)))))))
+       (cl-some
+        (lambda (b)
+          (let* ((open-beg (nth 0 b))
+                 (close-end (nth 3 b))
+                 (open-line (cons (save-excursion
+                                    (goto-char open-beg)
+                                    (line-beginning-position))
+                                  (save-excursion
+                                    (goto-char open-beg)
+                                    (line-end-position))))
+                 (close-line (cons (save-excursion
+                                     (goto-char close-end)
+                                     (line-beginning-position))
+                                   (save-excursion
+                                     (goto-char close-end)
+                                     (line-end-position)))))
+            (or (gfm-pretty--region-overlaps-p dirty open-line)
+                (gfm-pretty--region-overlaps-p dirty close-line))))
+        (gfm-pretty-fences--find-blocks))))
+
+(defalias 'gfm-pretty-tables--edit-at-point #'gfm-pretty-tables-edit-table-at-point
+  "Conventional decorator-protocol name for the table editor.
+The umbrella `gfm-pretty-edit-block-at-point' dispatch looks for
+`<name>--edit-at-point' by intern.")
 
 (with-eval-after-load 'gfm-pretty-engine
   (gfm-pretty-define-decorator 'tables
     :registry              gfm-pretty-tables--registry
     :collect-fn            #'gfm-pretty-tables--collect-blocks
     :range-fn              #'gfm-pretty-tables--block-range
-    :apply-anchors-fn      #'gfm-pretty-tables--apply-block-anchors
-    :apply-display-fn      #'gfm-pretty-tables--apply-block-display
+    :apply-block-fn        #'gfm-pretty-tables--apply-block
     :rebuild-fn            #'gfm-pretty-tables--rebuild
-    :structural-line-ranges-fn #'gfm-pretty-tables--structural-line-ranges
-    :reconcile-windows-fn  #'gfm-pretty-tables--reconcile-windows
+    :full-rebuild-required-p #'gfm-pretty-tables--full-rebuild-required-p
     :on-enable-fn          #'gfm-pretty-tables--on-enable
-    :on-disable-fn         #'gfm-pretty-tables--on-disable
-    :block-at-point-fn (lambda () (gfm-pretty-tables--block-at-point))
-    :edit-at-point-fn  (lambda () (gfm-pretty-tables-edit-table-at-point))))
+    :on-disable-fn         #'gfm-pretty-tables--on-disable))
 
 (provide 'gfm-pretty-tables)
 

@@ -73,13 +73,8 @@ non-whitespace character is `-' (dash form)."
 
 ;;; Overlay registry
 
-(defvar-local gfm-pretty-hrule--overlays nil
-  "All gfm-pretty-hrule overlays currently in this buffer.")
-
 (defconst gfm-pretty-hrule--registry
-  (gfm-pretty--registry-for
-   'gfm-pretty-hrule
-   'gfm-pretty-hrule--overlays)
+  (gfm-pretty--registry-for 'hrule 'gfm-pretty-hrule)
   "Shared overlay-registry context for HR bars.")
 
 ;;; Block enumeration
@@ -101,10 +96,7 @@ The engine memoises this via `gfm-pretty--collect'."
 
 ;;; Rendering
 
-(defun gfm-pretty-hrule--apply-block-anchors (_block)
-  "HR blocks carry no anchor overlays; placeholder for the reconciler.")
-
-(defun gfm-pretty-hrule--apply-block-display (block window)
+(defun gfm-pretty-hrule--apply-block (block window)
   "Apply a per-WINDOW display overlay for HR BLOCK.
 The overlay's `display' is `(make-string WIDTH ?─)' propertized with
 `gfm-pretty-hrule-face', where WIDTH is the window's available
@@ -139,7 +131,7 @@ lazily; we depend on it being populated before discovery."
          (windows (or (gfm-pretty--display-windows) (list nil))))
     (dolist (window windows)
       (dolist (block blocks)
-        (gfm-pretty-hrule--apply-block-display block window)))))
+        (gfm-pretty-hrule--apply-block block window)))))
 
 ;;; gfm-pretty decorator registration
 
@@ -148,11 +140,8 @@ lazily; we depend on it being populated before discovery."
     :registry           gfm-pretty-hrule--registry
     :collect-fn         #'gfm-pretty-hrule--collect-blocks
     :range-fn           #'gfm-pretty-hrule--block-range
-    :apply-anchors-fn   #'gfm-pretty-hrule--apply-block-anchors
-    :apply-display-fn   #'gfm-pretty-hrule--apply-block-display
-    :rebuild-fn         #'gfm-pretty-hrule--rebuild
-    :revealable-prop    'gfm-pretty-hrule-revealable
-    :saved-display-prop 'gfm-pretty-hrule-saved-display))
+    :apply-block-fn     #'gfm-pretty-hrule--apply-block
+    :rebuild-fn         #'gfm-pretty-hrule--rebuild))
 
 (provide 'gfm-pretty-hrule)
 
