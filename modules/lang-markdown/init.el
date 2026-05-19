@@ -203,6 +203,13 @@ themselves are activated by `gfm-pretty-mode' on the same hook."
     "t" '((lambda () (interactive) (gfm-pretty-toggle-decorator 'tables))
           :wk "toggle table rendering")))
 
+;;; Adaptive wrap-prefix
+
+(use-package adaptive-wrap
+  :commands (adaptive-wrap-prefix-mode)
+  :hook
+  (gfm-mode-hook . adaptive-wrap-prefix-mode))
+
 ;;; Formatting
 
 (use-package apheleia

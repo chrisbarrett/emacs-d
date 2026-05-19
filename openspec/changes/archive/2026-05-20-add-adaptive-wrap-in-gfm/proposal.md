@@ -6,7 +6,7 @@ With `visual-line-mode` enabled, continuation lines of soft-wrapped paragraphs, 
 
 - Add `adaptive-wrap` to the project's elpaca dependencies.
 - Enable `adaptive-wrap-prefix-mode` on `gfm-mode-hook` alongside the existing `visual-line-mode` hook.
-- Leave overlay-based `wrap-prefix` set by `gfm-pretty` decorators (callouts, fences, tables) untouched — overlay properties take precedence over the text properties that `adaptive-wrap` installs.
+- Leave overlay-based `wrap-prefix` set by `gfm-pretty` decorators (callouts, fences) untouched — overlay properties take precedence over the text properties that `adaptive-wrap` installs. (Tables do not set `wrap-prefix`, so the precedence rule does not apply there; their overlays are independent.)
 
 Out of scope: virtually joining soft newlines inside a paragraph (the "reflow" half of the original idea). That remains a possible follow-up under a separate proposal.
 

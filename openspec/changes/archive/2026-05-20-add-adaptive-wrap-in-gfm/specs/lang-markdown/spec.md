@@ -22,9 +22,9 @@ Overlay-set `wrap-prefix` properties installed by `gfm-pretty` decorators (callo
 
 #### Scenario: gfm-pretty decorator wrap-prefix is unaffected
 
-- **GIVEN** a GFM buffer containing a callout, a fenced code block, and a table — each producing overlay `wrap-prefix` via its `gfm-pretty` decorator
+- **GIVEN** a GFM buffer containing a callout and a fenced code block — each producing overlay `wrap-prefix` via its `gfm-pretty` decorator
 - **WHEN** `adaptive-wrap-prefix-mode` is enabled in the same buffer
-- **THEN** the callout left bar, fence borders, and table borders SHALL continue to render with their decorator-supplied wrap-prefix on continuation rows
+- **THEN** the callout left bar and fence borders SHALL continue to render with their decorator-supplied wrap-prefix on continuation rows
 
 #### Scenario: Disabling adaptive-wrap restores flush continuation
 
