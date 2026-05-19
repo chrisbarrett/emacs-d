@@ -2525,7 +2525,7 @@ window holding point."
 (defun lang-markdown-tests--link-overlay-at (pos &optional side)
   "Return a gfm-pretty-links overlay covering POS, optionally matching SIDE."
   (cl-find-if (lambda (o)
-                (and (overlay-get o 'gfm-pretty-links-revealable)
+                (and (overlay-get o 'gfm-pretty-links-class)
                      (<= (overlay-start o) pos)
                      (< pos (overlay-end o))
                      (or (null side) (eq side (overlay-get o 'gfm-pretty-links-side)))))
@@ -2737,59 +2737,132 @@ window holding point."
     (search-forward "(")
     (should (get-text-property (point) 'composition))))
 
-;;; 8.x Cursor reveal
+;;; 8.x URL classifier
 
-(ert-deftest lang-markdown/gfm-pretty-links-reveal-whole-link ()
-  "Point on the title reveals both the title-side and url-side overlays."
+(ert-deftest lang-markdown/gfm-pretty-links-classify-url-anchor ()
+  "Same-document anchors classify as `anchor'."
+  (should (eq 'anchor (gfm-pretty-links--classify-url "#setup")))
+  (should (eq 'anchor (gfm-pretty-links--classify-url "#")))
+  (should (eq 'anchor (gfm-pretty-links--classify-url "#with-dash-and-1"))))
+
+(ert-deftest lang-markdown/gfm-pretty-links-classify-url-file ()
+  "Relative paths, absolute paths, and `file:' URIs classify as `file'."
+  (should (eq 'file (gfm-pretty-links--classify-url "./scripts/x.sh")))
+  (should (eq 'file (gfm-pretty-links--classify-url "../sibling/x.md")))
+  (should (eq 'file (gfm-pretty-links--classify-url "/etc/hostname")))
+  (should (eq 'file (gfm-pretty-links--classify-url "file:/tmp/x"))))
+
+(ert-deftest lang-markdown/gfm-pretty-links-classify-url-web ()
+  "Schemed URLs, hostless URLs, and unknown shapes default to `web'."
+  (should (eq 'web (gfm-pretty-links--classify-url "https://anthropic.com")))
+  (should (eq 'web (gfm-pretty-links--classify-url "http://x.example/p")))
+  (should (eq 'web (gfm-pretty-links--classify-url "mailto:a@b.com")))
+  (should (eq 'web (gfm-pretty-links--classify-url "ftp://x.example")))
+  (should (eq 'web (gfm-pretty-links--classify-url "anthropic.com"))))
+
+(ert-deftest lang-markdown/gfm-pretty-links-classify-url-nil-or-empty ()
+  "nil / empty URL defaults to `web' (no special handling needed)."
+  (should (eq 'web (gfm-pretty-links--classify-url nil)))
+  (should (eq 'web (gfm-pretty-links--classify-url ""))))
+
+(ert-deftest lang-markdown/gfm-pretty-links-classify-reference-via-resolved-url ()
+  "Reference links classify by their resolved definition URL, not source shape."
+  (lang-markdown-tests--with-links-buffer
+      "[ops][tg]\n\n[tg]: ./scripts/tg.sh\n"
+    (let ((ov (lang-markdown-tests--link-overlay-at 2 'title)))
+      (should (eq 'file (overlay-get ov 'gfm-pretty-links-class))))))
+
+(ert-deftest lang-markdown/gfm-pretty-links-classify-reference-web ()
+  "A reference link whose definition is a web URL classifies as `web'."
+  (lang-markdown-tests--with-links-buffer
+      "[catalog][cat]\n\n[cat]: https://github.com/x/y\n"
+    (let ((ov (lang-markdown-tests--link-overlay-at 2 'title)))
+      (should (eq 'web (overlay-get ov 'gfm-pretty-links-class))))))
+
+;;; 8.y Local-link faces
+
+(ert-deftest lang-markdown/gfm-pretty-links-anchor-face-strips-underline ()
+  "Default `gfm-pretty-links-anchor-face' resolves with `:underline nil'."
+  (should-not (face-attribute 'gfm-pretty-links-anchor-face :underline nil t)))
+
+(ert-deftest lang-markdown/gfm-pretty-links-file-face-strips-underline ()
+  "Default `gfm-pretty-links-file-face' resolves with `:underline nil'."
+  (should-not (face-attribute 'gfm-pretty-links-file-face :underline nil t)))
+
+(ert-deftest lang-markdown/gfm-pretty-links-anchor-face-inherits-link ()
+  "`gfm-pretty-links-anchor-face' inherits `markdown-link-face'."
+  (should (eq 'markdown-link-face
+              (face-attribute 'gfm-pretty-links-anchor-face :inherit nil t))))
+
+(ert-deftest lang-markdown/gfm-pretty-links-file-face-inherits-link ()
+  "`gfm-pretty-links-file-face' inherits `markdown-link-face'."
+  (should (eq 'markdown-link-face
+              (face-attribute 'gfm-pretty-links-file-face :inherit nil t))))
+
+;;; 8.z Title-side face by class
+
+(defun lang-markdown-tests--display-face (ov)
+  "Return the face applied to OV's `display' string."
+  (get-text-property 0 'face (overlay-get ov 'display)))
+
+(ert-deftest lang-markdown/gfm-pretty-links-title-face-web ()
+  "A web link's title overlay uses `gfm-pretty-links-title-face'."
   (lang-markdown-tests--with-links-buffer
       "[Anthropic](https://anthropic.com)\n"
-    (let ((title-ov (lang-markdown-tests--link-overlay-at 2 'title))
-          (url-ov (lang-markdown-tests--link-overlay-at 13 'url)))
-      (should (overlay-get title-ov 'display))
-      (should (overlay-get url-ov 'display))
-      (goto-char 3)
-      (gfm-pretty-links--reveal)
-      (should-not (overlay-get title-ov 'display))
-      (should-not (overlay-get url-ov 'display))
-      (goto-char (point-max))
-      (gfm-pretty-links--reveal)
-      (should (overlay-get title-ov 'display))
-      (should (overlay-get url-ov 'display)))))
+    (let ((ov (lang-markdown-tests--link-overlay-at 2 'title)))
+      (should (eq 'markdown-link-face (lang-markdown-tests--display-face ov))))))
 
-(ert-deftest lang-markdown/gfm-pretty-links-reveal-respects-window-restriction ()
-  "Reveal in window A does not expose the link via window B's overlays."
-  (let ((buf (generate-new-buffer "*gfm-pretty-links-reveal-test*")))
-    (unwind-protect
-        (progn
-          (with-current-buffer buf
-            (delay-mode-hooks (markdown-mode))
-            (setq-local markdown-hide-urls t)
-            (insert "[Anthropic](https://anthropic.com)\n"))
-          (set-window-buffer (selected-window) buf)
-          (let* ((win-a (selected-window))
-                 (win-b (split-window)))
-            (set-window-buffer win-b buf)
-            (with-current-buffer buf
-              (gfm-pretty-mode 1)
-              (with-selected-window win-a
-                (goto-char 3)
-                (gfm-pretty-links--reveal))
-              (let* ((title-ovs
-                      (cl-remove-if-not
-                       (lambda (o) (eq 'title (overlay-get o 'gfm-pretty-links-side)))
-                       (gfm-pretty--state-get 'links 'overlays)))
-                     (a-ov (cl-find-if
-                            (lambda (o) (eq (overlay-get o 'window) win-a))
-                            title-ovs))
-                     (b-ov (cl-find-if
-                            (lambda (o) (eq (overlay-get o 'window) win-b))
-                            title-ovs)))
-                (should a-ov)
-                (should b-ov)
-                (should-not (overlay-get a-ov 'display))
-                (should (overlay-get b-ov 'display))))
-            (delete-window win-b)))
-      (kill-buffer buf))))
+(ert-deftest lang-markdown/gfm-pretty-links-title-face-anchor ()
+  "An anchor link's title overlay uses `gfm-pretty-links-anchor-face'."
+  (lang-markdown-tests--with-links-buffer
+      "[Setup](#setup)\n"
+    (let ((ov (lang-markdown-tests--link-overlay-at 2 'title)))
+      (should (eq 'gfm-pretty-links-anchor-face
+                  (lang-markdown-tests--display-face ov))))))
+
+(ert-deftest lang-markdown/gfm-pretty-links-title-face-file ()
+  "A file link's title overlay uses `gfm-pretty-links-file-face'."
+  (lang-markdown-tests--with-links-buffer
+      "[ops](./scripts/x.sh)\n"
+    (let ((ov (lang-markdown-tests--link-overlay-at 2 'title)))
+      (should (eq 'gfm-pretty-links-file-face
+                  (lang-markdown-tests--display-face ov))))))
+
+;;; 8.w URL-side suppression for local links
+
+(defun lang-markdown-tests--link-overlay-count-for (kind)
+  "Return the count of overlays for the link of KIND in the current buffer."
+  (length (cl-remove-if-not
+           (lambda (o) (overlay-get o 'gfm-pretty-links-class))
+           (gfm-pretty--state-get 'links 'overlays))))
+
+(ert-deftest lang-markdown/gfm-pretty-links-web-link-has-both-overlays ()
+  "A web link produces both a title-side and a url-side overlay."
+  (lang-markdown-tests--with-links-buffer
+      "[Anthropic](https://anthropic.com)\n"
+    (should (lang-markdown-tests--link-overlay-at 2 'title))
+    (should (lang-markdown-tests--link-overlay-at 13 'url))
+    (should (= 2 (lang-markdown-tests--link-overlay-count-for 'inline)))))
+
+(ert-deftest lang-markdown/gfm-pretty-links-anchor-link-has-no-url-overlay ()
+  "An anchor link produces only a title-side overlay (no icon)."
+  (lang-markdown-tests--with-links-buffer
+      "[Setup](#setup)\n"
+    (should (lang-markdown-tests--link-overlay-at 2 'title))
+    (should (= 1 (lang-markdown-tests--link-overlay-count-for 'inline)))
+    (should-not (cl-find-if
+                 (lambda (o) (eq 'url (overlay-get o 'gfm-pretty-links-side)))
+                 (gfm-pretty--state-get 'links 'overlays)))))
+
+(ert-deftest lang-markdown/gfm-pretty-links-file-link-has-no-url-overlay ()
+  "A file link produces only a title-side overlay (no icon)."
+  (lang-markdown-tests--with-links-buffer
+      "[ops](./scripts/x.sh)\n"
+    (should (lang-markdown-tests--link-overlay-at 2 'title))
+    (should (= 1 (lang-markdown-tests--link-overlay-count-for 'inline)))
+    (should-not (cl-find-if
+                 (lambda (o) (eq 'url (overlay-get o 'gfm-pretty-links-side)))
+                 (gfm-pretty--state-get 'links 'overlays)))))
 
 ;;; 9.x RET / follow-link
 
@@ -2803,7 +2876,7 @@ window holding point."
     (should-not (eq 'gfm-pretty-links-follow-link-at-point (key-binding (kbd "RET"))))))
 
 (ert-deftest lang-markdown/gfm-pretty-links-follow-link-browses-url ()
-  "`gfm-pretty-links-follow-link-at-point' browses the resolved URL on a link."
+  "RET on a web link calls `markdown--browse-url' on the resolved URL."
   (lang-markdown-tests--with-links-buffer
       "[Anthropic](https://anthropic.com)\n"
     (let (browsed)
@@ -2819,6 +2892,63 @@ window holding point."
       "[Anthropic](https://anthropic.com) plain.\n"
     (goto-char (point-max))
     (should-error (gfm-pretty-links-follow-link-at-point) :type 'user-error)))
+
+(ert-deftest lang-markdown/gfm-pretty-links-heading-slug-basic ()
+  "Heading slug is lowercase, space → hyphen, punctuation dropped."
+  (should (equal "setup-steps" (gfm-pretty-links--heading-slug "Setup Steps")))
+  (should (equal "what-now" (gfm-pretty-links--heading-slug "What, now?")))
+  (should (equal "code_x" (gfm-pretty-links--heading-slug "Code_X"))))
+
+(ert-deftest lang-markdown/gfm-pretty-links-follow-link-anchor-jumps-to-heading ()
+  "RET on an anchor link moves point to the heading whose slug matches."
+  (lang-markdown-tests--with-links-buffer
+      "## Setup Steps\n\nPara [go](#setup-steps).\n"
+    (let* ((heading-pos (save-excursion
+                          (goto-char (point-min))
+                          (search-forward "## Setup Steps")
+                          (line-beginning-position))))
+      (goto-char (point-min))
+      (search-forward "[go]")
+      (goto-char (1+ (match-beginning 0)))
+      (gfm-pretty-links-follow-link-at-point)
+      (should (= heading-pos (point))))))
+
+(ert-deftest lang-markdown/gfm-pretty-links-follow-link-anchor-no-match-errors ()
+  "RET on an anchor with no matching heading signals `user-error'."
+  (lang-markdown-tests--with-links-buffer
+      "Para [go](#missing).\n"
+    (goto-char (point-min))
+    (search-forward "[go]")
+    (goto-char (1+ (match-beginning 0)))
+    (should-error (gfm-pretty-links-follow-link-at-point) :type 'user-error)))
+
+(ert-deftest lang-markdown/gfm-pretty-links-follow-link-file-expands-against-buffer-file ()
+  "RET on a file link opens `find-file' with the path expanded against the buffer's directory."
+  (let ((visited nil))
+    (lang-markdown-tests--with-links-buffer
+        "[ops](./scripts/x.sh)\n"
+      (setq buffer-file-name "/repo/README.md")
+      (cl-letf (((symbol-function 'find-file)
+                 (lambda (p) (setq visited p))))
+        (goto-char (point-min))
+        (search-forward "[ops]")
+        (goto-char (1+ (match-beginning 0)))
+        (gfm-pretty-links-follow-link-at-point))
+      (should (equal "/repo/scripts/x.sh" visited)))))
+
+(ert-deftest lang-markdown/gfm-pretty-links-follow-link-file-fileless-buffer ()
+  "In a buffer with no `buffer-file-name', file links resolve against `default-directory'."
+  (lang-markdown-tests--with-links-buffer
+      "[ops](./scripts/x.sh)\n"
+    (let ((default-directory "/tmp/gfm-pretty-test/")
+          visited)
+      (cl-letf (((symbol-function 'find-file)
+                 (lambda (p) (setq visited p))))
+        (goto-char (point-min))
+        (search-forward "[ops]")
+        (goto-char (1+ (match-beginning 0)))
+        (gfm-pretty-links-follow-link-at-point))
+      (should (equal "/tmp/gfm-pretty-test/scripts/x.sh" visited)))))
 
 ;;; 10.x xref backend
 
@@ -2849,15 +2979,88 @@ window holding point."
 
 ;;; 11.x Eldoc
 
-(ert-deftest lang-markdown/gfm-pretty-links-eldoc-returns-url-on-link ()
-  "Eldoc returns the resolved URL (and title attr) when point is on a link."
+(defun lang-markdown-tests--face-at (str pos)
+  "Return the `face' text property of STR at POS."
+  (get-text-property pos 'face str))
+
+(ert-deftest lang-markdown/gfm-pretty-links-eldoc-inline-web-format ()
+  "Eldoc on an inline web link renders `[title](url)' with class-aware faces."
+  (lang-markdown-tests--with-links-buffer
+      "[Anthropic](https://anthropic.com)\n"
+    (goto-char 3)
+    (let ((doc (gfm-pretty-links--eldoc-function #'ignore)))
+      (should (stringp doc))
+      (should (equal "[Anthropic](https://anthropic.com)"
+                     (substring-no-properties doc)))
+      ;; `[' shadowed.
+      (should (eq 'shadow (lang-markdown-tests--face-at doc 0)))
+      ;; Title in title face.
+      (should (eq 'markdown-link-face (lang-markdown-tests--face-at doc 1)))
+      ;; `](' shadowed (position 10 is `]').
+      (should (eq 'shadow (lang-markdown-tests--face-at doc 10)))
+      ;; URL in url face (position 12 is `h' of https).
+      (should (eq 'markdown-url-face (lang-markdown-tests--face-at doc 12)))
+      ;; closing `)'.
+      (should (eq 'shadow
+                  (lang-markdown-tests--face-at doc (1- (length doc))))))))
+
+(ert-deftest lang-markdown/gfm-pretty-links-eldoc-inline-anchor-format ()
+  "Eldoc on an inline anchor link uses the anchor face on the title."
+  (lang-markdown-tests--with-links-buffer
+      "[Setup](#setup)\n"
+    (goto-char 3)
+    (let ((doc (gfm-pretty-links--eldoc-function #'ignore)))
+      (should (equal "[Setup](#setup)" (substring-no-properties doc)))
+      (should (eq 'gfm-pretty-links-anchor-face
+                  (lang-markdown-tests--face-at doc 1))))))
+
+(ert-deftest lang-markdown/gfm-pretty-links-eldoc-inline-file-format ()
+  "Eldoc on an inline file link uses the file face on the title."
+  (lang-markdown-tests--with-links-buffer
+      "[ops](./scripts/x.sh)\n"
+    (goto-char 3)
+    (let ((doc (gfm-pretty-links--eldoc-function #'ignore)))
+      (should (equal "[ops](./scripts/x.sh)" (substring-no-properties doc)))
+      (should (eq 'gfm-pretty-links-file-face
+                  (lang-markdown-tests--face-at doc 1))))))
+
+(ert-deftest lang-markdown/gfm-pretty-links-eldoc-reference-format ()
+  "Eldoc on a full reference link renders `[title][label]' with shadow on brackets."
+  (lang-markdown-tests--with-links-buffer
+      "[ops][tg]\n\n[tg]: ./scripts/x.sh\n"
+    (goto-char 3)
+    (let ((doc (gfm-pretty-links--eldoc-function #'ignore)))
+      (should (equal "[ops][tg]" (substring-no-properties doc)))
+      ;; Title and label both in file face.
+      (should (eq 'gfm-pretty-links-file-face
+                  (lang-markdown-tests--face-at doc 1)))
+      (should (eq 'gfm-pretty-links-file-face
+                  (lang-markdown-tests--face-at doc 6)))
+      ;; Brackets shadowed.
+      (should (eq 'shadow (lang-markdown-tests--face-at doc 0)))
+      (should (eq 'shadow (lang-markdown-tests--face-at doc 4))))))
+
+(ert-deftest lang-markdown/gfm-pretty-links-eldoc-shortcut-format ()
+  "Eldoc on a shortcut reference renders `[label]' (no second bracket pair)."
+  (lang-markdown-tests--with-links-buffer
+      "Prose [design] more.\n\n[design]: ./adr.md\n"
+    (goto-char (point-min))
+    (search-forward "[design]")
+    (goto-char (1+ (match-beginning 0)))
+    (let ((doc (gfm-pretty-links--eldoc-function #'ignore)))
+      (should (equal "[design]" (substring-no-properties doc))))))
+
+(ert-deftest lang-markdown/gfm-pretty-links-eldoc-inline-title-attr-suffix ()
+  "Eldoc on an inline link with a title attribute appends ` — \"…\"' italic."
   (lang-markdown-tests--with-links-buffer
       "[Anthropic](https://anthropic.com \"official\")\n"
     (goto-char 3)
     (let ((doc (gfm-pretty-links--eldoc-function #'ignore)))
-      (should (stringp doc))
-      (should (string-match-p "https://anthropic.com" doc))
-      (should (string-match-p "official" doc)))))
+      (should (string-match-p "\"official\"" (substring-no-properties doc)))
+      (should (string-match-p " — " (substring-no-properties doc)))
+      (let* ((s (substring-no-properties doc))
+             (pos (string-match "\"" s)))
+        (should (eq 'italic (lang-markdown-tests--face-at doc pos)))))))
 
 (ert-deftest lang-markdown/gfm-pretty-links-eldoc-returns-nil-off-link ()
   "Eldoc returns nil when point is not on a decorated link."
