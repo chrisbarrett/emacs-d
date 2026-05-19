@@ -8,7 +8,7 @@
 ;;   > [!IMPORTANT]
 ;;   > Lorem ipsum.
 ;;
-;; Mirrors `gfm-pretty-fences-mode' on the Path C anchor / display split:
+;; Mirrors the fences decorator on the Path C anchor / display split:
 ;;
 ;; - Anchor overlays carry width-independent props (tinted background
 ;;   face, `wrap-prefix' for continuation rows).  Shared across windows.
@@ -40,6 +40,7 @@
 
 (require 'cl-lib)
 (require 'gfm-pretty-borders)
+(require 'gfm-pretty-engine)
 
 (defgroup gfm-pretty-callouts nil
   "Box overlays for GitHub Flavored Markdown callouts."
@@ -50,18 +51,13 @@
   "Fallback face for callout box-drawing characters."
   :group 'gfm-pretty-callouts)
 
-(defcustom gfm-pretty-callouts-slow-rebuild-threshold 0.05
-  "Threshold in seconds above which a single rebuild emits a warning."
-  :type 'number
-  :group 'gfm-pretty-callouts)
-
 (defconst gfm-pretty-callouts--type-faces
-  '(("NOTE"      . +markdown-gfm-callout-note-face)
-    ("TIP"       . +markdown-gfm-callout-tip-face)
-    ("IMPORTANT" . +markdown-gfm-callout-important-face)
-    ("WARNING"   . +markdown-gfm-callout-warning-face)
-    ("CAUTION"   . +markdown-gfm-callout-caution-face)
-    ("CRITICAL"  . +markdown-gfm-callout-caution-face))
+  '(("NOTE"      . gfm-pretty-callouts-note-face)
+    ("TIP"       . gfm-pretty-callouts-tip-face)
+    ("IMPORTANT" . gfm-pretty-callouts-important-face)
+    ("WARNING"   . gfm-pretty-callouts-warning-face)
+    ("CAUTION"   . gfm-pretty-callouts-caution-face)
+    ("CRITICAL"  . gfm-pretty-callouts-caution-face))
   "Map of callout type to face used for box border and label.")
 
 (defconst gfm-pretty-callouts--marker-re
@@ -74,13 +70,9 @@
   (rx bol ">")
   "Regexp matching any blockquote continuation line.")
 
-;;; Block discovery (cached)
+;;; Block discovery
 
-(defvar-local gfm-pretty-callouts--blocks-cache nil
-  "Pair (TICK . BLOCKS) memoising `gfm-pretty-callouts--find-blocks'.
-TICK is `buffer-chars-modified-tick' at the time of scan.")
-
-(defun gfm-pretty-callouts--find-blocks-1 ()
+(defun gfm-pretty-callouts--find-blocks ()
   "Scan the buffer for callout blocks (uncached).
 Each entry is (BEG END TYPE) where BEG is BOL of the marker line, END
 is EOL of the last blockquote line, and TYPE is the callout type
@@ -107,20 +99,6 @@ regardless of any current narrowing.  See fix-gfm-narrowing-safety."
               (push (list block-beg block-end type) blocks))))))
     (nreverse blocks)))
 
-(defun gfm-pretty-callouts--find-blocks ()
-  "Return all callout blocks in the current buffer.
-Memoised by `buffer-chars-modified-tick' so repeat calls without an
-intervening edit reuse the cached scan."
-  (let ((tick (buffer-chars-modified-tick)))
-    (cond
-     ((and gfm-pretty-callouts--blocks-cache
-           (= tick (car gfm-pretty-callouts--blocks-cache)))
-      (cdr gfm-pretty-callouts--blocks-cache))
-     (t
-      (let ((blocks (gfm-pretty-callouts--find-blocks-1)))
-        (setq gfm-pretty-callouts--blocks-cache (cons tick blocks))
-        blocks)))))
-
 ;;; Tinted background for the callout panel
 
 (defun gfm-pretty-callouts--tinted-bg (face)
@@ -138,43 +116,10 @@ Returns a hex colour string, or nil if either colour is unresolvable."
                                 bg-rgb fg-rgb)
                      '(2))))))
 
-;;; Performance instrumentation (lightweight)
-
-(defvar-local gfm-pretty-callouts--stats nil
-  "Per-buffer alist of rebuild stats: (rebuild-count total-time last-time).")
-
-(defun gfm-pretty-callouts--init-stats ()
-  "Reset the per-buffer rebuild stats to zero."
-  (setq gfm-pretty-callouts--stats
-        (list (cons 'rebuild-count 0)
-              (cons 'total-time 0.0)
-              (cons 'last-time 0.0))))
-
-(defun gfm-pretty-callouts--record-stats (duration)
-  "Record DURATION (seconds) for one rebuild."
-  (unless gfm-pretty-callouts--stats (gfm-pretty-callouts--init-stats))
-  (cl-incf (alist-get 'rebuild-count gfm-pretty-callouts--stats))
-  (cl-incf (alist-get 'total-time gfm-pretty-callouts--stats) duration)
-  (setf (alist-get 'last-time gfm-pretty-callouts--stats) duration)
-  (when (> duration gfm-pretty-callouts-slow-rebuild-threshold)
-    (message "gfm-pretty-callouts: slow rebuild in %s: %.3fs"
-             (buffer-name) duration)))
-
 ;;; Overlay registry
 
-(defvar gfm-pretty-callouts-mode)
-
-(defvar-local gfm-pretty-callouts--overlays nil
-  "All callout overlays currently in this buffer.")
-
-(defvar-local gfm-pretty-callouts--hidden-ovs nil
-  "Revealable overlays whose display is currently suppressed.")
-
 (defconst gfm-pretty-callouts--registry
-  (gfm-pretty--registry-for
-   'gfm-pretty-callouts
-   'gfm-pretty-callouts--overlays
-   'gfm-pretty-callouts--hidden-ovs)
+  (gfm-pretty--registry-for 'callouts 'gfm-pretty-callouts)
   "Shared overlay-registry context for callouts.")
 
 (defsubst gfm-pretty-callouts--make-anchor (beg end &rest props)
@@ -212,7 +157,8 @@ raw (BEG END TYPE) tuple."
   range payload)
 
 (defun gfm-pretty-callouts--collect-blocks ()
-  "Return tagged callout blocks for the buffer."
+  "Uncached widened scan returning tagged callout blocks.
+The engine memoises this via `gfm-pretty--collect'."
   (mapcar (lambda (b)
             (gfm-pretty-callouts--make-block
              :range (cons (nth 0 b) (1+ (nth 1 b)))
@@ -345,7 +291,7 @@ overlay engine."
       ;; Per-line anchor: tinted background + wrap-prefix on body lines.
       ;; Iterate via position math — `forward-line' inside the
       ;; overlay-creation loop interacts with cursor-intangible /
-      ;; display props (set by `gfm-pretty-fences-mode' on the same
+      ;; display props (set by the fences decorator on the same
       ;; buffer) and can stall mid-block; see the matching note in
       ;; `gfm-pretty-fences.el'.  Combining face + wrap-prefix on a
       ;; single anchor per line keeps Emacs's redisplay from picking
@@ -417,7 +363,7 @@ See `gfm-pretty-callouts--apply-block-anchors' for the widening rationale."
         ;; Body lines.  Iterate via explicit text-position math, not
         ;; `forward-line': inside this overlay-creation loop,
         ;; `forward-line' interacts with cursor-intangible / display
-        ;; props (set by `gfm-pretty-fences-mode' on the same buffer)
+        ;; props (set by the fences decorator on the same buffer)
         ;; and can stall mid-block, spinning forever — see the
         ;; matching note in `gfm-pretty-fences.el'.
         (when has-body
@@ -470,154 +416,37 @@ See `gfm-pretty-callouts--apply-block-anchors' for the widening rationale."
             (overlay-put trailing-ov 'after-string new)))
         (ignore last-right-after-ov))))))
 
-(defun gfm-pretty-callouts--apply-overlays ()
-  "Create overlays for every callout block in the buffer.
-Anchors shared, displays per-window.  Returns the block count."
-  (save-excursion
-    (let* ((blocks (gfm-pretty-callouts--collect-blocks))
-           (windows (or (gfm-pretty--display-windows) (list nil))))
-      (dolist (block blocks)
-        (gfm-pretty-callouts--apply-block-anchors block))
-      (dolist (window windows)
-        (dolist (block blocks)
-          (gfm-pretty-callouts--apply-block-display block window)))
-      (length blocks))))
-
-;;; Cursor-driven reveal (selected-window aware)
-
-(defun gfm-pretty-callouts--reveal ()
-  "Suppress display on the selected window's revealable overlays at point.
-Restores overlays no longer at point.  Per-window: only overlays
-whose `window' property is nil or matches the selected window are
-toggled, so cursor in window A does not expose source in window B."
-  (let ((pos (point))
-        (win (selected-window)))
-    (setq gfm-pretty-callouts--hidden-ovs
-          (cl-loop for ov in gfm-pretty-callouts--hidden-ovs
-                   if (and (overlay-buffer ov)
-                           (>= pos (overlay-start ov))
-                           (<= pos (overlay-end ov)))
-                   collect ov
-                   else do (when (overlay-buffer ov)
-                             (overlay-put ov 'display
-                                          (overlay-get ov 'gfm-pretty-callouts-saved-display))
-                             (overlay-put ov 'gfm-pretty-callouts-saved-display nil))))
-    (dolist (ov (overlays-in pos (1+ pos)))
-      (when (and (overlay-get ov 'gfm-pretty-callouts-revealable)
-                 (overlay-get ov 'display)
-                 (let ((w (overlay-get ov 'window)))
-                   (or (null w) (eq w win)))
-                 (not (memq ov gfm-pretty-callouts--hidden-ovs)))
-        (overlay-put ov 'gfm-pretty-callouts-saved-display
-                     (overlay-get ov 'display))
-        (overlay-put ov 'display nil)
-        (push ov gfm-pretty-callouts--hidden-ovs)))))
-
-;;; Rebuild scheduler state
-
-(defvar-local gfm-pretty-callouts--last-window-state nil
-  "Snapshot of the windows showing the buffer at the last rebuild.")
-
-(defvar-local gfm-pretty-callouts--dirty-region nil
-  "Buffer-local (BEG . END) covering all unrebuilt edits.")
-
-(defvar-local gfm-pretty-callouts--rebuild-timer nil
-  "Idle timer for debounced overlay rebuilds.")
-
-(defun gfm-pretty-callouts--rebuild ()
-  "Remove and recreate all gfm-pretty-callouts overlays."
-  (let ((start (current-time)))
-    (gfm-pretty-callouts--remove-overlays)
-    (setq gfm-pretty-callouts--dirty-region nil)
-    (gfm-pretty-callouts--apply-overlays)
-    (gfm-pretty-callouts--record-stats (float-time (time-since start)))
-    (setq gfm-pretty-callouts--last-window-state
-          (gfm-pretty--window-state))))
-
-(defun gfm-pretty-callouts--rebuild-block (block)
-  "Tear down BLOCK's overlays and re-apply just that block."
-  (let* ((start (current-time))
-         (range (gfm-pretty-callouts--block-range block)))
-    (gfm-pretty-callouts--remove-overlays (car range) (cdr range))
-    (gfm-pretty-callouts--apply-block-anchors block)
-    (dolist (window (or (gfm-pretty--display-windows) (list nil)))
-      (gfm-pretty-callouts--apply-block-display block window))
-    (gfm-pretty-callouts--record-stats (float-time (time-since start)))))
-
-(defun gfm-pretty-callouts--rebuild-blocks (blocks)
-  "Tear down each block in BLOCKS and re-apply them in one pass."
-  (let ((start (current-time))
-        (windows (or (gfm-pretty--display-windows) (list nil))))
-    (dolist (block blocks)
-      (let ((range (gfm-pretty-callouts--block-range block)))
-        (gfm-pretty-callouts--remove-overlays (car range) (cdr range)))
-      (gfm-pretty-callouts--apply-block-anchors block)
-      (dolist (window windows)
-        (gfm-pretty-callouts--apply-block-display block window)))
-    (gfm-pretty-callouts--record-stats (float-time (time-since start)))))
-
-(defconst gfm-pretty-callouts--reconciler
-  (gfm-pretty--make-reconciler
-   :registry gfm-pretty-callouts--registry
-   :state-symbol 'gfm-pretty-callouts--last-window-state
-   :dirty-region-symbol 'gfm-pretty-callouts--dirty-region
-   :timer-symbol 'gfm-pretty-callouts--rebuild-timer
-   :mode-symbol 'gfm-pretty-callouts-mode
-   :collect-fn #'gfm-pretty-callouts--collect-blocks
-   :range-fn #'gfm-pretty-callouts--block-range
-   :apply-anchors-fn #'gfm-pretty-callouts--apply-block-anchors
-   :apply-display-fn #'gfm-pretty-callouts--apply-block-display
-   :rebuild-fn #'gfm-pretty-callouts--rebuild)
-  "Shared reconciler context for callouts.")
-
-(defun gfm-pretty-callouts--rebuild-block-for-window (block window)
-  "Replace WINDOW's display overlays for BLOCK at the current width."
-  (gfm-pretty--rebuild-block-for-window
-   gfm-pretty-callouts--reconciler block window))
-
-;;; Visible-first prioritised rebuild
+;;; Visibility helper
 
 (defun gfm-pretty-callouts--block-visible-p (block ranges)
   "Non-nil if BLOCK's source range overlaps any range in RANGES."
   (gfm-pretty--block-visible-p
    block ranges #'gfm-pretty-callouts--block-range))
 
-(defun gfm-pretty-callouts--rebuild-prioritised ()
-  "Rebuild visible-window blocks first; defer off-screen ones one idle tick."
-  (let ((ranges (gfm-pretty--visible-window-ranges)))
-    (cond
-     ((null ranges) (gfm-pretty-callouts--rebuild))
-     (t
-      (let* ((blocks (gfm-pretty-callouts--collect-blocks))
-             (visible (cl-remove-if-not
-                       (lambda (b) (gfm-pretty-callouts--block-visible-p b ranges))
-                       blocks))
-             (offscreen (cl-set-difference blocks visible)))
-        (when visible
-          (gfm-pretty-callouts--rebuild-blocks visible))
-        (setq gfm-pretty-callouts--dirty-region nil
-              gfm-pretty-callouts--last-window-state
-              (gfm-pretty--window-state))
-        (when offscreen
-          (run-with-idle-timer
-           0 nil
-           (lambda (buf bs)
-             (when (buffer-live-p buf)
-               (with-current-buffer buf
-                 (when gfm-pretty-callouts-mode
-                   (gfm-pretty-callouts--rebuild-blocks bs)))))
-           (current-buffer) offscreen)))))))
+;;; Per-block apply (engine seam)
 
-(defun gfm-pretty-callouts--reconcile-windows ()
-  "Reconcile display overlays with current window state."
-  (gfm-pretty--reconcile-windows gfm-pretty-callouts--reconciler))
+(defun gfm-pretty-callouts--apply-block (block window)
+  "Engine `:apply-block-fn' — apply WINDOW's overlays for BLOCK.
+Routes through `gfm-pretty-borders--apply-with-anchors' so width-
+independent anchors are laid at most once per (block, rebuild pass)."
+  (gfm-pretty-borders--apply-with-anchors
+   block window
+   :registry gfm-pretty-callouts--registry
+   :range (gfm-pretty-callouts--block-range block)
+   :anchors-fn #'gfm-pretty-callouts--apply-block-anchors
+   :display-fn #'gfm-pretty-callouts--apply-block-display))
 
-;;; Scoped post-edit rebuild
+;;; Full-rebuild-required predicate (engine seam)
 
-(defsubst gfm-pretty-callouts--extend-dirty-region (beg end)
-  "Extend the buffer's dirty region to cover BEG..END."
-  (gfm-pretty--extend-dirty-region
-   'gfm-pretty-callouts--dirty-region beg end))
+(defun gfm-pretty-callouts--full-rebuild-required-p (dirty)
+  "Engine `:full-rebuild-required-p' — fold structural + adjacency checks.
+Non-nil when DIRTY overlaps a `> [!TYPE]' marker line (structural)
+or a line directly above / below a callout (adjacency)."
+  (or (cl-some (lambda (r) (gfm-pretty--region-overlaps-p dirty r))
+               (gfm-pretty-callouts--marker-line-ranges))
+      (gfm-pretty-callouts--region-adjacent-to-callout-p dirty)))
+
+;;; Structural-line + edit-adjacency helpers
 
 (defun gfm-pretty-callouts--marker-line-ranges ()
   "Return per-line (BEG . END) ranges for every `> [!TYPE]' line."
@@ -626,11 +455,6 @@ toggled, so cursor in window A does not expose source in window B."
               (cons beg (save-excursion
                           (goto-char beg) (line-end-position)))))
           (gfm-pretty-callouts--find-blocks)))
-
-(defun gfm-pretty-callouts--region-overlaps-marker-line-p (region)
-  "Non-nil if REGION overlaps any callout marker line."
-  (cl-some (lambda (r) (gfm-pretty--region-overlaps-p region r))
-           (gfm-pretty-callouts--marker-line-ranges)))
 
 (defun gfm-pretty-callouts--region-adjacent-to-callout-p (region)
   "Non-nil if REGION overlaps a line directly above or below a callout.
@@ -659,125 +483,61 @@ Edits there can create or destroy block boundaries."
                  region (cons after-beg after-end))))))
    (gfm-pretty-callouts--find-blocks)))
 
-(defun gfm-pretty-callouts--block-fully-contains-p (block region)
-  "Non-nil if REGION lies inside BLOCK's source range."
-  (let ((br (gfm-pretty-callouts--block-range block)))
-    (and (>= (car region) (car br))
-         (<= (cdr region) (cdr br)))))
+;;; Lifecycle hooks delegated to engine
 
-(defun gfm-pretty-callouts--rebuild-scoped ()
-  "Rebuild only what `gfm-pretty-callouts--dirty-region' demands."
-  (let ((dirty gfm-pretty-callouts--dirty-region))
-    (setq gfm-pretty-callouts--dirty-region nil)
-    (cond
-     ((null dirty) nil)
-     ((gfm-pretty-callouts--region-overlaps-marker-line-p dirty)
-      (gfm-pretty-callouts--rebuild))
-     ((gfm-pretty-callouts--region-adjacent-to-callout-p dirty)
-      (gfm-pretty-callouts--rebuild))
-     (t
-      (let* ((blocks (gfm-pretty-callouts--collect-blocks))
-             (matching (cl-loop for b in blocks
-                                when (gfm-pretty--region-overlaps-p
-                                      dirty
-                                      (gfm-pretty-callouts--block-range b))
-                                collect b)))
-        (cond
-         ((null matching) nil)
-         ((and (null (cdr matching))
-               (gfm-pretty-callouts--block-fully-contains-p (car matching) dirty))
-          (gfm-pretty-callouts--rebuild-block (car matching)))
-         (t (gfm-pretty-callouts--rebuild))))))))
+(defun gfm-pretty-callouts--on-enable ()
+  "Per-decorator setup invoked on enable.
+Font-lock / face refresh are installed at load time."
+  nil)
 
-;;; Schedulers
-
-(defsubst gfm-pretty-callouts--arm-rebuild-timer (callback)
-  "Cancel any pending rebuild timer and schedule CALLBACK after idle."
-  (gfm-pretty--arm-rebuild-timer
-   'gfm-pretty-callouts--rebuild-timer 'gfm-pretty-callouts-mode callback))
-
-(defun gfm-pretty-callouts--schedule-rebuild (&optional beg end _len)
-  "Merge BEG..END into the dirty region and arm the rebuild timer."
-  (unless (buffer-base-buffer)
-    (when (and beg end)
-      (gfm-pretty-callouts--extend-dirty-region beg end))
-    (gfm-pretty-callouts--arm-rebuild-timer #'gfm-pretty-callouts--rebuild-scoped)))
-
-(defun gfm-pretty-callouts--schedule-full-rebuild (&rest _)
-  "Schedule a window reconciliation if window state has changed."
-  (unless (buffer-base-buffer)
-    (let ((state (gfm-pretty--window-state)))
-      (unless (equal state gfm-pretty-callouts--last-window-state)
-        (gfm-pretty-callouts--arm-rebuild-timer
-         #'gfm-pretty-callouts--reconcile-windows)))))
-
-;;; Minor mode
-
-;;;###autoload
-(define-minor-mode gfm-pretty-callouts-mode
-  "Render GFM callout blockquotes as boxes."
-  :lighter " gfm-cb"
-  (if gfm-pretty-callouts-mode
-      (progn
-        (gfm-pretty-callouts--init-stats)
-        (gfm-pretty-callouts--rebuild)
-        (add-hook 'after-change-functions
-                  #'gfm-pretty-callouts--schedule-rebuild nil t)
-        (add-hook 'window-configuration-change-hook
-                  #'gfm-pretty-callouts--schedule-full-rebuild nil t)
-        (add-hook 'post-command-hook #'gfm-pretty-callouts--reveal nil t))
-    (remove-hook 'after-change-functions
-                 #'gfm-pretty-callouts--schedule-rebuild t)
-    (remove-hook 'window-configuration-change-hook
-                 #'gfm-pretty-callouts--schedule-full-rebuild t)
-    (remove-hook 'post-command-hook #'gfm-pretty-callouts--reveal t)
-    (when (timerp gfm-pretty-callouts--rebuild-timer)
-      (cancel-timer gfm-pretty-callouts--rebuild-timer))
-    (gfm-pretty-callouts--remove-overlays)))
+(defun gfm-pretty-callouts--on-disable ()
+  "Per-decorator teardown invoked on disable.
+Engine handles overlay teardown."
+  nil)
 
 ;;; Callout faces (moved from modules/lang-markdown/lib.el)
 
-(defface +markdown-gfm-callout-note-face
+(defface gfm-pretty-callouts-note-face
   '((((background dark))  :foreground "#89b4fa" :slant normal)
     (((background light)) :foreground "#1e66f5" :slant normal)
     (t :inherit font-lock-keyword-face :slant normal))
   "Header face for [!NOTE] callouts (blue)."
   :group 'markdown-faces)
 
-(defface +markdown-gfm-callout-tip-face
+(defface gfm-pretty-callouts-tip-face
   '((((background dark))  :foreground "#a6e3a1" :slant normal)
     (((background light)) :foreground "#40a02b" :slant normal)
     (t :inherit success :slant normal))
   "Header face for [!TIP] callouts (green)."
   :group 'markdown-faces)
 
-(defface +markdown-gfm-callout-important-face
+(defface gfm-pretty-callouts-important-face
   '((((background dark))  :foreground "#cba6f7" :slant normal)
     (((background light)) :foreground "#8839ef" :slant normal)
     (t :inherit font-lock-keyword-face :slant normal))
   "Header face for [!IMPORTANT] callouts (purple)."
   :group 'markdown-faces)
 
-(defface +markdown-gfm-callout-warning-face
+(defface gfm-pretty-callouts-warning-face
   '((((background dark))  :foreground "#fab387" :slant normal)
     (((background light)) :foreground "#fe640b" :slant normal)
     (t :inherit warning :slant normal))
   "Header face for [!WARNING] callouts (orange)."
   :group 'markdown-faces)
 
-(defface +markdown-gfm-callout-caution-face
+(defface gfm-pretty-callouts-caution-face
   '((((background dark))  :foreground "#f38ba8" :slant normal)
     (((background light)) :foreground "#d20f39" :slant normal)
     (t :inherit error :slant normal))
   "Header face for [!CAUTION]/[!CRITICAL] callouts (red)."
   :group 'markdown-faces)
 
-(defface +markdown-gfm-callout-header-face
+(defface gfm-pretty-callouts-header-face
   '((t :weight semibold))
   "Face merged onto callout marker lines on top of the block face."
   :group 'markdown-faces)
 
-(defface +markdown-gfm-callout-note-body-face
+(defface gfm-pretty-callouts-note-body-face
   '((t))
   "Body face for [!NOTE] callouts; `:background' set dynamically from theme.
 Default spec is intentionally empty so inline-markup emphasis (italic,
@@ -785,35 +545,61 @@ bold, underline, link, inline code) merged in from `markdown-italic-face'
 et al. is not clobbered when this face is prepended to body chars."
   :group 'markdown-faces)
 
-(defface +markdown-gfm-callout-tip-body-face
+(defface gfm-pretty-callouts-tip-body-face
   '((t))
   "Body face for [!TIP] callouts; `:background' set dynamically from theme.
-See `+markdown-gfm-callout-note-body-face' for the empty-spec rationale."
+See `gfm-pretty-callouts-note-body-face' for the empty-spec rationale."
   :group 'markdown-faces)
 
-(defface +markdown-gfm-callout-important-body-face
+(defface gfm-pretty-callouts-important-body-face
   '((t))
   "Body face for [!IMPORTANT] callouts; `:background' set dynamically from theme.
-See `+markdown-gfm-callout-note-body-face' for the empty-spec rationale."
+See `gfm-pretty-callouts-note-body-face' for the empty-spec rationale."
   :group 'markdown-faces)
 
-(defface +markdown-gfm-callout-warning-body-face
+(defface gfm-pretty-callouts-warning-body-face
   '((t))
   "Body face for [!WARNING] callouts; `:background' set dynamically from theme.
-See `+markdown-gfm-callout-note-body-face' for the empty-spec rationale."
+See `gfm-pretty-callouts-note-body-face' for the empty-spec rationale."
   :group 'markdown-faces)
 
-(defface +markdown-gfm-callout-caution-body-face
+(defface gfm-pretty-callouts-caution-body-face
   '((t))
   "Body face for [!CAUTION]/[!CRITICAL] callouts.
 `:background' is set dynamically from the active theme.  See
-`+markdown-gfm-callout-note-body-face' for the empty-spec rationale."
+`gfm-pretty-callouts-note-body-face' for the empty-spec rationale."
   :group 'markdown-faces)
 
-(defface +markdown-prettier-ignore-comment-face
+(defface gfm-pretty-callouts-prettier-ignore-comment-face
   '((t :inherit shadow :weight light))
   "Face for prettier-ignore comments."
   :group 'markdown-faces)
+
+;; Backwards-compatible face aliases for the old `+markdown-' names.
+(define-obsolete-face-alias '+markdown-gfm-callout-note-face
+  'gfm-pretty-callouts-note-face "29.1")
+(define-obsolete-face-alias '+markdown-gfm-callout-tip-face
+  'gfm-pretty-callouts-tip-face "29.1")
+(define-obsolete-face-alias '+markdown-gfm-callout-important-face
+  'gfm-pretty-callouts-important-face "29.1")
+(define-obsolete-face-alias '+markdown-gfm-callout-warning-face
+  'gfm-pretty-callouts-warning-face "29.1")
+(define-obsolete-face-alias '+markdown-gfm-callout-caution-face
+  'gfm-pretty-callouts-caution-face "29.1")
+(define-obsolete-face-alias '+markdown-gfm-callout-header-face
+  'gfm-pretty-callouts-header-face "29.1")
+(define-obsolete-face-alias '+markdown-gfm-callout-note-body-face
+  'gfm-pretty-callouts-note-body-face "29.1")
+(define-obsolete-face-alias '+markdown-gfm-callout-tip-body-face
+  'gfm-pretty-callouts-tip-body-face "29.1")
+(define-obsolete-face-alias '+markdown-gfm-callout-important-body-face
+  'gfm-pretty-callouts-important-body-face "29.1")
+(define-obsolete-face-alias '+markdown-gfm-callout-warning-body-face
+  'gfm-pretty-callouts-warning-body-face "29.1")
+(define-obsolete-face-alias '+markdown-gfm-callout-caution-body-face
+  'gfm-pretty-callouts-caution-body-face "29.1")
+(define-obsolete-face-alias '+markdown-prettier-ignore-comment-face
+  'gfm-pretty-callouts-prettier-ignore-comment-face "29.1")
 
 ;;;###autoload
 (defun +markdown-style-header-faces ()
@@ -831,25 +617,25 @@ bold there to keep the headings legible."
                     markdown-header-face-6))
       (face-spec-set face spec))))
 
-(defconst +markdown-gfm-callout-type-face-alist
-  '(("NOTE"      . +markdown-gfm-callout-note-face)
-    ("TIP"       . +markdown-gfm-callout-tip-face)
-    ("IMPORTANT" . +markdown-gfm-callout-important-face)
-    ("WARNING"   . +markdown-gfm-callout-warning-face)
-    ("CAUTION"   . +markdown-gfm-callout-caution-face)
-    ("CRITICAL"  . +markdown-gfm-callout-caution-face))
+(defconst gfm-pretty-callouts--type-face-alist
+  '(("NOTE"      . gfm-pretty-callouts-note-face)
+    ("TIP"       . gfm-pretty-callouts-tip-face)
+    ("IMPORTANT" . gfm-pretty-callouts-important-face)
+    ("WARNING"   . gfm-pretty-callouts-warning-face)
+    ("CAUTION"   . gfm-pretty-callouts-caution-face)
+    ("CRITICAL"  . gfm-pretty-callouts-caution-face))
   "Map of GFM callout type label to its header face.")
 
-(defconst +markdown-gfm-callout-type-body-face-alist
-  '(("NOTE"      . +markdown-gfm-callout-note-body-face)
-    ("TIP"       . +markdown-gfm-callout-tip-body-face)
-    ("IMPORTANT" . +markdown-gfm-callout-important-body-face)
-    ("WARNING"   . +markdown-gfm-callout-warning-body-face)
-    ("CAUTION"   . +markdown-gfm-callout-caution-body-face)
-    ("CRITICAL"  . +markdown-gfm-callout-caution-body-face))
+(defconst gfm-pretty-callouts--type-body-face-alist
+  '(("NOTE"      . gfm-pretty-callouts-note-body-face)
+    ("TIP"       . gfm-pretty-callouts-tip-body-face)
+    ("IMPORTANT" . gfm-pretty-callouts-important-body-face)
+    ("WARNING"   . gfm-pretty-callouts-warning-body-face)
+    ("CAUTION"   . gfm-pretty-callouts-caution-body-face)
+    ("CRITICAL"  . gfm-pretty-callouts-caution-body-face))
   "Map of GFM callout type label to its body (tinted background) face.")
 
-(defun +markdown-gfm-callout--tint-bg (face)
+(defun gfm-pretty-callouts--font-lock-tint-bg (face)
   "Return a hex colour 10% from FACE's foreground toward the theme bg.
 Mirrors `gfm-pretty-callouts--tinted-bg' so body face background matches the
 overlay's tinted panel.  Returns nil if either colour is unresolvable."
@@ -867,20 +653,20 @@ overlay's tinted panel.  Returns nil if either colour is unresolvable."
                      '(2))))))
 
 ;;;###autoload
-(defun +markdown-gfm-callout-refresh-body-faces (&rest _)
+(defun gfm-pretty-callouts--refresh-body-faces (&rest _)
   "Recompute `:background' on each callout body face from the current theme.
 Also clears `:slant', `:weight', and `:underline' on each body face.
 Body faces are prepended to body chars via `font-lock-prepend-text-property',
 so any attribute they specify shadows the markdown emphasis faces beneath
 them in the merge — emphasis would silently disappear inside callout
 bodies."
-  (dolist (entry +markdown-gfm-callout-type-body-face-alist)
+  (dolist (entry gfm-pretty-callouts--type-body-face-alist)
     (let* ((type (car entry))
            (body-face (cdr entry))
-           (header-face (alist-get type +markdown-gfm-callout-type-face-alist
+           (header-face (alist-get type gfm-pretty-callouts--type-face-alist
                                    nil nil #'string=))
            (tint (and header-face
-                      (+markdown-gfm-callout--tint-bg header-face))))
+                      (gfm-pretty-callouts--font-lock-tint-bg header-face))))
       (set-face-attribute body-face nil
                           :slant 'unspecified
                           :weight 'unspecified
@@ -888,17 +674,11 @@ bodies."
       (when tint
         (set-face-background body-face tint)))))
 
-(+markdown-gfm-callout-refresh-body-faces)
+(gfm-pretty-callouts--refresh-body-faces)
 
-(add-hook '+theme-changed-hook #'+markdown-gfm-callout-refresh-body-faces)
+(add-hook '+theme-changed-hook #'gfm-pretty-callouts--refresh-body-faces)
 
-(defconst +markdown-gfm-callout--marker-re
-  (rx bol "> " "[!"
-      (group (or "NOTE" "TIP" "IMPORTANT" "WARNING" "CAUTION" "CRITICAL"))
-      "]" (* space) eol)
-  "Regexp matching a GFM callout marker line. Group 1 is the type.")
-
-(defun +markdown-gfm-callout--block-end (marker-eol)
+(defun gfm-pretty-callouts--font-lock-block-end (marker-eol)
   "Return EOL of the last `>'-prefixed line following MARKER-EOL."
   (save-excursion
     (goto-char marker-eol)
@@ -910,29 +690,29 @@ bodies."
         (forward-line 1))
       end)))
 
-(defun +markdown-gfm-callout--matcher (limit)
+(defun gfm-pretty-callouts--font-lock-matcher (limit)
   "Font-lock matcher that spans full callout blocks up to LIMIT.
 Match data: group 0 = whole block, group 1 = type label, group 2 =
 marker line.  Sets `font-lock-multiline' on the matched region so
 edits inside the block trigger refontification of the entire block."
-  (when (re-search-forward +markdown-gfm-callout--marker-re limit t)
+  (when (re-search-forward gfm-pretty-callouts--marker-re limit t)
     (let* ((mbeg (match-beginning 0))
            (mend (match-end 0))
            (tbeg (match-beginning 1))
            (tend (match-end 1))
-           (block-end (+markdown-gfm-callout--block-end mend)))
+           (block-end (gfm-pretty-callouts--font-lock-block-end mend)))
       (with-silent-modifications
         (put-text-property mbeg block-end 'font-lock-multiline t))
       (set-match-data (list mbeg block-end tbeg tend mbeg mend))
       t)))
 
-(defun +markdown-gfm-callout--paint-body (type block-beg block-end)
+(defun gfm-pretty-callouts--font-lock-paint-body (type block-beg block-end)
   "Apply TYPE's body face to body content between BLOCK-BEG and BLOCK-END.
 Skips newlines so the tinted background does not bleed one column past
 the right border on body lines (the trailing newline character would
 otherwise pick up `:background')."
   (when-let* ((body-face (alist-get type
-                                    +markdown-gfm-callout-type-body-face-alist
+                                    gfm-pretty-callouts--type-body-face-alist
                                     nil nil #'string=)))
     (save-excursion
       (goto-char block-beg)
@@ -944,7 +724,7 @@ otherwise pick up `:background')."
             (font-lock-prepend-text-property lbeg lend 'face body-face)))
         (forward-line 1)))))
 
-(defun +markdown-gfm-callout--extend-region ()
+(defun gfm-pretty-callouts--font-lock-extend-region ()
   "Extend `font-lock-beg' / `font-lock-end' to cover any callout block.
 If the region overlaps a `> [!TYPE]' marker line or any of its
 `>'-prefixed continuation lines, widen so the whole block is refontified
@@ -961,11 +741,11 @@ only that line, missing the multi-line matcher's anchor."
                     (forward-line -1)
                     (looking-at-p (rx bol ">"))))
         (forward-line -1))
-      (when (looking-at-p +markdown-gfm-callout--marker-re)
+      (when (looking-at-p gfm-pretty-callouts--marker-re)
         (when (< (point) font-lock-beg)
           (setq font-lock-beg (point)
                 changed t))
-        (let ((block-end (+markdown-gfm-callout--block-end
+        (let ((block-end (gfm-pretty-callouts--font-lock-block-end
                           (line-end-position))))
           (when (> block-end font-lock-end)
             (setq font-lock-end block-end
@@ -973,28 +753,28 @@ only that line, missing the multi-line matcher's anchor."
     changed))
 
 ;;;###autoload
-(defun +markdown-fontify-gfm-pretty-callouts ()
+(defun gfm-pretty-callouts-install-font-lock ()
   "Add font-lock keywords for GFM callout syntax."
   (setq-local font-lock-multiline t)
   (add-hook 'font-lock-extend-region-functions
-            #'+markdown-gfm-callout--extend-region nil t)
+            #'gfm-pretty-callouts--font-lock-extend-region nil t)
   (font-lock-add-keywords
    nil
-   `((+markdown-gfm-callout--matcher
+   `((gfm-pretty-callouts--font-lock-matcher
       (2 (alist-get (match-string-no-properties 1)
-                    +markdown-gfm-callout-type-face-alist
+                    gfm-pretty-callouts--type-face-alist
                     nil nil #'string=)
          prepend)
-      (2 '+markdown-gfm-callout-header-face prepend)
-      (0 (progn (+markdown-gfm-callout--paint-body
+      (2 'gfm-pretty-callouts-header-face prepend)
+      (0 (progn (gfm-pretty-callouts--font-lock-paint-body
                  (match-string-no-properties 1)
                  (match-beginning 0)
                  (match-end 0))
                 nil)))
      (,(rx bol (* space) "<!--" (1+ space) "prettier-ignore-start" (1+ space) "-->")
-      0 '+markdown-prettier-ignore-comment-face prepend)
+      0 'gfm-pretty-callouts-prettier-ignore-comment-face prepend)
      (,(rx bol (* space) "<!--" (1+ space) "prettier-ignore-end" (1+ space) "-->")
-      0 '+markdown-prettier-ignore-comment-face prepend)
+      0 'gfm-pretty-callouts-prettier-ignore-comment-face prepend)
      (,(rx (group "$" (or (seq "{" (1+ (any alnum "_")) "}")
                           (seq (any upper "_") (1+ (any upper digit "_"))))))
       1 'font-lock-constant-face prepend))))
@@ -1015,11 +795,15 @@ only that line, missing the multi-line matcher's anchor."
 
 ;;; gfm-pretty decorator registration
 
-(with-eval-after-load 'gfm-pretty
+(with-eval-after-load 'gfm-pretty-engine
   (gfm-pretty-define-decorator 'callouts
-    :enable-fn    (lambda () (gfm-pretty-callouts-mode 1))
-    :disable-fn   (lambda () (gfm-pretty-callouts-mode -1))
-    :enabled-p-fn (lambda () (bound-and-true-p gfm-pretty-callouts-mode))))
+    :registry           gfm-pretty-callouts--registry
+    :collect-fn         #'gfm-pretty-callouts--collect-blocks
+    :range-fn           #'gfm-pretty-callouts--block-range
+    :apply-block-fn     #'gfm-pretty-callouts--apply-block
+    :full-rebuild-required-p #'gfm-pretty-callouts--full-rebuild-required-p
+    :on-enable-fn       #'gfm-pretty-callouts--on-enable
+    :on-disable-fn      #'gfm-pretty-callouts--on-disable))
 
 (provide 'gfm-pretty-callouts)
 

@@ -196,7 +196,7 @@ themselves are activated by `gfm-pretty-mode' on the same hook."
     (require 'gfm-pretty)
     (require 'gfm-pretty-callouts)
     (+markdown-style-header-faces)
-    (+markdown-fontify-gfm-pretty-callouts))
+    (gfm-pretty-callouts-install-font-lock))
   (+local-leader-set-key 'markdown-mode-map
     "l" '(markdown-toggle-url-hiding :wk "toggle URLs")
     "f" '(markdown-insert-footnote :wk "insert footnote")

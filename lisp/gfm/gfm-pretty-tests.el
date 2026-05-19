@@ -9,6 +9,12 @@
 (require 'ert)
 (require 'gfm-pretty)
 (require 'gfm-pretty-borders)
+(require 'gfm-pretty-engine)
+(require 'gfm-pretty-callouts)
+(require 'gfm-pretty-fences)
+(require 'gfm-pretty-tables)
+(require 'gfm-pretty-hrule)
+(require 'gfm-pretty-links)
 
 ;; Load lang-markdown composition (config of `markdown-code-lang-modes',
 ;; `gfm-mode-hook' wiring, `major-mode-remap-alist') so tests that exercise
@@ -115,18 +121,16 @@ outside the restriction (zombies on widen).  See the
 fix-gfm-narrowing-safety change."
   :tags '(narrowing-regression)
   (let ((overlays nil))
-    (let* ((registry (gfm-pretty--registry-for
-                      'lm-test-tag
-                      (make-symbol "lm-test-overlays-1"))))
-      (set (gfm-pretty--registry-overlays-symbol registry) nil)
+    (let* ((name 'lm-test-decorator)
+           (registry (gfm-pretty--registry-for name 'lm-test-tag)))
       (with-temp-buffer
+        (gfm-pretty--state-set name 'overlays nil)
         (insert "first region\n\n--- divider ---\n\nsecond region\n")
         (let ((ov-a (make-overlay 1 5))
               (ov-b (make-overlay 30 35)))
           (overlay-put ov-a 'lm-test-tag t)
           (overlay-put ov-b 'lm-test-tag t)
-          (set (gfm-pretty--registry-overlays-symbol registry)
-               (list ov-a ov-b)))
+          (gfm-pretty--state-set name 'overlays (list ov-a ov-b)))
         (narrow-to-region 1 10)
         (gfm-pretty--remove-overlays registry)
         (widen)
@@ -175,15 +179,15 @@ fix-gfm-narrowing-safety change."
 (ert-deftest lang-markdown/gfm-pretty-callouts-mode-creates-overlays ()
   (with-temp-buffer
     (insert "> [!NOTE]\n> Hello.\n")
-    (gfm-pretty-callouts-mode 1)
+    (gfm-pretty-mode 1)
     (should (cl-some (lambda (ov) (overlay-get ov 'gfm-pretty-callouts))
                      (overlays-in (point-min) (point-max))))))
 
 (ert-deftest lang-markdown/gfm-pretty-callouts-mode-removes-overlays ()
   (with-temp-buffer
     (insert "> [!NOTE]\n> Hello.\n")
-    (gfm-pretty-callouts-mode 1)
-    (gfm-pretty-callouts-mode -1)
+    (gfm-pretty-mode 1)
+    (gfm-pretty-mode -1)
     (should-not (cl-some (lambda (ov) (overlay-get ov 'gfm-pretty-callouts))
                          (overlays-in (point-min) (point-max))))))
 
@@ -197,7 +201,7 @@ fix-gfm-narrowing-safety change."
   "Marker and body display overlays are evaporative and revealable."
   (with-temp-buffer
     (insert "> [!NOTE]\n> Hello.\n")
-    (gfm-pretty-callouts-mode 1)
+    (gfm-pretty-mode 1)
     (let ((ovs (lang-markdown-tests--prefix-overlays)))
       (should (= 2 (length ovs)))
       (dolist (ov ovs)
@@ -209,7 +213,7 @@ fix-gfm-narrowing-safety change."
   "Marker overlay covers the full marker line; body overlay covers `> '."
   (with-temp-buffer
     (insert "> [!NOTE]\n> Hello.\n")
-    (gfm-pretty-callouts-mode 1)
+    (gfm-pretty-mode 1)
     (let* ((ovs (sort (lang-markdown-tests--prefix-overlays)
                       (lambda (a b) (< (overlay-start a)
                                        (overlay-start b)))))
@@ -223,7 +227,7 @@ fix-gfm-narrowing-safety change."
   "Marker displays `┌─ TITLE'; body displays the side edge `│ '."
   (with-temp-buffer
     (insert "> [!NOTE]\n> Hello.\n")
-    (gfm-pretty-callouts-mode 1)
+    (gfm-pretty-mode 1)
     (let* ((ovs (sort (lang-markdown-tests--prefix-overlays)
                       (lambda (a b) (< (overlay-start a)
                                        (overlay-start b)))))
@@ -237,7 +241,7 @@ fix-gfm-narrowing-safety change."
 emphasis faces on buffer text merge through."
   (with-temp-buffer
     (insert "> [!NOTE]\n> Hello.\n")
-    (gfm-pretty-callouts-mode 1)
+    (gfm-pretty-mode 1)
     (let ((bodies (cl-remove-if-not
                    (lambda (ov)
                      (and (overlay-get ov 'gfm-pretty-callouts-anchor)
@@ -260,7 +264,7 @@ emphasis faces on buffer text merge through."
   (with-temp-buffer
     (gfm-mode)
     (insert "> [!NOTE]\n> **boldword** *italword* [linktext](https://x) `codeword`\n")
-    (gfm-pretty-callouts-mode 1)
+    (gfm-pretty-mode 1)
     (font-lock-ensure)
     (dolist (cell '(("boldword"   markdown-bold-face)
                     ("italword"   markdown-italic-face)
@@ -280,11 +284,11 @@ emphasis faces on buffer text merge through."
 body chars with `font-lock-prepend-text-property', so any attribute
 they specify sits at the top of the face merge and shadows lower
 faces."
-  (dolist (face '(+markdown-gfm-callout-note-body-face
-                  +markdown-gfm-callout-tip-body-face
-                  +markdown-gfm-callout-important-body-face
-                  +markdown-gfm-callout-warning-body-face
-                  +markdown-gfm-callout-caution-body-face))
+  (dolist (face '(gfm-pretty-callouts-note-body-face
+                  gfm-pretty-callouts-tip-body-face
+                  gfm-pretty-callouts-important-body-face
+                  gfm-pretty-callouts-warning-body-face
+                  gfm-pretty-callouts-caution-body-face))
     (should (eq (face-attribute face :slant nil) 'unspecified))
     (should (eq (face-attribute face :weight nil) 'unspecified))
     (should (eq (face-attribute face :underline nil) 'unspecified))))
@@ -319,7 +323,7 @@ no inherit chain — so emphasis faces and the default face show through."
   "A callout with no body lines still gets a bottom border."
   (with-temp-buffer
     (insert "> [!NOTE]\n\nplain.\n")
-    (gfm-pretty-callouts-mode 1)
+    (gfm-pretty-mode 1)
     (let* ((after (cl-some (lambda (ov) (overlay-get ov 'after-string))
                            (overlays-in (point-min) (point-max)))))
       (should (and after (string-match-p "└" after))))))
@@ -328,9 +332,9 @@ no inherit chain — so emphasis faces and the default face show through."
   "Moving point onto the prefix temporarily clears its display."
   (with-temp-buffer
     (insert "> [!NOTE]\n> Hello.\n")
-    (gfm-pretty-callouts-mode 1)
+    (gfm-pretty-mode 1)
     (goto-char (point-min))
-    (gfm-pretty-callouts--reveal)
+    (gfm-pretty--reveal)
     (let ((ov (cl-find-if (lambda (o) (overlay-get o 'gfm-pretty-callouts-revealable))
                           (overlays-at (point-min)))))
       (should ov)
@@ -338,7 +342,7 @@ no inherit chain — so emphasis faces and the default face show through."
       (should (stringp (overlay-get ov 'gfm-pretty-callouts-saved-display))))
     ;; Move off the prefix; display restores.
     (goto-char (point-max))
-    (gfm-pretty-callouts--reveal)
+    (gfm-pretty--reveal)
     (let ((ov (cl-find-if (lambda (o) (overlay-get o 'gfm-pretty-callouts-revealable))
                           (overlays-at (point-min)))))
       (should ov)
@@ -346,22 +350,26 @@ no inherit chain — so emphasis faces and the default face show through."
 
 ;;; Block-discovery cache
 
-(ert-deftest lang-markdown/gfm-pretty-callouts-find-blocks-cache-eq-no-edit ()
-  "Two `gfm-pretty-callouts--find-blocks' calls with no edits return `eq' lists."
+(ert-deftest lang-markdown/gfm-pretty-callouts-collect-cache-eq-no-edit ()
+  "Two `gfm-pretty--collect' calls on `callouts' with no edits return `eq' lists."
   (with-temp-buffer
     (insert "> [!NOTE]\n> Hello.\n")
-    (let ((a (gfm-pretty-callouts--find-blocks))
-          (b (gfm-pretty-callouts--find-blocks)))
+    (gfm-pretty-mode 1)
+    (let* ((d (gfm-pretty--get 'callouts))
+           (a (gfm-pretty--collect d))
+           (b (gfm-pretty--collect d)))
       (should (eq a b)))))
 
-(ert-deftest lang-markdown/gfm-pretty-callouts-find-blocks-cache-invalidates-on-edit ()
-  "Edits invalidate the callouts blocks cache."
+(ert-deftest lang-markdown/gfm-pretty-callouts-collect-cache-invalidates-on-edit ()
+  "Edits invalidate the engine `:collect-fn' cache for the callouts decorator."
   (with-temp-buffer
     (insert "> [!NOTE]\n> Hello.\n")
-    (let ((before (gfm-pretty-callouts--find-blocks)))
+    (gfm-pretty-mode 1)
+    (let* ((d (gfm-pretty--get 'callouts))
+           (before (gfm-pretty--collect d)))
       (goto-char (point-max))
       (insert "\n> [!TIP]\n> More.\n")
-      (let ((after (gfm-pretty-callouts--find-blocks)))
+      (let ((after (gfm-pretty--collect d)))
         (should-not (eq before after))
         (should (= 2 (length after)))))))
 
@@ -378,31 +386,31 @@ no inherit chain — so emphasis faces and the default face show through."
   :tags '(narrowing-regression)
   (with-temp-buffer
     (lang-markdown-tests--two-slide-callouts-buffer)
-    (gfm-pretty-callouts-mode 1)
+    (gfm-pretty-mode 1)
     (let ((slide-1-end (save-excursion
                          (goto-char (point-min))
                          (search-forward "# slide 2")
                          (line-beginning-position))))
       (narrow-to-region (point-min) slide-1-end)
-      (should (progn (gfm-pretty-callouts--rebuild) t)))))
+      (should (progn (gfm-pretty--rebuild (gfm-pretty--get 'callouts)) t)))))
 
 (ert-deftest lang-markdown/gfm-pretty-callouts-narrowed-rebuild-no-zombies ()
   "Post-`widen' the tracking list length matches the on-buffer overlay count."
   :tags '(narrowing-regression)
   (with-temp-buffer
     (lang-markdown-tests--two-slide-callouts-buffer)
-    (gfm-pretty-callouts-mode 1)
+    (gfm-pretty-mode 1)
     (let ((slide-1-end (save-excursion
                          (goto-char (point-min))
                          (search-forward "# slide 2")
                          (line-beginning-position))))
       (narrow-to-region (point-min) slide-1-end)
-      (gfm-pretty-callouts--rebuild)
+      (gfm-pretty--rebuild (gfm-pretty--get 'callouts))
       (widen)
       (let ((on-buffer (cl-count-if
                         (lambda (ov) (overlay-get ov 'gfm-pretty-callouts))
                         (overlays-in (point-min) (point-max)))))
-        (should (= (length gfm-pretty-callouts--overlays) on-buffer))))))
+        (should (= (length (gfm-pretty--state-get 'callouts 'overlays)) on-buffer))))))
 
 ;;; Cross-narrow partial-block coverage — overlay set converges across paths
 
@@ -422,7 +430,7 @@ re-introduces narrowing-dependent caches/teardown."
   :tags '(narrowing-regression)
   (with-temp-buffer
     (lang-markdown-tests--two-slide-tables-buffer)
-    (gfm-pretty-tables-mode 1)
+    (gfm-pretty-mode 1)
     (let* ((baseline (lang-markdown-tests--tagged-source-positions 'gfm-pretty-tables))
            (slide-1-end (save-excursion
                           (goto-char (point-min))
@@ -440,16 +448,16 @@ re-introduces narrowing-dependent caches/teardown."
   :tags '(narrowing-regression)
   (with-temp-buffer
     (lang-markdown-tests--two-slide-fences-buffer)
-    (gfm-pretty-fences-mode 1)
+    (gfm-pretty-mode 1)
     (let* ((baseline (lang-markdown-tests--tagged-source-positions 'gfm-pretty-fences))
            (slide-1-end (save-excursion
                           (goto-char (point-min))
                           (search-forward "# slide 2")
                           (line-beginning-position))))
       (narrow-to-region (point-min) slide-1-end)
-      (gfm-pretty-fences--rebuild)
+      (gfm-pretty--rebuild (gfm-pretty--get 'fences))
       (widen)
-      (gfm-pretty-fences--rebuild)
+      (gfm-pretty--rebuild (gfm-pretty--get 'fences))
       (should (equal baseline
                      (lang-markdown-tests--tagged-source-positions
                       'gfm-pretty-fences))))))
@@ -459,16 +467,16 @@ re-introduces narrowing-dependent caches/teardown."
   :tags '(narrowing-regression)
   (with-temp-buffer
     (lang-markdown-tests--two-slide-callouts-buffer)
-    (gfm-pretty-callouts-mode 1)
+    (gfm-pretty-mode 1)
     (let* ((baseline (lang-markdown-tests--tagged-source-positions 'gfm-pretty-callouts))
            (slide-1-end (save-excursion
                           (goto-char (point-min))
                           (search-forward "# slide 2")
                           (line-beginning-position))))
       (narrow-to-region (point-min) slide-1-end)
-      (gfm-pretty-callouts--rebuild)
+      (gfm-pretty--rebuild (gfm-pretty--get 'callouts))
       (widen)
-      (gfm-pretty-callouts--rebuild)
+      (gfm-pretty--rebuild (gfm-pretty--get 'callouts))
       (should (equal baseline
                      (lang-markdown-tests--tagged-source-positions
                       'gfm-pretty-callouts))))))
@@ -482,7 +490,7 @@ line is fully painted to the window edge, so an `:extend t' overlay
 face like `hl-line' has no past-EOL region left to fill."
   (with-temp-buffer
     (insert "> [!NOTE]\n> body line.\n")
-    (gfm-pretty-callouts-mode 1)
+    (gfm-pretty-mode 1)
     (let* ((body-beg (progn (goto-char (point-min))
                             (forward-line 1) (point)))
            (nl (line-end-position))
@@ -510,7 +518,7 @@ face like `hl-line' has no past-EOL region left to fill."
         (with-current-buffer buf
           (insert "> [!NOTE]\n> "
                   (make-string 100 ?x) "\n")
-          (gfm-pretty-callouts-mode 1)
+          (gfm-pretty-mode 1)
           (let* ((rhs-overlays
                   (cl-remove-if-not
                    (lambda (o)
@@ -536,7 +544,7 @@ line (last body line's after-string also carries the bottom border)."
         (with-current-buffer buf
           (insert "> [!NOTE]\n> " (make-string 200 ?a)
                   "\n> trailing line.\n")
-          (gfm-pretty-callouts-mode 1)
+          (gfm-pretty-mode 1)
           (let* ((rhs-overlays
                   (cl-remove-if-not
                    (lambda (o)
@@ -571,7 +579,7 @@ line (last body line's after-string also carries the bottom border)."
           (let ((other (split-window)))
             (set-window-buffer other buf)
             (with-current-buffer buf
-              (gfm-pretty-callouts-mode 1)
+              (gfm-pretty-mode 1)
               (let* ((overlays (cl-remove-if-not
                                 (lambda (o) (overlay-get o 'gfm-pretty-callouts))
                                 (overlays-in (point-min) (point-max))))
@@ -589,22 +597,6 @@ line (last body line's after-string also carries the bottom border)."
 
 ;;; Window-state diff reconciliation
 
-(ert-deftest lang-markdown/gfm-pretty-callouts-schedule-full-rebuild-noop-when-window-state-unchanged ()
-  "Full-rebuild scheduler is a no-op when window state is unchanged."
-  (with-temp-buffer
-    (insert "> [!NOTE]\n> Hello.\n")
-    (gfm-pretty-callouts-mode 1)
-    (when (timerp gfm-pretty-callouts--rebuild-timer)
-      (cancel-timer gfm-pretty-callouts--rebuild-timer))
-    (setq gfm-pretty-callouts--rebuild-timer nil)
-    (gfm-pretty-callouts--schedule-full-rebuild)
-    (should-not gfm-pretty-callouts--rebuild-timer)
-    (setq gfm-pretty-callouts--last-window-state
-          (cons 'forged gfm-pretty-callouts--last-window-state))
-    (gfm-pretty-callouts--schedule-full-rebuild)
-    (should (timerp gfm-pretty-callouts--rebuild-timer))
-    (cancel-timer gfm-pretty-callouts--rebuild-timer)))
-
 (ert-deftest lang-markdown/gfm-pretty-callouts-reconcile-windows-touches-changed-only ()
   "Reconcile replaces only the resized window's display overlays."
   (let ((buf (generate-new-buffer "*gfm-pretty-callouts-reconcile-test*")))
@@ -617,23 +609,23 @@ line (last body line's after-string also carries the bottom border)."
                  (win-b (split-window)))
             (set-window-buffer win-b buf)
             (with-current-buffer buf
-              (gfm-pretty-callouts-mode 1)
+              (gfm-pretty-mode 1)
               (let* ((displays-for
                       (lambda (w)
                         (cl-remove-if-not
                          (lambda (o)
                            (and (overlay-get o 'gfm-pretty-callouts-display)
                                 (eq (overlay-get o 'window) w)))
-                         gfm-pretty-callouts--overlays)))
+                         (gfm-pretty--state-get 'callouts 'overlays))))
                      (a-before (funcall displays-for win-a))
                      (b-before (funcall displays-for win-b)))
-                (setq gfm-pretty-callouts--last-window-state
+                (gfm-pretty--state-set 'callouts 'last-window-state
                       (mapcar (lambda (e)
                                 (if (eq (car e) win-a)
                                     (cons (car e) (1- (cdr e)))
                                   e))
-                              gfm-pretty-callouts--last-window-state))
-                (gfm-pretty-callouts--rebuild-block-for-window
+                              (gfm-pretty--state-get 'callouts 'last-window-state)))
+                (gfm-pretty--rebuild-block-for-window (gfm-pretty--get 'callouts)
                  (car (gfm-pretty-callouts--collect-blocks)) win-a)
                 (let ((a-after (funcall displays-for win-a))
                       (b-after (funcall displays-for win-b)))
@@ -669,7 +661,7 @@ line (last body line's after-string also carries the bottom border)."
   "Editing inside one callout's body only rebuilds that callout."
   (with-temp-buffer
     (insert "> [!NOTE]\n> Hello.\n\n> [!TIP]\n> Pizza.\n")
-    (gfm-pretty-callouts-mode 1)
+    (gfm-pretty-mode 1)
     (let* ((blocks (gfm-pretty-callouts--collect-blocks))
            (b1 (nth 0 blocks))
            (b2 (nth 1 blocks))
@@ -685,8 +677,8 @@ line (last body line's after-string also carries the bottom border)."
         (goto-char (car r1))
         (forward-line 1)
         (let ((p (1+ (point))))
-          (setq gfm-pretty-callouts--dirty-region (cons p p))))
-      (gfm-pretty-callouts--rebuild-scoped)
+          (gfm-pretty--state-set 'callouts 'dirty-region (cons p p))))
+      (gfm-pretty--scheduled-rebuild)
       (let ((b2-after (funcall collect r2)))
         (should (cl-every (lambda (o) (memq o b2-after)) b2-before))))))
 
@@ -694,15 +686,15 @@ line (last body line's after-string also carries the bottom border)."
   "Edit on the marker line triggers a full rebuild."
   (with-temp-buffer
     (insert "> [!NOTE]\n> Hello.\n")
-    (gfm-pretty-callouts-mode 1)
+    (gfm-pretty-mode 1)
     (let* ((blocks (gfm-pretty-callouts--find-blocks))
            (marker-beg (nth 0 (car blocks)))
            (marker-line-end (save-excursion
                               (goto-char marker-beg) (line-end-position)))
            (before (gfm-pretty-callouts--test-overlay-set)))
-      (setq gfm-pretty-callouts--dirty-region
+      (gfm-pretty--state-set 'callouts 'dirty-region
             (cons marker-beg marker-line-end))
-      (gfm-pretty-callouts--rebuild-scoped)
+      (gfm-pretty--scheduled-rebuild)
       (let ((after (gfm-pretty-callouts--test-overlay-set)))
         (let (xs)
           (maphash (lambda (k _) (push k xs)) before)
@@ -712,7 +704,7 @@ line (last body line's after-string also carries the bottom border)."
   "Edit on a line adjacent to a callout triggers full rebuild."
   (with-temp-buffer
     (insert "preamble.\n> [!NOTE]\n> Hello.\nepilogue.\n")
-    (gfm-pretty-callouts-mode 1)
+    (gfm-pretty-mode 1)
     (let* ((blocks (gfm-pretty-callouts--find-blocks))
            (block-beg (nth 0 (car blocks)))
            (above-beg (save-excursion
@@ -722,8 +714,8 @@ line (last body line's after-string also carries the bottom border)."
                         (goto-char block-beg) (forward-line -1)
                         (line-end-position)))
            (before (gfm-pretty-callouts--test-overlay-set)))
-      (setq gfm-pretty-callouts--dirty-region (cons above-beg above-end))
-      (gfm-pretty-callouts--rebuild-scoped)
+      (gfm-pretty--state-set 'callouts 'dirty-region (cons above-beg above-end))
+      (gfm-pretty--scheduled-rebuild)
       (let ((after (gfm-pretty-callouts--test-overlay-set)))
         (let (xs)
           (maphash (lambda (k _) (push k xs)) before)
@@ -733,10 +725,10 @@ line (last body line's after-string also carries the bottom border)."
   "Edit outside every decorated callout is a no-op."
   (with-temp-buffer
     (insert "intro line.\n\nmore.\n\n> [!NOTE]\n> Hello.\n")
-    (gfm-pretty-callouts-mode 1)
+    (gfm-pretty-mode 1)
     (let ((before (gfm-pretty-callouts--test-overlay-set)))
-      (setq gfm-pretty-callouts--dirty-region (cons 1 5))
-      (gfm-pretty-callouts--rebuild-scoped)
+      (gfm-pretty--state-set 'callouts 'dirty-region (cons 1 5))
+      (gfm-pretty--scheduled-rebuild)
       (let ((after (gfm-pretty-callouts--test-overlay-set)))
         (should (= (hash-table-count before) (hash-table-count after)))
         (maphash (lambda (ov _) (should (gethash ov after))) before)))))
@@ -754,8 +746,8 @@ when both `gfm-pretty-callouts-mode' and `gfm-pretty-fences-mode' are active."
       (insert (format "## Section %d\n\nLead.\n\n> [!IMPORTANT]\n> Body %d line a.\n> Body %d line b.\n\n    indented code line %d\n    second indent line\n\nMore text after.\n\n"
                       i i i i)))
     (let ((res (with-timeout (5 'timeout)
-                 (gfm-pretty-fences-mode 1)
-                 (gfm-pretty-callouts-mode 1)
+                 (gfm-pretty-mode 1)
+                 (gfm-pretty-mode 1)
                  'ok)))
       (should (eq res 'ok))
       (should (cl-some (lambda (o) (overlay-get o 'gfm-pretty-callouts))
@@ -777,16 +769,16 @@ when both `gfm-pretty-callouts-mode' and `gfm-pretty-fences-mode' are active."
                  (win-b (split-window)))
             (set-window-buffer win-b buf)
             (with-current-buffer buf
-              (gfm-pretty-callouts-mode 1)
+              (gfm-pretty-mode 1)
               (with-selected-window win-a
                 (goto-char (point-min))
-                (gfm-pretty-callouts--reveal))
+                (gfm-pretty--reveal))
               (let* ((revealable
                       (cl-remove-if-not
                        (lambda (o)
                          (and (overlay-get o 'gfm-pretty-callouts-revealable)
                               (= (overlay-start o) (point-min))))
-                       gfm-pretty-callouts--overlays))
+                       (gfm-pretty--state-get 'callouts 'overlays)))
                      (a-ov (cl-find-if
                             (lambda (o) (eq (overlay-get o 'window) win-a))
                             revealable))
@@ -821,15 +813,15 @@ when both `gfm-pretty-callouts-mode' and `gfm-pretty-fences-mode' are active."
 (ert-deftest lang-markdown/gfm-pretty-fences-mode-creates-overlays ()
   (with-temp-buffer
     (insert "```bash\necho hi\n```\n")
-    (gfm-pretty-fences-mode 1)
+    (gfm-pretty-mode 1)
     (should (cl-some (lambda (ov) (overlay-get ov 'gfm-pretty-fences))
                      (overlays-in (point-min) (point-max))))))
 
 (ert-deftest lang-markdown/gfm-pretty-fences-mode-removes-overlays ()
   (with-temp-buffer
     (insert "```bash\necho hi\n```\n")
-    (gfm-pretty-fences-mode 1)
-    (gfm-pretty-fences-mode -1)
+    (gfm-pretty-mode 1)
+    (gfm-pretty-mode -1)
     (should-not (cl-some (lambda (ov) (overlay-get ov 'gfm-pretty-fences))
                          (overlays-in (point-min) (point-max))))))
 
@@ -849,31 +841,31 @@ when both `gfm-pretty-callouts-mode' and `gfm-pretty-fences-mode' are active."
   :tags '(narrowing-regression)
   (with-temp-buffer
     (lang-markdown-tests--two-slide-fences-buffer)
-    (gfm-pretty-fences-mode 1)
+    (gfm-pretty-mode 1)
     (let ((slide-1-end (save-excursion
                          (goto-char (point-min))
                          (search-forward "# slide 2")
                          (line-beginning-position))))
       (narrow-to-region (point-min) slide-1-end)
-      (should (progn (gfm-pretty-fences--rebuild) t)))))
+      (should (progn (gfm-pretty--rebuild (gfm-pretty--get 'fences)) t)))))
 
 (ert-deftest lang-markdown/gfm-pretty-fences-narrowed-rebuild-no-zombies ()
   "Post-`widen' the tracking list length matches the on-buffer overlay count."
   :tags '(narrowing-regression)
   (with-temp-buffer
     (lang-markdown-tests--two-slide-fences-buffer)
-    (gfm-pretty-fences-mode 1)
+    (gfm-pretty-mode 1)
     (let ((slide-1-end (save-excursion
                          (goto-char (point-min))
                          (search-forward "# slide 2")
                          (line-beginning-position))))
       (narrow-to-region (point-min) slide-1-end)
-      (gfm-pretty-fences--rebuild)
+      (gfm-pretty--rebuild (gfm-pretty--get 'fences))
       (widen)
       (let ((on-buffer (cl-count-if
                         (lambda (ov) (overlay-get ov 'gfm-pretty-fences))
                         (overlays-in (point-min) (point-max)))))
-        (should (= (length gfm-pretty-fences--overlays) on-buffer))))))
+        (should (= (length (gfm-pretty--state-get 'fences 'overlays)) on-buffer))))))
 
 ;;; Body background fill — code fences
 
@@ -889,7 +881,7 @@ when both `gfm-pretty-callouts-mode' and `gfm-pretty-fences-mode' are active."
   "A `+' body line's right-edge padding carries the `:extend t' background."
   (with-temp-buffer
     (insert "```diff\n+ x\n```\n")
-    (gfm-pretty-fences-mode 1)
+    (gfm-pretty-mode 1)
     ;; Stand in for native fontification copying diff-mode's `:extend t'
     ;; `diff-added' face onto the `+' body line — an explicit plist,
     ;; since batch Emacs does not realise a defface's `:extend'.
@@ -899,7 +891,7 @@ when both `gfm-pretty-callouts-mode' and `gfm-pretty-fences-mode' are active."
            (lend (line-end-position)))
       (put-text-property body-beg (1+ lend) 'face diff-added-face)
       ;; Rebuild so the display pass reads the freshly-applied face.
-      (gfm-pretty-fences--rebuild)
+      (gfm-pretty--rebuild (gfm-pretty--get 'fences))
       (let ((after (lang-markdown-tests--fence-body-after-string
                     body-beg lend)))
         (should after)
@@ -917,7 +909,7 @@ inheriting (and bleeding through) the buffer text-property face's
 `:background' at the line's newline."
   (with-temp-buffer
     (insert "```text\nplain line\n```\n")
-    (gfm-pretty-fences-mode 1)
+    (gfm-pretty-mode 1)
     (let* ((body-beg (progn (goto-char (point-min))
                             (forward-line 1) (point)))
            (lend (line-end-position))
@@ -948,7 +940,7 @@ inheriting (and bleeding through) the buffer text-property face's
   "Border face spec inherits the configured face but resets styling
 attrs that would otherwise leak from font-lock onto box edges (slant,
 weight, underline, overline, strike-through, box)."
-  (let ((spec (gfm-pretty-fences--normalised-border-face 'italic)))
+  (let ((spec (gfm-pretty--normalised-border-face 'italic)))
     (should (equal (plist-get spec :inherit) 'italic))
     (should (eq (plist-get spec :slant) 'normal))
     (should (eq (plist-get spec :weight) 'normal))
@@ -972,7 +964,7 @@ weight, underline, overline, strike-through, box)."
   "YAML helmet body receives face overlays from the chosen yaml mode."
   (with-temp-buffer
     (insert "---\nkey: value\n---\nbody\n")
-    (gfm-pretty-fences-mode 1)
+    (gfm-pretty-mode 1)
     (goto-char (point-min))
     (search-forward "key")
     (let ((pos (match-beginning 0)))
@@ -985,7 +977,7 @@ weight, underline, overline, strike-through, box)."
   "Empty YAML helmet body does not error during rebuild."
   (with-temp-buffer
     (insert "---\n---\nbody\n")
-    (should (progn (gfm-pretty-fences-mode 1) t))))
+    (should (progn (gfm-pretty-mode 1) t))))
 
 (ert-deftest lang-markdown/gfm-pretty-fences-skip-indent-inside-fence ()
   (with-temp-buffer
@@ -1035,61 +1027,58 @@ Cases are restricted to modes that ship with Emacs so the test never skips."
 ;;; Wrap simulation termination guard
 
 (ert-deftest lang-markdown/gfm-pretty-fences-simulate-wrap-zero-width-terminates ()
-  "`gfm-pretty-fences--simulate-wrap' returns rather than spinning at width 0."
+  "`gfm-pretty--simulate-wrap' returns rather than spinning at width 0."
   (let ((res (with-timeout (1 'timeout)
-               (gfm-pretty-fences--simulate-wrap "hello world" 0))))
+               (gfm-pretty--simulate-wrap "hello world" 0))))
     (should (consp res))
     (should (not (eq res 'timeout)))))
 
 (ert-deftest lang-markdown/gfm-pretty-fences-simulate-wrap-tiny-width-with-prefix-terminates ()
-  "`gfm-pretty-fences--simulate-wrap' terminates when width ≤ cont-prefix-w."
+  "`gfm-pretty--simulate-wrap' terminates when width ≤ cont-prefix-w."
   (let ((res (with-timeout (1 'timeout)
-               (gfm-pretty-fences--simulate-wrap "hello world" 1 2))))
+               (gfm-pretty--simulate-wrap "hello world" 1 2))))
     (should (consp res))
     (should (not (eq res 'timeout)))))
 
 ;;; Discovery cache
 
-(ert-deftest lang-markdown/gfm-pretty-fences-find-blocks-cache-eq-no-edit ()
-  "Two `gfm-pretty-fences--find-blocks' calls with no edits return `eq' lists."
+(ert-deftest lang-markdown/gfm-pretty-fences-collect-cache-eq-no-edit ()
+  "Two `gfm-pretty--collect' calls on `fences' with no edits return `eq' lists.
+Pass 3 moved memoisation into the engine; per-decorator block caches were
+retired."
   (with-temp-buffer
     (insert "```bash\necho hi\n```\n")
-    (let ((a (gfm-pretty-fences--find-blocks))
-          (b (gfm-pretty-fences--find-blocks)))
+    (gfm-pretty-mode 1)
+    (let* ((d (gfm-pretty--get 'fences))
+           (a (gfm-pretty--collect d))
+           (b (gfm-pretty--collect d)))
       (should (eq a b)))))
 
-(ert-deftest lang-markdown/gfm-pretty-fences-find-blocks-cache-invalidates-on-edit ()
-  "Edits invalidate the fenced-blocks cache."
+(ert-deftest lang-markdown/gfm-pretty-fences-collect-cache-invalidates-on-edit ()
+  "Edits invalidate the engine `:collect-fn' cache for the fences decorator."
   (with-temp-buffer
     (insert "```bash\necho hi\n```\n")
-    (let ((before (gfm-pretty-fences--find-blocks)))
+    (gfm-pretty-mode 1)
+    (let* ((d (gfm-pretty--get 'fences))
+           (before (gfm-pretty--collect d)))
       (goto-char (point-max))
       (insert "\n```sh\nfoo\n```\n")
-      (let ((after (gfm-pretty-fences--find-blocks)))
-        (should-not (eq before after))
-        (should (= 2 (length after)))))))
-
-(ert-deftest lang-markdown/gfm-pretty-fences-yaml-helmet-cache-invalidates-on-edit ()
-  "Edits invalidate the YAML-helmet cache."
-  (with-temp-buffer
-    (insert "---\nkey: value\n---\nbody\n")
-    (let ((before (gfm-pretty-fences--find-yaml-helmet)))
-      (should before)
-      (let ((same (gfm-pretty-fences--find-yaml-helmet)))
-        (should (eq before same)))
-      (goto-char (point-max))
-      (insert "more\n")
-      (let ((after (gfm-pretty-fences--find-yaml-helmet)))
-        ;; Helmet positions unchanged but cache list itself is fresh.
+      (let ((after (gfm-pretty--collect d)))
         (should-not (eq before after))))))
 
-(ert-deftest lang-markdown/gfm-pretty-fences-indent-blocks-cache-eq-no-edit ()
-  "Two `gfm-pretty-fences--find-indent-blocks' calls return `eq' lists."
+(ert-deftest lang-markdown/gfm-pretty-fences-collect-cache-narrowing-resilient ()
+  "Engine `:collect-fn' is invoked under widen so narrowing does not hide blocks."
   (with-temp-buffer
-    (insert "Para.\n\n    code one\n    code two\n\nMore.\n")
-    (let ((a (gfm-pretty-fences--find-indent-blocks nil))
-          (b (gfm-pretty-fences--find-indent-blocks nil)))
-      (should (eq a b)))))
+    (insert "```bash\nfirst\n```\n\n```sh\nsecond\n```\n")
+    (gfm-pretty-mode 1)
+    (let* ((d (gfm-pretty--get 'fences))
+           (full (gfm-pretty--collect d)))
+      (should (cl-some #'identity full))
+      ;; Bust the cache and re-collect under narrowing.
+      (gfm-pretty--state-set 'fences 'blocks-cache nil)
+      (narrow-to-region (point-min) (1+ (point-min)))
+      (let ((narrowed (gfm-pretty--collect d)))
+        (should (= (length full) (length narrowed)))))))
 
 ;;; Per-window display overlays
 
@@ -1106,7 +1095,7 @@ Anchors stay shared across windows; only display overlays carry a
           (let ((other (split-window)))
             (set-window-buffer other buf)
             (with-current-buffer buf
-              (gfm-pretty-fences-mode 1)
+              (gfm-pretty-mode 1)
               (let* ((overlays (cl-remove-if-not
                                 (lambda (o) (overlay-get o 'gfm-pretty-fences))
                                 (overlays-in (point-min) (point-max))))
@@ -1124,23 +1113,6 @@ Anchors stay shared across windows; only display overlays carry a
 
 ;;; Window-state diff reconciliation
 
-(ert-deftest lang-markdown/gfm-pretty-fences-schedule-full-rebuild-noop-when-window-state-unchanged ()
-  "Full-rebuild scheduler is a no-op when window state is unchanged."
-  (with-temp-buffer
-    (insert "```bash\necho hi\n```\n")
-    (gfm-pretty-fences-mode 1)
-    (when (timerp gfm-pretty-fences--rebuild-timer)
-      (cancel-timer gfm-pretty-fences--rebuild-timer))
-    (setq gfm-pretty-fences--rebuild-timer nil)
-    (gfm-pretty-fences--schedule-full-rebuild)
-    (should-not gfm-pretty-fences--rebuild-timer)
-    ;; Forge a state change → timer armed.
-    (setq gfm-pretty-fences--last-window-state
-          (cons 'forged gfm-pretty-fences--last-window-state))
-    (gfm-pretty-fences--schedule-full-rebuild)
-    (should (timerp gfm-pretty-fences--rebuild-timer))
-    (cancel-timer gfm-pretty-fences--rebuild-timer)))
-
 (ert-deftest lang-markdown/gfm-pretty-fences-reconcile-windows-touches-changed-only ()
   "Reconciling windows replaces only the resized window's display overlays."
   (let ((buf (generate-new-buffer "*gfm-pretty-fences-reconcile-test*")))
@@ -1153,29 +1125,29 @@ Anchors stay shared across windows; only display overlays carry a
                  (win-b (split-window)))
             (set-window-buffer win-b buf)
             (with-current-buffer buf
-              (gfm-pretty-fences-mode 1)
+              (gfm-pretty-mode 1)
               (let* ((displays-for
                       (lambda (w)
                         (cl-remove-if-not
                          (lambda (o)
                            (and (overlay-get o 'gfm-pretty-fences-display)
                                 (eq (overlay-get o 'window) w)))
-                         gfm-pretty-fences--overlays)))
+                         (gfm-pretty--state-get 'fences 'overlays))))
                      (a-before (funcall displays-for win-a))
                      (b-before (funcall displays-for win-b)))
                 ;; Forge a width change for win-a only.
-                (setq gfm-pretty-fences--last-window-state
+                (gfm-pretty--state-set 'fences 'last-window-state
                       (mapcar (lambda (e)
                                 (if (eq (car e) win-a)
                                     (cons (car e) (1- (cdr e)))
                                   e))
-                              gfm-pretty-fences--last-window-state))
+                              (gfm-pretty--state-get 'fences 'last-window-state)))
                 ;; Drive the deferred rebuild path synchronously by calling
                 ;; the per-window helper directly: reconcile schedules
                 ;; rebuilds via idle timers, but ERT tests can't easily wait
                 ;; for them to fire.  Helper does the same work that the
                 ;; idle callback eventually does.
-                (gfm-pretty-fences--rebuild-block-for-window
+                (gfm-pretty--rebuild-block-for-window (gfm-pretty--get 'fences)
                  (car (gfm-pretty-fences--collect-blocks)) win-a)
                 (let ((a-after (funcall displays-for win-a))
                       (b-after (funcall displays-for win-b)))
@@ -1201,7 +1173,7 @@ Anchors stay shared across windows; only display overlays carry a
   "Editing inside one fenced block only rebuilds that block's overlays."
   (with-temp-buffer
     (insert "```bash\necho hi\n```\n\n```sh\nfoo\n```\n")
-    (gfm-pretty-fences-mode 1)
+    (gfm-pretty-mode 1)
     (let* ((blocks (gfm-pretty-fences--collect-blocks))
            (b1 (nth 0 blocks))
            (b2 (nth 1 blocks))
@@ -1217,9 +1189,9 @@ Anchors stay shared across windows; only display overlays carry a
         (goto-char (car r1))
         (forward-line 1)
         (let ((p (point)))
-          (setq gfm-pretty-fences--dirty-region
+          (gfm-pretty--state-set 'fences 'dirty-region
                 (cons (1+ p) (1+ p)))))
-      (gfm-pretty-fences--rebuild-scoped)
+      (gfm-pretty--scheduled-rebuild)
       (let ((b2-after (funcall collect r2)))
         ;; b2's overlay objects survived `eq'.
         (should (cl-every (lambda (o) (memq o b2-after)) b2-before))))))
@@ -1228,7 +1200,7 @@ Anchors stay shared across windows; only display overlays carry a
   "Edit overlapping a fence opening line triggers a full rebuild."
   (with-temp-buffer
     (insert "```bash\necho hi\n```\n")
-    (gfm-pretty-fences-mode 1)
+    (gfm-pretty-mode 1)
     (let* ((blocks (gfm-pretty-fences--find-blocks))
            (open-beg (nth 0 (car blocks)))
            (open-line-beg (save-excursion
@@ -1236,8 +1208,8 @@ Anchors stay shared across windows; only display overlays carry a
            (open-line-end (save-excursion
                             (goto-char open-beg) (line-end-position)))
            (before (gfm-pretty-fences--test-overlay-set)))
-      (setq gfm-pretty-fences--dirty-region (cons open-line-beg open-line-end))
-      (gfm-pretty-fences--rebuild-scoped)
+      (gfm-pretty--state-set 'fences 'dirty-region (cons open-line-beg open-line-end))
+      (gfm-pretty--scheduled-rebuild)
       (let ((after (gfm-pretty-fences--test-overlay-set)))
         ;; Full rebuild → original overlay objects no longer present.
         (let (xs)
@@ -1248,7 +1220,7 @@ Anchors stay shared across windows; only display overlays carry a
   "Edit on a blank line adjacent to an indent block triggers full rebuild."
   (with-temp-buffer
     (insert "Para.\n\n    code line\n    next code\n\nMore.\n")
-    (gfm-pretty-fences-mode 1)
+    (gfm-pretty-mode 1)
     (let* ((blocks (gfm-pretty-fences--find-indent-blocks nil))
            (block (car blocks))
            (beg (nth 0 block))
@@ -1259,8 +1231,8 @@ Anchors stay shared across windows; only display overlays carry a
                         (goto-char beg) (forward-line -1)
                         (line-end-position)))
            (before (gfm-pretty-fences--test-overlay-set)))
-      (setq gfm-pretty-fences--dirty-region (cons blank-beg blank-end))
-      (gfm-pretty-fences--rebuild-scoped)
+      (gfm-pretty--state-set 'fences 'dirty-region (cons blank-beg blank-end))
+      (gfm-pretty--scheduled-rebuild)
       (let ((after (gfm-pretty-fences--test-overlay-set)))
         (let (xs)
           (maphash (lambda (k _) (push k xs)) before)
@@ -1270,16 +1242,16 @@ Anchors stay shared across windows; only display overlays carry a
   "Edit outside every decorated block is a no-op."
   (with-temp-buffer
     (insert "intro line\n\n```bash\necho hi\n```\n")
-    (gfm-pretty-fences-mode 1)
+    (gfm-pretty-mode 1)
     (let ((before (gfm-pretty-fences--test-overlay-set))
-          (rebuild-count (alist-get 'rebuild-count gfm-pretty-fences--stats)))
-      (setq gfm-pretty-fences--dirty-region (cons 1 5))
-      (gfm-pretty-fences--rebuild-scoped)
+          (rebuild-count (plist-get (gfm-pretty--state-get 'fences 'rebuild-stats) :count)))
+      (gfm-pretty--state-set 'fences 'dirty-region (cons 1 5))
+      (gfm-pretty--scheduled-rebuild)
       (let ((after (gfm-pretty-fences--test-overlay-set)))
         (should (= (hash-table-count before) (hash-table-count after)))
         (maphash (lambda (ov _) (should (gethash ov after))) before)
         (should (= rebuild-count
-                   (alist-get 'rebuild-count gfm-pretty-fences--stats)))))))
+                   (plist-get (gfm-pretty--state-get 'fences 'rebuild-stats) :count)))))))
 
 ;;; Visible-first prioritisation
 
@@ -1300,18 +1272,18 @@ Anchors stay shared across windows; only display overlays carry a
   "Stats accumulate rebuild count and total time across rebuilds."
   (with-temp-buffer
     (insert "```bash\necho hi\n```\n")
-    (gfm-pretty-fences-mode 1)
-    (let ((before (alist-get 'rebuild-count gfm-pretty-fences--stats)))
-      (gfm-pretty-fences--rebuild)
-      (let ((after (alist-get 'rebuild-count gfm-pretty-fences--stats)))
+    (gfm-pretty-mode 1)
+    (let ((before (plist-get (gfm-pretty--state-get 'fences 'rebuild-stats) :count)))
+      (gfm-pretty--rebuild (gfm-pretty--get 'fences))
+      (let ((after (plist-get (gfm-pretty--state-get 'fences 'rebuild-stats) :count)))
         (should (> after before))))))
 
 (ert-deftest lang-markdown/gfm-pretty-fences-phase-totals-include-required-keys ()
   "Phase totals include the six keys required by the spec."
   (with-temp-buffer
     (insert "---\nk: v\n---\n```bash\necho hi\n```\n\nPara.\n\n    indent\n")
-    (gfm-pretty-fences-mode 1)
-    (let ((phases (alist-get 'phase-totals gfm-pretty-fences--stats)))
+    (gfm-pretty-mode 1)
+    (let ((phases (gfm-pretty--state-get 'fences 'phase-totals)))
       (dolist (k '(find-fenced find-yaml find-indent
                    compose-borders compose-overflow apply))
         (should (assq k phases))))))
@@ -1356,21 +1328,23 @@ Anchors stay shared across windows; only display overlays carry a
     (insert "Some prose.\n| - | - |\nMore prose.\n")
     (should-not (gfm-pretty-tables--find-blocks))))
 
-(ert-deftest lang-markdown/gfm-pretty-tables-find-blocks-cache-invalidates-on-edit ()
-  "`gfm-pretty-tables--find-blocks' caches by `buffer-modified-tick'.
+(ert-deftest lang-markdown/gfm-pretty-tables-collect-cache-invalidates-on-edit ()
+  "Engine `:collect-fn' for the tables decorator caches by chars-modified tick.
 Two calls without an intervening edit return `eq' lists; an edit
 invalidates the cache and the next call returns a fresh list reflecting
 the new buffer state."
   (with-temp-buffer
     (insert "| A | B |\n| - | - |\n| 1 | 2 |\n\nintro\n")
-    (let ((first (gfm-pretty-tables--find-blocks))
-          (second (gfm-pretty-tables--find-blocks)))
-      (should (eq first second)))
-    ;; Append a second table; cache must invalidate.
-    (goto-char (point-max))
-    (insert "\n| C | D |\n| - | - |\n| 3 | 4 |\n")
-    (let ((after (gfm-pretty-tables--find-blocks)))
-      (should (= 2 (length after))))))
+    (gfm-pretty-mode 1)
+    (let* ((d (gfm-pretty--get 'tables))
+           (first (gfm-pretty--collect d))
+           (second (gfm-pretty--collect d)))
+      (should (eq first second))
+      ;; Append a second table; cache must invalidate.
+      (goto-char (point-max))
+      (insert "\n| C | D |\n| - | - |\n| 3 | 4 |\n")
+      (let ((after (gfm-pretty--collect d)))
+        (should (= 2 (length after)))))))
 
 (ert-deftest lang-markdown/gfm-pretty-tables-find-blocks-skips-fenced ()
   (with-temp-buffer
@@ -1613,7 +1587,7 @@ shrinks the measured width."
   (with-temp-buffer
     (gfm-mode)
     (insert "| col |\n| --- |\n| [text](https://example.com) |\n")
-    (gfm-pretty-tables-mode 1)
+    (gfm-pretty-mode 1)
     (goto-char (point-min))
     (forward-line 2)
     (let* ((row-ov (cl-find-if (lambda (o)
@@ -1630,7 +1604,7 @@ shrinks the measured width."
   (with-temp-buffer
     (gfm-mode)
     (insert "| col |\n| --- |\n| plain text |\n")
-    (gfm-pretty-tables-mode 1)
+    (gfm-pretty-mode 1)
     (goto-char (point-min))
     (forward-line 2)
     (let ((row-ov (cl-find-if (lambda (o)
@@ -1689,7 +1663,7 @@ column width must still cover all its source chars in the bounds."
   "Table overlays must not evaporate when their region empties."
   (with-temp-buffer
     (insert "| A | B |\n| - | - |\n| 1 | 2 |\n")
-    (gfm-pretty-tables-mode 1)
+    (gfm-pretty-mode 1)
     (dolist (ov (overlays-in (point-min) (point-max)))
       (when (overlay-get ov 'gfm-pretty-tables)
         (should-not (overlay-get ov 'evaporate))))))
@@ -1727,7 +1701,7 @@ region is just cell content; the trailing newline must be stripped."
     (gfm-mode)
     (insert "| A             | B   |\n| ------------- | --- |\n"
             "| `(parameter)` | foo |\n")
-    (gfm-pretty-tables-mode 1)
+    (gfm-pretty-mode 1)
     (goto-char (point-min))
     (forward-line 2)
     (forward-char 4)
@@ -1804,7 +1778,7 @@ region is just cell content; the trailing newline must be stripped."
 (ert-deftest lang-markdown/gfm-pretty-tables-cell-info-at-point ()
   (with-temp-buffer
     (insert "| A | B |\n| - | - |\n| 1 | 2 |\n")
-    (gfm-pretty-tables-mode 1)
+    (gfm-pretty-mode 1)
     (goto-char (point-min))
     (search-forward "1")
     (let ((info (gfm-pretty-tables--cell-info-at-point)))
@@ -1815,7 +1789,7 @@ region is just cell content; the trailing newline must be stripped."
   "Display string carries the active-cell face after entering the row."
   (with-temp-buffer
     (insert "| A | B |\n| - | - |\n| 1 | 2 |\n")
-    (gfm-pretty-tables-mode 1)
+    (gfm-pretty-mode 1)
     (goto-char (point-min))
     (search-forward "1")
     (gfm-pretty-tables--update-cursor-highlight)
@@ -1835,7 +1809,7 @@ region is just cell content; the trailing newline must be stripped."
   "Moving point out of a table restores the cursor and original display."
   (with-temp-buffer
     (insert "| A | B |\n| - | - |\n| 1 | 2 |\nout of table\n")
-    (gfm-pretty-tables-mode 1)
+    (gfm-pretty-mode 1)
     (goto-char (point-min))
     (search-forward "1")
     (gfm-pretty-tables--update-cursor-highlight)
@@ -1851,7 +1825,7 @@ region is just cell content; the trailing newline must be stripped."
 (ert-deftest lang-markdown/gfm-pretty-tables-swap-column-right-swaps ()
   (with-temp-buffer
     (insert "| A | B | C |\n| - | - | - |\n| 1 | 2 | 3 |\n")
-    (gfm-pretty-tables-mode 1)
+    (gfm-pretty-mode 1)
     (goto-char (point-min))
     (search-forward "A")
     (goto-char (1- (point)))
@@ -1868,7 +1842,7 @@ region is just cell content; the trailing newline must be stripped."
 (ert-deftest lang-markdown/gfm-pretty-tables-swap-column-left-edge-noop ()
   (with-temp-buffer
     (insert "| A | B |\n| - | - |\n| 1 | 2 |\n")
-    (gfm-pretty-tables-mode 1)
+    (gfm-pretty-mode 1)
     (goto-char (point-min))
     (search-forward "A")
     (goto-char (1- (point)))
@@ -1879,7 +1853,7 @@ region is just cell content; the trailing newline must be stripped."
 (ert-deftest lang-markdown/gfm-pretty-tables-swap-column-on-body-noop ()
   (with-temp-buffer
     (insert "| A | B |\n| - | - |\n| 1 | 2 |\n")
-    (gfm-pretty-tables-mode 1)
+    (gfm-pretty-mode 1)
     (goto-char (point-min))
     (search-forward "1")
     (goto-char (1- (point)))
@@ -1892,7 +1866,7 @@ region is just cell content; the trailing newline must be stripped."
 (ert-deftest lang-markdown/gfm-pretty-tables-cell-forward-moves-cell ()
   (with-temp-buffer
     (insert "| A | B | C |\n| - | - | - |\n| 1 | 2 | 3 |\n")
-    (gfm-pretty-tables-mode 1)
+    (gfm-pretty-mode 1)
     (goto-char (point-min))
     (search-forward "1")
     (goto-char (1- (point))) ; stand on the digit
@@ -1906,7 +1880,7 @@ region is just cell content; the trailing newline must be stripped."
 (ert-deftest lang-markdown/gfm-pretty-tables-cell-tab-wraps-to-next-row ()
   (with-temp-buffer
     (insert "| A | B |\n| - | - |\n| 1 | 2 |\n| 3 | 4 |\n")
-    (gfm-pretty-tables-mode 1)
+    (gfm-pretty-mode 1)
     (goto-char (point-min))
     (search-forward "B")
     (goto-char (1- (point)))
@@ -1921,7 +1895,7 @@ region is just cell content; the trailing newline must be stripped."
 (ert-deftest lang-markdown/gfm-pretty-tables-cell-tab-inserts-row-at-end ()
   (with-temp-buffer
     (insert "| A | B |\n| - | - |\n| 1 | 2 |\n")
-    (gfm-pretty-tables-mode 1)
+    (gfm-pretty-mode 1)
     (goto-char (point-min))
     (search-forward "2")
     (goto-char (1- (point)))
@@ -1937,7 +1911,7 @@ region is just cell content; the trailing newline must be stripped."
 (ert-deftest lang-markdown/gfm-pretty-tables-cell-backtab-wraps-to-prev-row ()
   (with-temp-buffer
     (insert "| A | B |\n| - | - |\n| 1 | 2 |\n| 3 | 4 |\n")
-    (gfm-pretty-tables-mode 1)
+    (gfm-pretty-mode 1)
     (goto-char (point-min))
     (search-forward "1")
     (goto-char (1- (point)))
@@ -1952,7 +1926,7 @@ region is just cell content; the trailing newline must be stripped."
 (ert-deftest lang-markdown/gfm-pretty-tables-row-down-skips-delim ()
   (with-temp-buffer
     (insert "| A | B |\n| - | - |\n| 1 | 2 |\n| 3 | 4 |\n")
-    (gfm-pretty-tables-mode 1)
+    (gfm-pretty-mode 1)
     (goto-char (point-min))
     (search-forward "A")
     (goto-char (1- (point)))
@@ -1970,7 +1944,7 @@ region is just cell content; the trailing newline must be stripped."
     (insert "| A | B |\n| - | - |\n| 1 | 2 |\n\n"
             "Some prose here.\n\n"
             "| C | D |\n| - | - |\n| 9 | 8 |\n")
-    (gfm-pretty-tables-mode 1)
+    (gfm-pretty-mode 1)
     (goto-char (point-min))
     (search-forward "1")
     (goto-char (1- (point)))
@@ -1983,7 +1957,7 @@ region is just cell content; the trailing newline must be stripped."
     (insert "| A | B |\n| - | - |\n| 1 | 2 |\n\n"
             "Prose.\n\n"
             "| C | D |\n| - | - |\n| 9 | 8 |\n")
-    (gfm-pretty-tables-mode 1)
+    (gfm-pretty-mode 1)
     (goto-char (point-min))
     (search-forward "9")
     (goto-char (1- (point)))
@@ -2002,7 +1976,7 @@ region is just cell content; the trailing newline must be stripped."
   "Snap moves a non-cell point on a row line into the first cell."
   (with-temp-buffer
     (insert "| A | B |\n| - | - |\n| 1 | 2 |\n")
-    (gfm-pretty-tables-mode 1)
+    (gfm-pretty-mode 1)
     (goto-char (point-min))
     (search-forward "| 1 ")
     (goto-char (line-beginning-position)) ; on `|', not in any cell
@@ -2019,7 +1993,7 @@ region is just cell content; the trailing newline must be stripped."
   "Snap leaves point alone when already inside a cell range."
   (with-temp-buffer
     (insert "| A | B |\n| - | - |\n| 1 | 2 |\n")
-    (gfm-pretty-tables-mode 1)
+    (gfm-pretty-mode 1)
     (goto-char (point-min))
     (search-forward "2")
     (goto-char (1- (point)))
@@ -2031,7 +2005,7 @@ region is just cell content; the trailing newline must be stripped."
   "Snap is a no-op when the row line is invisible."
   (with-temp-buffer
     (insert "| A | B |\n| - | - |\n| 1 | 2 |\n")
-    (gfm-pretty-tables-mode 1)
+    (gfm-pretty-mode 1)
     (goto-char (point-min))
     (search-forward "| 1 ")
     (let ((lbeg (line-beginning-position))
@@ -2048,7 +2022,7 @@ region is just cell content; the trailing newline must be stripped."
 point on a column gap or border without being yanked back to cell 0."
   (with-temp-buffer
     (insert "| A | B |\n| - | - |\n| 1 | 2 |\n")
-    (gfm-pretty-tables-mode 1)
+    (gfm-pretty-mode 1)
     (goto-char (point-min))
     (search-forward "| 1 ")
     (goto-char (line-beginning-position)) ; on `|', not in any cell
@@ -2062,7 +2036,7 @@ point on a column gap or border without being yanked back to cell 0."
 evil-search-next and friends don't have point yanked back."
   (with-temp-buffer
     (insert "| A | B |\n| - | - |\n| 1 | 2 |\n")
-    (gfm-pretty-tables-mode 1)
+    (gfm-pretty-mode 1)
     (goto-char (point-min))
     (search-forward "| 1 ")
     (goto-char (line-beginning-position))
@@ -2082,8 +2056,8 @@ suppression, the hook moves point back to cell 0 and the next
     (insert "| foo | bar |\n")
     (insert "| foo | qux |\n")
     (markdown-mode)
-    (gfm-pretty-tables-mode 1)
-    (let ((gfm-pretty-tables--rebuild-timer nil)) (gfm-pretty-tables--rebuild))
+    (gfm-pretty-mode 1)
+    (let ((gfm-pretty--rebuild-timer nil)) (gfm-pretty-tables--rebuild))
     (goto-char (point-min))
     ;; Simulate the body of isearch's command loop: search, then run
     ;; post-command-hook with `isearch-mode' active.  Match-end of
@@ -2113,15 +2087,15 @@ suppression, the hook moves point back to cell 0 and the next
 (ert-deftest lang-markdown/gfm-pretty-tables-mode-creates-overlays ()
   (with-temp-buffer
     (insert "| A | B |\n| - | - |\n| 1 | 2 |\n")
-    (gfm-pretty-tables-mode 1)
+    (gfm-pretty-mode 1)
     (should (cl-some (lambda (ov) (overlay-get ov 'gfm-pretty-tables))
                      (overlays-in (point-min) (point-max))))))
 
 (ert-deftest lang-markdown/gfm-pretty-tables-mode-removes-overlays ()
   (with-temp-buffer
     (insert "| A | B |\n| - | - |\n| 1 | 2 |\n")
-    (gfm-pretty-tables-mode 1)
-    (gfm-pretty-tables-mode -1)
+    (gfm-pretty-mode 1)
+    (gfm-pretty-mode -1)
     (should-not (cl-some (lambda (ov) (overlay-get ov 'gfm-pretty-tables))
                          (overlays-in (point-min) (point-max))))))
 
@@ -2143,7 +2117,7 @@ narrowing and signalled.  See fix-gfm-narrowing-safety."
   :tags '(narrowing-regression)
   (with-temp-buffer
     (lang-markdown-tests--two-slide-tables-buffer)
-    (gfm-pretty-tables-mode 1)
+    (gfm-pretty-mode 1)
     (let ((slide-1-end (save-excursion
                          (goto-char (point-min))
                          (search-forward "# slide 2")
@@ -2158,7 +2132,7 @@ off-narrowing overlays untracked."
   :tags '(narrowing-regression)
   (with-temp-buffer
     (lang-markdown-tests--two-slide-tables-buffer)
-    (gfm-pretty-tables-mode 1)
+    (gfm-pretty-mode 1)
     (let ((slide-1-end (save-excursion
                          (goto-char (point-min))
                          (search-forward "# slide 2")
@@ -2169,7 +2143,7 @@ off-narrowing overlays untracked."
       (let ((on-buffer (cl-count-if
                         (lambda (ov) (overlay-get ov 'gfm-pretty-tables))
                         (overlays-in (point-min) (point-max)))))
-        (should (= (length gfm-pretty-tables--overlays) on-buffer))))))
+        (should (= (length (gfm-pretty--state-get 'tables 'overlays)) on-buffer))))))
 
 ;;; Per-rebuild width cache
 
@@ -2298,7 +2272,7 @@ emitted by `gfm-pretty-tables--multiline-row-char-bounds'."
   (with-temp-buffer
     (insert "| A | B |\n| - | - |\n| 1 | 2 |\n\n"
             "| C | D |\n| - | - |\n| 3 | 4 |\n")
-    (gfm-pretty-tables-mode 1)
+    (gfm-pretty-mode 1)
     (let* ((blocks (gfm-pretty-tables--find-blocks))
            (b1 (nth 0 blocks))
            (b2 (nth 1 blocks))
@@ -2306,9 +2280,9 @@ emitted by `gfm-pretty-tables--multiline-row-char-bounds'."
            (b2-h (nth 0 b2)) (b2-e (nth 3 b2))
            (b1-before (gfm-pretty-tables--test-block-overlays b1-h b1-e))
            (b2-before (gfm-pretty-tables--test-block-overlays b2-h b2-e)))
-      (setq gfm-pretty-tables--dirty-region
+      (gfm-pretty--state-set 'tables 'dirty-region
             (cons (1+ b1-h) (1- b1-e)))
-      (gfm-pretty-tables--rebuild-scoped)
+      (gfm-pretty--scheduled-rebuild)
       (let ((b1-after (gfm-pretty-tables--test-block-overlays b1-h b1-e))
             (b2-after (gfm-pretty-tables--test-block-overlays b2-h b2-e)))
         (should-not (cl-intersection b1-before b1-after))
@@ -2319,29 +2293,29 @@ emitted by `gfm-pretty-tables--multiline-row-char-bounds'."
   "Editing in a region intersecting no decorated table is a no-op."
   (with-temp-buffer
     (insert "intro line\n\n| A | B |\n| - | - |\n| 1 | 2 |\n")
-    (gfm-pretty-tables-mode 1)
+    (gfm-pretty-mode 1)
     (let ((before (gfm-pretty-tables--test-overlay-set))
-          (rebuild-count (alist-get 'rebuild-count gfm-pretty-tables--stats)))
-      (setq gfm-pretty-tables--dirty-region (cons 1 5))
-      (gfm-pretty-tables--rebuild-scoped)
+          (rebuild-count (plist-get (gfm-pretty--state-get 'tables 'rebuild-stats) :count)))
+      (gfm-pretty--state-set 'tables 'dirty-region (cons 1 5))
+      (gfm-pretty--scheduled-rebuild)
       (let ((after (gfm-pretty-tables--test-overlay-set)))
         (should (= (hash-table-count before) (hash-table-count after)))
         (maphash (lambda (ov _) (should (gethash ov after))) before)
         (should (= rebuild-count
-                   (alist-get 'rebuild-count gfm-pretty-tables--stats)))))))
+                   (plist-get (gfm-pretty--state-get 'tables 'rebuild-stats) :count)))))))
 
 (ert-deftest lang-markdown/gfm-pretty-tables-scoped-edit-spans-two-tables-full-rebuild ()
   "Edit region intersecting two tables triggers a full rebuild."
   (with-temp-buffer
     (insert "| A | B |\n| - | - |\n| 1 | 2 |\n\n"
             "| C | D |\n| - | - |\n| 3 | 4 |\n")
-    (gfm-pretty-tables-mode 1)
+    (gfm-pretty-mode 1)
     (let* ((blocks (gfm-pretty-tables--find-blocks))
            (b1-h (nth 0 (car blocks)))
            (b2-e (nth 3 (cadr blocks)))
            (before (gfm-pretty-tables--test-overlay-set)))
-      (setq gfm-pretty-tables--dirty-region (cons b1-h b2-e))
-      (gfm-pretty-tables--rebuild-scoped)
+      (gfm-pretty--state-set 'tables 'dirty-region (cons b1-h b2-e))
+      (gfm-pretty--scheduled-rebuild)
       (let ((after (gfm-pretty-tables--test-overlay-set)))
         (should (cl-every (lambda (ov) (not (gethash ov after)))
                           (let (xs) (maphash (lambda (k _) (push k xs)) before)
@@ -2352,15 +2326,15 @@ emitted by `gfm-pretty-tables--multiline-row-char-bounds'."
   (with-temp-buffer
     (gfm-mode)
     (insert "```\nfenced\n```\n\n| A | B |\n| - | - |\n| 1 | 2 |\n")
-    (gfm-pretty-tables-mode 1)
+    (gfm-pretty-mode 1)
     (let* ((fence (car (gfm-pretty-fences--find-blocks)))
            (open-line-beg (save-excursion
                             (goto-char (nth 0 fence)) (line-beginning-position)))
            (open-line-end (save-excursion
                             (goto-char (nth 0 fence)) (line-end-position)))
            (before (gfm-pretty-tables--test-overlay-set)))
-      (setq gfm-pretty-tables--dirty-region (cons open-line-beg open-line-end))
-      (gfm-pretty-tables--rebuild-scoped)
+      (gfm-pretty--state-set 'tables 'dirty-region (cons open-line-beg open-line-end))
+      (gfm-pretty--scheduled-rebuild)
       (let ((after (gfm-pretty-tables--test-overlay-set)))
         ;; Full rebuild → overlay objects are fresh.
         (should (cl-every (lambda (ov) (not (gethash ov after)))
@@ -2380,7 +2354,7 @@ carry a `window' restriction."
           (let ((other (split-window)))
             (set-window-buffer other buf)
             (with-current-buffer buf
-              (gfm-pretty-tables-mode 1)
+              (gfm-pretty-mode 1)
               (let* ((overlays (cl-remove-if-not
                                 (lambda (o) (overlay-get o 'gfm-pretty-tables))
                                 (overlays-in (point-min) (point-max))))
@@ -2416,23 +2390,23 @@ Untouched windows keep their existing display-overlay objects (eq)."
                  (win-b (split-window)))
             (set-window-buffer win-b buf)
             (with-current-buffer buf
-              (gfm-pretty-tables-mode 1)
+              (gfm-pretty-mode 1)
               (let* ((displays-for (lambda (w)
                                      (cl-remove-if-not
                                       (lambda (o)
                                         (and (overlay-get o 'gfm-pretty-tables-display)
                                              (eq (overlay-get o 'window) w)))
-                                      gfm-pretty-tables--overlays)))
+                                      (gfm-pretty--state-get 'tables 'overlays))))
                      (a-before (funcall displays-for win-a))
                      (b-before (funcall displays-for win-b)))
                 ;; Forge a width change for win-a only by mutating the cached
                 ;; state; reconcile sees win-a as resized, win-b as unchanged.
-                (setq gfm-pretty-tables--last-window-state
+                (gfm-pretty--state-set 'tables 'last-window-state
                       (mapcar (lambda (e)
                                 (if (eq (car e) win-a)
                                     (cons (car e) (1- (cdr e)))
                                   e))
-                              gfm-pretty-tables--last-window-state))
+                              (gfm-pretty--state-get 'tables 'last-window-state)))
                 (gfm-pretty-tables--reconcile-windows)
                 (let ((a-after (funcall displays-for win-a))
                       (b-after (funcall displays-for win-b)))
@@ -2459,7 +2433,7 @@ window holding point."
                  (win-b (split-window)))
             (set-window-buffer win-b buf)
             (with-current-buffer buf
-              (gfm-pretty-tables-mode 1)
+              (gfm-pretty-mode 1)
               (goto-char (point-min))
               (forward-line 2)
               (forward-char 2)
@@ -2477,14 +2451,12 @@ window holding point."
       (kill-buffer buf))))
 
 (ert-deftest lang-markdown/gfm-pretty-tables-window-config-change-wired-to-full-rebuild ()
-  "`window-configuration-change-hook' is wired to the full-rebuild scheduler."
+  "`window-configuration-change-hook' carries the engine's single handler."
   (with-temp-buffer
     (insert "| A | B |\n| - | - |\n| 1 | 2 |\n")
-    (gfm-pretty-tables-mode 1)
-    (should (memq 'gfm-pretty-tables--schedule-full-rebuild
-                  window-configuration-change-hook))
-    (should-not (memq 'gfm-pretty-tables--schedule-rebuild
-                      window-configuration-change-hook))))
+    (gfm-pretty-mode 1)
+    (should (memq 'gfm-pretty--wcc
+                  window-configuration-change-hook))))
 
 (ert-deftest lang-markdown/gfm-pretty-tables-block-visible-p ()
   "`gfm-pretty-tables--block-visible-p' detects overlap with any window range."
@@ -2503,34 +2475,16 @@ window holding point."
     ;; Multiple ranges; one covers it.
     (should (gfm-pretty-tables--block-visible-p block '((1 . 50) (130 . 180))))))
 
-(ert-deftest lang-markdown/gfm-pretty-tables-schedule-full-rebuild-noop-when-window-state-unchanged ()
-  "Full-rebuild scheduler is a no-op when the window state is unchanged."
-  (with-temp-buffer
-    (insert "| A | B |\n| - | - |\n| 1 | 2 |\n")
-    (gfm-pretty-tables-mode 1)
-    ;; Cancel any timer the mode-enable rebuild may have left running.
-    (when (timerp gfm-pretty-tables--rebuild-timer)
-      (cancel-timer gfm-pretty-tables--rebuild-timer))
-    (setq gfm-pretty-tables--rebuild-timer nil)
-    ;; Same window state → no timer armed.
-    (gfm-pretty-tables--schedule-full-rebuild)
-    (should-not gfm-pretty-tables--rebuild-timer)
-    ;; Forge a state change → timer armed.
-    (setq gfm-pretty-tables--last-window-state (cons 'forged gfm-pretty-tables--last-window-state))
-    (gfm-pretty-tables--schedule-full-rebuild)
-    (should (timerp gfm-pretty-tables--rebuild-timer))
-    (cancel-timer gfm-pretty-tables--rebuild-timer)))
-
 ;;; Phase-level instrumentation
 
 (ert-deftest lang-markdown/gfm-pretty-tables-phase-totals-non-negative-and-bounded ()
   "Phase totals are non-negative and sum to ≤ recorded total-time."
   (with-temp-buffer
     (insert "| A | B |\n| - | - |\n| 1 | 2 |\n| 3 | 4 |\n")
-    (gfm-pretty-tables-mode 1)
-    (let* ((stats gfm-pretty-tables--stats)
-           (total (alist-get 'total-time stats))
-           (phases (alist-get 'phase-totals stats)))
+    (gfm-pretty-mode 1)
+    (let* ((stats (gfm-pretty--state-get 'tables 'rebuild-stats))
+           (total (plist-get stats :total))
+           (phases (gfm-pretty--state-get 'tables 'phase-totals)))
       (should phases)
       (dolist (p phases)
         (should (>= (cdr p) 0)))
@@ -2542,8 +2496,8 @@ window holding point."
   "Phase totals include all five keys required by the spec."
   (with-temp-buffer
     (insert "| A |\n| - |\n| 1 |\n")
-    (gfm-pretty-tables-mode 1)
-    (let ((phases (alist-get 'phase-totals gfm-pretty-tables--stats)))
+    (gfm-pretty-mode 1)
+    (let ((phases (gfm-pretty--state-get 'tables 'phase-totals)))
       (dolist (k '(find-blocks parse layout compose apply))
         (should (assq k phases))))))
 
@@ -2560,12 +2514,12 @@ window holding point."
      (delay-mode-hooks (markdown-mode))
      (setq-local markdown-hide-urls t)
      (insert ,contents)
-     (gfm-pretty-links-mode 1)
+     (gfm-pretty-mode 1)
      ,@body))
 
 (defun lang-markdown-tests--link-overlays ()
   "Return gfm-pretty-links overlays in the current buffer, sorted by start."
-  (sort (copy-sequence gfm-pretty-links--overlays)
+  (sort (copy-sequence (gfm-pretty--state-get 'links 'overlays))
         (lambda (a b) (< (overlay-start a) (overlay-start b)))))
 
 (defun lang-markdown-tests--link-overlay-at (pos &optional side)
@@ -2575,7 +2529,7 @@ window holding point."
                      (<= (overlay-start o) pos)
                      (< pos (overlay-end o))
                      (or (null side) (eq side (overlay-get o 'gfm-pretty-links-side)))))
-              gfm-pretty-links--overlays))
+              (gfm-pretty--state-get 'links 'overlays)))
 
 ;;; Mode toggle
 
@@ -2590,9 +2544,9 @@ window holding point."
   "Disabling the mode removes every overlay it created."
   (lang-markdown-tests--with-links-buffer
       "See [Anthropic](https://anthropic.com) here.\n"
-    (should gfm-pretty-links--overlays)
-    (gfm-pretty-links-mode -1)
-    (should-not gfm-pretty-links--overlays)
+    (should (gfm-pretty--state-get 'links 'overlays))
+    (gfm-pretty-mode -1)
+    (should-not (gfm-pretty--state-get 'links 'overlays))
     (should-not (cl-some (lambda (o) (overlay-get o 'gfm-pretty-links))
                          (overlays-in (point-min) (point-max))))))
 
@@ -2603,10 +2557,10 @@ window holding point."
     (setq-local markdown-hide-urls t)
     (insert "See [Anthropic](https://anthropic.com).\n")
     (gfm-pretty-links--maybe-enable)
-    (should gfm-pretty-links-mode)
+    (should (gfm-pretty--state-get 'links 'enabled-p))
     (setq-local markdown-hide-urls nil)
-    (should-not gfm-pretty-links-mode)
-    (should-not gfm-pretty-links--overlays)))
+    (should-not (gfm-pretty--state-get 'links 'enabled-p))
+    (should-not (gfm-pretty--state-get 'links 'overlays))))
 
 (ert-deftest lang-markdown/gfm-pretty-links-enabled-via-gfm-mode-hook ()
   "Links activation runs via the `gfm-pretty-mode' hook."
@@ -2685,7 +2639,7 @@ window holding point."
     (setq-local markdown-hide-urls t)
     (setq-local markdown-enable-wiki-links t)
     (insert "See [[Some Page]] here.\n")
-    (gfm-pretty-links-mode 1)
+    (gfm-pretty-mode 1)
     (let ((ov (lang-markdown-tests--link-overlay-at 6 'title)))
       (should ov)
       (should (eq 'wiki (overlay-get ov 'gfm-pretty-links-kind))))))
@@ -2694,13 +2648,13 @@ window holding point."
   "Image links are explicitly left raw."
   (lang-markdown-tests--with-links-buffer
       "![alt](./diagram.png)\n"
-    (should-not gfm-pretty-links--overlays)))
+    (should-not (gfm-pretty--state-get 'links 'overlays))))
 
 (ert-deftest lang-markdown/gfm-pretty-links-reference-definition-not-decorated ()
   "Reference-definition lines themselves are not decorated."
   (lang-markdown-tests--with-links-buffer
       "[d]: https://example.com\n"
-    (should-not gfm-pretty-links--overlays)))
+    (should-not (gfm-pretty--state-get 'links 'overlays))))
 
 ;;; 14.2 Reference resolution
 
@@ -2816,14 +2770,14 @@ window holding point."
                  (win-b (split-window)))
             (set-window-buffer win-b buf)
             (with-current-buffer buf
-              (gfm-pretty-links-mode 1)
+              (gfm-pretty-mode 1)
               (with-selected-window win-a
                 (goto-char 3)
                 (gfm-pretty-links--reveal))
               (let* ((title-ovs
                       (cl-remove-if-not
                        (lambda (o) (eq 'title (overlay-get o 'gfm-pretty-links-side)))
-                       gfm-pretty-links--overlays))
+                       (gfm-pretty--state-get 'links 'overlays)))
                      (a-ov (cl-find-if
                             (lambda (o) (eq (overlay-get o 'window) win-a))
                             title-ovs))
@@ -2920,7 +2874,7 @@ window holding point."
     (delay-mode-hooks (markdown-mode))
     (setq-local markdown-hide-urls t)
     (insert "| [Anthropic](https://anthropic.com) |\n| --- |\n| x |\n")
-    (gfm-pretty-links-mode 1)
+    (gfm-pretty-mode 1)
     (goto-char (point-min))
     (let* ((cells (gfm-pretty-tables--fontify-row-cells
                    (line-beginning-position) (line-end-position)))
@@ -2938,7 +2892,7 @@ decoration must be baked into the cell string itself."
     (delay-mode-hooks (markdown-mode))
     (setq-local markdown-hide-urls t)
     (insert "| [Anthropic](https://anthropic.com) |\n| --- |\n| x |\n")
-    (gfm-pretty-links-mode 1)
+    (gfm-pretty-mode 1)
     (goto-char (point-min))
     (let* ((cell (car (gfm-pretty-tables--fontify-row-cells
                        (line-beginning-position) (line-end-position))))
@@ -2962,7 +2916,7 @@ decoration must be baked into the cell string itself."
     (delay-mode-hooks (markdown-mode))
     (setq-local markdown-hide-urls t)
     (lang-markdown-tests--two-slide-links-buffer)
-    (gfm-pretty-links-mode 1)
+    (gfm-pretty-mode 1)
     (let* ((baseline (lang-markdown-tests--tagged-source-positions 'gfm-pretty-links))
            (slide-1-end (save-excursion
                           (goto-char (point-min))
@@ -3043,7 +2997,7 @@ decoration must be baked into the cell string itself."
           (delay-mode-hooks (gfm-mode))
           (insert "\nfoo\n\n---\n\nbar\n")
           (font-lock-ensure)
-          (gfm-pretty-hrule-mode 1)
+          (gfm-pretty-mode 1)
           (let ((ovs (lang-markdown-tests--hrule-bar-overlays)))
             (should (= 1 (length ovs)))
             (let* ((ov (car ovs))
@@ -3060,7 +3014,7 @@ decoration must be baked into the cell string itself."
     (delay-mode-hooks (gfm-mode))
     (insert "\nfoo\n\n***\n\nbar\n")
     (font-lock-ensure)
-    (gfm-pretty-hrule-mode 1)
+    (gfm-pretty-mode 1)
     (should-not (lang-markdown-tests--hrule-bar-overlays))))
 
 (ert-deftest lang-markdown/gfm-pretty-hrule-mode-setext-produces-no-overlay ()
@@ -3069,7 +3023,7 @@ decoration must be baked into the cell string itself."
     (delay-mode-hooks (gfm-mode))
     (insert "Heading\n---\n\nbody\n")
     (font-lock-ensure)
-    (gfm-pretty-hrule-mode 1)
+    (gfm-pretty-mode 1)
     (should-not (lang-markdown-tests--hrule-bar-overlays))))
 
 (ert-deftest lang-markdown/gfm-pretty-hrule-mode-fenced-code-produces-no-overlay ()
@@ -3078,7 +3032,7 @@ decoration must be baked into the cell string itself."
     (delay-mode-hooks (gfm-mode))
     (insert "```\n---\n```\n")
     (font-lock-ensure)
-    (gfm-pretty-hrule-mode 1)
+    (gfm-pretty-mode 1)
     (should-not (lang-markdown-tests--hrule-bar-overlays))))
 
 (ert-deftest lang-markdown/gfm-pretty-hrule-mode-blockquote-produces-no-overlay ()
@@ -3087,7 +3041,7 @@ decoration must be baked into the cell string itself."
     (delay-mode-hooks (gfm-mode))
     (insert "\nfoo\n\n> ---\n\nbar\n")
     (font-lock-ensure)
-    (gfm-pretty-hrule-mode 1)
+    (gfm-pretty-mode 1)
     (should-not (lang-markdown-tests--hrule-bar-overlays))))
 
 (ert-deftest lang-markdown/gfm-pretty-hrule-mode-removes-overlays ()
@@ -3096,8 +3050,8 @@ decoration must be baked into the cell string itself."
     (delay-mode-hooks (gfm-mode))
     (insert "\nfoo\n\n---\n\nbar\n")
     (font-lock-ensure)
-    (gfm-pretty-hrule-mode 1)
-    (gfm-pretty-hrule-mode -1)
+    (gfm-pretty-mode 1)
+    (gfm-pretty-mode -1)
     (should-not (lang-markdown-tests--hrule-bar-overlays))))
 
 (ert-deftest lang-markdown/gfm-pretty-hrule-reveal-suppresses-display-at-point ()
@@ -3108,16 +3062,16 @@ decoration must be baked into the cell string itself."
           (delay-mode-hooks (gfm-mode))
           (insert "\nfoo\n\n---\n\nbar\n")
           (font-lock-ensure)
-          (gfm-pretty-hrule-mode 1)
+          (gfm-pretty-mode 1)
           (let* ((ov (car (lang-markdown-tests--hrule-bar-overlays)))
                  (hr-pos (and ov (overlay-start ov))))
             (should ov)
             (should (stringp (overlay-get ov 'display)))
             (goto-char hr-pos)
-            (gfm-pretty-hrule--reveal)
+            (gfm-pretty--reveal)
             (should (null (overlay-get ov 'display)))
             (goto-char (point-min))
-            (gfm-pretty-hrule--reveal)
+            (gfm-pretty--reveal)
             (should (stringp (overlay-get ov 'display)))))
       (kill-buffer buf))))
 
@@ -3140,7 +3094,7 @@ decoration must be baked into the cell string itself."
     (delay-mode-hooks (gfm-mode))
     (lang-markdown-tests--two-slide-hrule-buffer)
     (font-lock-ensure)
-    (gfm-pretty-hrule-mode 1)
+    (gfm-pretty-mode 1)
     (let* ((baseline (lang-markdown-tests--tagged-source-positions 'gfm-pretty-hrule))
            (slide-1-end (save-excursion
                           (goto-char (point-min))
@@ -3164,25 +3118,72 @@ decoration must be baked into the cell string itself."
   (require 'gfm-pretty-hrule)
   (with-temp-buffer
     (gfm-pretty-mode 1)
-    (should gfm-pretty-callouts-mode)
-    (should gfm-pretty-fences-mode)
-    (should gfm-pretty-tables-mode)
-    (should gfm-pretty-hrule-mode)
+    (should (gfm-pretty--state-get 'callouts 'enabled-p))
+    (should (gfm-pretty--state-get 'fences 'enabled-p))
+    (should (gfm-pretty--state-get 'tables 'enabled-p))
+    (should (gfm-pretty--state-get 'hrule 'enabled-p))
     (gfm-pretty-mode -1)
-    (should-not gfm-pretty-callouts-mode)
-    (should-not gfm-pretty-fences-mode)
-    (should-not gfm-pretty-tables-mode)
-    (should-not gfm-pretty-hrule-mode)))
+    (should-not (gfm-pretty--state-get 'callouts 'enabled-p))
+    (should-not (gfm-pretty--state-get 'fences 'enabled-p))
+    (should-not (gfm-pretty--state-get 'tables 'enabled-p))
+    (should-not (gfm-pretty--state-get 'hrule 'enabled-p))))
+
+(ert-deftest gfm-pretty/umbrella-installs-one-engine-hook-per-event ()
+  "Engine installs exactly one of its own handler per lifecycle hook.
+Decorators may install their own extras via `:on-enable-fn' (tables
+cursor handler, links xref / eldoc) — those are not the engine's
+hooks and are checked separately."
+  (require 'gfm-pretty-callouts)
+  (require 'gfm-pretty-fences)
+  (require 'gfm-pretty-tables)
+  (require 'gfm-pretty-hrule)
+  (require 'gfm-pretty-links)
+  (with-temp-buffer
+    (let ((ac-before (cl-count #'gfm-pretty--after-change
+                               after-change-functions))
+          (wcc-before (cl-count #'gfm-pretty--wcc
+                                window-configuration-change-hook))
+          (pc-before (cl-count #'gfm-pretty--reveal
+                               post-command-hook)))
+      (gfm-pretty-mode 1)
+      (should (= 1 (- (cl-count #'gfm-pretty--after-change
+                                after-change-functions)
+                      ac-before)))
+      (should (= 1 (- (cl-count #'gfm-pretty--wcc
+                                window-configuration-change-hook)
+                      wcc-before)))
+      (should (= 1 (- (cl-count #'gfm-pretty--reveal
+                                post-command-hook)
+                      pc-before)))
+      (gfm-pretty-mode -1)
+      (should (= ac-before (cl-count #'gfm-pretty--after-change
+                                     after-change-functions)))
+      (should (= wcc-before (cl-count #'gfm-pretty--wcc
+                                      window-configuration-change-hook)))
+      (should (= pc-before (cl-count #'gfm-pretty--reveal
+                                     post-command-hook))))))
+
+(ert-deftest gfm-pretty/engine-arms-at-most-one-rebuild-timer ()
+  "Editing the buffer arms at most one engine-owned idle rebuild timer."
+  (with-temp-buffer
+    (gfm-pretty-mode 1)
+    (insert "> [!NOTE]\n> Hello.\n")
+    (should (or (null gfm-pretty--rebuild-timer)
+                (timerp gfm-pretty--rebuild-timer)))
+    (when (timerp gfm-pretty--rebuild-timer)
+      (cancel-timer gfm-pretty--rebuild-timer)
+      (setq gfm-pretty--rebuild-timer nil))
+    (gfm-pretty-mode -1)))
 
 (ert-deftest gfm-pretty/toggle-decorator-flips ()
   "`gfm-pretty-toggle-decorator' toggles a single decorator."
   (require 'gfm-pretty-fences)
   (with-temp-buffer
-    (should-not gfm-pretty-fences-mode)
+    (should-not (gfm-pretty--state-get 'fences 'enabled-p))
     (gfm-pretty-toggle-decorator 'fences)
-    (should gfm-pretty-fences-mode)
+    (should (gfm-pretty--state-get 'fences 'enabled-p))
     (gfm-pretty-toggle-decorator 'fences)
-    (should-not gfm-pretty-fences-mode)))
+    (should-not (gfm-pretty--state-get 'fences 'enabled-p))))
 
 (ert-deftest gfm-pretty/block-at-point-dispatches-to-tables ()
   "`gfm-pretty-block-at-point' returns (tables . BLOCK) inside a table."
@@ -3191,7 +3192,7 @@ decoration must be baked into the cell string itself."
   (with-temp-buffer
     (gfm-mode)
     (insert "| a | b |\n|---|---|\n| 1 | 2 |\n")
-    (gfm-pretty-tables-mode 1)
+    (gfm-pretty-mode 1)
     (goto-char (point-min))
     (let ((hit (gfm-pretty-block-at-point)))
       (should hit)

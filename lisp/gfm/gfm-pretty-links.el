@@ -43,10 +43,13 @@
 (require 'xref)
 (require 'eldoc)
 (require 'markdown-mode)
-(require 'gfm-pretty-borders)
+(require 'gfm-pretty-engine)
 (require 'nerd-icons nil t)
 
-(defvar gfm-pretty-links-mode)
+(defvar gfm-pretty-mode)
+(declare-function gfm-pretty-mode "gfm-pretty")
+(declare-function gfm-pretty--require-all "gfm-pretty")
+(declare-function gfm-pretty-toggle-decorator "gfm-pretty")
 
 (defgroup gfm-pretty-links nil
   "Overlay decoration for GitHub Flavored Markdown links."
@@ -70,15 +73,6 @@ optional title attribute, and the buffer position of the `[label]:'
 definition line.  Recomputed at the start of every rebuild; the first
 definition for a duplicate label wins.")
 
-(defvar-local gfm-pretty-links--overlays nil
-  "All gfm-pretty-links overlays currently in this buffer.")
-
-(defvar-local gfm-pretty-links--hidden-ovs nil
-  "Revealable gfm-pretty-links overlays whose display is currently suppressed.")
-
-(defvar-local gfm-pretty-links--rebuild-timer nil
-  "Idle timer for the debounced overlay rebuild.")
-
 (defvar-local gfm-pretty-links--id-counter 0
   "Monotonic counter backing `gfm-pretty-links--next-id'.")
 
@@ -97,8 +91,7 @@ reveal hook can find the partner overlay."
   (cl-incf gfm-pretty-links--id-counter))
 
 (defconst gfm-pretty-links--registry
-  (gfm-pretty--registry-for
-   'gfm-pretty-links 'gfm-pretty-links--overlays 'gfm-pretty-links--hidden-ovs)
+  (gfm-pretty--registry-for 'links 'gfm-pretty-links)
   "Shared overlay-registry context for gfm-pretty-links.")
 
 (defsubst gfm-pretty-links--remove-overlays (&optional beg end)
@@ -469,11 +462,23 @@ is recomputed first so reference links resolve against current state."
           (dolist (record blocks)
             (gfm-pretty-links--decorate-link record window)))))))
 
-(defun gfm-pretty-links--schedule-rebuild (&rest _)
-  "Arm the debounced rebuild timer after a buffer change."
-  (unless (buffer-base-buffer)
-    (gfm-pretty--arm-rebuild-timer
-     'gfm-pretty-links--rebuild-timer 'gfm-pretty-links-mode #'gfm-pretty-links--rebuild)))
+(defun gfm-pretty-links--collect-blocks ()
+  "Return link records widened over the whole buffer.
+Engine entry point — the engine's reconciler reads ranges from these."
+  (save-restriction
+    (widen)
+    (gfm-pretty-links--build-ref-def-alist)
+    (gfm-pretty-links--blocks-in-range (point-min) (point-max))))
+
+(defun gfm-pretty-links--block-range (record)
+  "Engine `:range-fn' — return RECORD's full span as (BEG . END)."
+  (gfm-pretty-links--record-span record))
+
+(defun gfm-pretty-links--apply-block (record window)
+  "Engine `:apply-block-fn' — decorate RECORD in WINDOW."
+  (save-restriction
+    (widen)
+    (gfm-pretty-links--decorate-link record window)))
 
 ;;; Cursor-driven reveal (per-window, whole-link)
 
@@ -500,9 +505,10 @@ previously-revealed link once point leaves it.  Per-window: overlays
 scoped to another window are never touched."
   (let* ((pos (point))
          (win (selected-window))
-         (active-id (gfm-pretty-links--link-id-at pos win)))
-    (setq gfm-pretty-links--hidden-ovs
-          (cl-loop for ov in gfm-pretty-links--hidden-ovs
+         (active-id (gfm-pretty-links--link-id-at pos win))
+         (hidden (gfm-pretty--state-get 'links 'hidden-ovs)))
+    (setq hidden
+          (cl-loop for ov in hidden
                    if (and (overlay-buffer ov)
                            active-id
                            (eq (overlay-get ov 'gfm-pretty-links-id) active-id)
@@ -511,35 +517,36 @@ scoped to another window are never touched."
                    collect ov
                    else do (gfm-pretty-links--restore-overlay ov)))
     (when active-id
-      (dolist (ov gfm-pretty-links--overlays)
+      (dolist (ov (gfm-pretty--state-get 'links 'overlays))
         (when (and (overlay-buffer ov)
                    (eq (overlay-get ov 'gfm-pretty-links-id) active-id)
                    (overlay-get ov 'gfm-pretty-links-revealable)
                    (overlay-get ov 'display)
                    (let ((w (overlay-get ov 'window)))
                      (or (null w) (eq w win)))
-                   (not (memq ov gfm-pretty-links--hidden-ovs)))
+                   (not (memq ov hidden)))
           (overlay-put ov 'gfm-pretty-links-saved-display (overlay-get ov 'display))
           (overlay-put ov 'display nil)
-          (push ov gfm-pretty-links--hidden-ovs))))))
+          (push ov hidden))))
+    (gfm-pretty--state-set 'links 'hidden-ovs hidden)))
 
 ;;; Suppression of the built-in compose path
 
 (define-advice markdown-fontify-inline-links
     (:around (orig &rest args) gfm-pretty-links-suppress-compose)
-  "Skip the `markdown-hide-urls' compose branch under `gfm-pretty-links-mode'.
+  "Skip the `markdown-hide-urls' compose branch under the links decorator.
 The body still runs — faces apply, properties propagate — only the URL
 glyph composition is suppressed, because the gfm-pretty-links overlays
 own the link's appearance.  Inert in buffers where the mode is off."
-  (if (bound-and-true-p gfm-pretty-links-mode)
+  (if (gfm-pretty--state-get 'links 'enabled-p)
       (let ((markdown-hide-urls nil)) (apply orig args))
     (apply orig args)))
 
 (define-advice markdown-fontify-reference-links
     (:around (orig &rest args) gfm-pretty-links-suppress-compose)
-  "Skip the `markdown-hide-urls' compose branch under `gfm-pretty-links-mode'.
+  "Skip the `markdown-hide-urls' compose branch under the links decorator.
 See `markdown-fontify-inline-links@gfm-pretty-links-suppress-compose'."
-  (if (bound-and-true-p gfm-pretty-links-mode)
+  (if (gfm-pretty--state-get 'links 'enabled-p)
       (let ((markdown-hide-urls nil)) (apply orig args))
     (apply orig args)))
 
@@ -600,73 +607,74 @@ decorated link so other eldoc providers are not blocked."
           (format "%s — %s" url title)
         url))))
 
-;;; Minor mode
+;;; Lifecycle hooks delegated to engine
 
-;;;###autoload
-(define-minor-mode gfm-pretty-links-mode
-  "Decorate Markdown links with per-window overlays.
-Replaces the bracket scaffolding of inline, reference, autolink,
-bare-URL, and wiki links with a title label and a host-aware icon.
-See the file commentary for the full behaviour."
-  :lighter " gfm-ln"
-  (if gfm-pretty-links-mode
-      (progn
-        (gfm-pretty-links--rebuild)
-        (add-hook 'after-change-functions
-                  #'gfm-pretty-links--schedule-rebuild nil t)
-        (add-hook 'window-configuration-change-hook
-                  #'gfm-pretty-links--schedule-rebuild nil t)
-        (add-hook 'post-command-hook #'gfm-pretty-links--reveal nil t)
-        (add-hook 'xref-backend-functions #'gfm-pretty-links--xref-backend nil t)
-        (add-hook 'eldoc-documentation-functions
-                  #'gfm-pretty-links--eldoc-function nil t))
-    (remove-hook 'after-change-functions #'gfm-pretty-links--schedule-rebuild t)
-    (remove-hook 'window-configuration-change-hook
-                 #'gfm-pretty-links--schedule-rebuild t)
-    (remove-hook 'post-command-hook #'gfm-pretty-links--reveal t)
-    (remove-hook 'xref-backend-functions #'gfm-pretty-links--xref-backend t)
-    (remove-hook 'eldoc-documentation-functions
-                 #'gfm-pretty-links--eldoc-function t)
-    (when (timerp gfm-pretty-links--rebuild-timer)
-      (cancel-timer gfm-pretty-links--rebuild-timer))
-    (setq gfm-pretty-links--rebuild-timer nil
-          gfm-pretty-links--ref-def-alist nil)
-    (gfm-pretty-links--remove-overlays)))
+(defun gfm-pretty-links--on-enable ()
+  "Install link-decorator-specific hooks (xref + eldoc)."
+  (add-hook 'xref-backend-functions #'gfm-pretty-links--xref-backend nil t)
+  (add-hook 'eldoc-documentation-functions
+            #'gfm-pretty-links--eldoc-function nil t))
+
+(defun gfm-pretty-links--on-disable ()
+  "Remove the link-decorator-specific hooks and reset reference cache."
+  (remove-hook 'xref-backend-functions #'gfm-pretty-links--xref-backend t)
+  (remove-hook 'eldoc-documentation-functions
+               #'gfm-pretty-links--eldoc-function t)
+  (setq gfm-pretty-links--ref-def-alist nil))
 
 ;;; markdown-hide-urls integration
 
+(defun gfm-pretty-links--enabled-p ()
+  "Non-nil when the links decorator is on in the current buffer."
+  (gfm-pretty--state-get 'links 'enabled-p))
+
 (defun gfm-pretty-links--watch-hide-urls (_symbol newval operation where)
-  "Track `markdown-hide-urls' changes into `gfm-pretty-links-mode'.
+  "Track `markdown-hide-urls' changes into the links decorator.
 Enabling/disabling stays independent of the variable — toggling the
-variable simply follows through to the mode in the affected buffer
-\(WHERE, or the current buffer for a global set)."
+variable follows through to the links decorator in WHERE (or the
+current buffer for a global set) via `gfm-pretty-mode' +
+`gfm-pretty-toggle-decorator'."
   (when (eq operation 'set)
     (let ((buf (if (bufferp where) where (current-buffer))))
       (when (buffer-live-p buf)
         (with-current-buffer buf
           (when (and gfm-pretty-links--watching (derived-mode-p 'markdown-mode))
-            (if newval
-                (unless gfm-pretty-links-mode (gfm-pretty-links-mode 1))
-              (when gfm-pretty-links-mode (gfm-pretty-links-mode -1)))))))))
+            (cond
+             ;; Enable: ensure umbrella is on, then ensure links bit is on.
+             (newval
+              (unless gfm-pretty-mode (gfm-pretty-mode 1))
+              (unless (gfm-pretty-links--enabled-p)
+                (gfm-pretty-toggle-decorator 'links)))
+             ;; Disable: only flip the links bit; leave umbrella alone.
+             (t
+              (when (gfm-pretty-links--enabled-p)
+                (gfm-pretty-toggle-decorator 'links))))))))))
 
 ;;;###autoload
 (defun gfm-pretty-links--maybe-enable ()
-  "Enable `gfm-pretty-links-mode' when `markdown-hide-urls' is on, and track it.
+  "Enable the links decorator when `markdown-hide-urls' is on, and track it.
 Wired into `markdown-mode-hook' / `gfm-mode-hook'.  Installs a
-buffer-local watcher on `markdown-hide-urls' so later changes to the
-variable toggle the mode."
+variable watcher on `markdown-hide-urls' so later changes flip the
+decorator's enable bit via `gfm-pretty-toggle-decorator'."
   (setq gfm-pretty-links--watching t)
   (add-variable-watcher 'markdown-hide-urls #'gfm-pretty-links--watch-hide-urls)
   (when (bound-and-true-p markdown-hide-urls)
-    (gfm-pretty-links-mode 1)))
+    (unless gfm-pretty-mode (gfm-pretty-mode 1))
+    (unless (gfm-pretty-links--enabled-p)
+      (gfm-pretty-toggle-decorator 'links))))
 
 ;;; gfm-pretty decorator registration
 
-(with-eval-after-load 'gfm-pretty
+(with-eval-after-load 'gfm-pretty-engine
   (gfm-pretty-define-decorator 'links
-    :enable-fn    (lambda () (gfm-pretty-links--maybe-enable))
-    :disable-fn   (lambda () (gfm-pretty-links-mode -1))
-    :enabled-p-fn (lambda () (bound-and-true-p gfm-pretty-links-mode))))
+    :registry           gfm-pretty-links--registry
+    :collect-fn         #'gfm-pretty-links--collect-blocks
+    :range-fn           #'gfm-pretty-links--block-range
+    :apply-block-fn     #'gfm-pretty-links--apply-block
+    :rebuild-fn         #'gfm-pretty-links--rebuild
+    :on-enable-fn       #'gfm-pretty-links--on-enable
+    :on-disable-fn      #'gfm-pretty-links--on-disable
+    :reveal-fn          #'gfm-pretty-links--reveal))
 
 (provide 'gfm-pretty-links)
 

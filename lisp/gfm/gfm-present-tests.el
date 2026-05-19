@@ -11,29 +11,6 @@
 (require 'gfm-present)
 
 
-;;; Module-init negative assertions
-
-(defun gfm-present-tests--load-init ()
-  "Load `modules/presentation/init.el'.
-Returns t if loaded, nil if the file is unavailable."
-  (let ((init (expand-file-name "modules/presentation/init.el"
-                                user-emacs-directory)))
-    (when (file-exists-p init)
-      (condition-case nil (load init nil t) (error nil))
-      t)))
-
-(ert-deftest gfm-present/no-mcp-tools-registered ()
-  "Module init no longer registers presentation MCP tools."
-  (skip-unless (gfm-present-tests--load-init))
-  (when (boundp 'claude-code-ide-mcp-server-tools)
-    (let ((names (mapcar (lambda (s) (plist-get s :name))
-                         claude-code-ide-mcp-server-tools)))
-      (dolist (n '("start_presentation" "present_document" "get_presentation"
-                   "end_presentation" "push_slide" "replace_slide"
-                   "truncate_after" "goto_slide" "get_deck"))
-        (should-not (member n names))))))
-
-
 ;;; Surviving surface
 
 (ert-deftest gfm-present/focus-face-defined ()
@@ -955,22 +932,6 @@ buffer-local revert hooks, and the minor-mode flag before
      (expand-file-name "lisp/gfm/gfm-present.el"
                        user-emacs-directory))
     (buffer-string)))
-
-(defun gfm-present-tests--read-init ()
-  (with-temp-buffer
-    (insert-file-contents
-     (expand-file-name "modules/presentation/init.el"
-                       user-emacs-directory))
-    (buffer-string)))
-
-(ert-deftest gfm-present/init-el-is-small-and-has-no-mcp-calls ()
-  (skip-unless (file-exists-p
-                (expand-file-name "modules/presentation/init.el"
-                                  user-emacs-directory)))
-  (let ((src (gfm-present-tests--read-init)))
-    (should-not (string-match-p "claude-code-ide-make-tool" src))
-    (should-not (string-match-p "delete-frame-functions" src))
-    (should-not (string-match-p "claude-code-ide-mcp" src))))
 
 (ert-deftest gfm-present/lib-el-exports-public-symbols ()
   (should (fboundp 'gfm-present-markdown))

@@ -22,11 +22,11 @@
 
 (require 'cl-lib)
 (require 'gfm-pretty-borders)
+(require 'gfm-pretty-engine)
 (require 'gfm-pretty-fences nil t)
 (require 'markdown-mode nil t)
 
 (defvar gfm-pretty-tables--row-map)
-(defvar gfm-pretty-tables-mode)
 
 (defgroup gfm-pretty-tables nil
   "Visual treatment for GitHub Flavored Markdown tables."
@@ -55,25 +55,8 @@ Mirrors the background of `gfm-pretty-tables-row-alt-face' so that
 the row's background to the header box's vertical edges."
   :group 'gfm-pretty-tables)
 
-(defcustom gfm-pretty-tables-slow-rebuild-threshold 0.05
-  "Threshold in seconds above which a single rebuild emits a warning."
-  :type 'number
-  :group 'gfm-pretty-tables)
-
-(defconst gfm-pretty-tables--border-face '+markdown-overlay-border-face
+(defconst gfm-pretty-tables--border-face 'gfm-pretty-border-face
   "Face used for table border characters.")
-
-(defvar gfm-pretty-tables--stats)
-(defvar-local gfm-pretty-tables--dirty-region nil
-  "Buffer-local (BEG . END) covering all unrebuilt edits, or nil if clean.
-The dirty region grows monotonically until the idle timer fires and
-`gfm-pretty-tables--rebuild-scoped' consumes it.")
-
-(defvar gfm-pretty-tables-mode-map (make-sparse-keymap)
-  "Keymap for `gfm-pretty-tables-mode'.
-Intentionally empty: cell-wise bindings live on row overlays via the
-`keymap' overlay property (`gfm-pretty-tables--row-map') so they only apply
-inside a table.")
 
 (defconst gfm-pretty-tables--delim-re
   ;; Matches a delimiter row like `| --- | :---: | ---: |' — outer pipes
@@ -110,7 +93,7 @@ STR is the fontified, trimmed cell text; BUFFER's region [BEG, END) is
 the raw source between the cell pipes (including padding).  The
 region's leading and trailing whitespace is skipped so STR offset 0
 maps to the first content character.  Overlays carrying a `display'
-string — for instance the link overlays created by `gfm-pretty-links-mode' —
+string — for instance the link overlays created by the links decorator —
 have that string spliced into STR in place of the covered text, and
 overlays hidden via `invisible' splice to the empty string.  Splicing
 \(rather than copying the property) is required because a `display'
@@ -159,7 +142,7 @@ With BUFFER, BEG and END all non-nil, CELL is the trimmed text of the
 source-buffer region [BEG, END).  Width-affecting overlay decoration on
 that region is baked into the returned string via
 `gfm-pretty-tables--transcribe-source-overlays', so a cell containing a
-`gfm-pretty-links-mode'-decorated link both renders and sizes its column by
+the links decorator-decorated link both renders and sizes its column by
 the decorated width rather than the raw markdown width."
   (cond
    ((or (null cell) (string-empty-p cell)) (or cell ""))
@@ -179,7 +162,7 @@ the decorated width rather than the raw markdown width."
 (defun gfm-pretty-tables--fontify-row-cells (line-beg line-end)
   "Fontify the cells of the table row spanning LINE-BEG..LINE-END.
 Each cell is measured against its source region so overlay
-decorations (e.g. `gfm-pretty-links-mode' link overlays) inside a cell size
+decorations (e.g. the links decorator link overlays) inside a cell size
 the column to their decorated width.  Cells past the available source
 bounds fall back to plain string measurement."
   (let* ((line (buffer-substring-no-properties line-beg line-end))
@@ -229,7 +212,7 @@ outside one, so the cache never crosses rebuild boundaries.")
   "Walk the region [BEG, END) in BUFFER, returning its visible width.
 Consults overlay properties as well as text properties via
 `get-char-property', so overlay decorations (e.g. the link overlays
-created by `gfm-pretty-links-mode') are measured at their visible width
+created by the links decorator) are measured at their visible width
 rather than their underlying source width.  Honours `display',
 `invisible', and `composition' the same way the string walker does.
 Leading and trailing whitespace of the region is trimmed first so a
@@ -452,17 +435,6 @@ escapes and `|' inside backtick code spans."
   "Non-nil if POS lies in any (BEG . END) range in RANGES."
   (cl-some (lambda (r) (and (>= pos (car r)) (<= pos (cdr r)))) ranges))
 
-(defvar-local gfm-pretty-tables--blocks-cache nil
-  "Pair (TICK . BLOCKS) memoising `gfm-pretty-tables--find-blocks'.
-TICK is the `buffer-chars-modified-tick' at scan time.
-BLOCKS is the unfiltered, full-buffer block list as returned by
-`gfm-pretty-tables--find-blocks-1'.  Stale when its tick disagrees with
-`buffer-chars-modified-tick'.  We key on the chars tick rather than
-`buffer-modified-tick' because the latter increments for text-property
-changes too — including the `cursor' anchor we re-set on every cell
-crossing in `gfm-pretty-tables--update-cursor-highlight' — which would
-invalidate the cache on plain motion.")
-
 (defun gfm-pretty-tables--find-blocks-1 ()
   "Scan the buffer for GFM tables, ignoring any excluded-ranges filtering.
 Each entry is (HEADER-BEG DELIM-BEG BODY-BEG BODY-END).  Internal
@@ -517,18 +489,9 @@ regardless of any current narrowing.  See fix-gfm-narrowing-safety."
   "Return all GFM tables in the buffer.
 Each entry is (HEADER-BEG DELIM-BEG BODY-BEG BODY-END).  Tables whose
 delimiter row falls inside any (BEG . END) range in EXCLUDED-RANGES are
-omitted.  The unfiltered scan is memoised by `buffer-modified-tick' so
-non-modifying callers (cell motion, edit dispatch) reuse a single scan
-between edits."
-  (let* ((tick (buffer-chars-modified-tick))
-         (all (cond
-               ((and gfm-pretty-tables--blocks-cache
-                     (= tick (car gfm-pretty-tables--blocks-cache)))
-                (cdr gfm-pretty-tables--blocks-cache))
-               (t
-                (let ((blocks (gfm-pretty-tables--find-blocks-1)))
-                  (setq gfm-pretty-tables--blocks-cache (cons tick blocks))
-                  blocks)))))
+omitted.  Engine-level memoisation in `gfm-pretty--collect' covers the
+rebuild path; this helper exists for filtered callers."
+  (let ((all (gfm-pretty-tables--find-blocks-1)))
     (if excluded-ranges
         (cl-remove-if (lambda (b)
                         (gfm-pretty-tables--in-ranges-p (nth 1 b) excluded-ranges))
@@ -854,36 +817,17 @@ vector for callers (and tests) that depend on the older API."
                         'face face)
             (propertize "┘" 'face face))))
 
-;;; Performance instrumentation primitives
-
-(defun gfm-pretty-tables--accum-phase (phase delta)
-  "Accumulate DELTA seconds into PHASE in `gfm-pretty-tables--stats'.
-No-op when stats are not initialised."
-  (when gfm-pretty-tables--stats
-    (let ((totals (alist-get 'phase-totals gfm-pretty-tables--stats)))
-      (when totals
-        (setf (alist-get phase totals)
-              (+ delta (or (alist-get phase totals) 0.0)))
-        (setf (alist-get 'phase-totals gfm-pretty-tables--stats) totals)))))
+;;; Phase timing helpers (route through engine)
 
 (defmacro gfm-pretty-tables--time-phase (phase &rest body)
-  "Run BODY, accumulating its wall-time into PHASE on `gfm-pretty-tables--stats'."
+  "Run BODY, accumulating its wall-time into PHASE on the tables decorator."
   (declare (indent 1) (debug (form body)))
-  (let ((start (make-symbol "start")))
-    `(let ((,start (current-time)))
-       (prog1 (progn ,@body)
-         (gfm-pretty-tables--accum-phase
-          ,phase (float-time (time-since ,start)))))))
+  `(gfm-pretty-time-phase 'tables ,phase ,@body))
 
 ;;; Overlay application
 
-(defvar-local gfm-pretty-tables--overlays nil
-  "All gfm-pretty-tables overlays currently in this buffer.")
-
 (defconst gfm-pretty-tables--registry
-  (gfm-pretty--registry-for
-   'gfm-pretty-tables
-   'gfm-pretty-tables--overlays)
+  (gfm-pretty--registry-for 'tables 'gfm-pretty-tables)
   "Shared overlay-registry context for tables.
 Routes the full-clear teardown through `gfm-pretty--remove-overlays'
 so it widens for the duration of the clear, matching the fences/callouts
@@ -892,7 +836,7 @@ contract.")
 (defun gfm-pretty-tables--register (ov)
   "Tag OV as a gfm-pretty-tables overlay and remember it for bulk cleanup."
   (overlay-put ov 'gfm-pretty-tables t)
-  (push ov gfm-pretty-tables--overlays)
+  (gfm-pretty--state-push 'tables 'overlays ov)
   ov)
 
 (defun gfm-pretty-tables--remove-overlays (&optional beg end)
@@ -913,7 +857,7 @@ buffer; the per-window rendering lives on display overlays."
     (overlay-put ov 'gfm-pretty-tables-anchor t)
     (overlay-put ov 'gfm-pretty-tables-cell-bounds cell-bounds)
     (overlay-put ov 'keymap gfm-pretty-tables--row-map)
-    (push ov gfm-pretty-tables--overlays)
+    (gfm-pretty--state-push 'tables 'overlays ov)
     ov))
 
 (defun gfm-pretty-tables--make-display (beg end window display before after col-widths dcb)
@@ -935,7 +879,7 @@ every window (used when no window currently shows the buffer)."
     (when after (overlay-put ov 'after-string after))
     (when col-widths (overlay-put ov 'gfm-pretty-tables-col-widths col-widths))
     (when dcb (overlay-put ov 'gfm-pretty-tables-display-cell-bounds dcb))
-    (push ov gfm-pretty-tables--overlays)
+    (gfm-pretty--state-push 'tables 'overlays ov)
     ov))
 
 (defun gfm-pretty-tables--display-overlay-for-anchor (anchor &optional window)
@@ -1084,18 +1028,16 @@ display overlay (used when wiping out an unrestricted fallback set)."
                  (or (null window)
                      (eq (overlay-get ov 'window) window)))
         (delete-overlay ov))))
-  (setq gfm-pretty-tables--overlays
-        (cl-remove-if-not #'overlay-buffer gfm-pretty-tables--overlays)))
+  (gfm-pretty--prune-dead-overlays gfm-pretty-tables--registry))
 
 (defun gfm-pretty-tables--remove-display-overlays-for-window (window)
   "Delete every display overlay restricted to WINDOW across the buffer."
-  (dolist (ov gfm-pretty-tables--overlays)
+  (dolist (ov (gfm-pretty--state-get 'tables 'overlays))
     (when (and (overlay-buffer ov)
                (overlay-get ov 'gfm-pretty-tables-display)
                (eq (overlay-get ov 'window) window))
       (delete-overlay ov)))
-  (setq gfm-pretty-tables--overlays
-        (cl-remove-if-not #'overlay-buffer gfm-pretty-tables--overlays)))
+  (gfm-pretty--prune-dead-overlays gfm-pretty-tables--registry))
 
 (defun gfm-pretty-tables--rebuild-block-for-window (block window)
   "Replace WINDOW's display overlays for BLOCK with fresh ones at current width.
@@ -1130,75 +1072,7 @@ restriction can still be parsed and re-rendered."
         (cl-incf n)))
     n))
 
-;;; Performance instrumentation
-
-(defvar-local gfm-pretty-tables--stats nil
-  "Per-buffer alist of rebuild stats.")
-
-(defconst gfm-pretty-tables--phase-keys
-  '(find-blocks parse layout compose apply)
-  "Keys used in `gfm-pretty-tables--stats' `phase-totals' alist, in display order.")
-
-(defun gfm-pretty-tables--init-stats ()
-  "Reset the per-buffer rebuild stats to zero."
-  (setq gfm-pretty-tables--stats
-        (list (cons 'rebuild-count 0)
-              (cons 'total-time 0.0)
-              (cons 'last-time 0.0)
-              (cons 'max-time 0.0)
-              (cons 'table-count 0)
-              (cons 'phase-totals
-                    (mapcar (lambda (k) (cons k 0.0))
-                            gfm-pretty-tables--phase-keys)))))
-
-(defun gfm-pretty-tables--record-stats (duration table-count)
-  "Update stats with DURATION and TABLE-COUNT from one rebuild."
-  (unless gfm-pretty-tables--stats (gfm-pretty-tables--init-stats))
-  (setf (alist-get 'rebuild-count gfm-pretty-tables--stats)
-        (1+ (alist-get 'rebuild-count gfm-pretty-tables--stats)))
-  (setf (alist-get 'total-time gfm-pretty-tables--stats)
-        (+ duration (alist-get 'total-time gfm-pretty-tables--stats)))
-  (setf (alist-get 'last-time gfm-pretty-tables--stats) duration)
-  (setf (alist-get 'max-time gfm-pretty-tables--stats)
-        (max duration (alist-get 'max-time gfm-pretty-tables--stats)))
-  (setf (alist-get 'table-count gfm-pretty-tables--stats) table-count)
-  (when (> duration gfm-pretty-tables-slow-rebuild-threshold)
-    (message "gfm-pretty-tables: slow rebuild in %s: %.3fs"
-             (buffer-name) duration)))
-
-(defun gfm-pretty-tables--format-phase-totals (totals)
-  "Return a phase-by-phase summary string for TOTALS, sorted by total desc."
-  (let ((sorted (sort (copy-sequence totals)
-                      (lambda (a b) (> (cdr a) (cdr b))))))
-    (mapconcat (lambda (p) (format "%s=%.3fs" (car p) (cdr p)))
-               sorted " ")))
-
-(defun gfm-pretty-tables-stats ()
-  "Display the current buffer's gfm-pretty-tables rebuild statistics."
-  (interactive)
-  (if (not gfm-pretty-tables--stats)
-      (message "gfm-pretty-tables: no stats yet")
-    (let-alist gfm-pretty-tables--stats
-      (message
-       "gfm-pretty-tables [%s]: rebuilds=%d total=%.3fs last=%.3fs max=%.3fs tables=%d | %s"
-       (buffer-name)
-       .rebuild-count .total-time .last-time .max-time .table-count
-       (gfm-pretty-tables--format-phase-totals .phase-totals)))))
-
-;;; Rebuild scheduler
-
-(defvar-local gfm-pretty-tables--last-available-width nil
-  "Available char width recorded on the last full rebuild.
-Single-window legacy: kept for the regression test that pokes at it.
-Real check uses `gfm-pretty-tables--last-window-state'.")
-
-(defvar-local gfm-pretty-tables--last-window-state nil
-  "Snapshot of the windows showing the buffer at the last rebuild.
-List of (WINDOW . MAX-CHARS-PER-LINE) pairs.  Compared in
-`gfm-pretty-tables--schedule-full-rebuild' so window-config changes that
-leave every window's width unchanged (minibuffer activity, focus
-shifts) skip the rebuild, while a new or resized window — and so a
-genuinely new rendering need — triggers one.")
+;;; Rebuild
 
 (defun gfm-pretty-tables--window-state ()
   "Return the (WINDOW . WIDTH) snapshot used to detect rendering drift."
@@ -1209,38 +1083,28 @@ genuinely new rendering need — triggers one.")
   "Remove and recreate all gfm-pretty-tables overlays.
 Re-applies the active-cell highlight afterwards so cell selection
 survives window-configuration changes and other rebuild triggers."
-  (let ((start (current-time))
-        (gfm-pretty-tables--width-cache (make-hash-table :test 'eq)))
+  (let ((gfm-pretty-tables--width-cache (make-hash-table :test 'eq)))
     (gfm-pretty-tables--remove-overlays)
-    (setq gfm-pretty-tables--dirty-region nil)
-    (let ((n (gfm-pretty-tables--apply-overlays)))
-      (gfm-pretty-tables--record-stats (float-time (time-since start)) n))
-    (setq gfm-pretty-tables--last-available-width (gfm-pretty-tables--available-width)
-          gfm-pretty-tables--last-window-state (gfm-pretty-tables--window-state))
+    (gfm-pretty-tables--apply-overlays)
+    (gfm-pretty--state-set 'tables 'last-window-state
+                           (gfm-pretty-tables--window-state))
     (gfm-pretty-tables--update-cursor-highlight)))
 
 (defun gfm-pretty-tables--rebuild-block (block)
   "Tear down BLOCK's overlays and re-apply just that table."
-  (let ((start (current-time))
-        (gfm-pretty-tables--width-cache (make-hash-table :test 'eq)))
+  (let ((gfm-pretty-tables--width-cache (make-hash-table :test 'eq)))
     (gfm-pretty-tables--remove-overlays-in-block block)
     (cl-destructuring-bind (h d bb be) block
-      (gfm-pretty-tables--apply-table h d bb be))
-    (gfm-pretty-tables--record-stats (float-time (time-since start)) 1))
+      (gfm-pretty-tables--apply-table h d bb be)))
   (gfm-pretty-tables--update-cursor-highlight))
 
 (defun gfm-pretty-tables--rebuild-blocks (blocks)
-  "Tear down each block in BLOCKS and re-apply those tables in one pass.
-Stats record one rebuild covering all BLOCKS, so callers can rebuild
-several tables (e.g. all visible-window tables) without `n' separate
-stat entries."
-  (let ((start (current-time))
-        (gfm-pretty-tables--width-cache (make-hash-table :test 'eq)))
+  "Tear down each block in BLOCKS and re-apply those tables in one pass."
+  (let ((gfm-pretty-tables--width-cache (make-hash-table :test 'eq)))
     (dolist (block blocks)
       (gfm-pretty-tables--remove-overlays-in-block block)
       (cl-destructuring-bind (h d bb be) block
-        (gfm-pretty-tables--apply-table h d bb be)))
-    (gfm-pretty-tables--record-stats (float-time (time-since start)) (length blocks))))
+        (gfm-pretty-tables--apply-table h d bb be)))))
 
 (defun gfm-pretty-tables--block-visible-p (block ranges)
   "Non-nil if BLOCK's source range overlaps any (VSTART . VEND) in RANGES."
@@ -1259,37 +1123,6 @@ the live value (second arg t), since we're driven by
 `window-configuration-change-hook' where the cached value may be stale."
   (mapcar (lambda (w) (cons (window-start w) (window-end w t)))
           (get-buffer-window-list (current-buffer) nil t)))
-
-(defun gfm-pretty-tables--rebuild-prioritised ()
-  "Rebuild visible-window tables first; schedule off-screen on next idle.
-Used for width-affecting changes (window resize) so the user's view
-catches up immediately and tables they can't see take their own tick.
-Falls back to a full one-shot rebuild when no window shows the buffer."
-  (let ((ranges (gfm-pretty-tables--visible-window-ranges)))
-    (cond
-     ((null ranges)
-      (gfm-pretty-tables--rebuild))
-     (t
-      (let* ((blocks (gfm-pretty-tables--find-blocks (gfm-pretty-tables--fenced-ranges)))
-             (visible (cl-remove-if-not
-                       (lambda (b) (gfm-pretty-tables--block-visible-p b ranges))
-                       blocks))
-             (offscreen (cl-set-difference blocks visible)))
-        (when visible
-          (gfm-pretty-tables--rebuild-blocks visible))
-        (setq gfm-pretty-tables--dirty-region nil
-              gfm-pretty-tables--last-available-width (gfm-pretty-tables--available-width)
-              gfm-pretty-tables--last-window-state (gfm-pretty-tables--window-state))
-        (gfm-pretty-tables--update-cursor-highlight)
-        (when offscreen
-          (run-with-idle-timer
-           0 nil
-           (lambda (buf bs)
-             (when (buffer-live-p buf)
-               (with-current-buffer buf
-                 (when gfm-pretty-tables-mode
-                   (gfm-pretty-tables--rebuild-blocks bs)))))
-           (current-buffer) offscreen)))))))
 
 (defun gfm-pretty-tables--rebuild-window-prioritised (window)
   "Visible-first / off-screen-deferred rebuild of WINDOW's display overlays.
@@ -1314,7 +1147,7 @@ buffer or has been resized."
          (lambda (buf bs win)
            (when (and (buffer-live-p buf) (window-live-p win))
              (with-current-buffer buf
-               (when gfm-pretty-tables-mode
+               (when (gfm-pretty--state-get 'tables 'enabled-p)
                  (let ((gfm-pretty-tables--width-cache
                         (make-hash-table :test 'eq)))
                    (dolist (b bs)
@@ -1323,185 +1156,88 @@ buffer or has been resized."
 
 (defun gfm-pretty-tables--reconcile-windows ()
   "Reconcile display overlays with current window state.
-Compares the current `(WIN . WIDTH)' snapshot to the one cached in
-`gfm-pretty-tables--last-window-state' and acts only on the diff:
+Compares the current `(WIN . WIDTH)' snapshot to the engine's cached
+`last-window-state' for the tables decorator and acts only on the
+diff: added/resized windows get a prioritised rebuild; removed
+windows have their display overlays deleted.  Falls back to a full
+rebuild via the engine when called for the first time or when an
+anchor is missing."
+  (let ((prev (gfm-pretty--state-get 'tables 'last-window-state)))
+    (cond
+     ((or (null prev)
+          (null (cl-some (lambda (o) (overlay-get o 'gfm-pretty-tables-anchor))
+                         (gfm-pretty--state-get 'tables 'overlays))))
+      (gfm-pretty--rebuild (gfm-pretty--get 'tables)))
+     (t
+      (let* ((curr (gfm-pretty-tables--window-state))
+             (prev-keys (mapcar #'car prev))
+             (curr-keys (mapcar #'car curr))
+             (added (cl-remove-if (lambda (e) (memq (car e) prev-keys)) curr))
+             (removed (cl-remove-if (lambda (w) (memq w curr-keys)) prev-keys))
+             (resized (cl-remove-if-not
+                       (lambda (e)
+                         (let ((old (assq (car e) prev)))
+                           (and old (not (eql (cdr e) (cdr old))))))
+                       curr)))
+        (dolist (w removed)
+          (gfm-pretty-tables--remove-display-overlays-for-window w))
+        (dolist (entry (append added resized))
+          (gfm-pretty-tables--rebuild-window-prioritised (car entry)))
+        (gfm-pretty--state-set 'tables 'last-window-state curr)
+        (gfm-pretty-tables--update-cursor-highlight))))))
 
-- Windows now showing the buffer (added) get a prioritised rebuild
-  for that window only.
-- Windows no longer showing the buffer (removed) have their display
-  overlays deleted.
-- Windows whose width changed (resized) get a prioritised rebuild.
+;;; Engine adapter helpers
 
-Anchors and untouched windows' display overlays are not disturbed.
-Falls back to a full `gfm-pretty-tables--rebuild' when called for the first
-time (no prior state cached) or when an anchor is missing."
-  (cond
-   ((or (null gfm-pretty-tables--last-window-state)
-        (null (cl-some (lambda (o) (overlay-get o 'gfm-pretty-tables-anchor))
-                       gfm-pretty-tables--overlays)))
-    (gfm-pretty-tables--rebuild))
-   (t
-    (let* ((prev gfm-pretty-tables--last-window-state)
-           (curr (gfm-pretty-tables--window-state))
-           (prev-keys (mapcar #'car prev))
-           (curr-keys (mapcar #'car curr))
-           (added (cl-remove-if (lambda (e) (memq (car e) prev-keys)) curr))
-           (removed (cl-remove-if (lambda (w) (memq w curr-keys)) prev-keys))
-           (resized (cl-remove-if-not
-                     (lambda (e)
-                       (let ((old (assq (car e) prev)))
-                         (and old (not (eql (cdr e) (cdr old))))))
-                     curr)))
-      (dolist (w removed)
-        (gfm-pretty-tables--remove-display-overlays-for-window w))
-      (dolist (entry (append added resized))
-        (gfm-pretty-tables--rebuild-window-prioritised (car entry)))
-      (setq gfm-pretty-tables--last-window-state curr
-            gfm-pretty-tables--last-available-width (gfm-pretty-tables--available-width))
-      (gfm-pretty-tables--update-cursor-highlight)))))
+(defun gfm-pretty-tables--collect-blocks ()
+  "Engine `:collect-fn' — return tagged tables for the engine reconciler."
+  (gfm-pretty-tables--find-blocks (gfm-pretty-tables--fenced-ranges)))
 
-(defun gfm-pretty-tables--extend-dirty-region (beg end)
-  "Extend the buffer's dirty region to cover BEG..END."
-  (cond
-   ((null gfm-pretty-tables--dirty-region)
-    (setq gfm-pretty-tables--dirty-region (cons beg end)))
-   (t
-    (setcar gfm-pretty-tables--dirty-region
-            (min (car gfm-pretty-tables--dirty-region) beg))
-    (setcdr gfm-pretty-tables--dirty-region
-            (max (cdr gfm-pretty-tables--dirty-region) end)))))
-
-(defun gfm-pretty-tables--region-overlaps-p (a b)
-  "Non-nil if (BEG . END) ranges A and B overlap."
-  (and (<= (car a) (cdr b)) (>= (cdr a) (car b))))
-
-(defun gfm-pretty-tables--block-line-range (block)
-  "Return (HEADER-BEG . BODY-END+1) for BLOCK."
+(defun gfm-pretty-tables--block-range (block)
+  "Engine `:range-fn' — return (HEADER-BEG . BODY-END+1) for BLOCK."
   (cons (nth 0 block) (1+ (nth 3 block))))
 
-(defun gfm-pretty-tables--block-fully-contains-p (block region)
-  "Non-nil if REGION lies inside BLOCK's HEADER-BEG..BODY-END+1 range."
-  (let ((br (gfm-pretty-tables--block-line-range block)))
-    (and (>= (car region) (car br))
-         (<= (cdr region) (cdr br)))))
+(defun gfm-pretty-tables--apply-block (block window)
+  "Engine `:apply-block-fn' — apply WINDOW's display overlays for BLOCK.
+Anchors are laid by the full `gfm-pretty-tables--apply-table' path
+during `--rebuild', so the per-window seam only re-renders the
+display layer here."
+  (gfm-pretty-tables--rebuild-block-for-window block window))
 
-(defun gfm-pretty-tables--fence-line-ranges ()
-  "Return per-line (BEG . END) ranges for opening/closing code-fence lines."
-  (when (fboundp 'gfm-pretty-fences--find-blocks)
-    (cl-loop for b in (gfm-pretty-fences--find-blocks)
-             for open-beg = (nth 0 b)
-             for close-end = (nth 3 b)
-             nconc (list
-                    (cons (save-excursion
-                            (goto-char open-beg) (line-beginning-position))
-                          (save-excursion
-                            (goto-char open-beg) (line-end-position)))
-                    (cons (save-excursion
-                            (goto-char close-end) (line-beginning-position))
-                          (save-excursion
-                            (goto-char close-end) (line-end-position)))))))
+;;; Lifecycle hooks delegated to engine
 
-(defun gfm-pretty-tables--region-overlaps-fence-line-p (region)
-  "Non-nil if REGION overlaps a fenced-code-block fence line."
-  (cl-some (lambda (r) (gfm-pretty-tables--region-overlaps-p region r))
-           (gfm-pretty-tables--fence-line-ranges)))
+(defun gfm-pretty-tables--wcc-handler (&rest _)
+  "Buffer-local `window-configuration-change-hook' handler.
+Invokes the tables-specific per-window reconciler when the tables
+decorator is enabled and the window state has changed."
+  (when (gfm-pretty--state-get 'tables 'enabled-p)
+    (gfm-pretty-tables--reconcile-windows)))
 
-(defun gfm-pretty-tables--rebuild-scoped ()
-  "Rebuild only what `gfm-pretty-tables--dirty-region' demands.
-No-op when the region intersects no decorated table; falls back to a
-full rebuild when the region spans a table boundary, multiple tables,
-or any code-fence line."
-  (let ((dirty gfm-pretty-tables--dirty-region))
-    (setq gfm-pretty-tables--dirty-region nil)
-    (cond
-     ((null dirty) nil)
-     ((gfm-pretty-tables--region-overlaps-fence-line-p dirty)
-      (gfm-pretty-tables--rebuild))
-     (t
-      (let* ((excluded (gfm-pretty-tables--fenced-ranges))
-             (blocks (gfm-pretty-tables--find-blocks excluded))
-             (matching (cl-loop for b in blocks
-                                when (gfm-pretty-tables--region-overlaps-p
-                                      dirty
-                                      (gfm-pretty-tables--block-line-range b))
-                                collect b)))
-        (cond
-         ((null matching) nil)
-         ((and (null (cdr matching))
-               (gfm-pretty-tables--block-fully-contains-p (car matching) dirty))
-          (gfm-pretty-tables--rebuild-block (car matching)))
-         (t
-          (gfm-pretty-tables--rebuild))))))))
+(defun gfm-pretty-tables--on-enable ()
+  "Per-decorator setup invoked on enable.
+Installs the active-cell cursor handler and a buffer-local
+`window-configuration-change-hook' that routes tables's bespoke
+per-window reconciler (the engine's generic reconciler is not used
+for tables)."
+  (add-hook 'post-command-hook
+            #'gfm-pretty-tables--update-cursor-highlight nil t)
+  (add-hook 'window-configuration-change-hook
+            #'gfm-pretty-tables--wcc-handler nil t))
 
-(defvar-local gfm-pretty-tables--rebuild-timer nil
-  "Idle timer for debounced overlay rebuilds.")
+(defun gfm-pretty-tables--on-disable ()
+  "Per-decorator teardown invoked on disable."
+  (remove-hook 'post-command-hook
+               #'gfm-pretty-tables--update-cursor-highlight t)
+  (remove-hook 'window-configuration-change-hook
+               #'gfm-pretty-tables--wcc-handler t)
+  (gfm-pretty-tables--hide-cursor-highlight))
 
-(defvar gfm-pretty-tables-mode)
-
-(defun gfm-pretty-tables--arm-rebuild-timer (callback)
-  "Cancel any pending rebuild timer and schedule CALLBACK after idle."
-  (when (timerp gfm-pretty-tables--rebuild-timer)
-    (cancel-timer gfm-pretty-tables--rebuild-timer))
-  (setq gfm-pretty-tables--rebuild-timer
-        (run-with-idle-timer
-         0.2 nil
-         (lambda (buf cb)
-           (when (buffer-live-p buf)
-             (with-current-buffer buf
-               (when gfm-pretty-tables-mode
-                 (funcall cb)))))
-         (current-buffer) callback)))
-
-(defun gfm-pretty-tables--schedule-rebuild (&optional beg end _len)
-  "Merge BEG..END into the dirty region and arm the rebuild timer.
-Skips indirect buffers since base buffer overlays already cover them."
-  (unless (buffer-base-buffer)
-    (when (and beg end)
-      (gfm-pretty-tables--extend-dirty-region beg end))
-    (gfm-pretty-tables--arm-rebuild-timer #'gfm-pretty-tables--rebuild-scoped)))
-
-(defun gfm-pretty-tables--schedule-full-rebuild (&rest _)
-  "Schedule a rebuild on next idle if the window state has changed.
-Window-configuration-change-hook fires for many reasons that don't
-affect rendering (minibuffer activity, focus, scroll-margin), so we
-compare the current per-window (WIN . WIDTH) snapshot against the one
-recorded on the last rebuild and skip when they're equal.  Any size
-change, new window showing the buffer, or window now no-longer-shown
-trips the comparison and triggers the prioritised rebuilder, which
-updates visible-window tables immediately and lets off-screen tables
-catch up on the following idle tick."
-  (unless (buffer-base-buffer)
-    (let ((state (gfm-pretty-tables--window-state)))
-      (unless (equal state gfm-pretty-tables--last-window-state)
-        (gfm-pretty-tables--arm-rebuild-timer #'gfm-pretty-tables--reconcile-windows)))))
-
-;;; Minor mode
+;;; Stats command (thin wrapper over engine)
 
 ;;;###autoload
-(define-minor-mode gfm-pretty-tables-mode
-  "Adorn GFM tables with bordered, zebra-striped overlays."
-  :lighter " gfm-tb"
-  :keymap gfm-pretty-tables-mode-map
-  (if gfm-pretty-tables-mode
-      (progn
-        (gfm-pretty-tables--init-stats)
-        (gfm-pretty-tables--rebuild)
-        (add-hook 'after-change-functions
-                  #'gfm-pretty-tables--schedule-rebuild nil t)
-        (add-hook 'window-configuration-change-hook
-                  #'gfm-pretty-tables--schedule-full-rebuild nil t)
-        (add-hook 'post-command-hook
-                  #'gfm-pretty-tables--update-cursor-highlight nil t))
-    (remove-hook 'after-change-functions
-                 #'gfm-pretty-tables--schedule-rebuild t)
-    (remove-hook 'window-configuration-change-hook
-                 #'gfm-pretty-tables--schedule-full-rebuild t)
-    (remove-hook 'post-command-hook
-                 #'gfm-pretty-tables--update-cursor-highlight t)
-    (when (timerp gfm-pretty-tables--rebuild-timer)
-      (cancel-timer gfm-pretty-tables--rebuild-timer))
-    (gfm-pretty-tables--hide-cursor-highlight)
-    (gfm-pretty-tables--remove-overlays)))
+(defun gfm-pretty-tables-stats ()
+  "Display the tables decorator's rebuild stats and phase totals."
+  (interactive)
+  (gfm-pretty-stats 'tables))
 
 ;;; Indirect editing
 
@@ -1583,7 +1319,7 @@ committed positions)."
                  (set-window-point win (point))
                  (unless (pos-visible-in-window-p (point) win)
                    (with-selected-window win (recenter)))))
-             (when (bound-and-true-p gfm-pretty-tables-mode)
+             (when (gfm-pretty--state-get 'tables 'enabled-p)
                (gfm-pretty-tables--update-cursor-highlight)))))))))
 
 (defun gfm-pretty-tables--cell-content-bounds (row-ov idx)
@@ -2337,7 +2073,7 @@ the symbol `snap', a post-call landing in a table snaps to cell 0."
 
 (defun gfm-pretty-tables--maybe-edit-advice (orig &rest args)
   "Around-advice: divert ORIG (called with ARGS) to the table editor in tables."
-  (if (and (bound-and-true-p gfm-pretty-tables-mode)
+  (if (and (gfm-pretty--state-get 'tables 'enabled-p)
            (gfm-pretty-tables--block-at-point))
       (gfm-pretty-tables-edit-table-at-point)
     (apply orig args)))
@@ -2349,13 +2085,49 @@ the symbol `snap', a post-call landing in a table snaps to cell 0."
 
 ;;; gfm-pretty decorator registration
 
-(with-eval-after-load 'gfm-pretty
+(defun gfm-pretty-tables--full-rebuild-required-p (dirty)
+  "Engine `:full-rebuild-required-p' — non-nil on code-fence marker edits.
+Tables exclude content inside fenced code blocks; touching a fence
+line can create or destroy adjacent tables, so any such edit forces
+a full rebuild.  Edits inside a table's own header / delimiter /
+body fit within the block's source range and scope via the engine's
+block-containment fallback."
+  (and (fboundp 'gfm-pretty-fences--find-blocks)
+       (cl-some
+        (lambda (b)
+          (let* ((open-beg (nth 0 b))
+                 (close-end (nth 3 b))
+                 (open-line (cons (save-excursion
+                                    (goto-char open-beg)
+                                    (line-beginning-position))
+                                  (save-excursion
+                                    (goto-char open-beg)
+                                    (line-end-position))))
+                 (close-line (cons (save-excursion
+                                     (goto-char close-end)
+                                     (line-beginning-position))
+                                   (save-excursion
+                                     (goto-char close-end)
+                                     (line-end-position)))))
+            (or (gfm-pretty--region-overlaps-p dirty open-line)
+                (gfm-pretty--region-overlaps-p dirty close-line))))
+        (gfm-pretty-fences--find-blocks))))
+
+(defalias 'gfm-pretty-tables--edit-at-point #'gfm-pretty-tables-edit-table-at-point
+  "Conventional decorator-protocol name for the table editor.
+The umbrella `gfm-pretty-edit-block-at-point' dispatch looks for
+`<name>--edit-at-point' by intern.")
+
+(with-eval-after-load 'gfm-pretty-engine
   (gfm-pretty-define-decorator 'tables
-    :enable-fn         (lambda () (gfm-pretty-tables-mode 1))
-    :disable-fn        (lambda () (gfm-pretty-tables-mode -1))
-    :enabled-p-fn      (lambda () (bound-and-true-p gfm-pretty-tables-mode))
-    :block-at-point-fn (lambda () (gfm-pretty-tables--block-at-point))
-    :edit-at-point-fn  (lambda () (gfm-pretty-tables-edit-table-at-point))))
+    :registry              gfm-pretty-tables--registry
+    :collect-fn            #'gfm-pretty-tables--collect-blocks
+    :range-fn              #'gfm-pretty-tables--block-range
+    :apply-block-fn        #'gfm-pretty-tables--apply-block
+    :rebuild-fn            #'gfm-pretty-tables--rebuild
+    :full-rebuild-required-p #'gfm-pretty-tables--full-rebuild-required-p
+    :on-enable-fn          #'gfm-pretty-tables--on-enable
+    :on-disable-fn         #'gfm-pretty-tables--on-disable))
 
 (provide 'gfm-pretty-tables)
 

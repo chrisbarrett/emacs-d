@@ -53,25 +53,65 @@ registration entry point. A decorator SHALL declare itself by name and
 contribute pure functions; the engine SHALL own the lifecycle hooks
 (`after-change-functions`, `window-configuration-change-hook`,
 `post-command-hook`, the idle rebuild timer, the dirty-region tracker,
-the window-state snapshot).
+the window-state snapshot, the scoped-rebuild routing, and the
+generic rebuild stats wrapper).
 
 A registration form SHALL accept:
 
 - `NAME` (symbol) — decorator identifier.
-- `:collect FN` — returns the buffer's list of blocks (under widening).
-- `:range FN` — returns `(BEG . END)` for a block.
-- `:apply-anchors FN` — applies a block's width-independent overlays.
-- `:apply-display FN` — applies a block's width-dependent per-window
-  overlays.
-- `:font-lock KEYWORDS` (optional) — font-lock keywords contribution.
-- `:revealable-p FN` (optional) — predicate for cursor reveal.
-- `:block-at-point FN` (optional) — predicate for the public block
-  introspection API.
-- `:edit-at-point FN` (optional) — command for the public edit
-  dispatcher.
-- `:on-enable FN` (optional) — decorator extras to install when the
-  umbrella mode (or the decorator's per-decorator toggle) enables.
-- `:on-disable FN` (optional) — symmetric teardown.
+- `:registry REGISTRY` — `gfm-pretty--registry` value identifying the
+  decorator's overlay tag. The engine SHALL derive every overlay
+  property name (anchor, display, revealable, saved-display) from this
+  registry's `tag`.
+- `:collect-fn FN` — returns the buffer's list of blocks (under
+  widening).
+- `:range-fn FN` — returns `(BEG . END)` for a block.
+- `:apply-block-fn FN` — `(block window)`-arity function that applies
+  every overlay required to render BLOCK in WINDOW. Decorators that
+  share width-independent state across windows MAY call
+  `gfm-pretty-borders--apply-with-anchors` to factor the
+  anchors-once-per-block / display-once-per-window split internally.
+- `:rebuild-fn FN` (optional) — full rebuild override. When omitted,
+  the engine SHALL perform generic teardown + reapply by calling
+  `:collect-fn` and `:apply-block-fn` once per (block, window) pair.
+- `:full-rebuild-required-p FN` (optional, takes the dirty region) —
+  returns non-nil when the dirty region forces a full rebuild
+  (structural-line edit, adjacency-gated edit, or any other
+  decorator-specific reason). When omitted, the engine SHALL fall
+  through to block-containment scoping.
+- `:reveal-fn FN` (optional) — bespoke reveal handler (used by links
+  to group whole-link overlays by id).
+- `:on-enable-fn FN` (optional) — decorator extras to install when
+  the umbrella mode (or `gfm-pretty-toggle-decorator`) enables. A
+  decorator MAY install bespoke buffer-local hooks here (e.g. tables
+  installs its own `window-configuration-change-hook` handler for its
+  custom reconciler).
+- `:on-disable-fn FN` (optional) — symmetric teardown.
+
+The registration protocol SHALL NOT include keys for `:apply-anchors`,
+`:apply-display`, `:structural-line-ranges`, `:edit-adjacency`,
+`:revealable-prop`, `:saved-display-prop`, `:revealable-p`,
+`:reconcile-windows`, `:block-at-point`, or `:edit-at-point`. The
+behaviours those keys previously named SHALL be implemented as
+follows:
+
+- Anchor / display split → call
+  `gfm-pretty-borders--apply-with-anchors` from inside the
+  decorator's `:apply-block-fn`.
+- Structural-line ranges + edit-adjacency → fold into the decorator's
+  `:full-rebuild-required-p`.
+- Revealable property + saved-display property → derived from the
+  decorator's `:registry` (`<tag>-revealable`, `<tag>-saved-display`).
+- Custom revealable predicate → no decorator uses this; the engine's
+  default property-presence check is the only path.
+- Per-decorator window reconciler → wired by the decorator's
+  `:on-enable-fn` via a buffer-local `window-configuration-change-hook`
+  handler (tables only).
+- `block-at-point` / `edit-at-point` → exported by the decorator
+  under the naming convention `<name>--block-at-point` /
+  `<name>--edit-at-point`. The public commands in `gfm-pretty.el`
+  SHALL consult any decorator that exports these functions; only
+  `tables` does so today.
 
 #### Scenario: Registering a new decorator
 
@@ -81,6 +121,123 @@ A registration form SHALL accept:
   needs
 - **AND** the engine SHALL invoke its functions during rebuild, reveal,
   and reconcile without further wiring
+
+#### Scenario: Decorator declines to override scoped-rebuild policy
+
+- **GIVEN** a decorator registers `:apply-block-fn`, `:collect-fn`,
+  `:range-fn`
+- **AND** does NOT register `:full-rebuild-required-p`
+- **WHEN** the user edits inside one block's body
+- **THEN** the engine SHALL fall through to block-containment scoping
+- **AND** rebuild only that block
+
+#### Scenario: Anchor/display split is opt-in via the borders helper
+
+- **GIVEN** a decorator (e.g. `callouts` or `fences`) wants width-
+  independent overlays shared across windows
+- **WHEN** its `:apply-block-fn` runs for a given (block, window) pair
+- **THEN** the decorator SHALL call
+  `gfm-pretty-borders--apply-with-anchors` with separate
+  anchor-application and display-application thunks
+- **AND** the helper SHALL apply the anchors at most once per
+  (block, current rebuild pass) regardless of how many windows are
+  displaying the buffer
+
+### Requirement: Scoped post-edit rebuild routing
+
+The engine SHALL own the routing decision for scoped post-edit
+rebuilds. After an `after-change-functions` burst settles, the engine's
+idle timer SHALL invoke a per-decorator routing function that, given
+the decorator's accumulated dirty region:
+
+1. Calls the decorator's optional `:full-rebuild-required-p` with the
+   dirty region. If non-nil, the engine SHALL perform a full rebuild
+   via `:rebuild-fn` (or generic teardown + reapply when
+   `:rebuild-fn` is absent).
+2. Otherwise calls the decorator's `:collect-fn` (cache-hit normal)
+   and matches the dirty region against each block's `:range-fn`
+   result. If exactly one block fully contains the dirty region, the
+   engine SHALL rebuild that single block via `:apply-block-fn` per
+   currently-displayed window. Otherwise the engine SHALL perform a
+   full rebuild.
+
+A decorator that does not register `:full-rebuild-required-p` SHALL
+still receive correct scoped rebuilds via the block-containment
+fallback (step 2).
+
+#### Scenario: Edit inside one block body triggers single-block rebuild
+
+- **GIVEN** a buffer with two callouts and no other decorators
+- **WHEN** the user types a character inside callout #1's body
+- **AND** the idle timer fires
+- **THEN** the engine SHALL match the dirty region against the
+  collected blocks
+- **AND** rebuild only callout #1 via its `:apply-block-fn` per
+  displayed window
+- **AND** callout #2's overlays SHALL be untouched
+
+#### Scenario: Structural-line edit forces full rebuild
+
+- **GIVEN** a buffer with two fenced code blocks
+- **WHEN** the user inserts a backtick on block #1's opening fence
+  line
+- **AND** the idle timer fires
+- **THEN** the fences decorator's `:full-rebuild-required-p` SHALL
+  return non-nil for the dirty region
+- **AND** the engine SHALL invoke the fences decorator's
+  `:rebuild-fn` (full rebuild)
+
+#### Scenario: Adjacency edit invalidates indent block
+
+- **GIVEN** a buffer with an indented code block preceded by a blank
+  line
+- **WHEN** the user types on the blank line directly above the indent
+  block
+- **AND** the idle timer fires
+- **THEN** the fences decorator's `:full-rebuild-required-p` SHALL
+  return non-nil for the dirty region
+- **AND** the engine SHALL invoke the fences decorator's
+  `:rebuild-fn` (full rebuild)
+
+### Requirement: Engine-owned generic rebuild stats
+
+The engine SHALL track per-decorator rebuild stats (rebuild count,
+total wall-time, last duration, max duration) in
+`gfm-pretty--state`. The engine SHALL wrap every `:rebuild-fn`
+invocation and every single-block rebuild path with a timer and
+update the per-decorator slot. When a single rebuild exceeds
+`gfm-pretty-slow-rebuild-threshold` (defcustom, default 0.05 s) the
+engine SHALL emit `display-warning` of severity `:warning`.
+
+`gfm-pretty-stats &optional DECORATOR` SHALL be an interactive
+command. When DECORATOR is nil it SHALL prompt via
+`completing-read` over registered decorators; with one symbol arg it
+displays that decorator's stats. The output SHALL include any
+phase-level totals the decorator has chosen to publish via an
+optional `gfm-pretty--state` `phase-totals` slot.
+
+Decorator-local phase instrumentation (e.g. `find-fenced`,
+`compose-borders`, `compose-overflow`, `apply` in fences;
+`find`, `compose`, `apply` in tables) SHALL remain owned by the
+decorator that knows the phase boundaries; the decorator SHALL
+write its phase totals into its own state slot for `gfm-pretty-stats`
+to read.
+
+#### Scenario: Engine times a rebuild
+
+- **GIVEN** `gfm-pretty-mode` is enabled with the fences decorator
+- **WHEN** the engine invokes the fences decorator's `:rebuild-fn`
+- **THEN** the engine SHALL record the rebuild's wall-time into
+  `gfm-pretty--state`'s `rebuild-stats` slot for `'fences`
+- **AND** `(gfm-pretty-stats 'fences)` SHALL include `rebuild-count`,
+  `total-time`, `last-time`, and `max-time`
+
+#### Scenario: Slow rebuild logged via engine threshold
+
+- **GIVEN** `gfm-pretty-slow-rebuild-threshold` is 0.05
+- **WHEN** the tables decorator's `:rebuild-fn` takes 0.08 s
+- **THEN** the engine SHALL emit a `display-warning` of severity
+  `:warning`
 
 ### Requirement: Per-decorator toggle via `gfm-pretty-toggle-decorator`
 
@@ -105,10 +262,12 @@ When toggled back on, the decorator's overlays SHALL be rebuilt.
 The system SHALL expose `gfm-pretty-block-at-point` and
 `gfm-pretty-edit-block-at-point` as the only public block-aware
 entry points. `gfm-pretty-block-at-point` SHALL return
-`(DECORATOR-NAME . BLOCK)` for the first registered decorator whose
-`:block-at-point` returns non-nil, or nil if none matches.
-`gfm-pretty-edit-block-at-point` SHALL dispatch to the matched
-decorator's `:edit-at-point`.
+`(DECORATOR-NAME . BLOCK)` for the first enabled decorator whose
+`gfm-pretty-<name>--block-at-point` function returns non-nil, or nil
+if none matches. `gfm-pretty-edit-block-at-point` SHALL dispatch to
+the matched decorator's `gfm-pretty-<name>--edit-at-point` function.
+Participation in this dispatch is a naming convention — a decorator
+opts in by exporting both functions, with no registry slot involved.
 
 No `gfm-pretty--*` private symbol SHALL be relied upon by code outside
 the `gfm-pretty` module.
@@ -119,7 +278,7 @@ the `gfm-pretty` module.
   binding for "edit block at point"
 - **WHEN** point is inside a GFM table
 - **THEN** the binding calls `gfm-pretty-edit-block-at-point`
-- **AND** the tables decorator's `:edit-at-point` is invoked
+- **AND** `gfm-pretty-tables--edit-at-point` is invoked
 - **AND** no private `gfm-pretty--*` symbol is read
 
 ### Requirement: Rendering primitives are public
@@ -145,7 +304,7 @@ Every other engine symbol SHALL be `gfm-pretty--` private.
 
 #### Scenario: Decorator builds a bordered block
 
-- **GIVEN** a decorator's `:apply-display` callback
+- **GIVEN** a decorator's `:apply-block-fn` callback
 - **WHEN** it constructs a border for the current window
 - **THEN** it calls `gfm-pretty-available-width` and
   `gfm-pretty-top-border` / `gfm-pretty-bottom-border` /
@@ -156,10 +315,24 @@ Every other engine symbol SHALL be `gfm-pretty--` private.
 
 ### Requirement: Debounced rebuild scheduler
 
-The engine SHALL run at most one idle rebuild timer per buffer. The
-timer SHALL fire after a 0.2 second idle delay following a buffer
-modification, iterate every enabled decorator, and rebuild within the
-buffer's accumulated dirty region.
+The engine SHALL install exactly one of each lifecycle hook per
+buffer when `gfm-pretty-mode` enables: one `after-change-functions`
+handler, one `window-configuration-change-hook` handler, one
+`post-command-hook` reveal handler, and one idle rebuild timer.
+
+The timer SHALL fire after a 0.2 second idle delay following a
+buffer modification, iterate every enabled decorator, and rebuild
+within the buffer's accumulated dirty region. The engine SHALL
+cancel and re-arm the timer on every modification so a burst of
+edits produces one rebuild after the burst ends.
+
+Decorators SHALL NOT install their own `after-change-functions`
+or `post-command-hook` handlers for scheduling purposes. Decorators
+MAY use `:on-enable-fn` / `:on-disable-fn` to install
+decorator-specific hooks — for example, the tables decorator
+installs its own buffer-local `window-configuration-change-hook`
+handler for its bespoke per-window reconciler, and the links
+decorator installs an xref backend.
 
 #### Scenario: Burst of edits causes one rebuild
 
@@ -167,34 +340,108 @@ buffer's accumulated dirty region.
 - **WHEN** the user types ten characters in rapid succession
 - **THEN** the engine SHALL cancel and re-arm the timer on each edit
 - **AND** the rebuild SHALL run once, 0.2 s after the last edit
-- **AND** every decorator's `:apply-anchors` / `:apply-display`
-  contributions SHALL be invoked over the dirty region
+- **AND** every decorator's `:apply-block-fn` SHALL be invoked over
+  the dirty region
+
+#### Scenario: One handler per hook regardless of decorator count
+
+- **GIVEN** a buffer with five enabled decorators
+- **WHEN** the engine installs lifecycle hooks
+- **THEN** `(length after-change-functions)` SHALL increase by one
+  (engine handler only)
+- **AND** `(length post-command-hook)` SHALL increase by one
+- **AND** at most one buffer-local idle timer SHALL be live
+
+### Requirement: Block discovery memoisation
+
+The engine SHALL memoise each registered decorator's `:collect-fn`
+result by `buffer-chars-modified-tick` per decorator per buffer.
+Repeated calls within an unmodified buffer SHALL NOT rescan; the
+engine returns the cached block list. The first call after a buffer
+modification SHALL rescan and refresh the cache.
+
+The engine SHALL invoke `:collect-fn` under `save-restriction` plus
+`widen` so a narrowed buffer (e.g. under `gfm-present-mode`) still
+sees the full block set. Decorators register their *uncached, widened*
+discovery function; the engine wraps it.
+
+This subsumes the previous per-decorator block-discovery cache
+requirements.
+
+#### Scenario: Repeated reveal calls hit cache
+
+- **GIVEN** a buffer with 20 callouts and `gfm-pretty-mode` enabled
+- **WHEN** `post-command-hook` invokes reveal twice between edits
+- **THEN** the callouts decorator's `:collect-fn` SHALL run once
+- **AND** the second reveal SHALL use the cached block list
+
+#### Scenario: Cache invalidates on buffer modification
+
+- **GIVEN** a cached block list for the fences decorator
+- **WHEN** any buffer modification advances `buffer-chars-modified-tick`
+- **THEN** the next collect call SHALL rescan and replace the cache
+
+#### Scenario: Narrowed buffer sees the full block set
+
+- **GIVEN** a buffer with three fenced blocks narrowed to the second
+- **WHEN** the engine collects for the fences decorator
+- **THEN** the result SHALL include all three blocks
+- **AND** the buffer's narrowing SHALL be preserved after the call
 
 ### Requirement: Per-window decorator rendering
 
-The engine SHALL produce one display-overlay set per window currently
-showing the buffer, restricted via the `window` overlay property, for
-every decorator that applies width-dependent display. A buffer split
-across two windows of different widths SHALL render at each window's
-own width.
+The engine SHALL invoke each enabled decorator's `:apply-block-fn`
+once per (block, window) pair currently displaying the buffer.
+Width-dependent overlay construction SHALL be the decorator's
+responsibility; the engine SHALL pass the current window so the
+decorator may compute width via `window-max-chars-per-line` or via
+`gfm-pretty--available-width`.
 
-#### Scenario: Buffer shown in two windows of different widths
+Decorators that share width-independent overlay state across windows
+SHALL call `gfm-pretty-borders--apply-with-anchors` from inside their
+`:apply-block-fn` to lay anchor overlays at most once per (block,
+current rebuild pass) while continuing to apply display overlays per
+window.
 
-- **GIVEN** `gfm-pretty-mode` is enabled in a buffer containing a
-  fenced code block
-- **AND** the buffer is displayed in two windows W1 (width 80) and W2
-  (width 120)
-- **THEN** W1 SHALL render the fence box at width 80
-- **AND** W2 SHALL render the fence box at width 120
+A decorator's overlays SHALL be removed by tag (via
+`gfm-pretty--remove-overlays` consulting the registry) when its
+enable bit flips off or when the umbrella mode is disabled.
+
+#### Scenario: Per-window display overlays in a split
+
+- **GIVEN** a decorated buffer in W1 (80 cols) and W2 (120 cols)
+- **WHEN** the engine performs a full rebuild
+- **THEN** each block SHALL have one set of display overlays in W1
+  sized to 80 cols
+- **AND** another set in W2 sized to 120 cols
+- **AND** width-independent overlays (anchors) created via
+  `gfm-pretty-borders--apply-with-anchors` SHALL exist only once per
+  block, not once per (block, window)
 
 ### Requirement: Per-window cursor reveal
 
-The engine SHALL install one `post-command-hook` handler that consults
-every enabled decorator's `:revealable-p` predicate (or its default —
-overlays carrying the engine's `revealable` flag). Reveal SHALL be
-scoped to the selected window: an overlay restricted to a non-selected
-window SHALL NOT have its source revealed regardless of where point is
-in the selected window.
+The engine SHALL install one `post-command-hook` handler that walks
+every enabled decorator's revealable overlays in the selected window.
+The engine SHALL derive each decorator's revealable + saved-display
+overlay property names from its registered `:registry` value
+(`<tag>-revealable` / `<tag>-saved-display`); decorators SHALL NOT
+register these property names separately.
+
+When point lies inside a revealable overlay whose `window` property
+is nil or equals the selected window, the engine SHALL save the
+overlay's `display` property under the `<tag>-saved-display` property
+and set `display` to nil — exposing the source. When point leaves the
+overlay, the engine SHALL restore `display` from the saved property.
+Reveal SHALL be scoped to the selected window: an overlay restricted
+to a non-selected window SHALL NOT have its source revealed
+regardless of where point is.
+
+A decorator MAY register a `:reveal-fn` (bespoke reveal handler) to
+take over reveal entirely; otherwise the engine's default walker
+runs. A decorator's overlays are revealable iff they carry the
+`<tag>-revealable` property; a decorator that manages its own cursor
+model (e.g. `tables` for cell highlighting) simply never sets that
+property on its overlays.
 
 #### Scenario: Point on a fence marker reveals the source in selected window only
 
@@ -202,6 +449,29 @@ in the selected window.
 - **WHEN** point moves onto the opening fence marker in W1
 - **THEN** W1 SHALL show the raw `\`\`\`lang` line
 - **AND** W2 SHALL continue to show the rendered box
+
+#### Scenario: Engine derives revealable property per decorator
+
+- **GIVEN** the callouts decorator registers
+  `:registry gfm-pretty-callouts--registry` whose tag is
+  `'gfm-pretty-callouts`
+- **AND** the fences decorator registers
+  `:registry gfm-pretty-fences--registry` whose tag is
+  `'gfm-pretty-fences`
+- **WHEN** point enters a callout overlay carrying
+  `gfm-pretty-callouts-revealable`
+- **THEN** the engine SHALL reveal it
+- **AND** SHALL NOT touch overlays carrying
+  `gfm-pretty-fences-revealable` outside the callout
+
+#### Scenario: Tables decorator skipped by reveal loop
+
+- **GIVEN** the tables decorator's overlays carry no
+  `gfm-pretty-tables-revealable` property
+- **WHEN** point enters a rendered table cell
+- **THEN** the engine's reveal loop SHALL NOT modify any table overlay
+- **AND** the tables decorator's `:on-enable-fn`-installed cursor
+  handler SHALL manage cell highlighting independently
 
 ### Requirement: Selective per-window reconciliation
 
@@ -251,6 +521,41 @@ one window briefly drops below the wrap-prefix width).
   wrap-prefix)
 - **THEN** `gfm-pretty-simulate-wrap` SHALL return a result
 - **AND** the function SHALL NOT loop forever
+
+### Requirement: Engine owns per-decorator overlay state in `gfm-pretty--state`
+
+Internals-facing. The engine SHALL store every decorator's overlay
+list and revealable-hidden list inside `gfm-pretty--state`, keyed by
+decorator name, under the `'overlays` and `'hidden-ovs` slots
+respectively. No decorator SHALL declare module-local `defvar-local`
+symbols for its overlay or hidden-overlay lists.
+
+The `gfm-pretty--registry` struct SHALL NOT carry `overlays-symbol`
+or `hidden-ovs-symbol` slots. Registry-aware primitives
+(`gfm-pretty--register`, `gfm-pretty--remove-overlays`,
+`gfm-pretty--prune-dead-overlays`, etc.) SHALL accept the decorator
+name (or derive it from the registry's `tag`) and read/write through
+the state alist.
+
+#### Scenario: Adding a decorator's overlay updates engine state
+
+- **GIVEN** the callouts decorator's `:apply-block-fn` runs for one
+  block in one window
+- **WHEN** it creates a display overlay via the engine's
+  registry-aware overlay primitives
+- **THEN** the overlay SHALL appear in
+  `(gfm-pretty--state-get 'callouts 'overlays)`
+- **AND** no symbol named `gfm-pretty-callouts--overlays` SHALL
+  exist as a buffer-local variable
+
+#### Scenario: Disabling a decorator clears its state slots
+
+- **GIVEN** the fences decorator is enabled and has overlays
+- **WHEN** `gfm-pretty-toggle-decorator 'fences` flips it off
+- **THEN** `(gfm-pretty--state-get 'fences 'overlays)` SHALL be nil
+- **AND** `(gfm-pretty--state-get 'fences 'hidden-ovs)` SHALL be nil
+- **AND** every overlay tagged with the fences registry's `tag`
+  SHALL have been removed from the buffer
 
 <!-- ── Callouts decorator ─────────────────────────────────────────── -->
 
@@ -306,7 +611,7 @@ Discovery SHALL widen before scanning so a narrowed buffer (e.g. under
 
 ### Requirement: Callout bordered-block rendering
 
-The callouts decorator's `:apply-display` SHALL render a bordered
+The callouts decorator's `:apply-block-fn` SHALL render a bordered
 callout box with:
 
 - A top border using the type's coloured face and the type label as
@@ -321,9 +626,12 @@ callout box with:
   computed by `gfm-pretty-callouts--tint-bg` (10% from the type
   face foreground toward the theme background).
 
-Anchor overlays SHALL carry the body-face property and a
-`wrap-prefix` of `│ `; display overlays SHALL carry the borders and
-right-edge after-strings.
+The decorator's `:apply-block-fn` SHALL call
+`gfm-pretty-borders--apply-with-anchors` so anchor overlays
+(carrying the body-face property and a `wrap-prefix` of `│ `) are
+laid at most once per (block, rebuild pass) while per-window
+display overlays (borders and right-edge after-strings) apply once
+per window.
 
 #### Scenario: NOTE callout
 
@@ -373,14 +681,14 @@ how the line wraps.
 
 ### Requirement: Callout marker line and body prefix reveal
 
-The callouts decorator's `:revealable-p` predicate SHALL return
-non-nil for display overlays carrying the engine's revealable flag.
-When point lies on the marker line, the engine SHALL hide the marker's
-display overlay so the raw `> [!TYPE]` text shows. When point lies on
-a body line, the engine SHALL hide that body line's `│ ` prefix
-substitution so the raw `> ` shows.
-
-Reveal SHALL be scoped to the selected window.
+The callouts decorator SHALL carry the engine's revealable property
+(`gfm-pretty-callouts-revealable`) on the marker-line top and on
+each per-line `> ` → `│ ` body-prefix display overlay. The engine's
+reveal walker SHALL hide those overlays in the selected window when
+point lies on them, exposing the raw `> [!TYPE]` or `> ` source.
+The property name SHALL be derived from the callouts registry's
+`tag`; the decorator SHALL NOT register it separately. Reveal SHALL
+be scoped to the selected window.
 
 #### Scenario: Point on marker
 
@@ -390,18 +698,6 @@ Reveal SHALL be scoped to the selected window.
 - **AND** the top-border decoration is visible
 - **AND** other windows showing the buffer continue to show the
   marker decoration
-
-### Requirement: Callout block-discovery cache
-
-The callouts decorator SHALL memoise `:collect` results by
-`buffer-chars-modified-tick` so repeated calls within an unmodified
-buffer SHALL NOT rescan.
-
-#### Scenario: Repeated reveal calls
-
-- **GIVEN** a buffer with 20 callouts
-- **WHEN** `post-command-hook` invokes reveal twice between edits
-- **THEN** the second invocation SHALL hit the cache and NOT rescan
 
 ### Requirement: Callout narrowing-resilient discovery and teardown
 
@@ -427,32 +723,52 @@ widened rebuild — the suite
 
 ### Requirement: Callout scoped post-edit rebuild
 
-The engine SHALL rebuild only the callout block whose marker or
-continuation lines the dirty region intersects, plus any adjacent
-callout that the dirty region extends into. When the dirty region
-does not intersect any callout, the callouts decorator SHALL NOT
-contribute to the rebuild iteration.
+The callouts decorator SHALL register
+`:full-rebuild-required-p` that returns non-nil when the dirty
+region overlaps a `> [!TYPE]` marker line (structural-line case) or
+overlaps a line directly above or below an existing callout
+(adjacency case). The two conditions are OR-combined inside the
+predicate. The engine's routing (see "Scoped post-edit rebuild
+routing") SHALL use the predicate to choose between full rebuild
+and single-block scoped rebuild.
+
+When the dirty region intersects a callout body line (not the
+marker and not adjacent to another callout), the engine SHALL
+rebuild only the containing callout via its `:apply-block-fn`
+(per displayed window). When the dirty region does not overlap any
+callout block range and does not trigger the predicate, the
+callouts decorator SHALL NOT contribute work to the rebuild
+iteration.
 
 #### Scenario: Edit inside one callout body
 
 - **GIVEN** two non-adjacent callouts
 - **WHEN** the user edits inside callout #1's body
-- **THEN** only callout #1 is rebuilt
+- **THEN** only callout #1 is rebuilt by the engine
 - **AND** callout #2's overlays are untouched
+
+#### Scenario: Edit on a callout marker forces full rebuild
+
+- **GIVEN** two callouts in a buffer
+- **WHEN** the user edits callout #1's `> [!NOTE]` marker line
+- **THEN** `:full-rebuild-required-p` returns non-nil for the dirty
+  region
+- **AND** the engine invokes the callouts decorator's `:rebuild-fn`
+  (full rebuild)
 
 ### Requirement: Theme change responsiveness
 
-The callouts decorator's `:on-enable` SHALL add
-`+markdown-gfm-callout-refresh-body-faces` to `+theme-changed-hook`.
-`:on-disable` SHALL remove it. The refresh function SHALL recompute
-each callout body face's `:background` from the current theme by
-tinting 10% toward the theme background.
+The callouts decorator's `:on-enable-fn` SHALL add
+`gfm-pretty-callouts--refresh-body-faces` to `+theme-changed-hook`.
+`:on-disable-fn` SHALL remove it. The refresh function SHALL
+recompute each callout body face's `:background` from the current
+theme by tinting 10% toward the theme background.
 
 #### Scenario: Theme switch
 
 - **WHEN** the user switches from a light to a dark theme
 - **THEN** `+theme-changed-hook` fires
-- **AND** each `+markdown-gfm-callout-*-body-face` background is
+- **AND** each `gfm-pretty-callouts-*-body-face` background is
   recomputed
 - **AND** the next redisplay shows correctly tinted body backgrounds
 
@@ -527,7 +843,8 @@ already covered by a fenced or YAML block.
 
 ### Requirement: Code-fence bordered-block rendering
 
-`:apply-display` SHALL render a curved-border box with:
+The fences decorator's `:apply-block-fn` SHALL render a
+curved-border box with:
 
 - A top border using the border face and (when resolvable) a
   language icon at the upper-right.
@@ -535,9 +852,12 @@ already covered by a fenced or YAML block.
   the box width.
 - A bottom border.
 
-Anchor overlays carry width-independent props (wrap-prefix, body
-background fill). Display overlays carry the borders and right-edge
-after-strings, restricted to `WINDOW`.
+The decorator's `:apply-block-fn` SHALL call
+`gfm-pretty-borders--apply-with-anchors` so anchor overlays
+(width-independent props such as the wrap-prefix and body
+background fill) are laid at most once per (block, rebuild pass)
+while per-window display overlays (borders and right-edge
+after-strings, restricted to `WINDOW`) apply once per window.
 
 #### Scenario: Fence with language
 
@@ -576,10 +896,13 @@ overflow after-string.
 
 ### Requirement: Code-fence marker line reveal
 
-The fences decorator's `:revealable-p` SHALL fire for display overlays
-covering the opening or closing fence marker. When point lies on a
-marker, the engine SHALL hide that overlay so the raw `\`\`\`lang`
-shows in the selected window.
+The fences decorator SHALL carry the engine's revealable property
+(`gfm-pretty-fences-revealable`) on the opening and closing fence
+marker display overlays. When point lies on a marker, the engine's
+reveal walker SHALL hide those overlays in the selected window so
+the raw `\`\`\`lang` shows. The property name SHALL be derived
+from the fences registry's `tag`; the decorator SHALL NOT register
+it separately.
 
 #### Scenario: Point on opening fence
 
@@ -619,17 +942,6 @@ so keys and values colourise inside the helmet's border.
 - **THEN** `title` renders with a key face and `Hello` with a value
   face
 
-### Requirement: Code-fence block-discovery cache
-
-The fences decorator SHALL memoise `:collect` results by
-`buffer-chars-modified-tick`.
-
-#### Scenario: Repeated reveal calls
-
-- **GIVEN** a buffer with 20 fenced blocks
-- **WHEN** reveal runs three times between edits
-- **THEN** the scan executes once
-
 ### Requirement: Code-fence narrowing-resilient discovery and teardown
 
 `:collect` SHALL widen for the duration of its scan; bulk-cleanup
@@ -645,33 +957,58 @@ SHALL converge.
 
 ### Requirement: Code-fence scoped post-edit rebuild
 
-When the dirty region intersects a fence line, the engine SHALL
-rebuild that block. When the dirty region is a blank line adjacent to
-an indented block, the engine SHALL rebuild any adjacent indented
-block whose extent the edit may have changed.
+The fences decorator SHALL register `:full-rebuild-required-p`
+that returns non-nil when the dirty region overlaps any of:
+
+- a fence opening line,
+- a fence closing line,
+- a YAML helmet's `---` marker line, or
+- a blank line directly above or below an indent code block (where
+  discovery is blank-line-gated).
+
+The four conditions are OR-combined inside the predicate. The
+engine's routing (see "Scoped post-edit rebuild routing") SHALL
+use the predicate so an edit on any of those lines forces a full
+fences rebuild; an edit fully contained in one block scopes to that
+block; and edits outside every fences range produce no fences work.
 
 #### Scenario: Edit inside fenced body
 
 - **GIVEN** two fenced blocks
 - **WHEN** the user edits inside block #1's body (not a marker)
-- **THEN** only block #1 is rebuilt by the fences decorator
+- **THEN** only block #1 is rebuilt by the engine via the fences
+  decorator's `:apply-block-fn`
+
+#### Scenario: Blank line above an indent block becomes non-blank
+
+- **GIVEN** an indent code block preceded by a blank line
+- **WHEN** the user types on that preceding blank line
+- **THEN** `:full-rebuild-required-p` returns non-nil for the dirty
+  region
+- **AND** the engine invokes the fences decorator's `:rebuild-fn`
+  (full rebuild)
 
 ### Requirement: Code-fence performance instrumentation
 
-The fences decorator SHALL track per-rebuild duration and accumulate
-phase-level totals (`collect`, `apply-anchors`, `apply-display`,
-`reconcile`). When a single rebuild exceeds
-`gfm-pretty-fences-slow-rebuild-threshold` (default 0.05 s) the
-decorator SHALL emit a `display-warning` of severity `:warning`.
+The fences decorator SHALL contribute *phase-level* timing (`find-fenced`,
+`find-yaml`, `find-indent`, `compose-borders`, `compose-overflow`,
+`apply`) to its own state's `phase-totals` slot during rebuilds.
+Rebuild count, total / last / max wall-time, and the slow-rebuild
+warning are owned by the engine (see "Engine-owned generic rebuild
+stats") and apply uniformly to every decorator.
 
-`gfm-pretty-fences-stats` SHALL be an interactive command that
-displays the accumulated totals.
+`gfm-pretty-fences-stats` SHALL remain an interactive command that
+displays the fences decorator's full stats; it MAY be implemented as
+a thin call to `(gfm-pretty-stats 'fences)`.
 
 #### Scenario: Slow rebuild logged
 
 - **GIVEN** a buffer where rendering a single fence takes 0.1 s
 - **WHEN** that rebuild completes
-- **THEN** a warning is logged via `display-warning`
+- **THEN** the engine SHALL emit `display-warning` of severity
+  `:warning` (engine-level threshold)
+- **AND** `gfm-pretty-fences-stats` SHALL show the elapsed time plus
+  the per-phase breakdown
 
 <!-- ── Tables decorator ───────────────────────────────────────────── -->
 
@@ -961,16 +1298,22 @@ body row consistently.
 
 ### Requirement: Table performance instrumentation
 
-The tables decorator SHALL track per-rebuild duration and accumulate
-phase totals. Slow rebuilds (exceeding
-`gfm-pretty-tables-slow-rebuild-threshold`, default 0.05 s) SHALL emit
-a `display-warning`. `gfm-pretty-tables-stats` SHALL be an
-interactive command displaying totals.
+The tables decorator SHALL contribute phase-level totals (`find`,
+`compose`, `apply`) to its own state's `phase-totals` slot during
+rebuilds. Rebuild count, total / last / max wall-time, and the
+slow-rebuild warning are owned by the engine (see "Engine-owned
+generic rebuild stats").
+
+`gfm-pretty-tables-stats` SHALL remain an interactive command that
+displays the tables decorator's full stats; it MAY be implemented as
+a thin call to `(gfm-pretty-stats 'tables)`.
 
 #### Scenario: Slow rebuild
 
 - **GIVEN** a rebuild taking 0.08 s
-- **THEN** a warning is logged
+- **THEN** the engine SHALL emit a `display-warning`
+- **AND** `gfm-pretty-tables-stats` SHALL show the elapsed time plus
+  the per-phase breakdown
 
 ### Requirement: Table narrowing-resilient discovery and teardown
 
@@ -1030,9 +1373,12 @@ has been applied over the scanned region by calling
 
 ### Requirement: HR rendering
 
-`:apply-display` SHALL replace each collected HR line's display with
-`(make-string WIDTH ?─)` propertised with the hrule face. WIDTH comes
-from `gfm-pretty-available-width` for the rendering window.
+The hrule decorator's `:apply-block-fn` SHALL replace each
+collected HR line's display with `(make-string WIDTH ?─)`
+propertised with the hrule face. WIDTH comes from
+`gfm-pretty-available-width` for the rendering window. The
+overlay is per-window so two windows of different widths each see
+a bar sized to their own width.
 
 #### Scenario: HR in 100-cell window
 
@@ -1041,9 +1387,12 @@ from `gfm-pretty-available-width` for the rendering window.
 
 ### Requirement: HR cursor reveal
 
-The hrule decorator's `:revealable-p` SHALL fire for the HR display
-overlay. When point lies on the HR line, the engine SHALL hide the
-overlay so the raw `---` source shows in the selected window only.
+The hrule decorator SHALL carry the engine's revealable property
+(`gfm-pretty-hrule-revealable`) on the HR display overlay. When
+point lies on the HR line, the engine's reveal walker SHALL hide
+the overlay so the raw `---` source shows in the selected window
+only. The property name SHALL be derived from the hrule registry's
+`tag`; the decorator SHALL NOT register it separately.
 
 #### Scenario: Point on HR
 
@@ -1106,9 +1455,10 @@ excluded.
 
 ### Requirement: Title-side overlay rendering
 
-`:apply-display` SHALL replace the `[title]` span (brackets included)
-with the title text in `gfm-pretty-links-title-face` (default
-`markdown-link-face`), per window.
+The links decorator's `:apply-block-fn` SHALL replace the
+`[title]` span (brackets included) with the title text in
+`gfm-pretty-links-title-face` (default `markdown-link-face`), per
+window.
 
 #### Scenario: Title rendering
 
@@ -1118,10 +1468,11 @@ with the title text in `gfm-pretty-links-title-face` (default
 
 ### Requirement: URL-side icon rendering
 
-`:apply-display` SHALL replace the URL span (`(url)`, `[label]`, the
-autolink span, …) with a single nerd-icons glyph resolved from the
-target host or scheme. When `nerd-icons` is unavailable, the URL-side
-overlay SHALL be omitted (URL shows raw).
+The links decorator's `:apply-block-fn` SHALL replace the URL span
+(`(url)`, `[label]`, the autolink span, …) with a single
+nerd-icons glyph resolved from the target host or scheme. When
+`nerd-icons` is unavailable, the URL-side overlay SHALL be omitted
+(URL shows raw).
 
 #### Scenario: Github URL
 
@@ -1163,10 +1514,14 @@ markdown-mode's collapse.
 
 ### Requirement: Whole-link cursor reveal
 
-The links decorator's `:revealable-p` SHALL group the title-side and
-URL-side overlays via a shared `gfm-pretty-links-id` property. When
-point lies anywhere inside either span, the engine SHALL hide BOTH
-overlays in the selected window so the raw `[title](url)` shows.
+The links decorator SHALL carry the engine's revealable property
+(`gfm-pretty-links-revealable`) on both the title-side and
+URL-side display overlays, plus a shared `gfm-pretty-links-id`
+property. The decorator SHALL register `:reveal-fn` so its bespoke
+reveal handler — not the engine's default walker — runs for links.
+When point lies anywhere inside either span, the handler SHALL
+hide BOTH overlays in the selected window so the raw `[title](url)`
+shows.
 
 #### Scenario: Point inside title
 
