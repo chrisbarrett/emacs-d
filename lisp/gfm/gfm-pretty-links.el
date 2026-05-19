@@ -239,6 +239,15 @@ Records starting inside one of these ranges are not decorated."
   "Non-nil if POS lies within any (BEG . END) range in RANGES."
   (cl-some (lambda (r) (and (>= pos (car r)) (<= pos (cdr r)))) ranges))
 
+(defun gfm-pretty-links--in-code-p (pos)
+  "Non-nil if POS lies inside a markdown code region.
+Delegates to `markdown-code-block-at-pos' (fenced + indented +
+pre) and `markdown-inline-code-at-pos-p' (inline spans).  Used to
+keep the links decorator out of code where `[foo](bar)' syntax is
+just text."
+  (or (markdown-code-block-at-pos pos)
+      (markdown-inline-code-at-pos-p pos)))
+
 (defun gfm-pretty-links--scan-inline (beg end)
   "Return inline-link records found between BEG and END.
 Image links (`![alt](url)') are rejected via the leading-bang group."
@@ -426,6 +435,7 @@ lines are excluded entirely."
                              beg end ref-def-ranges)))
       (let ((span (gfm-pretty-links--record-span record)))
         (unless (or (gfm-pretty-links--pos-in-ranges-p (car span) ref-def-ranges)
+                    (gfm-pretty-links--in-code-p (car span))
                     (cl-some (lambda (c)
                                (gfm-pretty--region-overlaps-p span c))
                              claimed))
