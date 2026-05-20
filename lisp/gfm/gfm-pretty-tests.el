@@ -244,6 +244,35 @@ fix-gfm-narrowing-safety change."
       (should (string-match-p "┌─ NOTE" (overlay-get marker 'display)))
       (should (string-match-p "\\`│ \\'" (overlay-get body   'display))))))
 
+(ert-deftest lang-markdown/gfm-pretty-callouts-bare-blockquote-body-prefix ()
+  "A bare `>' blockquote body line gets a `│ ' display overlay,
+and reveal suppresses the display when point sits on it."
+  (with-temp-buffer
+    (insert "> [!IMPORTANT]\n> first\n>\n> second\n")
+    (gfm-pretty-mode 1)
+    (goto-char (point-min))
+    (should (re-search-forward (rx bol ">" eol) nil t))
+    (let* ((bare-pos (match-beginning 0))
+           (ov (cl-find-if
+                (lambda (o)
+                  (and (eq (overlay-get o 'gfm-pretty-callouts-kind)
+                           'body-prefix)
+                       (= (overlay-start o) bare-pos)))
+                (overlays-at bare-pos))))
+      (should ov)
+      (should (equal "│ " (overlay-get ov 'display)))
+      (should (overlay-get ov 'gfm-pretty-callouts-revealable))
+      (should (= 1 (- (overlay-end ov) (overlay-start ov))))
+      ;; Reveal exposes the bare `>' when point sits on the line.
+      (goto-char bare-pos)
+      (gfm-pretty--reveal)
+      (should-not (overlay-get ov 'display))
+      (should (stringp (overlay-get ov 'gfm-pretty-callouts-saved-display)))
+      ;; Box edge returns when point leaves.
+      (goto-char (point-max))
+      (gfm-pretty--reveal)
+      (should (equal "│ " (overlay-get ov 'display))))))
+
 (ert-deftest lang-markdown/gfm-pretty-callouts-body-anchor-face-only-bg-and-extend ()
   "Body-line anchor face specifies only `:background' and/or `:extend' so
 emphasis faces on buffer text merge through."

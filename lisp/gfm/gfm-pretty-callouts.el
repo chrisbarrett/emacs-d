@@ -394,17 +394,28 @@ See `gfm-pretty-callouts--apply-block-anchors' for the widening rationale."
                           (put-text-property 0 1 'cursor t s)
                           s))
                        (t right-after))))
-                ;; `> ' → `│ ' substitution as a per-window display so
-                ;; reveal in window A doesn't expose the source in B.
-                (when (and (>= (- lend lbeg) 2)
-                           (eq (char-after lbeg) ?>)
-                           (eq (char-after (1+ lbeg)) ?\s))
+                ;; `> ' / bare `>' → `│ ' substitution as a per-window
+                ;; display so reveal in window A doesn't expose the
+                ;; source in B.  Source range is 2 chars for `> ',
+                ;; 1 char for a bare `>' continuation line.
+                (cond
+                 ((and (>= (- lend lbeg) 2)
+                       (eq (char-after lbeg) ?>)
+                       (eq (char-after (1+ lbeg)) ?\s))
                   (gfm-pretty-callouts--make-display
                    lbeg (+ lbeg 2) window
                    'gfm-pretty-callouts-kind 'body-prefix
                    'gfm-pretty-callouts-revealable t
                    'evaporate t
                    'display edge))
+                 ((and (= (- lend lbeg) 1)
+                       (eq (char-after lbeg) ?>))
+                  (gfm-pretty-callouts--make-display
+                   lbeg (1+ lbeg) window
+                   'gfm-pretty-callouts-kind 'body-prefix
+                   'gfm-pretty-callouts-revealable t
+                   'evaporate t
+                   'display edge)))
                 ;; Right-edge (and bottom on the last line).
                 (setq last-right-after-ov
                       (gfm-pretty-callouts--make-display
