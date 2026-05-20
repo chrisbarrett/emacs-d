@@ -88,6 +88,17 @@ The recognised axes are:
   profile-gated assertion fontification, `$BATS_*` variable
   highlighting, and an imenu composing Tests, Fixtures, and inherited
   bash functions.
+- **dune-mode** (lib) — `lisp/dune-mode/dune-mode.el`. Major mode
+  derived from `lisp-data-mode` for Dune build configuration files
+  (`dune`, `dune-workspace`, `dune-project`): mode-line label,
+  `comment-add` set to 0, and the path-pattern `auto-mode-alist`
+  registration.
+- **opam-mode** (lib) — `lisp/opam-mode/opam-mode.el`. Major mode
+  derived from `conf-colon-mode` for OPAM package configuration
+  files (`*.opam`): mode-line label and the extension-based
+  `auto-mode-alist` registration. The read-only-on-generated-files
+  hook is composition policy and lives in
+  `modules/lang-ocaml/init.el`.
 - **may-i** (lib) — `lisp/may-i/may-i.el`. Major mode
   (`may-i-config-mode`) derived from `lisp-data-mode` for `may-i`
   config files: activation on `/may-i/<any>.lisp` and

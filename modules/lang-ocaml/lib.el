@@ -48,24 +48,4 @@ Returns empty string for template insertion but sets buffer-local state."
   "Return \" in\" if template started in expression context."
   (if +ocaml--tempel-in-expr-p " in" ""))
 
-
-
-;;;###autoload
-(define-derived-mode dune-config-mode lisp-data-mode "Dune Config"
-  "Major mode for Dune build configuration files."
-  (setq-local comment-add 0))
-
-;;;###autoload
-(add-to-list 'auto-mode-alist (cons (rx "/dune" (? "-" (or "workspace" "project"))
-                                        eos)
-                                    #'dune-config-mode))
-
-;;;###autoload
-(define-derived-mode opam-config-mode conf-colon-mode "OPAM Config"
-  "Major mode for Opam configuration files.")
-
-;;;###autoload
-(add-to-list 'auto-mode-alist (cons (rx ".opam" eos) 'opam-config-mode))
-
-
 ;;; lib.el ends here
