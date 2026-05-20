@@ -54,7 +54,7 @@
   (neocamli-mode-local-vars-hook . ocaml-eglot))
 
 ;; Make generated opam files read-only
-(add-hook! 'opam-config-mode-hook
+(add-hook! 'opam-mode-hook
   (when (string-match-p "# This file is generated" (buffer-substring (point-min) (min (point-max) 500)))
     (read-only-mode +1)))
 
