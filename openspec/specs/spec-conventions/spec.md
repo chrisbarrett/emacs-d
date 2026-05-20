@@ -88,6 +88,14 @@ The recognised axes are:
   profile-gated assertion fontification, `$BATS_*` variable
   highlighting, and an imenu composing Tests, Fixtures, and inherited
   bash functions.
+- **may-i** (lib) — `lisp/may-i/may-i.el`. Major mode
+  (`may-i-config-mode`) derived from `lisp-data-mode` for `may-i`
+  config files: activation on `/may-i/<any>.lisp` and
+  `.may-i(.local)?.lisp`, faces for decision verbs and reason
+  strings, font-lock for def heads / top-level forms / parser
+  attributes / style names / fact keywords, apheleia formatter
+  wiring, may-i-scoped indent rules, and an imenu composing Rules,
+  Parsers, Arg styles, Definitions, Checks, Loads, and Safe env vars.
 - **eglot** (module) — LSP integration, diagnostics.
 - **evil** (module) — vi emulation, keybindings.
 - **org** (module) — org-mode, agenda, capture.
