@@ -48,16 +48,6 @@ The recognised axes are:
   profile-gated assertion fontification, `$BATS_*` variable
   highlighting, and an imenu composing Tests, Fixtures, and inherited
   bash functions.
-- **argc-mode** (lib) — `lisp/argc-mode/argc-mode.el`. Minor mode
-  for [argc](https://github.com/sigoden/argc) CLI directive
-  fontification in shell-script comments: face overlays for the
-  `@cmd`/`@arg`/`@option`/`@flag`/`@env`/`@meta`/`@alias`/`@describe`
-  directives, Unicode box overlays around directive blocks with a
-  function-name label, `spell-fu` advice that skips directive
-  lines, and a debounced rebuild scheduler that skips indirect
-  buffers. Does NOT cover the activation gate
-  `+argc-maybe-enable` — that lives in `lang-shscript` as
-  composition glue.
 - **dune-mode** (lib) — `lisp/dune-mode/dune-mode.el`. Major mode
   derived from `lisp-data-mode` for Dune build configuration files
   (`dune`, `dune-workspace`, `dune-project`): mode-line label,
