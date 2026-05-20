@@ -1,13 +1,18 @@
-;;; +argc.el --- argc-mode: fontify argc directives in shell scripts -*- lexical-binding: t; -*-
+;;; argc-mode.el --- Fontify argc CLI directives in shell scripts -*- lexical-binding: t; -*-
 
 ;;; Commentary:
 
-;; Minor mode that fontifies argc (https://github.com/sigoden/argc)
-;; comment directives in shell script buffers and draws box overlays
-;; around directive blocks.
+;; `argc-mode' is a minor mode that fontifies argc
+;; (https://github.com/sigoden/argc) comment directives in shell
+;; script buffers and draws Unicode box overlays around contiguous
+;; directive blocks.
 ;;
 ;; All visual changes use overlays so they reliably override
 ;; tree-sitter text properties.
+;;
+;; Activation is intentionally not handled here; consumers wire the
+;; mode up via their own mode hooks (e.g. `sh-mode-hook',
+;; `bash-ts-mode-hook') with whatever gate they prefer.
 
 ;;; Code:
 
@@ -205,13 +210,14 @@ Checks the next non-blank line after POS."
 
 (defun argc--block-max-col (beg end)
   "Return the maximum line length between BEG and END."
-  (let ((max-col 0))
+  (let ((max-col 0)
+        (done nil))
     (save-excursion
       (goto-char beg)
-      (while (<= (point) end)
+      (while (and (not done) (<= (point) end))
         (setq max-col (max max-col (- (line-end-position) (line-beginning-position))))
         (when (= (forward-line 1) 1)
-          (cl-return))))
+          (setq done t))))
     max-col))
 
 (defun argc--make-border (width corner-l corner-r &optional label)
@@ -252,8 +258,9 @@ LABEL is an optional right-aligned bold label."
         (let ((first t)
               (align-col (- box-width 2))
               (right-border (propertize " │" 'face face))
+              (done nil)
               last-ov)
-          (while (<= (point) end)
+          (while (and (not done) (<= (point) end))
             (let* ((lbeg (line-beginning-position))
                    (lend (line-end-position))
                    (pad (propertize " " 'display `(space :align-to ,align-col) 'face face))
@@ -270,7 +277,7 @@ LABEL is an optional right-aligned bold label."
               (overlay-put ov 'after-string after)
               (setq last-ov ov))
             (when (= (forward-line 1) 1)
-              (cl-return)))
+              (setq done t)))
           ;; Append bottom border to last line's after-string
           (when last-ov
             (let* ((pad (propertize " " 'display `(space :align-to ,align-col) 'face face))
@@ -306,6 +313,9 @@ ORIG-FN is the original function, POS-BEG and POS-END the range."
 (defvar-local argc--rebuild-timer nil
   "Idle timer for debounced overlay rebuilds.")
 
+;; Forward declaration; the variable is created by `define-minor-mode' below.
+(defvar argc-mode)
+
 (defun argc--schedule-rebuild (&rest _)
   "Schedule a debounced overlay rebuild.
 Skips indirect buffers since base buffer overlays are already visible."
@@ -339,6 +349,6 @@ Skips indirect buffers since base buffer overlays are already visible."
       (cancel-timer argc--rebuild-timer))
     (argc--remove-overlays)))
 
-(provide '+argc)
+(provide 'argc-mode)
 
-;;; +argc.el ends here
+;;; argc-mode.el ends here
