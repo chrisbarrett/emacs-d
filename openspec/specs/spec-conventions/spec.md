@@ -81,6 +81,13 @@ The recognised axes are:
   slide-walkthrough mode over markdown documents: heading-narrowed
   slides, navigation, source-range and diff-range link previews,
   click actions. Declares load-order dep on `gfm-pretty`.
+- **bats-mode** (lib) — `lisp/bats-mode/bats-mode.el`. Major mode
+  derived from `bash-ts-mode` for `.bats` test files: activation on
+  the `.bats` extension and the `bats` interpreter, layered regex
+  font-lock for bats directives and helper-library assertions,
+  profile-gated assertion fontification, `$BATS_*` variable
+  highlighting, and an imenu composing Tests, Fixtures, and inherited
+  bash functions.
 - **eglot** (module) — LSP integration, diagnostics.
 - **evil** (module) — vi emulation, keybindings.
 - **org** (module) — org-mode, agenda, capture.

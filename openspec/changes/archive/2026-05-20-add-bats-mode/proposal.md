@@ -61,4 +61,11 @@ None.
   cover it. A `(require 'bats-mode)` may be added from `lang-shscript`
   only if autoload harvesting under `lisp/` proves insufficient at
   startup; design.md decides.
+- `lisp/+modules.el` autoload-extractor (`+modules--autoload-form`)
+  generalised: unrecognised `;;;###autoload`-annotated top-level forms
+  now pass through verbatim so activation triggers like
+  `(add-to-list 'auto-mode-alist …)` work in `lisp/<family>/<lib>.el`
+  libraries (the extractor previously only handled defun/defmacro/
+  define-(derived|minor)-mode/defvar/defconst). Companion tests in
+  `lisp/+modules-tests.el` updated to assert pass-through semantics.
 - No new external packages.

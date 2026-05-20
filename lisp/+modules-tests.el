@@ -419,10 +419,15 @@
     (should (equal '(autoload 'my-mode "/path/lib.el" "Doc." t)
                    (+modules--autoload-form form "/path/lib.el")))))
 
-(ert-deftest modules--autoload-form--returns-nil-for-unknown ()
-  "Returns nil for unrecognized forms."
-  (let ((form '(setq foo 'bar)))
-    (should (null (+modules--autoload-form form "/path/lib.el")))))
+(ert-deftest modules--autoload-form--passes-through-unknown ()
+  "Unrecognised top-level forms pass through verbatim.
+
+The `;;;###autoload' cookie is the author's opt-in to run the form
+when `+autoloads.el' is loaded; this covers side-effecting forms
+like `(add-to-list 'auto-mode-alist …)' used to register activation
+triggers without loading the implementation file."
+  (let ((form '(add-to-list 'auto-mode-alist '("\\.bats\\'" . bats-mode))))
+    (should (equal form (+modules--autoload-form form "/path/lib.el")))))
 
 
 ;;; Tests for +modules--collect-autoloads
@@ -484,11 +489,17 @@
   (+modules--register-autoloads nil)
   (+modules--register-autoloads '()))
 
-(ert-deftest modules--register-autoloads--skips-unknown-forms ()
-  "Skips forms that can't be converted to autoloads."
-  (let ((entries '(((setq foo 'bar) . "/path/lib.el"))))
-    ;; Should not error
-    (+modules--register-autoloads entries)))
+(ert-deftest modules--register-autoloads--evaluates-passthrough-forms ()
+  "Forms not matching a defun-shape get evaluated verbatim.
+
+The `;;;###autoload' cookie is opt-in: unrecognised top-level
+forms (e.g. `(add-to-list 'auto-mode-alist …)') run when
+autoloads load, allowing activation triggers without loading the
+implementation file."
+  (let* ((sym (make-symbol "modules-tests--pass-through-marker"))
+         (entries `(((set ',sym 'ran) . "/path/lib.el"))))
+    (+modules--register-autoloads entries)
+    (should (eq (symbol-value sym) 'ran))))
 
 ;;; Tests for +modules--find-init-file
 

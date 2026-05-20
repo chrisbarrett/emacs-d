@@ -194,8 +194,10 @@ if FORM is not a recognized definition type."
      `(autoload ',name ,source-file ,(if (stringp docstring) docstring nil) t))
     (`(define-derived-mode ,name ,_parent ,_name . ,_)
      `(autoload ',name ,source-file nil t))
-    ;; Unrecognized form
-    (_ nil)))
+    ;; Side-effecting top-level form annotated with ;;;###autoload —
+    ;; pass through verbatim so it runs when `+autoloads.el' is loaded
+    ;; (e.g. `(add-to-list 'auto-mode-alist …)' for activation triggers).
+    (_ form)))
 
 (defun +modules--lisp-family-lib-files ()
   "Discover library files under `lisp/<family>/' subdirectories.
