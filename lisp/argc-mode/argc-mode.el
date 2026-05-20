@@ -1,13 +1,18 @@
-;;; +argc.el --- argc-mode: fontify argc directives in shell scripts -*- lexical-binding: t; -*-
+;;; argc-mode.el --- Fontify argc CLI directives in shell scripts -*- lexical-binding: t; -*-
 
 ;;; Commentary:
 
-;; Minor mode that fontifies argc (https://github.com/sigoden/argc)
-;; comment directives in shell script buffers and draws box overlays
-;; around directive blocks.
+;; `argc-mode' is a minor mode that fontifies argc
+;; (https://github.com/sigoden/argc) comment directives in shell
+;; script buffers and draws Unicode box overlays around contiguous
+;; directive blocks.
 ;;
 ;; All visual changes use overlays so they reliably override
 ;; tree-sitter text properties.
+;;
+;; Activation is intentionally not handled here; consumers wire the
+;; mode up via their own mode hooks (e.g. `sh-mode-hook',
+;; `bash-ts-mode-hook') with whatever gate they prefer.
 
 ;;; Code:
 
@@ -339,6 +344,6 @@ Skips indirect buffers since base buffer overlays are already visible."
       (cancel-timer argc--rebuild-timer))
     (argc--remove-overlays)))
 
-(provide '+argc)
+(provide 'argc-mode)
 
-;;; +argc.el ends here
+;;; argc-mode.el ends here
