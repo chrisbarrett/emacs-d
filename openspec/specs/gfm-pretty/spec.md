@@ -616,8 +616,11 @@ callout box with:
 
 - A top border using the type's coloured face and the type label as
   the upper-right caption.
-- A `│ ` substitution for the `> ` prefix on each body line, using
-  the border face.
+- A `│ ` substitution for the body-line blockquote prefix on each
+  body line, using the border face. The substitution SHALL cover
+  both the two-char `> ` prefix and the one-char bare `>` form (a
+  blockquote continuation line with no trailing space, used in
+  practice for blank rows between body paragraphs).
 - A right-edge `│` painted via `gfm-pretty-right-after` (or its
   overflow variant on wrapped body lines) so the right border
   aligns to the box width regardless of body-line wrapping.
@@ -640,6 +643,21 @@ per window.
 - **THEN** the top border shows `┌── NOTE ──┐` (right-aligned label)
 - **AND** the body line shows `│ hello` with a blue-tinted background
 - **AND** the bottom border shows `└──────────┘`
+
+#### Scenario: Bare-`>` body line
+
+- **GIVEN** `> [!IMPORTANT]\n> first paragraph\n>\n> second paragraph`
+  (note the middle body line is a single `>` with no trailing space)
+- **WHEN** the decorator renders
+- **THEN** the middle body line shows `│` at the left edge (display
+  string `│ `) with no raw `>` character visible
+- **AND** the right-edge `│` lands on the box-width column on that
+  line, matching the surrounding body rows
+- **AND** the per-window body-prefix overlay over the bare `>`
+  carries `gfm-pretty-callouts-kind 'body-prefix` and the
+  `gfm-pretty-callouts-revealable` property so the reveal walker
+  exposes the raw `>` when point sits on the line in the selected
+  window
 
 ### Requirement: Callout box width sizing
 
