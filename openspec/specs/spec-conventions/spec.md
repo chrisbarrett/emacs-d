@@ -99,6 +99,16 @@ The recognised axes are:
   `auto-mode-alist` registration. The read-only-on-generated-files
   hook is composition policy and lives in
   `modules/lang-ocaml/init.el`.
+- **argc-mode** (lib) — `lisp/argc-mode/argc-mode.el`. Minor mode
+  for [argc](https://github.com/sigoden/argc) CLI directive
+  fontification in shell-script comments: face overlays for the
+  `@cmd`/`@arg`/`@option`/`@flag`/`@env`/`@meta`/`@alias`/`@describe`
+  directives, Unicode box overlays around directive blocks with a
+  function-name label, `spell-fu` advice that skips directive
+  lines, and a debounced rebuild scheduler that skips indirect
+  buffers. Does NOT cover the activation gate
+  `+argc-maybe-enable` — that lives in `lang-shscript` as
+  composition glue.
 - **may-i** (lib) — `lisp/may-i/may-i.el`. Major mode
   (`may-i-config-mode`) derived from `lisp-data-mode` for `may-i`
   config files: activation on `/may-i/<any>.lisp` and
