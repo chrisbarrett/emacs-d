@@ -121,13 +121,18 @@ Rejected: there is no may-i grammar; the mode derives from
 `safe-env-vars` collapses to a single entry per form because its
 contents are not user-named anchors.
 
-### Decision: keep regex-based head matching consistent with font-lock
+### Decision: imenu walks open parens, dispatches on the read head symbol
 
-The existing `may-i--head-rx` helper in `+may-i.el` produces an `rx`
-matcher for "head of a call form". The imenu scanner re-uses it
-(passed via `funcall` to avoid duplication) rather than re-inventing
-the pattern. Both font-lock and imenu therefore agree on what counts
-as a head.
+The imenu scanner finds every open paren via `re-search-forward "("`,
+skips matches inside strings or comments via `syntax-ppss`, then
+calls `(read (current-buffer))` to obtain the head atom and
+`pcase`-dispatches on its symbol. This is preferred over reusing
+`may-i--head-rx` (which only fontifies a fixed list of pre-known
+heads) because the imenu walker needs to (a) consider any head and
+select known ones, (b) distinguish string vs symbol args for `rule`
+and `check` natively, and (c) read `(or "a" "b" …)` literals for
+the `rule`/`or` alternative-expansion case. Using `read` removes
+the need for parallel regex variants per head.
 
 ### Decision: tests live at `lisp/may-i/may-i-tests.el`
 
