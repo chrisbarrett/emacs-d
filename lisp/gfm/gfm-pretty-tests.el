@@ -2183,6 +2183,87 @@ off-narrowing overlays untracked."
                         (overlays-in (point-min) (point-max)))))
         (should (= (length (gfm-pretty--state-get 'tables 'overlays)) on-buffer))))))
 
+(defun lang-markdown-tests--tables-display-strings-by-pos ()
+  "Return ((BEG . DISPLAY-STRING) …) for tables display overlays, sorted."
+  (mapcar (lambda (o) (cons (overlay-start o) (overlay-get o 'display)))
+          (cl-sort
+           (cl-remove-if-not
+            (lambda (o) (overlay-get o 'gfm-pretty-tables-display))
+            (overlays-in (point-min) (point-max)))
+           #'< :key #'overlay-start)))
+
+(ert-deftest lang-markdown/gfm-pretty-tables-per-window-rebuild-converges ()
+  "Repeated `--rebuild-block-for-window' produces identical display strings.
+Pre-fix the per-window path parsed the table before removing the
+prior render's display overlays, so `--transcribe-source-overlays'
+spliced its own output back into every cell and the second pass
+diverged from (and grew larger than) the first."
+  (let ((buf (generate-new-buffer " *gfm-pretty-tables-converge*")))
+    (unwind-protect
+        (progn
+          (with-current-buffer buf
+            (insert "| Workflow | Schedule | Status | Last |\n")
+            (insert "| -------- | -------- | ------ | ---- |\n")
+            (insert "| onboard  | daily    | green  | 9am  |\n"))
+          (set-window-buffer (selected-window) buf)
+          (with-current-buffer buf
+            (gfm-pretty-mode 1)
+            (let* ((blocks (gfm-pretty-tables--find-blocks
+                            (gfm-pretty-tables--fenced-ranges)))
+                   (block (car blocks))
+                   (win (selected-window)))
+              (gfm-pretty-tables--rebuild-block-for-window block win)
+              (let ((first (lang-markdown-tests--tables-display-strings-by-pos)))
+                (gfm-pretty-tables--rebuild-block-for-window block win)
+                (let ((second (lang-markdown-tests--tables-display-strings-by-pos)))
+                  (should (equal first second))
+                  (should-not (cl-some
+                               (lambda (entry)
+                                 (let ((d (cdr entry)))
+                                   (and (stringp d)
+                                        (string-match-p
+                                         "│ │ │ │ │ " d))))
+                               second)))))))
+      (kill-buffer buf))))
+
+(ert-deftest lang-markdown/gfm-pretty-tables-narrowed-per-window-rebuild-matches-fresh ()
+  "Narrowed `--reconcile-windows' then widen + reconcile yields fresh-widened display strings.
+Drives the presentation-shape sequence
+\(narrow → reconcile-windows → widen → reconcile-windows): pre-fix
+the per-window rebuild path spliced its own prior render into every
+cell, so display strings diverged from a clean full rebuild."
+  :tags '(narrowing-regression)
+  (let ((buf (generate-new-buffer " *gfm-pretty-tables-narrow-converge*"))
+        baseline after)
+    (unwind-protect
+        (progn
+          (with-current-buffer buf
+            (lang-markdown-tests--two-slide-tables-buffer))
+          (set-window-buffer (selected-window) buf)
+          (with-current-buffer buf
+            (gfm-pretty-mode 1)
+            (gfm-pretty-tables--rebuild)
+            (setq baseline (lang-markdown-tests--tables-display-strings-by-pos))
+            (let ((slide-1-end (save-excursion
+                                 (goto-char (point-min))
+                                 (search-forward "# slide 2")
+                                 (line-beginning-position))))
+              (narrow-to-region (point-min) slide-1-end))
+            (cl-flet ((forge-resize ()
+                        (gfm-pretty--state-set
+                         'tables 'last-window-state
+                         (mapcar (lambda (e) (cons (car e) (1- (cdr e))))
+                                 (gfm-pretty--state-get
+                                  'tables 'last-window-state)))))
+              (forge-resize)
+              (gfm-pretty-tables--reconcile-windows)
+              (widen)
+              (forge-resize)
+              (gfm-pretty-tables--reconcile-windows))
+            (setq after (lang-markdown-tests--tables-display-strings-by-pos))
+            (should (equal baseline after))))
+      (kill-buffer buf))))
+
 ;;; Per-rebuild width cache
 
 (ert-deftest lang-markdown/gfm-pretty-tables-width-cache-fast-path-matches-uncached ()

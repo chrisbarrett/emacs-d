@@ -109,14 +109,15 @@ unchanged when no width-affecting overlay intersects the region."
     (let ((slen (length str))
           (edits nil))
       (dolist (ov (overlays-in beg end))
-        (let ((s (- (max beg (overlay-start ov)) beg))
-              (e (- (min end (overlay-end ov)) beg))
-              (disp (overlay-get ov 'display)))
-          (when (and (<= 0 s) (< s e) (<= e slen))
-            (cond
-             ((stringp disp) (cl-pushnew (list s e disp) edits :test #'equal))
-             ((overlay-get ov 'invisible)
-              (cl-pushnew (list s e "") edits :test #'equal))))))
+        (unless (overlay-get ov 'gfm-pretty-tables-display)
+          (let ((s (- (max beg (overlay-start ov)) beg))
+                (e (- (min end (overlay-end ov)) beg))
+                (disp (overlay-get ov 'display)))
+            (when (and (<= 0 s) (< s e) (<= e slen))
+              (cond
+               ((stringp disp) (cl-pushnew (list s e disp) edits :test #'equal))
+               ((overlay-get ov 'invisible)
+                (cl-pushnew (list s e "") edits :test #'equal)))))))
       (if (null edits)
           str
         ;; Apply right-to-left so earlier offsets stay valid.  Per-window
