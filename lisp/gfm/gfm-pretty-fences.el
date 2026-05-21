@@ -970,19 +970,26 @@ the next reveal-restore picks up the right variant."
 Walks overlays in every window's visible range and, for each overlay
 carrying a stashed masked variant for any entry in
 `gfm-pretty-fences--variant-props', chooses the bare variant when the
-overlay's buffer range overlaps the active selection and the masked
-variant otherwise.  Early-returns when the selection bounds are
-`equal' to the last seen bounds."
-  (let ((bounds (gfm-pretty-fences--selection-bounds)))
-    (unless (equal bounds gfm-pretty-fences--last-selection-bounds)
-      (dolist (range (or (gfm-pretty--visible-window-ranges)
-                         (list (cons (point-min) (point-max)))))
+overlay's start lies inside the active selection and masked
+otherwise.
+
+Memoisation keys on both the selection bounds AND the current visible
+window ranges so a pure scroll (selection unchanged) still re-walks
+overlays that have just entered the visible range — otherwise an
+overlay last painted bare and then scrolled out of view stays bare
+when scrolled back in."
+  (let* ((bounds (gfm-pretty-fences--selection-bounds))
+         (ranges (or (gfm-pretty--visible-window-ranges)
+                     (list (cons (point-min) (point-max)))))
+         (key (cons bounds ranges)))
+    (unless (equal key gfm-pretty-fences--last-selection-bounds)
+      (dolist (range ranges)
         (dolist (ov (overlays-in (car range) (cdr range)))
           (let* ((selected (gfm-pretty-fences--pos-in-selection-p
                             (overlay-start ov) bounds))
                  (variant (if selected 'bare 'masked)))
             (gfm-pretty-fences--apply-variant ov variant))))
-      (setq gfm-pretty-fences--last-selection-bounds bounds))))
+      (setq gfm-pretty-fences--last-selection-bounds key))))
 
 ;;; Lifecycle hooks delegated to engine
 

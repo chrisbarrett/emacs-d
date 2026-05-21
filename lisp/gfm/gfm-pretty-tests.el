@@ -1388,6 +1388,40 @@ Forces a walker re-run by clearing the memoised last-bounds."
 
 ;;; Rebuild during active V-line
 
+(defun lang-markdown-tests--overlay-variant-on-line (line kind)
+  "Return variant for decoration overlay of KIND on LINE, or nil."
+  (when-let* ((ov (cl-find-if
+                   (lambda (o)
+                     (and (eq (overlay-get o 'gfm-pretty-fences-kind) kind)
+                          (= (line-number-at-pos (overlay-start o)) line)))
+                   (overlays-in (point-min) (point-max)))))
+    (lang-markdown-tests--overlay-variant ov)))
+
+(ert-deftest lang-markdown/gfm-pretty-fences-scroll-back-into-view-resets-stale-bare ()
+  "An overlay marked bare while off-screen resets when scrolled back into view.
+Regression: the bounds-memoised walker would early-return when current
+bounds matched last-seen bounds, leaving overlays that scrolled out of
+the visible window — and so weren't touched during the previous walk
+— stuck in their prior variant once scrolled back in."
+  (lang-markdown-tests--with-fences-test-buffer
+    (lang-markdown-tests--with-evil-v-line 5 5
+      (should (eq 'bare
+                  (lang-markdown-tests--overlay-variant-on-line 5 'body))))
+    ;; Simulate a scroll that hides line 5 from the visible range, then
+    ;; run the walker (with the V-line already gone since the dlet
+    ;; popped).  L5 is off-screen so it should not be updated this pass.
+    (cl-letf (((symbol-function 'gfm-pretty--visible-window-ranges)
+               (lambda ()
+                 (list (cons (point-min)
+                             (lang-markdown-tests--line-bol 4))))))
+      (gfm-pretty-fences--update-selection))
+    ;; Now the window scrolls so L5 is visible again.  The selection
+    ;; bounds are still nil (no change), but L5 was missed last walk
+    ;; and is still bare — the walker must update it.
+    (gfm-pretty-fences--update-selection)
+    (should (eq 'masked
+                (lang-markdown-tests--overlay-variant-on-line 5 'body)))))
+
 (ert-deftest lang-markdown/gfm-pretty-fences-rebuild-during-v-line-paints-bare ()
   "A decorator rebuild with V-line active creates overlays already in bare state."
   (lang-markdown-tests--with-fences-test-buffer
