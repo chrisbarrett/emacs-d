@@ -437,55 +437,84 @@ See `gfm-pretty-callouts--apply-block-anchors' for the widening rationale."
                      'gfm-pretty-display-masked edge
                      'gfm-pretty-display-bare edge-bare
                      'display (if line-selected edge-bare edge))))
-                  ;; Right-edge (and bottom on the last line).
-                  ;; The bottom border row sits visually BELOW the last
-                  ;; body line; conceptually it's the box's bottom edge,
-                  ;; not part of the selected body line.  Keep the
-                  ;; bottom-str opaque (masked form) inside the bare
-                  ;; variant so a V-line on the last body line doesn't
-                  ;; bleed region bg past the box's bottom edge.
+                  ;; Right-edge of the body line.
                   (let* ((right-after-bare
                           (concat (gfm-pretty--str-with-region-bg right-after)
-                                  (gfm-pretty--region-tail)))
-                         (after-with-bottom-bare
-                          (cond
-                           (last-body
-                            (let ((s (concat right-after-bare
-                                             "\n"
-                                             bottom-str)))
-                              (put-text-property 0 1 'cursor t s)
-                              s))
-                           (t right-after-bare))))
+                                  (gfm-pretty--region-tail))))
                     (setq last-right-after-ov
                           (gfm-pretty-callouts--make-display
                            lend lend window
                            'gfm-pretty-callouts-kind 'body-rhs
-                           'gfm-pretty-after-masked after-with-bottom
-                           'gfm-pretty-after-bare after-with-bottom-bare
+                           'gfm-pretty-after-masked right-after
+                           'gfm-pretty-after-bare right-after-bare
                            'after-string (if line-selected
-                                             after-with-bottom-bare
-                                           after-with-bottom)))))
+                                             right-after-bare
+                                           right-after)))
+                    ;; Bottom border (last body line only).  Rendered as
+                    ;; a separate overlay so its selection check can use
+                    ;; the line BELOW the box: bare iff the selection
+                    ;; covers position (1+ lend) (= bol of line after
+                    ;; the callout).  Without this split, painting the
+                    ;; bottom in the bare variant on the last body line
+                    ;; would bleed region bg past the box's bottom edge
+                    ;; when only the last body line is selected.
+                    (when last-body
+                      ;; The leading newline of body-bottom's after-string
+                      ;; lands as the trailing cell of the LAST body
+                      ;; line's visual row (the after-string is appended
+                      ;; to that row).  Propertize it with `region' so
+                      ;; the trailing cell shares the bare variant's bg
+                      ;; — otherwise it renders with the default face,
+                      ;; leaving a 1-col "notch" against the box's right
+                      ;; border.
+                      (let* ((bottom-masked (concat "\n" bottom-str))
+                             (bottom-bare
+                              (concat (propertize "\n" 'face 'region)
+                                      (gfm-pretty--str-with-region-bg
+                                       bottom-str)
+                                      (gfm-pretty--region-tail)))
+                             (select-range (cons (1+ lend) (1+ lend)))
+                             (bottom-selected
+                              (and (gfm-pretty--selection-bounds)
+                                   (<= (car (gfm-pretty--selection-bounds))
+                                       (1+ lend))
+                                   (< (1+ lend)
+                                      (cdr (gfm-pretty--selection-bounds))))))
+                        (gfm-pretty-callouts--make-display
+                         lend lend window
+                         'gfm-pretty-callouts-kind 'body-bottom
+                         'gfm-pretty-select-range select-range
+                         'gfm-pretty-after-masked bottom-masked
+                         'gfm-pretty-after-bare bottom-bare
+                         'after-string (if bottom-selected
+                                           bottom-bare
+                                         bottom-masked))))))
                 (setq p (min (1+ end) (1+ lend)))))))
-        ;; Body-less callout: bottom border attaches to marker trailing.
-        ;; Same rationale as the last-line body-rhs case: keep the
-        ;; bottom-str opaque in the bare variant so selection paint
-        ;; doesn't bleed past the box's bottom edge.
+        ;; Body-less callout: bottom border attaches to the marker
+        ;; line, but its selection logic still belongs to the line
+        ;; BELOW the box.  Use a separate overlay so the bottom-only
+        ;; selection check sees the right range.
         (unless has-body
-          (let* ((existing-masked
-                  (overlay-get trailing-ov 'gfm-pretty-after-masked))
-                 (existing-bare
-                  (overlay-get trailing-ov 'gfm-pretty-after-bare))
-                 (new-masked (concat existing-masked "\n" bottom-str))
-                 (new-bare (concat existing-bare "\n" bottom-str))
-                 (selected (gfm-pretty--range-selected-p
-                            (overlay-start trailing-ov)
-                            (overlay-end trailing-ov))))
-            (put-text-property 0 1 'cursor t new-masked)
-            (put-text-property 0 1 'cursor t new-bare)
-            (overlay-put trailing-ov 'gfm-pretty-after-masked new-masked)
-            (overlay-put trailing-ov 'gfm-pretty-after-bare new-bare)
-            (overlay-put trailing-ov 'after-string
-                         (if selected new-bare new-masked))))
+          (let* ((bottom-masked (concat "\n" bottom-str))
+                 (bottom-bare
+                  (concat (propertize "\n" 'face 'region)
+                          (gfm-pretty--str-with-region-bg bottom-str)
+                          (gfm-pretty--region-tail)))
+                 (select-range (cons (1+ marker-line-end)
+                                     (1+ marker-line-end)))
+                 (bottom-selected
+                  (and (gfm-pretty--selection-bounds)
+                       (<= (car (gfm-pretty--selection-bounds))
+                           (1+ marker-line-end))
+                       (< (1+ marker-line-end)
+                          (cdr (gfm-pretty--selection-bounds))))))
+            (gfm-pretty-callouts--make-display
+             marker-line-end marker-line-end window
+             'gfm-pretty-callouts-kind 'body-bottom
+             'gfm-pretty-select-range select-range
+             'gfm-pretty-after-masked bottom-masked
+             'gfm-pretty-after-bare bottom-bare
+             'after-string (if bottom-selected bottom-bare bottom-masked))))
         (ignore last-right-after-ov))))))
 
 ;;; Visibility helper

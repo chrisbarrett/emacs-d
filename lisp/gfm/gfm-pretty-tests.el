@@ -1114,8 +1114,9 @@ Forces a walker re-run by clearing the memoised last-bounds."
            (evil-visual-end (copy-marker 7)))
       (should (equal (cons 1 7) (gfm-pretty--selection-bounds))))))
 
-(ert-deftest lang-markdown/gfm-pretty-fences-selection-bounds-charwise-single-line-nil ()
-  "Charwise (`v') visual within a single line has no interior lines: nil."
+(ert-deftest lang-markdown/gfm-pretty-fences-selection-bounds-charwise-returns-full-range ()
+  "Charwise (`v') visual returns the full evil-visual marker range.
+The per-overlay walker then decides which overlays are fully inside."
   (with-temp-buffer
     (insert "hello world\n")
     (dlet ((mark-active nil)
@@ -1123,30 +1124,7 @@ Forces a walker re-run by clearing the memoised last-bounds."
            (evil-visual-selection 'char)
            (evil-visual-beginning (copy-marker 2))
            (evil-visual-end (copy-marker 8)))
-      (should-not (gfm-pretty--selection-bounds)))))
-
-(ert-deftest lang-markdown/gfm-pretty-fences-selection-bounds-charwise-adjacent-lines-nil ()
-  "Charwise spanning two adjacent lines has no interior: nil."
-  (with-temp-buffer
-    (insert "line one\nline two\n")
-    (dlet ((mark-active nil)
-           (evil-state 'visual)
-           (evil-visual-selection 'char)
-           (evil-visual-beginning (copy-marker 3))
-           (evil-visual-end (copy-marker 12)))
-      (should-not (gfm-pretty--selection-bounds)))))
-
-(ert-deftest lang-markdown/gfm-pretty-fences-selection-bounds-charwise-multi-line-returns-interior ()
-  "Charwise spanning ≥3 lines returns bols of strictly-interior lines."
-  (with-temp-buffer
-    (insert "line 1\nline 2\nline 3\nline 4\n")
-    (dlet ((mark-active nil)
-           (evil-state 'visual)
-           (evil-visual-selection 'char)
-           (evil-visual-beginning (copy-marker 3))
-           (evil-visual-end (copy-marker 26)))
-      (should (equal (cons 8 22)
-                     (gfm-pretty--selection-bounds))))))
+      (should (equal (cons 2 8) (gfm-pretty--selection-bounds))))))
 
 (ert-deftest lang-markdown/gfm-pretty-fences-selection-bounds-block-returns-nil ()
   "Evil visual-block does not drive decoration swap."
@@ -1159,26 +1137,15 @@ Forces a walker re-run by clearing the memoised last-bounds."
            (evil-visual-end (copy-marker 6)))
       (should-not (gfm-pretty--selection-bounds)))))
 
-(ert-deftest lang-markdown/gfm-pretty-fences-selection-bounds-vanilla-single-line-nil ()
-  "Vanilla `mark-active' region within one line has no interior: nil."
+(ert-deftest lang-markdown/gfm-pretty-fences-selection-bounds-vanilla-returns-full-range ()
+  "Vanilla `mark-active' region returns the full `region-beginning'/`-end' range."
   (with-temp-buffer
     (insert "hello world\n")
     (transient-mark-mode 1)
     (push-mark 2 t t)
     (goto-char 8)
     (should (use-region-p))
-    (should-not (gfm-pretty--selection-bounds))))
-
-(ert-deftest lang-markdown/gfm-pretty-fences-selection-bounds-vanilla-multi-line-returns-interior ()
-  "Vanilla `mark-active' region spanning ≥3 lines returns interior bols."
-  (with-temp-buffer
-    (insert "line 1\nline 2\nline 3\nline 4\n")
-    (transient-mark-mode 1)
-    (push-mark 3 t t)
-    (goto-char 26)
-    (should (use-region-p))
-    (should (equal (cons 8 22)
-                   (gfm-pretty--selection-bounds)))))
+    (should (equal (cons 2 8) (gfm-pretty--selection-bounds)))))
 
 (ert-deftest lang-markdown/gfm-pretty-fences-selection-bounds-no-region-nil ()
   "With no selection active, bounds are nil."
@@ -1324,14 +1291,19 @@ Forces a walker re-run by clearing the memoised last-bounds."
                    (7 (bottom-leading . masked) (bottom-trailing . masked)))
                  (lang-markdown-tests--fence-variants-by-line)))))))
 
-(ert-deftest lang-markdown/gfm-pretty-fences-v-char-spans-top-and-body-paints-interior ()
-  "Charwise from mid-L3 (open fence) to mid-L5 (body): interior L4 body bare."
+(ert-deftest lang-markdown/gfm-pretty-fences-v-char-spans-top-and-body ()
+  "Charwise from mid-L3 (open fence) to mid-L5 (body): per-overlay containment.
+The open fence's `top-trailing' is zero-width at L3-eol which falls
+inside the selection, so it goes bare; `top-leading' (full-line range)
+isn't contained because L3-bol precedes the selection start, so it
+stays masked.  Body L4 (fully inside) is bare; body L5 (extends past
+the selection end) is masked."
   (lang-markdown-tests--with-fences-test-buffer
     (let ((l3-bol (lang-markdown-tests--line-bol 3))
           (l5-bol (lang-markdown-tests--line-bol 5)))
       (lang-markdown-tests--with-evil-v-char (+ l3-bol 1) (+ l5-bol 3)
         (should (equal
-                 '((3 (top-leading . masked) (top-trailing . masked))
+                 '((3 (top-leading . masked) (top-trailing . bare))
                    (4 (body . bare))
                    (5 (body . masked))
                    (6 (body . masked))
@@ -1504,7 +1476,8 @@ Line 8: para after")
                '((3 (top-leading . bare) (top-trailing . bare))
                  (4 (body-prefix . masked) (body-rhs . masked))
                  (5 (body-prefix . masked) (body-rhs . masked))
-                 (6 (body-prefix . masked) (body-rhs . masked)))
+                 (6 (body-bottom . masked)
+                  (body-prefix . masked) (body-rhs . masked)))
                (lang-markdown-tests--callout-variants-by-line))))))
 
 (ert-deftest lang-markdown/gfm-pretty-callouts-v-line-on-one-body-paints-that-body-only ()
@@ -1515,18 +1488,37 @@ Line 8: para after")
                '((3 (top-leading . masked) (top-trailing . masked))
                  (4 (body-prefix . masked) (body-rhs . masked))
                  (5 (body-prefix . bare) (body-rhs . bare))
-                 (6 (body-prefix . masked) (body-rhs . masked)))
+                 (6 (body-bottom . masked)
+                  (body-prefix . masked) (body-rhs . masked)))
                (lang-markdown-tests--callout-variants-by-line))))))
 
-(ert-deftest lang-markdown/gfm-pretty-callouts-v-line-whole-box-paints-everything ()
-  "V-line over the entire callout: every decoration bare."
+(ert-deftest lang-markdown/gfm-pretty-callouts-v-line-whole-box-keeps-bottom-masked ()
+  "V-line over the entire callout: top + body bare, but `body-bottom'
+stays masked because its select-range is the line BELOW the box and
+the V-line stops at the last body line.  A V-line that extends one
+more line down (covered by the next test) paints the bottom too."
   (lang-markdown-tests--with-callouts-test-buffer
     (lang-markdown-tests--with-evil-v-line 3 6
       (should (equal
                '((3 (top-leading . bare) (top-trailing . bare))
                  (4 (body-prefix . bare) (body-rhs . bare))
                  (5 (body-prefix . bare) (body-rhs . bare))
-                 (6 (body-prefix . bare) (body-rhs . bare)))
+                 (6 (body-bottom . masked)
+                  (body-prefix . bare) (body-rhs . bare)))
+               (lang-markdown-tests--callout-variants-by-line))))))
+
+(ert-deftest lang-markdown/gfm-pretty-callouts-v-line-extends-past-paints-bottom ()
+  "V-line extending one line past the callout paints the bottom border bare.
+Regression: the box's bottom edge needs region bg when the selection
+crosses past the last body line into the line below."
+  (lang-markdown-tests--with-callouts-test-buffer
+    (lang-markdown-tests--with-evil-v-line 3 7
+      (should (equal
+               '((3 (top-leading . bare) (top-trailing . bare))
+                 (4 (body-prefix . bare) (body-rhs . bare))
+                 (5 (body-prefix . bare) (body-rhs . bare))
+                 (6 (body-bottom . bare)
+                  (body-prefix . bare) (body-rhs . bare)))
                (lang-markdown-tests--callout-variants-by-line))))))
 
 (ert-deftest lang-markdown/gfm-pretty-callouts-v-line-outside-paints-nothing ()
@@ -1537,21 +1529,43 @@ Line 8: para after")
                '((3 (top-leading . masked) (top-trailing . masked))
                  (4 (body-prefix . masked) (body-rhs . masked))
                  (5 (body-prefix . masked) (body-rhs . masked))
-                 (6 (body-prefix . masked) (body-rhs . masked)))
+                 (6 (body-bottom . masked)
+                  (body-prefix . masked) (body-rhs . masked)))
                (lang-markdown-tests--callout-variants-by-line))))))
 
-(ert-deftest lang-markdown/gfm-pretty-callouts-v-char-multi-line-paints-interior ()
-  "Charwise from mid-L4 to mid-L6: interior L5 body bare, L4/L6 masked."
+(ert-deftest lang-markdown/gfm-pretty-callouts-v-char-multi-line-per-overlay ()
+  "Charwise from mid-L4 to mid-L6: per-overlay containment decides each.
+- L4 (start line): `body-prefix' masked (LHS chars precede the
+  selection start), `body-rhs' bare (zero-width at L4-eol falls inside
+  the range, so the right edge paints past EOL).
+- L5 (interior): both bare.
+- L6 (end line): `body-prefix' bare (selection extends past the LHS
+  chars), `body-rhs' masked (L6-eol is past the selection end),
+  `body-bottom' masked (selection doesn't reach past the callout)."
   (lang-markdown-tests--with-callouts-test-buffer
     (let ((l4-bol (lang-markdown-tests--line-bol 4))
           (l6-bol (lang-markdown-tests--line-bol 6)))
       (lang-markdown-tests--with-evil-v-char (+ l4-bol 3) (+ l6-bol 4)
         (should (equal
                  '((3 (top-leading . masked) (top-trailing . masked))
-                   (4 (body-prefix . masked) (body-rhs . masked))
+                   (4 (body-prefix . masked) (body-rhs . bare))
                    (5 (body-prefix . bare) (body-rhs . bare))
-                   (6 (body-prefix . masked) (body-rhs . masked)))
+                   (6 (body-bottom . masked)
+                    (body-prefix . bare) (body-rhs . masked)))
                  (lang-markdown-tests--callout-variants-by-line)))))))
+
+(ert-deftest lang-markdown/gfm-pretty-callouts-v-char-end-line-lhs-paints-when-covered ()
+  "End-line `body-prefix' paints bare when the selection covers its `> ' chars.
+Regression: a v-charwise selection extending past the LHS `> ' on
+the final line used to leave the left border masked, breaking the
+visual continuity of the box border on selected rows."
+  (lang-markdown-tests--with-callouts-test-buffer
+    (let ((l4-bol (lang-markdown-tests--line-bol 4))
+          (l5-bol (lang-markdown-tests--line-bol 5)))
+      (lang-markdown-tests--with-evil-v-char (+ l4-bol 3) (+ l5-bol 5)
+        (should (eq 'bare
+                    (cdr (assq 'body-prefix
+                               (cdr (assq 5 (lang-markdown-tests--callout-variants-by-line)))))))))))
 
 (ert-deftest lang-markdown/gfm-pretty-callouts-v-char-single-line-leaves-masked ()
   "Charwise within one body line: nothing painted."
@@ -1562,7 +1576,8 @@ Line 8: para after")
                  '((3 (top-leading . masked) (top-trailing . masked))
                    (4 (body-prefix . masked) (body-rhs . masked))
                    (5 (body-prefix . masked) (body-rhs . masked))
-                   (6 (body-prefix . masked) (body-rhs . masked)))
+                   (6 (body-bottom . masked)
+                    (body-prefix . masked) (body-rhs . masked)))
                  (lang-markdown-tests--callout-variants-by-line)))))))
 
 (ert-deftest lang-markdown/gfm-pretty-fences-border-face-resets-styling ()

@@ -480,20 +480,16 @@ INDENT-WIDTH is the buffer indent width; FACE colours the borders."
                        face line-text window nil line-bg)
                     (gfm-pretty--right-after
                      box-width face line-bg))))
-               (after-masked (if last-line
-                                 (concat after-masked-base "\n" bot-str)
-                               after-masked-base))
-               ;; Last-line bare keeps the bot-str opaque (masked form)
-               ;; so the box's bottom edge doesn't bleed region bg past
-               ;; the border when the last body line is selected.
-               (after-bare (if last-line
-                               (concat
-                                (gfm-pretty--str-with-region-bg
-                                 after-masked-base)
-                                "\n"
-                                bot-str)
-                             (gfm-pretty--str-with-region-bg
-                              after-masked-base)))
+               ;; Indent-rhs covers ONLY the right-edge of each body
+               ;; line; the bot-str on the last line is split off into
+               ;; a separate indent-bottom overlay so its selection
+               ;; check uses the line below the block (see below).
+               ;; `--right-after' already ends with a stretch-to-window
+               ;; tail so the str-with-region-bg pass alone (without a
+               ;; trailing region-tail concat) carries region bg to the
+               ;; window's right edge in the bare variant.
+               (after-masked after-masked-base)
+               (after-bare (gfm-pretty--str-with-region-bg after-masked-base))
                (selected (gfm-pretty--range-selected-p lbeg lend)))
           (when first
             (let* ((top-masked (concat top-str "\n"))
@@ -511,6 +507,26 @@ INDENT-WIDTH is the buffer indent width; FACE colours the borders."
            'gfm-pretty-after-masked after-masked
            'gfm-pretty-after-bare after-bare
            'after-string (if selected after-bare after-masked))
+          (when last-line
+            (let* ((bottom-masked (concat "\n" bot-str))
+                   (bottom-bare
+                    (concat (propertize "\n" 'face 'region)
+                            (gfm-pretty--str-with-region-bg bot-str)
+                            (gfm-pretty--region-tail)))
+                   (select-range (cons (1+ lend) (1+ lend)))
+                   (bounds (gfm-pretty--selection-bounds))
+                   (bottom-selected
+                    (and bounds
+                         (<= (car bounds) (1+ lend))
+                         (< (1+ lend) (cdr bounds)))))
+              (gfm-pretty-fences--make-display
+               lend lend window
+               'gfm-pretty-fences-kind 'indent-bottom
+               'gfm-pretty-select-range select-range
+               'gfm-pretty-after-masked bottom-masked
+               'gfm-pretty-after-bare bottom-bare
+               'after-string (if bottom-selected
+                                 bottom-bare bottom-masked))))
           ;; Inset the bg band on the left by masking the first body
           ;; char (after the indent) when the line carries an
           ;; `:extend t' background.  See the fenced display path

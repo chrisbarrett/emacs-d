@@ -257,64 +257,63 @@ entered the visible range.")
 Each entry is (PROP . STASH-PREFIX); the masked / bare values live on
 `STASH-PREFIX-masked' / `STASH-PREFIX-bare' overlay properties.")
 
-(defun gfm-pretty--interior-line-bounds (beg end)
-  "Return `(IBEG . IEND)' covering lines strictly between line(BEG) and line(END).
-Returns nil when no interior lines exist (single-line selection or two
-adjacent lines).  Used for charwise selections, where the start and
-end lines are partially-selected exceptions and only fully-enclosed
-interior lines get full-width region paint."
-  (let ((first-line (line-number-at-pos beg))
-        (last-line (line-number-at-pos end)))
-    (when (> last-line (1+ first-line))
-      (save-excursion
-        (let ((ibeg (progn (goto-char beg) (forward-line 1)
-                           (line-beginning-position)))
-              (iend (progn (goto-char end) (line-beginning-position))))
-          (cons ibeg iend))))))
-
 (defun gfm-pretty--selection-bounds ()
-  "Return `(BEG . END)' of the decoration-paintable selection range, or nil.
+  "Return `(BEG . END)' of the active selection range, or nil.
 
-V-line (evil `linewise' visual): every line in the selection paints
-full-width across the window — return the full marker range.
+V-line (evil `linewise' visual) and v charwise (evil `char' visual)
+both return the full evil-visual marker range; vanilla `mark-active'
+regions return `(region-beginning . region-end)'.  Visual-block
+(evil `block') and the no-selection state return nil.
 
-v charwise (evil `char' visual) and vanilla `mark-active' regions:
-only interior lines (those strictly between the start and end lines)
-get full-width paint; the start and end lines stay masked so Emacs's
-native char-level region paint sits naturally inside the text.
-
-Visual-block (evil `block') and the no-selection state return nil.
+The per-overlay variant decision is line-shape-agnostic at this
+level — see `gfm-pretty--range-selected-p' for the rule:
+- V-line: an overlay's range is fully inside [vb, ve) iff the
+  overlay sits on a line in the V-line range (line-aligned by
+  construction), so every selected line is fully highlighted.
+- v charwise: only overlays whose full range falls inside
+  [region-beg, region-end) are bare — interior body decorations
+  paint full-width, start/end-line LHS or RHS decorations are
+  bare only when their underlying buffer chars are entirely
+  inside the selection.
 
 Evil's `evil-visual-state-p' is a function (not a variable), so
 detection runs through the `evil-state' variable instead."
   (cond
    ((and (eq (bound-and-true-p evil-state) 'visual)
+         (memq (bound-and-true-p evil-visual-selection) '(line char))
          (markerp (bound-and-true-p evil-visual-beginning))
          (markerp (bound-and-true-p evil-visual-end)))
-    (let ((sel (bound-and-true-p evil-visual-selection))
-          (vb (marker-position evil-visual-beginning))
-          (ve (marker-position evil-visual-end)))
-      (cond
-       ((eq sel 'line) (cons vb ve))
-       ((eq sel 'char) (gfm-pretty--interior-line-bounds vb ve)))))
+    (cons (marker-position evil-visual-beginning)
+          (marker-position evil-visual-end)))
    ((use-region-p)
-    (gfm-pretty--interior-line-bounds (region-beginning) (region-end)))))
+    (cons (region-beginning) (region-end)))))
 
-(defun gfm-pretty--pos-in-selection-p (pos bounds)
-  "Non-nil iff POS is on a line covered by BOUNDS.
-BOUNDS is `(BEG . END)' from `gfm-pretty--selection-bounds'.  V-line
-bounds are line-aligned and interior bounds are bol-aligned, so a
-position in the half-open [BEG, END) range belongs to a selected line."
-  (and bounds (<= (car bounds) pos) (< pos (cdr bounds))))
+(defun gfm-pretty--range-selected-p (beg end)
+  "Non-nil iff [BEG, END] is fully inside the active selection range.
+Zero-width overlays (BEG == END) are treated as a single point in
+the selection: bare iff the point falls strictly within `[bounds-beg,
+bounds-end)'.  Non-zero overlays must be fully contained: BEG >=
+bounds-beg AND END <= bounds-end."
+  (when-let* ((bounds (gfm-pretty--selection-bounds)))
+    (if (= beg end)
+        (and (<= (car bounds) beg) (< beg (cdr bounds)))
+      (and (<= (car bounds) beg) (<= end (cdr bounds))))))
 
-(defun gfm-pretty--range-selected-p (beg _end)
-  "Non-nil iff the line at BEG is covered by the active selection range.
-Decorators call this at overlay creation to choose the initial
-variant; the second argument (overlay end) is unused since V-line
-semantics paint by line and the overlay's start position alone
-determines selection."
-  (gfm-pretty--pos-in-selection-p
-   beg (gfm-pretty--selection-bounds)))
+(defun gfm-pretty--overlay-selected-p (ov bounds)
+  "Non-nil iff OV's effective range is inside BOUNDS.
+The effective range is `gfm-pretty-select-range' if set on OV
+(a (BEG . END) override used by decorations whose rendering position
+differs from the position that should drive the selection check —
+e.g. a box's bottom-border row, rendered on the last body line's
+after-string but logically belonging to the line below it).
+Otherwise it's the overlay's `(overlay-start . overlay-end)' range."
+  (when bounds
+    (let* ((override (overlay-get ov 'gfm-pretty-select-range))
+           (ob (if override (car override) (overlay-start ov)))
+           (oe (if override (cdr override) (overlay-end ov))))
+      (if (= ob oe)
+          (and (<= (car bounds) ob) (< ob (cdr bounds)))
+        (and (<= (car bounds) ob) (<= oe (cdr bounds)))))))
 
 (defun gfm-pretty--with-region-face (face)
   "Return a face spec that paints `region' bg on top of FACE.
@@ -396,8 +395,7 @@ variant could be stale."
     (unless (equal key gfm-pretty--last-selection-bounds)
       (dolist (range ranges)
         (dolist (ov (overlays-in (car range) (cdr range)))
-          (let* ((selected (gfm-pretty--pos-in-selection-p
-                            (overlay-start ov) bounds))
+          (let* ((selected (gfm-pretty--overlay-selected-p ov bounds))
                  (variant (if selected 'bare 'masked)))
             (gfm-pretty--apply-variant ov variant))))
       (setq gfm-pretty--last-selection-bounds key))))
