@@ -1667,10 +1667,10 @@ Also anchors the visible cursor at the cell's first buffer char."
   (let* ((display-ov (gfm-pretty-tables--display-overlay-for-anchor anchor))
          (cb (overlay-get anchor 'gfm-pretty-tables-cell-bounds)))
     (when display-ov
-      (let ((orig (or (overlay-get display-ov 'gfm-pretty-tables-saved-display)
+      (let ((orig (or (overlay-get display-ov 'gfm-pretty-saved-display)
                       (overlay-get display-ov 'display)))
             (dcb (overlay-get display-ov 'gfm-pretty-tables-display-cell-bounds)))
-        (overlay-put display-ov 'gfm-pretty-tables-saved-display orig)
+        (overlay-put display-ov 'gfm-pretty-saved-display orig)
         (overlay-put display-ov 'display
                      (gfm-pretty-tables--apply-cell-highlight orig dcb idx))
         (setq gfm-pretty-tables--highlighted-anchor anchor
@@ -1683,10 +1683,10 @@ Also anchors the visible cursor at the cell's first buffer char."
   (when (and gfm-pretty-tables--highlighted-row-ov
              (overlay-buffer gfm-pretty-tables--highlighted-row-ov))
     (let* ((ov gfm-pretty-tables--highlighted-row-ov)
-           (orig (overlay-get ov 'gfm-pretty-tables-saved-display)))
+           (orig (overlay-get ov 'gfm-pretty-saved-display)))
       (when orig
         (overlay-put ov 'display orig))
-      (overlay-put ov 'gfm-pretty-tables-saved-display nil)))
+      (overlay-put ov 'gfm-pretty-saved-display nil)))
   (gfm-pretty-tables--clear-cursor-anchor)
   (gfm-pretty-tables--restore-cursor)
   (setq gfm-pretty-tables--highlighted-anchor nil

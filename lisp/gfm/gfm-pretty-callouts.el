@@ -353,17 +353,31 @@ See `gfm-pretty-callouts--apply-block-anchors' for the widening rationale."
            (edge (gfm-pretty-callouts--upright "│ " border-face tint))
            (last-right-after-ov nil))
       ;; Top — leading on marker line, trailing after.
-      (gfm-pretty-callouts--make-display
-       beg marker-line-end window
-       'gfm-pretty-callouts-kind 'top-leading
-       'gfm-pretty-callouts-revealable t
-       'evaporate t
-       'display (car top-split))
-      (let ((trailing-ov
-             (gfm-pretty-callouts--make-display
-              marker-line-end marker-line-end window
-              'gfm-pretty-callouts-kind 'top-trailing
-              'after-string (cdr top-split))))
+      (let* ((top-display-masked (car top-split))
+             (top-display-bare
+              (gfm-pretty--str-with-region-bg top-display-masked))
+             (selected (gfm-pretty--range-selected-p beg marker-line-end)))
+        (gfm-pretty-callouts--make-display
+         beg marker-line-end window
+         'gfm-pretty-callouts-kind 'top-leading
+         'gfm-pretty-callouts-revealable t
+         'evaporate t
+         'gfm-pretty-display-masked top-display-masked
+         'gfm-pretty-display-bare top-display-bare
+         'display (if selected top-display-bare top-display-masked)))
+      (let* ((top-after-masked (cdr top-split))
+             (top-after-bare
+              (concat (gfm-pretty--str-with-region-bg top-after-masked)
+                      (gfm-pretty--region-tail)))
+             (selected (gfm-pretty--range-selected-p
+                        marker-line-end marker-line-end))
+             (trailing-ov
+              (gfm-pretty-callouts--make-display
+               marker-line-end marker-line-end window
+               'gfm-pretty-callouts-kind 'top-trailing
+               'gfm-pretty-after-masked top-after-masked
+               'gfm-pretty-after-bare top-after-bare
+               'after-string (if selected top-after-bare top-after-masked))))
         ;; Body lines.  Iterate via explicit text-position math, not
         ;; `forward-line': inside this overlay-creation loop,
         ;; `forward-line' interacts with cursor-intangible / display
@@ -398,37 +412,80 @@ See `gfm-pretty-callouts--apply-block-anchors' for the widening rationale."
                 ;; display so reveal in window A doesn't expose the
                 ;; source in B.  Source range is 2 chars for `> ',
                 ;; 1 char for a bare `>' continuation line.
-                (cond
-                 ((and (>= (- lend lbeg) 2)
-                       (eq (char-after lbeg) ?>)
-                       (eq (char-after (1+ lbeg)) ?\s))
-                  (gfm-pretty-callouts--make-display
-                   lbeg (+ lbeg 2) window
-                   'gfm-pretty-callouts-kind 'body-prefix
-                   'gfm-pretty-callouts-revealable t
-                   'evaporate t
-                   'display edge))
-                 ((and (= (- lend lbeg) 1)
-                       (eq (char-after lbeg) ?>))
-                  (gfm-pretty-callouts--make-display
-                   lbeg (1+ lbeg) window
-                   'gfm-pretty-callouts-kind 'body-prefix
-                   'gfm-pretty-callouts-revealable t
-                   'evaporate t
-                   'display edge)))
-                ;; Right-edge (and bottom on the last line).
-                (setq last-right-after-ov
-                      (gfm-pretty-callouts--make-display
-                       lend lend window
-                       'gfm-pretty-callouts-kind 'body-rhs
-                       'after-string after-with-bottom))
+                (let* ((edge-bare (gfm-pretty--str-with-region-bg edge))
+                       (line-selected
+                        (gfm-pretty--range-selected-p lbeg lend)))
+                  (cond
+                   ((and (>= (- lend lbeg) 2)
+                         (eq (char-after lbeg) ?>)
+                         (eq (char-after (1+ lbeg)) ?\s))
+                    (gfm-pretty-callouts--make-display
+                     lbeg (+ lbeg 2) window
+                     'gfm-pretty-callouts-kind 'body-prefix
+                     'gfm-pretty-callouts-revealable t
+                     'evaporate t
+                     'gfm-pretty-display-masked edge
+                     'gfm-pretty-display-bare edge-bare
+                     'display (if line-selected edge-bare edge)))
+                   ((and (= (- lend lbeg) 1)
+                         (eq (char-after lbeg) ?>))
+                    (gfm-pretty-callouts--make-display
+                     lbeg (1+ lbeg) window
+                     'gfm-pretty-callouts-kind 'body-prefix
+                     'gfm-pretty-callouts-revealable t
+                     'evaporate t
+                     'gfm-pretty-display-masked edge
+                     'gfm-pretty-display-bare edge-bare
+                     'display (if line-selected edge-bare edge))))
+                  ;; Right-edge (and bottom on the last line).
+                  ;; The bottom border row sits visually BELOW the last
+                  ;; body line; conceptually it's the box's bottom edge,
+                  ;; not part of the selected body line.  Keep the
+                  ;; bottom-str opaque (masked form) inside the bare
+                  ;; variant so a V-line on the last body line doesn't
+                  ;; bleed region bg past the box's bottom edge.
+                  (let* ((right-after-bare
+                          (concat (gfm-pretty--str-with-region-bg right-after)
+                                  (gfm-pretty--region-tail)))
+                         (after-with-bottom-bare
+                          (cond
+                           (last-body
+                            (let ((s (concat right-after-bare
+                                             "\n"
+                                             bottom-str)))
+                              (put-text-property 0 1 'cursor t s)
+                              s))
+                           (t right-after-bare))))
+                    (setq last-right-after-ov
+                          (gfm-pretty-callouts--make-display
+                           lend lend window
+                           'gfm-pretty-callouts-kind 'body-rhs
+                           'gfm-pretty-after-masked after-with-bottom
+                           'gfm-pretty-after-bare after-with-bottom-bare
+                           'after-string (if line-selected
+                                             after-with-bottom-bare
+                                           after-with-bottom)))))
                 (setq p (min (1+ end) (1+ lend)))))))
         ;; Body-less callout: bottom border attaches to marker trailing.
+        ;; Same rationale as the last-line body-rhs case: keep the
+        ;; bottom-str opaque in the bare variant so selection paint
+        ;; doesn't bleed past the box's bottom edge.
         (unless has-body
-          (let* ((existing (overlay-get trailing-ov 'after-string))
-                 (new (concat existing "\n" bottom-str)))
-            (put-text-property 0 1 'cursor t new)
-            (overlay-put trailing-ov 'after-string new)))
+          (let* ((existing-masked
+                  (overlay-get trailing-ov 'gfm-pretty-after-masked))
+                 (existing-bare
+                  (overlay-get trailing-ov 'gfm-pretty-after-bare))
+                 (new-masked (concat existing-masked "\n" bottom-str))
+                 (new-bare (concat existing-bare "\n" bottom-str))
+                 (selected (gfm-pretty--range-selected-p
+                            (overlay-start trailing-ov)
+                            (overlay-end trailing-ov))))
+            (put-text-property 0 1 'cursor t new-masked)
+            (put-text-property 0 1 'cursor t new-bare)
+            (overlay-put trailing-ov 'gfm-pretty-after-masked new-masked)
+            (overlay-put trailing-ov 'gfm-pretty-after-bare new-bare)
+            (overlay-put trailing-ov 'after-string
+                         (if selected new-bare new-masked))))
         (ignore last-right-after-ov))))))
 
 ;;; Visibility helper

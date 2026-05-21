@@ -267,7 +267,7 @@ and reveal suppresses the display when point sits on it."
       (goto-char bare-pos)
       (gfm-pretty--reveal)
       (should-not (overlay-get ov 'display))
-      (should (stringp (overlay-get ov 'gfm-pretty-callouts-saved-display)))
+      (should (stringp (overlay-get ov 'gfm-pretty-saved-display)))
       ;; Box edge returns when point leaves.
       (goto-char (point-max))
       (gfm-pretty--reveal)
@@ -376,7 +376,7 @@ no inherit chain — so emphasis faces and the default face show through."
                           (overlays-at (point-min)))))
       (should ov)
       (should-not (overlay-get ov 'display))
-      (should (stringp (overlay-get ov 'gfm-pretty-callouts-saved-display))))
+      (should (stringp (overlay-get ov 'gfm-pretty-saved-display))))
     ;; Move off the prefix; display restores.
     (goto-char (point-max))
     (gfm-pretty--reveal)
@@ -1031,7 +1031,7 @@ Line 9: para after")
                    (cond ((eq cur bare) 'bare)
                          ((eq cur masked) 'masked)
                          (t 'unknown))))))
-           gfm-pretty-fences--variant-props))
+           gfm-pretty--variant-props))
 
 (defun lang-markdown-tests--fence-variants-by-line ()
   "Return alist `(LINE . ((KIND . VARIANT) ...))' for all fence decorations.
@@ -1073,8 +1073,8 @@ Forces a walker re-run by clearing the memoised last-bounds."
            (copy-marker (lang-markdown-tests--line-bol ,line-beg)))
           (evil-visual-end
            (copy-marker (lang-markdown-tests--line-bol (1+ ,line-end)))))
-     (setq gfm-pretty-fences--last-selection-bounds nil)
-     (gfm-pretty-fences--update-selection)
+     (setq gfm-pretty--last-selection-bounds nil)
+     (gfm-pretty--update-selection)
      ,@body))
 
 (defmacro lang-markdown-tests--with-evil-v-char (beg-pos end-pos &rest body)
@@ -1085,8 +1085,8 @@ Forces a walker re-run by clearing the memoised last-bounds."
           (evil-visual-selection 'char)
           (evil-visual-beginning (copy-marker ,beg-pos))
           (evil-visual-end (copy-marker ,end-pos)))
-     (setq gfm-pretty-fences--last-selection-bounds nil)
-     (gfm-pretty-fences--update-selection)
+     (setq gfm-pretty--last-selection-bounds nil)
+     (gfm-pretty--update-selection)
      ,@body))
 
 (defmacro lang-markdown-tests--with-vanilla-region (beg-pos end-pos &rest body)
@@ -1097,8 +1097,8 @@ Forces a walker re-run by clearing the memoised last-bounds."
      (goto-char ,end-pos)
      (setq deactivate-mark nil)
      (activate-mark)
-     (setq gfm-pretty-fences--last-selection-bounds nil)
-     (gfm-pretty-fences--update-selection)
+     (setq gfm-pretty--last-selection-bounds nil)
+     (gfm-pretty--update-selection)
      ,@body))
 
 ;;; selection-bounds helper
@@ -1112,7 +1112,7 @@ Forces a walker re-run by clearing the memoised last-bounds."
            (evil-visual-selection 'line)
            (evil-visual-beginning (copy-marker 1))
            (evil-visual-end (copy-marker 7)))
-      (should (equal (cons 1 7) (gfm-pretty-fences--selection-bounds))))))
+      (should (equal (cons 1 7) (gfm-pretty--selection-bounds))))))
 
 (ert-deftest lang-markdown/gfm-pretty-fences-selection-bounds-charwise-single-line-nil ()
   "Charwise (`v') visual within a single line has no interior lines: nil."
@@ -1123,7 +1123,7 @@ Forces a walker re-run by clearing the memoised last-bounds."
            (evil-visual-selection 'char)
            (evil-visual-beginning (copy-marker 2))
            (evil-visual-end (copy-marker 8)))
-      (should-not (gfm-pretty-fences--selection-bounds)))))
+      (should-not (gfm-pretty--selection-bounds)))))
 
 (ert-deftest lang-markdown/gfm-pretty-fences-selection-bounds-charwise-adjacent-lines-nil ()
   "Charwise spanning two adjacent lines has no interior: nil."
@@ -1134,7 +1134,7 @@ Forces a walker re-run by clearing the memoised last-bounds."
            (evil-visual-selection 'char)
            (evil-visual-beginning (copy-marker 3))
            (evil-visual-end (copy-marker 12)))
-      (should-not (gfm-pretty-fences--selection-bounds)))))
+      (should-not (gfm-pretty--selection-bounds)))))
 
 (ert-deftest lang-markdown/gfm-pretty-fences-selection-bounds-charwise-multi-line-returns-interior ()
   "Charwise spanning ≥3 lines returns bols of strictly-interior lines."
@@ -1146,7 +1146,7 @@ Forces a walker re-run by clearing the memoised last-bounds."
            (evil-visual-beginning (copy-marker 3))
            (evil-visual-end (copy-marker 26)))
       (should (equal (cons 8 22)
-                     (gfm-pretty-fences--selection-bounds))))))
+                     (gfm-pretty--selection-bounds))))))
 
 (ert-deftest lang-markdown/gfm-pretty-fences-selection-bounds-block-returns-nil ()
   "Evil visual-block does not drive decoration swap."
@@ -1157,7 +1157,7 @@ Forces a walker re-run by clearing the memoised last-bounds."
            (evil-visual-selection 'block)
            (evil-visual-beginning (copy-marker 1))
            (evil-visual-end (copy-marker 6)))
-      (should-not (gfm-pretty-fences--selection-bounds)))))
+      (should-not (gfm-pretty--selection-bounds)))))
 
 (ert-deftest lang-markdown/gfm-pretty-fences-selection-bounds-vanilla-single-line-nil ()
   "Vanilla `mark-active' region within one line has no interior: nil."
@@ -1167,7 +1167,7 @@ Forces a walker re-run by clearing the memoised last-bounds."
     (push-mark 2 t t)
     (goto-char 8)
     (should (use-region-p))
-    (should-not (gfm-pretty-fences--selection-bounds))))
+    (should-not (gfm-pretty--selection-bounds))))
 
 (ert-deftest lang-markdown/gfm-pretty-fences-selection-bounds-vanilla-multi-line-returns-interior ()
   "Vanilla `mark-active' region spanning ≥3 lines returns interior bols."
@@ -1178,13 +1178,13 @@ Forces a walker re-run by clearing the memoised last-bounds."
     (goto-char 26)
     (should (use-region-p))
     (should (equal (cons 8 22)
-                   (gfm-pretty-fences--selection-bounds)))))
+                   (gfm-pretty--selection-bounds)))))
 
 (ert-deftest lang-markdown/gfm-pretty-fences-selection-bounds-no-region-nil ()
   "With no selection active, bounds are nil."
   (with-temp-buffer
     (insert "hello\n")
-    (should-not (gfm-pretty-fences--selection-bounds))))
+    (should-not (gfm-pretty--selection-bounds))))
 
 ;;; Decoration variant stashing
 
@@ -1207,7 +1207,7 @@ Forces a walker re-run by clearing the memoised last-bounds."
                                ov (intern (concat base "-masked")))
                               (overlay-get
                                ov (intern (concat base "-bare"))))))
-                     gfm-pretty-fences--variant-props))))))))
+                     gfm-pretty--variant-props))))))))
 
 ;;; V-line scenarios
 
@@ -1377,7 +1377,7 @@ Forces a walker re-run by clearing the memoised last-bounds."
       ;; deselection by running the walker outside the dlet so the
       ;; bounds-change detection unwinds to masked.)
       (ignore))
-    (gfm-pretty-fences--update-selection)
+    (gfm-pretty--update-selection)
     (should (equal
              '((3 (top-leading . masked) (top-trailing . masked))
                (4 (body . masked))
@@ -1414,11 +1414,11 @@ the visible window — and so weren't touched during the previous walk
                (lambda ()
                  (list (cons (point-min)
                              (lang-markdown-tests--line-bol 4))))))
-      (gfm-pretty-fences--update-selection))
+      (gfm-pretty--update-selection))
     ;; Now the window scrolls so L5 is visible again.  The selection
     ;; bounds are still nil (no change), but L5 was missed last walk
     ;; and is still bare — the walker must update it.
-    (gfm-pretty-fences--update-selection)
+    (gfm-pretty--update-selection)
     (should (eq 'masked
                 (lang-markdown-tests--overlay-variant-on-line 5 'body)))))
 
@@ -1434,6 +1434,136 @@ the visible window — and so weren't touched during the previous walk
                  (6 (body . bare))
                  (7 (bottom-leading . bare) (bottom-trailing . bare)))
                (lang-markdown-tests--fence-variants-by-line))))))
+
+;;; Selection-aware decoration swap — callouts
+
+(defconst lang-markdown-tests--callouts-selection-buffer
+  "para before\n\n> [!NOTE]\n> body one\n> body two\n> body three\n\npara after\n"
+  "Test buffer for V-line selection scenarios on callouts.
+Line 1: para before
+Line 2: (empty)
+Line 3: > [!NOTE]      (marker)
+Line 4: > body one
+Line 5: > body two
+Line 6: > body three   (last body)
+Line 7: (empty)
+Line 8: para after")
+
+(defmacro lang-markdown-tests--with-callouts-test-buffer (&rest body)
+  "Insert the standard callouts test buffer, enable mode, run BODY."
+  (declare (indent 0))
+  `(with-temp-buffer
+     (insert lang-markdown-tests--callouts-selection-buffer)
+     (goto-char (point-min))
+     (gfm-pretty-mode 1)
+     ,@body))
+
+(defun lang-markdown-tests--callout-variants-by-line ()
+  "Return alist `(LINE . ((KIND . VARIANT) ...))' for callout decorations."
+  (let ((by-line (make-hash-table :test 'equal)))
+    (dolist (ov (overlays-in (point-min) (point-max)))
+      (let ((kind (overlay-get ov 'gfm-pretty-callouts-kind))
+            (variant (lang-markdown-tests--overlay-variant ov)))
+        (when (and kind variant)
+          (let ((line (line-number-at-pos (overlay-start ov))))
+            (push (cons kind variant) (gethash line by-line))))))
+    (let (result)
+      (maphash (lambda (k v)
+                 (push (cons k (sort (copy-sequence v)
+                                     (lambda (a b)
+                                       (string< (symbol-name (car a))
+                                                (symbol-name (car b))))))
+                       result))
+               by-line)
+      (sort result (lambda (a b) (< (car a) (car b)))))))
+
+(ert-deftest lang-markdown/gfm-pretty-callouts-decoration-stashes-both-variants ()
+  "Every callout decoration overlay stashes both masked and bare variants."
+  (lang-markdown-tests--with-callouts-test-buffer
+    (dolist (kind '(top-leading top-trailing body-prefix body-rhs))
+      (let ((ovs (cl-remove-if-not
+                  (lambda (o)
+                    (eq (overlay-get o 'gfm-pretty-callouts-kind) kind))
+                  (overlays-in (point-min) (point-max)))))
+        (should ovs)
+        (dolist (ov ovs)
+          (should (cl-some
+                   (lambda (entry)
+                     (let ((base (symbol-name (cdr entry))))
+                       (and (overlay-get
+                             ov (intern (concat base "-masked")))
+                            (overlay-get
+                             ov (intern (concat base "-bare"))))))
+                   gfm-pretty--variant-props)))))))
+
+(ert-deftest lang-markdown/gfm-pretty-callouts-v-line-on-marker-paints-top-only ()
+  "V-line on the callout marker line: only top decorations bare."
+  (lang-markdown-tests--with-callouts-test-buffer
+    (lang-markdown-tests--with-evil-v-line 3 3
+      (should (equal
+               '((3 (top-leading . bare) (top-trailing . bare))
+                 (4 (body-prefix . masked) (body-rhs . masked))
+                 (5 (body-prefix . masked) (body-rhs . masked))
+                 (6 (body-prefix . masked) (body-rhs . masked)))
+               (lang-markdown-tests--callout-variants-by-line))))))
+
+(ert-deftest lang-markdown/gfm-pretty-callouts-v-line-on-one-body-paints-that-body-only ()
+  "V-line on one callout body line: only that line's decorations bare."
+  (lang-markdown-tests--with-callouts-test-buffer
+    (lang-markdown-tests--with-evil-v-line 5 5
+      (should (equal
+               '((3 (top-leading . masked) (top-trailing . masked))
+                 (4 (body-prefix . masked) (body-rhs . masked))
+                 (5 (body-prefix . bare) (body-rhs . bare))
+                 (6 (body-prefix . masked) (body-rhs . masked)))
+               (lang-markdown-tests--callout-variants-by-line))))))
+
+(ert-deftest lang-markdown/gfm-pretty-callouts-v-line-whole-box-paints-everything ()
+  "V-line over the entire callout: every decoration bare."
+  (lang-markdown-tests--with-callouts-test-buffer
+    (lang-markdown-tests--with-evil-v-line 3 6
+      (should (equal
+               '((3 (top-leading . bare) (top-trailing . bare))
+                 (4 (body-prefix . bare) (body-rhs . bare))
+                 (5 (body-prefix . bare) (body-rhs . bare))
+                 (6 (body-prefix . bare) (body-rhs . bare)))
+               (lang-markdown-tests--callout-variants-by-line))))))
+
+(ert-deftest lang-markdown/gfm-pretty-callouts-v-line-outside-paints-nothing ()
+  "V-line outside the callout: all decorations stay masked."
+  (lang-markdown-tests--with-callouts-test-buffer
+    (lang-markdown-tests--with-evil-v-line 1 2
+      (should (equal
+               '((3 (top-leading . masked) (top-trailing . masked))
+                 (4 (body-prefix . masked) (body-rhs . masked))
+                 (5 (body-prefix . masked) (body-rhs . masked))
+                 (6 (body-prefix . masked) (body-rhs . masked)))
+               (lang-markdown-tests--callout-variants-by-line))))))
+
+(ert-deftest lang-markdown/gfm-pretty-callouts-v-char-multi-line-paints-interior ()
+  "Charwise from mid-L4 to mid-L6: interior L5 body bare, L4/L6 masked."
+  (lang-markdown-tests--with-callouts-test-buffer
+    (let ((l4-bol (lang-markdown-tests--line-bol 4))
+          (l6-bol (lang-markdown-tests--line-bol 6)))
+      (lang-markdown-tests--with-evil-v-char (+ l4-bol 3) (+ l6-bol 4)
+        (should (equal
+                 '((3 (top-leading . masked) (top-trailing . masked))
+                   (4 (body-prefix . masked) (body-rhs . masked))
+                   (5 (body-prefix . bare) (body-rhs . bare))
+                   (6 (body-prefix . masked) (body-rhs . masked)))
+                 (lang-markdown-tests--callout-variants-by-line)))))))
+
+(ert-deftest lang-markdown/gfm-pretty-callouts-v-char-single-line-leaves-masked ()
+  "Charwise within one body line: nothing painted."
+  (lang-markdown-tests--with-callouts-test-buffer
+    (let ((l5-bol (lang-markdown-tests--line-bol 5)))
+      (lang-markdown-tests--with-evil-v-char (+ l5-bol 3) (+ l5-bol 7)
+        (should (equal
+                 '((3 (top-leading . masked) (top-trailing . masked))
+                   (4 (body-prefix . masked) (body-rhs . masked))
+                   (5 (body-prefix . masked) (body-rhs . masked))
+                   (6 (body-prefix . masked) (body-rhs . masked)))
+                 (lang-markdown-tests--callout-variants-by-line)))))))
 
 (ert-deftest lang-markdown/gfm-pretty-fences-border-face-resets-styling ()
   "Border face spec inherits the configured face but resets styling
@@ -2317,7 +2447,7 @@ region is just cell content; the trailing newline must be stripped."
       (goto-char (point-max))
       (gfm-pretty-tables--update-cursor-highlight)
       (should-not gfm-pretty-tables--highlighted-row-ov)
-      (should-not (overlay-get row-ov 'gfm-pretty-tables-saved-display))
+      (should-not (overlay-get row-ov 'gfm-pretty-saved-display))
       (should-not gfm-pretty-tables--cursor-anchor))))
 
 ;;; Header column reordering
@@ -3025,9 +3155,9 @@ window holding point."
                      (a-display (gfm-pretty-tables--display-overlay-for-anchor anchor win-a))
                      (b-display (gfm-pretty-tables--display-overlay-for-anchor anchor win-b)))
                 ;; Selected window's overlay carries the saved-display sentinel.
-                (should (overlay-get a-display 'gfm-pretty-tables-saved-display))
+                (should (overlay-get a-display 'gfm-pretty-saved-display))
                 ;; The other window's overlay does not.
-                (should-not (overlay-get b-display 'gfm-pretty-tables-saved-display))))
+                (should-not (overlay-get b-display 'gfm-pretty-saved-display))))
             (delete-window win-b)))
       (kill-buffer buf))))
 

@@ -227,6 +227,181 @@ last wrapped visual row from `│' to the window's right edge — see
     (put-text-property 0 1 'cursor t str)
     str))
 
+;;; Selection-aware decoration variant swap
+;;
+;; Decoration overlays (display strings, before-/after-strings, faces)
+;; that paint an opaque `:background' to mask past-EOL `:extend t' leaks
+;; from sibling overlays (e.g. `region', `hl-line', `diff-added') also
+;; block the `region' face from showing through inside the decoration's
+;; visible cells.  To make active selections paint across the box edges
+;; the cleanest way, each decorator stashes BOTH a masked variant (the
+;; opaque rendering) AND a bare variant (region face baked in front of
+;; every face plist) on each decoration overlay.  A buffer-local
+;; post-command-hook walks the visible overlays and swaps each one's
+;; live property between the two variants based on whether the overlay
+;; falls inside the active V-line selection or the interior lines of
+;; an active charwise / vanilla region.
+
+(defvar-local gfm-pretty--last-selection-bounds nil
+  "Memoised `(BOUNDS . VISIBLE-RANGES)' tuple from the last walker pass.
+Keyed on visible window ranges so a pure scroll (selection bounds
+unchanged) invalidates the cache and re-walks overlays that have just
+entered the visible range.")
+
+(defconst gfm-pretty--variant-props
+  '((display      . gfm-pretty-display)
+    (after-string . gfm-pretty-after)
+    (before-string . gfm-pretty-before)
+    (face         . gfm-pretty-face))
+  "Overlay props whose live value swaps between masked and bare variants.
+Each entry is (PROP . STASH-PREFIX); the masked / bare values live on
+`STASH-PREFIX-masked' / `STASH-PREFIX-bare' overlay properties.")
+
+(defun gfm-pretty--interior-line-bounds (beg end)
+  "Return `(IBEG . IEND)' covering lines strictly between line(BEG) and line(END).
+Returns nil when no interior lines exist (single-line selection or two
+adjacent lines).  Used for charwise selections, where the start and
+end lines are partially-selected exceptions and only fully-enclosed
+interior lines get full-width region paint."
+  (let ((first-line (line-number-at-pos beg))
+        (last-line (line-number-at-pos end)))
+    (when (> last-line (1+ first-line))
+      (save-excursion
+        (let ((ibeg (progn (goto-char beg) (forward-line 1)
+                           (line-beginning-position)))
+              (iend (progn (goto-char end) (line-beginning-position))))
+          (cons ibeg iend))))))
+
+(defun gfm-pretty--selection-bounds ()
+  "Return `(BEG . END)' of the decoration-paintable selection range, or nil.
+
+V-line (evil `linewise' visual): every line in the selection paints
+full-width across the window — return the full marker range.
+
+v charwise (evil `char' visual) and vanilla `mark-active' regions:
+only interior lines (those strictly between the start and end lines)
+get full-width paint; the start and end lines stay masked so Emacs's
+native char-level region paint sits naturally inside the text.
+
+Visual-block (evil `block') and the no-selection state return nil.
+
+Evil's `evil-visual-state-p' is a function (not a variable), so
+detection runs through the `evil-state' variable instead."
+  (cond
+   ((and (eq (bound-and-true-p evil-state) 'visual)
+         (markerp (bound-and-true-p evil-visual-beginning))
+         (markerp (bound-and-true-p evil-visual-end)))
+    (let ((sel (bound-and-true-p evil-visual-selection))
+          (vb (marker-position evil-visual-beginning))
+          (ve (marker-position evil-visual-end)))
+      (cond
+       ((eq sel 'line) (cons vb ve))
+       ((eq sel 'char) (gfm-pretty--interior-line-bounds vb ve)))))
+   ((use-region-p)
+    (gfm-pretty--interior-line-bounds (region-beginning) (region-end)))))
+
+(defun gfm-pretty--pos-in-selection-p (pos bounds)
+  "Non-nil iff POS is on a line covered by BOUNDS.
+BOUNDS is `(BEG . END)' from `gfm-pretty--selection-bounds'.  V-line
+bounds are line-aligned and interior bounds are bol-aligned, so a
+position in the half-open [BEG, END) range belongs to a selected line."
+  (and bounds (<= (car bounds) pos) (< pos (cdr bounds))))
+
+(defun gfm-pretty--range-selected-p (beg _end)
+  "Non-nil iff the line at BEG is covered by the active selection range.
+Decorators call this at overlay creation to choose the initial
+variant; the second argument (overlay end) is unused since V-line
+semantics paint by line and the overlay's start position alone
+determines selection."
+  (gfm-pretty--pos-in-selection-p
+   beg (gfm-pretty--selection-bounds)))
+
+(defun gfm-pretty--with-region-face (face)
+  "Return a face spec that paints `region' bg on top of FACE.
+Emacs does not merge a `region' overlay's face into a sibling
+overlay's display/before-/after-string, so to make decoration glyphs
+pick up the active selection bg we bake `region' into the string's
+own face property, ahead of FACE so its `:background' wins."
+  (cond
+   ((null face) 'region)
+   ((symbolp face) (list 'region face))
+   ((and (consp face) (keywordp (car face))) (list 'region face))
+   ((consp face) (cons 'region face))
+   (t (list 'region face))))
+
+(defun gfm-pretty--str-with-region-bg (s)
+  "Return a copy of string S with `region' merged in front of every face.
+Region's `:background' then paints the chars regardless of the
+masked face's `:background \"unspecified-bg\"' pin."
+  (cond
+   ((null s) nil)
+   ((not (stringp s)) s)
+   ((string-empty-p s) s)
+   (t
+    (let ((s (copy-sequence s))
+          (pos 0)
+          (len (length s)))
+      (while (< pos len)
+        (let ((next (or (next-single-property-change pos 'face s) len))
+              (face (get-text-property pos 'face s)))
+          (put-text-property pos next 'face
+                             (gfm-pretty--with-region-face face)
+                             s)
+          (setq pos next)))
+      s))))
+
+(defun gfm-pretty--region-tail ()
+  "Return a stretch-glyph tail painting `region' bg out to the window edge.
+Marker-line after-strings end at the corner glyph with no past-EOL
+fill of their own, so the bare variant appends this so the selection
+visually reaches the window's right edge."
+  (propertize " " 'display '(space :align-to right) 'face 'region))
+
+(defun gfm-pretty--apply-variant (ov variant)
+  "Apply VARIANT (`bare' or `masked') to OV's stashed swap properties.
+For each entry in `gfm-pretty--variant-props' that OV stashes, copies
+the chosen variant onto OV's live property.  `display' swaps are
+reveal-aware: when reveal has hidden the overlay (display=nil and the
+shared `gfm-pretty-saved-display' prop is non-nil), the saved value is
+updated instead so the next reveal-restore picks up the right variant."
+  (dolist (entry gfm-pretty--variant-props)
+    (let* ((prop (car entry))
+           (base (symbol-name (cdr entry)))
+           (masked-key (intern (concat base "-masked"))))
+      (when (overlay-get ov masked-key)
+        (let* ((var-key (intern (concat base "-" (symbol-name variant))))
+               (value (overlay-get ov var-key))
+               (reveal-hidden (and (eq prop 'display)
+                                   (null (overlay-get ov 'display))
+                                   (overlay-get ov 'gfm-pretty-saved-display))))
+          (if reveal-hidden
+              (overlay-put ov 'gfm-pretty-saved-display value)
+            (overlay-put ov prop value)))))))
+
+(defun gfm-pretty--update-selection ()
+  "Swap each visible decoration overlay between masked and bare variants.
+Walks overlays in every window's visible range and, for each overlay
+carrying any stashed masked variant from `gfm-pretty--variant-props',
+chooses the bare variant when the overlay's start lies inside the
+active selection range and masked otherwise.
+
+Memoised on `(bounds . visible-ranges)' so pure scrolls (selection
+unchanged) still re-walk overlays that have just entered the visible
+range; the previous walk left those untouched and their cached
+variant could be stale."
+  (let* ((bounds (gfm-pretty--selection-bounds))
+         (ranges (or (gfm-pretty--visible-window-ranges)
+                     (list (cons (point-min) (point-max)))))
+         (key (cons bounds ranges)))
+    (unless (equal key gfm-pretty--last-selection-bounds)
+      (dolist (range ranges)
+        (dolist (ov (overlays-in (car range) (cdr range)))
+          (let* ((selected (gfm-pretty--pos-in-selection-p
+                            (overlay-start ov) bounds))
+                 (variant (if selected 'bare 'masked)))
+            (gfm-pretty--apply-variant ov variant))))
+      (setq gfm-pretty--last-selection-bounds key))))
+
 ;;; Anchor / display split helper
 
 (cl-defun gfm-pretty-borders--apply-with-anchors

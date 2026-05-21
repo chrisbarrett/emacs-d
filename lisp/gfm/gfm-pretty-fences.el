@@ -56,122 +56,6 @@
 (defconst gfm-pretty-fences--border-face 'gfm-pretty-border-face
   "Face for the box border around pre blocks.")
 
-;;; Selection-aware after-string state
-
-(defvar-local gfm-pretty-fences--last-selection-bounds nil
-  "Last seen `(BEG . END)' of the active selection, or nil.
-Used by `gfm-pretty-fences--update-selection' to early-return when
-selection bounds are unchanged.")
-
-(defun gfm-pretty-fences--interior-line-bounds (beg end)
-  "Return `(IBEG . IEND)' covering lines strictly between line(BEG) and line(END).
-Returns nil when no interior lines exist (single-line selection or two
-adjacent lines).  Used for charwise selections, where the start and
-end lines are partially-selected exceptions and only fully-enclosed
-interior lines get full-width region paint."
-  (let ((first-line (line-number-at-pos beg))
-        (last-line (line-number-at-pos end)))
-    (when (> last-line (1+ first-line))
-      (save-excursion
-        (let ((ibeg (progn (goto-char beg) (forward-line 1)
-                           (line-beginning-position)))
-              (iend (progn (goto-char end) (line-beginning-position))))
-          (cons ibeg iend))))))
-
-(defun gfm-pretty-fences--selection-bounds ()
-  "Return `(BEG . END)' of the decoration-paintable selection range, or nil.
-
-V-line (evil `linewise' visual): every line in the selection paints
-full-width across the window — return the full marker range.
-
-v charwise (evil `char' visual) and vanilla `mark-active' regions:
-only interior lines (those strictly between the start and end lines)
-get full-width paint; the start and end lines stay masked so Emacs's
-native char-level region paint sits naturally inside the text.
-
-Visual-block (evil `block') and the no-selection state return nil.
-
-Evil's `evil-visual-state-p' is a function (not a variable), so
-detection runs through the `evil-state' variable instead."
-  (cond
-   ((and (eq (bound-and-true-p evil-state) 'visual)
-         (markerp (bound-and-true-p evil-visual-beginning))
-         (markerp (bound-and-true-p evil-visual-end)))
-    (let ((sel (bound-and-true-p evil-visual-selection))
-          (vb (marker-position evil-visual-beginning))
-          (ve (marker-position evil-visual-end)))
-      (cond
-       ((eq sel 'line) (cons vb ve))
-       ((eq sel 'char) (gfm-pretty-fences--interior-line-bounds vb ve)))))
-   ((use-region-p)
-    (gfm-pretty-fences--interior-line-bounds
-     (region-beginning) (region-end)))))
-
-(defun gfm-pretty-fences--pos-in-selection-p (pos bounds)
-  "Non-nil iff POS is on a line covered by V-line BOUNDS.
-BOUNDS is a `(BEG . END)' pair from
-`gfm-pretty-fences--selection-bounds'.  POS is the overlay's start;
-V-line bounds are line-aligned so a position in the [BEG, END)
-half-open range belongs to a selected line."
-  (and bounds (<= (car bounds) pos) (< pos (cdr bounds))))
-
-(defun gfm-pretty-fences--range-selected-p (beg _end)
-  "Non-nil iff the line starting at BEG is covered by the active V-line.
-The second arg (overlay end) is unused; V-line semantics paint by
-line so the overlay's start position alone determines selection."
-  (gfm-pretty-fences--pos-in-selection-p
-   beg (gfm-pretty-fences--selection-bounds)))
-
-(defun gfm-pretty-fences--with-region-face (face)
-  "Return a face spec that paints `region' bg on top of FACE.
-Emacs does not merge a `region' overlay's face into a sibling
-overlay's display/before-/after-string, so to make decoration glyphs
-pick up the active selection bg we bake `region' into the string's
-own face property, ahead of FACE so its `:background' wins."
-  (cond
-   ((null face) 'region)
-   ((symbolp face) (list 'region face))
-   ((and (consp face) (keywordp (car face))) (list 'region face))
-   ((consp face) (cons 'region face))
-   (t (list 'region face))))
-
-(defun gfm-pretty-fences--str-with-region-bg (s)
-  "Return a copy of string S with `region' merged in front of every face.
-Region's `:background' then paints the chars regardless of the
-masked face's `:background \"unspecified-bg\"' pin."
-  (cond
-   ((null s) nil)
-   ((not (stringp s)) s)
-   ((string-empty-p s) s)
-   (t
-    (let ((s (copy-sequence s))
-          (pos 0)
-          (len (length s)))
-      (while (< pos len)
-        (let ((next (or (next-single-property-change pos 'face s) len))
-              (face (get-text-property pos 'face s)))
-          (put-text-property pos next 'face
-                             (gfm-pretty-fences--with-region-face face)
-                             s)
-          (setq pos next)))
-      s))))
-
-(defun gfm-pretty-fences--region-tail ()
-  "Return a stretch-glyph tail painting `region' bg out to the window edge.
-The marker lines' after-strings end at the corner glyph and have no
-existing past-EOL fill, so we append this in the bare variant so the
-selection visually reaches the window's right edge."
-  (propertize " " 'display '(space :align-to right) 'face 'region))
-
-(defconst gfm-pretty-fences--variant-props
-  '((display . gfm-pretty-fences-display)
-    (after-string . gfm-pretty-fences-after)
-    (before-string . gfm-pretty-fences-before)
-    (face . gfm-pretty-fences-face))
-  "Overlay props whose value swaps between masked and bare variants.
-Each entry is (PROP . STASH-PREFIX); the masked / bare values live at
-`STASH-PREFIX-masked' and `STASH-PREFIX-bare' overlay properties.")
-
 ;;; Language resolution
 
 (defun gfm-pretty-fences--lang-mode (lang)
@@ -429,28 +313,28 @@ left-side mask is suppressed so the indicator keeps its own bg."
     ;; Top — leading on the marker line, trailing after.
     (let* ((top-display-masked (car top-split))
            (top-display-bare
-            (gfm-pretty-fences--str-with-region-bg top-display-masked))
-           (selected (gfm-pretty-fences--range-selected-p
+            (gfm-pretty--str-with-region-bg top-display-masked))
+           (selected (gfm-pretty--range-selected-p
                       open-line-beg open-line-end)))
       (gfm-pretty-fences--make-display
        open-line-beg open-line-end window
        'gfm-pretty-fences-kind 'top-leading
        'gfm-pretty-fences-revealable t
        'evaporate t
-       'gfm-pretty-fences-display-masked top-display-masked
-       'gfm-pretty-fences-display-bare top-display-bare
+       'gfm-pretty-display-masked top-display-masked
+       'gfm-pretty-display-bare top-display-bare
        'display (if selected top-display-bare top-display-masked)))
     (let* ((top-after-masked (cdr top-split))
            (top-after-bare
-            (concat (gfm-pretty-fences--str-with-region-bg top-after-masked)
-                    (gfm-pretty-fences--region-tail)))
-           (selected (gfm-pretty-fences--range-selected-p
+            (concat (gfm-pretty--str-with-region-bg top-after-masked)
+                    (gfm-pretty--region-tail)))
+           (selected (gfm-pretty--range-selected-p
                       open-line-beg open-line-end)))
       (gfm-pretty-fences--make-display
        open-line-end open-line-end window
        'gfm-pretty-fences-kind 'top-trailing
-       'gfm-pretty-fences-after-masked top-after-masked
-       'gfm-pretty-fences-after-bare top-after-bare
+       'gfm-pretty-after-masked top-after-masked
+       'gfm-pretty-after-bare top-after-bare
        'after-string (if selected top-after-bare top-after-masked)))
     ;; Body lines — single per-window overlay carrying before/wrap/after.
     ;; Iterate via explicit text-position math, not `forward-line': inside
@@ -459,7 +343,7 @@ left-side mask is suppressed so the indicator keeps its own bg."
     ;; spinning on the same line forever (bisect 2026-05-08).
     (let* ((lhs-masked (propertize (if lhs-margin "│" "│ ") 'face
                                    (gfm-pretty--normalised-border-face face)))
-           (lhs-bare (gfm-pretty-fences--str-with-region-bg lhs-masked))
+           (lhs-bare (gfm-pretty--str-with-region-bg lhs-masked))
            (wrap (gfm-pretty--wrap-prefix
                   face (and lhs-margin "↪")))
            (p body-beg))
@@ -474,17 +358,17 @@ left-side mask is suppressed so the indicator keeps its own bg."
                                     window nil line-bg)
                                  (gfm-pretty--right-after
                                   box-width face line-bg))))
-               (after-bare (gfm-pretty-fences--str-with-region-bg after-masked))
-               (selected (gfm-pretty-fences--range-selected-p lbeg lend)))
+               (after-bare (gfm-pretty--str-with-region-bg after-masked))
+               (selected (gfm-pretty--range-selected-p lbeg lend)))
           (gfm-pretty-fences--make-display
            lbeg lend window
            'gfm-pretty-fences-kind 'body
            'wrap-prefix wrap
-           'gfm-pretty-fences-before-masked lhs-masked
-           'gfm-pretty-fences-before-bare lhs-bare
+           'gfm-pretty-before-masked lhs-masked
+           'gfm-pretty-before-bare lhs-bare
            'before-string (if selected lhs-bare lhs-masked)
-           'gfm-pretty-fences-after-masked after-masked
-           'gfm-pretty-fences-after-bare after-bare
+           'gfm-pretty-after-masked after-masked
+           'gfm-pretty-after-bare after-bare
            'after-string (if selected after-bare after-masked))
           ;; When the line carries an `:extend t' background, inset
           ;; the band on the left too by masking the first body
@@ -499,39 +383,39 @@ left-side mask is suppressed so the indicator keeps its own bg."
           ;; first body col IS the indicator (`+'/`-'), and its bg
           ;; is part of the annotation band.
           (when (and line-bg (not lhs-margin) (< lbeg lend))
-            (let ((selected (gfm-pretty-fences--range-selected-p lbeg lend)))
+            (let ((selected (gfm-pretty--range-selected-p lbeg lend)))
               (gfm-pretty-fences--make-display
                lbeg (1+ lbeg) window
                'gfm-pretty-fences-kind 'body-bg-inset
-               'gfm-pretty-fences-face-masked '(:background "unspecified-bg")
-               'gfm-pretty-fences-face-bare 'region
+               'gfm-pretty-face-masked '(:background "unspecified-bg")
+               'gfm-pretty-face-bare 'region
                'face (if selected 'region '(:background "unspecified-bg")))))
           (setq p (min close-line-beg (1+ lend))))))
     ;; Bottom — leading on the marker line, trailing after.
     (let* ((bot-display-masked (car bot-split))
            (bot-display-bare
-            (gfm-pretty-fences--str-with-region-bg bot-display-masked))
-           (selected (gfm-pretty-fences--range-selected-p
+            (gfm-pretty--str-with-region-bg bot-display-masked))
+           (selected (gfm-pretty--range-selected-p
                       close-line-beg close-line-end)))
       (gfm-pretty-fences--make-display
        close-line-beg close-line-end window
        'gfm-pretty-fences-kind 'bottom-leading
        'gfm-pretty-fences-revealable t
        'evaporate t
-       'gfm-pretty-fences-display-masked bot-display-masked
-       'gfm-pretty-fences-display-bare bot-display-bare
+       'gfm-pretty-display-masked bot-display-masked
+       'gfm-pretty-display-bare bot-display-bare
        'display (if selected bot-display-bare bot-display-masked)))
     (let* ((bot-after-masked (cdr bot-split))
            (bot-after-bare
-            (concat (gfm-pretty-fences--str-with-region-bg bot-after-masked)
-                    (gfm-pretty-fences--region-tail)))
-           (selected (gfm-pretty-fences--range-selected-p
+            (concat (gfm-pretty--str-with-region-bg bot-after-masked)
+                    (gfm-pretty--region-tail)))
+           (selected (gfm-pretty--range-selected-p
                       close-line-end close-line-end)))
       (gfm-pretty-fences--make-display
        close-line-end close-line-end window
        'gfm-pretty-fences-kind 'bottom-trailing
-       'gfm-pretty-fences-after-masked bot-after-masked
-       'gfm-pretty-fences-after-bare bot-after-bare
+       'gfm-pretty-after-masked bot-after-masked
+       'gfm-pretty-after-bare bot-after-bare
        'after-string (if selected bot-after-bare bot-after-masked)))))
 
 ;;; Indent block rendering
@@ -540,22 +424,22 @@ left-side mask is suppressed so the indicator keeps its own bg."
   "Build width-independent anchors for an indent block at [BEG, END]."
   (let* ((lhs-masked (propertize "│ " 'face
                                  (gfm-pretty--normalised-border-face face)))
-         (lhs-bare (gfm-pretty-fences--str-with-region-bg lhs-masked))
+         (lhs-bare (gfm-pretty--str-with-region-bg lhs-masked))
          (first t)
          (p beg))
     (while (<= p end)
       (let* ((lbeg p)
              (lend (save-excursion (goto-char p) (line-end-position)))
              (cover-end (min (+ lbeg indent-width) lend))
-             (selected (gfm-pretty-fences--range-selected-p lbeg lend)))
+             (selected (gfm-pretty--range-selected-p lbeg lend)))
         ;; Cover indent chars with `│ ' display; carry cursor-intangible.
         (gfm-pretty-fences--make-anchor
          lbeg cover-end
          'gfm-pretty-fences-kind 'indent-body
          'gfm-pretty-fences-indent-first first
          'cursor-intangible t
-         'gfm-pretty-fences-display-masked lhs-masked
-         'gfm-pretty-fences-display-bare lhs-bare
+         'gfm-pretty-display-masked lhs-masked
+         'gfm-pretty-display-bare lhs-bare
          'display (if selected lhs-bare lhs-masked))
         ;; Wrap-prefix on the whole line (continuation lines).
         (gfm-pretty-fences--make-anchor
@@ -599,30 +483,33 @@ INDENT-WIDTH is the buffer indent width; FACE colours the borders."
                (after-masked (if last-line
                                  (concat after-masked-base "\n" bot-str)
                                after-masked-base))
+               ;; Last-line bare keeps the bot-str opaque (masked form)
+               ;; so the box's bottom edge doesn't bleed region bg past
+               ;; the border when the last body line is selected.
                (after-bare (if last-line
                                (concat
-                                (gfm-pretty-fences--str-with-region-bg
+                                (gfm-pretty--str-with-region-bg
                                  after-masked-base)
                                 "\n"
-                                (gfm-pretty-fences--str-with-region-bg bot-str))
-                             (gfm-pretty-fences--str-with-region-bg
+                                bot-str)
+                             (gfm-pretty--str-with-region-bg
                               after-masked-base)))
-               (selected (gfm-pretty-fences--range-selected-p lbeg lend)))
+               (selected (gfm-pretty--range-selected-p lbeg lend)))
           (when first
             (let* ((top-masked (concat top-str "\n"))
-                   (top-bare (concat (gfm-pretty-fences--str-with-region-bg top-str)
+                   (top-bare (concat (gfm-pretty--str-with-region-bg top-str)
                                      "\n")))
               (gfm-pretty-fences--make-display
                lbeg lbeg window
                'gfm-pretty-fences-kind 'indent-top
-               'gfm-pretty-fences-before-masked top-masked
-               'gfm-pretty-fences-before-bare top-bare
+               'gfm-pretty-before-masked top-masked
+               'gfm-pretty-before-bare top-bare
                'before-string (if selected top-bare top-masked))))
           (gfm-pretty-fences--make-display
            lend lend window
            'gfm-pretty-fences-kind 'indent-rhs
-           'gfm-pretty-fences-after-masked after-masked
-           'gfm-pretty-fences-after-bare after-bare
+           'gfm-pretty-after-masked after-masked
+           'gfm-pretty-after-bare after-bare
            'after-string (if selected after-bare after-masked))
           ;; Inset the bg band on the left by masking the first body
           ;; char (after the indent) when the line carries an
@@ -937,74 +824,15 @@ destroy a block."
                      region (cons after-beg after-end)))))))
      blocks)))
 
-;;; Selection-aware after-string swap
-
-(defun gfm-pretty-fences--saved-display-prop ()
-  "Return the engine's saved-display overlay-property symbol for fences."
-  (gfm-pretty--registry-saved-display gfm-pretty-fences--registry))
-
-(defun gfm-pretty-fences--apply-variant (ov variant)
-  "Apply VARIANT (`bare' or `masked') to OV's stashed swap props.
-For each entry in `gfm-pretty-fences--variant-props' that OV stashes,
-copies the chosen variant onto OV's live property.  `display' swaps
-are reveal-aware: when reveal has hidden the overlay (display=nil and
-saved-display non-nil), the saved-display slot is updated instead so
-the next reveal-restore picks up the right variant."
-  (let ((saved-prop (gfm-pretty-fences--saved-display-prop)))
-    (dolist (entry gfm-pretty-fences--variant-props)
-      (let* ((prop (car entry))
-             (base (symbol-name (cdr entry)))
-             (masked-key (intern (concat base "-masked"))))
-        (when (overlay-get ov masked-key)
-          (let* ((var-key (intern (concat base "-" (symbol-name variant))))
-                 (value (overlay-get ov var-key))
-                 (reveal-hidden (and (eq prop 'display)
-                                     (null (overlay-get ov 'display))
-                                     (overlay-get ov saved-prop))))
-            (if reveal-hidden
-                (overlay-put ov saved-prop value)
-              (overlay-put ov prop value))))))))
-
-(defun gfm-pretty-fences--update-selection ()
-  "Swap each visible decoration overlay between masked and bare variants.
-Walks overlays in every window's visible range and, for each overlay
-carrying a stashed masked variant for any entry in
-`gfm-pretty-fences--variant-props', chooses the bare variant when the
-overlay's start lies inside the active selection and masked
-otherwise.
-
-Memoisation keys on both the selection bounds AND the current visible
-window ranges so a pure scroll (selection unchanged) still re-walks
-overlays that have just entered the visible range — otherwise an
-overlay last painted bare and then scrolled out of view stays bare
-when scrolled back in."
-  (let* ((bounds (gfm-pretty-fences--selection-bounds))
-         (ranges (or (gfm-pretty--visible-window-ranges)
-                     (list (cons (point-min) (point-max)))))
-         (key (cons bounds ranges)))
-    (unless (equal key gfm-pretty-fences--last-selection-bounds)
-      (dolist (range ranges)
-        (dolist (ov (overlays-in (car range) (cdr range)))
-          (let* ((selected (gfm-pretty-fences--pos-in-selection-p
-                            (overlay-start ov) bounds))
-                 (variant (if selected 'bare 'masked)))
-            (gfm-pretty-fences--apply-variant ov variant))))
-      (setq gfm-pretty-fences--last-selection-bounds key))))
-
 ;;; Lifecycle hooks delegated to engine
 
 (defun gfm-pretty-fences--on-enable ()
   "Per-decorator setup invoked on enable."
-  (cursor-intangible-mode 1)
-  (add-hook 'post-command-hook
-            #'gfm-pretty-fences--update-selection nil t))
+  (cursor-intangible-mode 1))
 
 (defun gfm-pretty-fences--on-disable ()
   "Per-decorator teardown invoked on disable."
-  (cursor-intangible-mode -1)
-  (remove-hook 'post-command-hook
-               #'gfm-pretty-fences--update-selection t)
-  (setq gfm-pretty-fences--last-selection-bounds nil))
+  (cursor-intangible-mode -1))
 
 ;;; Stats command (thin wrapper over engine)
 
