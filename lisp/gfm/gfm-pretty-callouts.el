@@ -370,14 +370,13 @@ See `gfm-pretty-callouts--apply-block-anchors' for the widening rationale."
               (concat (gfm-pretty--str-with-region-bg top-after-masked)
                       (gfm-pretty--region-tail)))
              (selected (gfm-pretty--range-selected-p
-                        marker-line-end marker-line-end))
-             (trailing-ov
-              (gfm-pretty-callouts--make-display
-               marker-line-end marker-line-end window
-               'gfm-pretty-callouts-kind 'top-trailing
-               'gfm-pretty-after-masked top-after-masked
-               'gfm-pretty-after-bare top-after-bare
-               'after-string (if selected top-after-bare top-after-masked))))
+                        marker-line-end marker-line-end)))
+        (gfm-pretty-callouts--make-display
+         marker-line-end marker-line-end window
+         'gfm-pretty-callouts-kind 'top-trailing
+         'gfm-pretty-after-masked top-after-masked
+         'gfm-pretty-after-bare top-after-bare
+         'after-string (if selected top-after-bare top-after-masked))
         ;; Body lines.  Iterate via explicit text-position math, not
         ;; `forward-line': inside this overlay-creation loop,
         ;; `forward-line' interacts with cursor-intangible / display

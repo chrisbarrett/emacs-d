@@ -1580,6 +1580,188 @@ visual continuity of the box border on selected rows."
                     (body-prefix . masked) (body-rhs . masked)))
                  (lang-markdown-tests--callout-variants-by-line)))))))
 
+;;; Selection-aware decoration swap — fences indent block
+
+(defconst lang-markdown-tests--indent-selection-buffer
+  "para before\n\n    indent line one\n    indent line two\n    indent line three\n\npara after\n"
+  "Test buffer for V-line selection scenarios on indent code blocks.
+Line 1: para before
+Line 2: (empty)
+Line 3:     indent line one
+Line 4:     indent line two
+Line 5:     indent line three   (last body line)
+Line 6: (empty)
+Line 7: para after")
+
+(defmacro lang-markdown-tests--with-indent-test-buffer (&rest body)
+  "Insert the standard indent test buffer, enable mode, run BODY."
+  (declare (indent 0))
+  `(with-temp-buffer
+     (insert lang-markdown-tests--indent-selection-buffer)
+     (goto-char (point-min))
+     (gfm-pretty-mode 1)
+     ,@body))
+
+(defun lang-markdown-tests--indent-variants-by-line (&optional kinds)
+  "Return alist `(LINE . ((KIND . VARIANT) ...))' for fences indent overlays.
+KINDS limits to specific decoration kinds when non-nil."
+  (let ((by-line (make-hash-table :test 'equal))
+        (kinds (or kinds '(indent-top indent-rhs indent-bottom))))
+    (dolist (ov (overlays-in (point-min) (point-max)))
+      (let ((kind (overlay-get ov 'gfm-pretty-fences-kind))
+            (variant (lang-markdown-tests--overlay-variant ov)))
+        (when (and kind variant (memq kind kinds))
+          (let ((line (line-number-at-pos (overlay-start ov))))
+            (push (cons kind variant) (gethash line by-line))))))
+    (let (result)
+      (maphash (lambda (k v)
+                 (push (cons k (sort (copy-sequence v)
+                                     (lambda (a b)
+                                       (string< (symbol-name (car a))
+                                                (symbol-name (car b))))))
+                       result))
+               by-line)
+      (sort result (lambda (a b) (< (car a) (car b)))))))
+
+(ert-deftest lang-markdown/gfm-pretty-fences-indent-v-line-on-one-body-paints-rhs-only ()
+  "V-line on one indent body line: only that line's indent-rhs is bare."
+  (lang-markdown-tests--with-indent-test-buffer
+    (lang-markdown-tests--with-evil-v-line 4 4
+      (should (equal
+               '((3 (indent-rhs . masked) (indent-top . masked))
+                 (4 (indent-rhs . bare))
+                 (5 (indent-bottom . masked) (indent-rhs . masked)))
+               (lang-markdown-tests--indent-variants-by-line))))))
+
+(ert-deftest lang-markdown/gfm-pretty-fences-indent-v-line-whole-block-bottom-stays-masked ()
+  "V-line over the whole indent block: indent-bottom stays masked
+because its select-range targets the line BELOW the block."
+  (lang-markdown-tests--with-indent-test-buffer
+    (lang-markdown-tests--with-evil-v-line 3 5
+      (should (equal
+               '((3 (indent-rhs . bare) (indent-top . bare))
+                 (4 (indent-rhs . bare))
+                 (5 (indent-bottom . masked) (indent-rhs . bare)))
+               (lang-markdown-tests--indent-variants-by-line))))))
+
+(ert-deftest lang-markdown/gfm-pretty-fences-indent-v-line-extends-past-paints-bottom ()
+  "V-line extending one line past the indent block paints indent-bottom bare."
+  (lang-markdown-tests--with-indent-test-buffer
+    (lang-markdown-tests--with-evil-v-line 3 6
+      (should (equal
+               '((3 (indent-rhs . bare) (indent-top . bare))
+                 (4 (indent-rhs . bare))
+                 (5 (indent-bottom . bare) (indent-rhs . bare)))
+               (lang-markdown-tests--indent-variants-by-line))))))
+
+
+;;; Selection-aware decoration swap — vanilla on callouts
+
+(ert-deftest lang-markdown/gfm-pretty-callouts-vanilla-single-line-leaves-masked ()
+  "Vanilla region within one callout body line: nothing painted."
+  (lang-markdown-tests--with-callouts-test-buffer
+    (let ((l5-bol (lang-markdown-tests--line-bol 5)))
+      (lang-markdown-tests--with-vanilla-region
+          (+ l5-bol 3) (+ l5-bol 7)
+        (should (equal
+                 '((3 (top-leading . masked) (top-trailing . masked))
+                   (4 (body-prefix . masked) (body-rhs . masked))
+                   (5 (body-prefix . masked) (body-rhs . masked))
+                   (6 (body-bottom . masked)
+                    (body-prefix . masked) (body-rhs . masked)))
+                 (lang-markdown-tests--callout-variants-by-line)))))))
+
+(ert-deftest lang-markdown/gfm-pretty-callouts-vanilla-multi-line-per-overlay ()
+  "Vanilla region across L4-L6 paints per-overlay containment."
+  (lang-markdown-tests--with-callouts-test-buffer
+    (let ((l4-bol (lang-markdown-tests--line-bol 4))
+          (l6-bol (lang-markdown-tests--line-bol 6)))
+      (lang-markdown-tests--with-vanilla-region
+          (+ l4-bol 3) (+ l6-bol 4)
+        (should (equal
+                 '((3 (top-leading . masked) (top-trailing . masked))
+                   (4 (body-prefix . masked) (body-rhs . bare))
+                   (5 (body-prefix . bare) (body-rhs . bare))
+                   (6 (body-bottom . masked)
+                    (body-prefix . bare) (body-rhs . masked)))
+                 (lang-markdown-tests--callout-variants-by-line)))))))
+
+;;; Selection-aware decoration swap — YAML helmet
+
+(defconst lang-markdown-tests--yaml-helmet-selection-buffer
+  "---\nkey: value\nother: thing\n---\n\npara after\n"
+  "Test buffer for V-line selection scenarios on YAML helmet.
+Line 1: ---        (open marker)
+Line 2: key: value
+Line 3: other: thing
+Line 4: ---        (close marker)
+Line 5: (empty)
+Line 6: para after")
+
+(defmacro lang-markdown-tests--with-yaml-helmet-buffer (&rest body)
+  (declare (indent 0))
+  `(with-temp-buffer
+     (insert lang-markdown-tests--yaml-helmet-selection-buffer)
+     (goto-char (point-min))
+     (gfm-pretty-mode 1)
+     ,@body))
+
+(ert-deftest lang-markdown/gfm-pretty-fences-yaml-helmet-v-line-whole-block-paints-all ()
+  "V-line over the whole YAML helmet: every decoration kind bare."
+  (lang-markdown-tests--with-yaml-helmet-buffer
+    (lang-markdown-tests--with-evil-v-line 1 4
+      (should (equal
+               '((1 (top-leading . bare) (top-trailing . bare))
+                 (2 (body . bare))
+                 (3 (body . bare))
+                 (4 (bottom-leading . bare) (bottom-trailing . bare)))
+               (lang-markdown-tests--fence-variants-by-line))))))
+
+(ert-deftest lang-markdown/gfm-pretty-fences-yaml-helmet-v-line-on-one-body-line ()
+  "V-line on a single YAML helmet body line: only that body is bare."
+  (lang-markdown-tests--with-yaml-helmet-buffer
+    (lang-markdown-tests--with-evil-v-line 2 2
+      (should (equal
+               '((1 (top-leading . masked) (top-trailing . masked))
+                 (2 (body . bare))
+                 (3 (body . masked))
+                 (4 (bottom-leading . masked) (bottom-trailing . masked)))
+               (lang-markdown-tests--fence-variants-by-line))))))
+
+;;; Reveal-interaction with display variant swap
+
+(ert-deftest lang-markdown/gfm-pretty-fences-reveal-aware-display-swap ()
+  "When reveal has hidden an overlay's `display' (display=nil and
+`gfm-pretty-saved-display' carries the value), the walker updates the
+saved-display slot instead of `display' — so the next reveal-restore
+picks up the right variant.
+
+Regression: without reveal-awareness, a V-line over a marker line
+whose `top-leading' is currently hidden by reveal (cursor on it) would
+leave the saved value untouched; on cursor leave, reveal would restore
+the masked display even though selection still covered the line."
+  (lang-markdown-tests--with-fences-test-buffer
+    (let* ((l3-bol (lang-markdown-tests--line-bol 3))
+           (tl (cl-find-if
+                (lambda (o)
+                  (and (eq (overlay-get o 'gfm-pretty-fences-kind) 'top-leading)
+                       (= (overlay-start o) l3-bol)))
+                (overlays-in l3-bol (1+ l3-bol))))
+           (masked (overlay-get tl 'gfm-pretty-display-masked)))
+      (should tl)
+      ;; Simulate reveal hiding top-leading: stash display in
+      ;; saved-display and clear `display'.
+      (overlay-put tl 'gfm-pretty-saved-display masked)
+      (overlay-put tl 'display nil)
+      ;; Activate a V-line over the marker line and run the walker.
+      (lang-markdown-tests--with-evil-v-line 3 3
+        ;; `display' should remain nil (reveal still hiding it).
+        (should-not (overlay-get tl 'display))
+        ;; saved-display should now hold the BARE variant so the
+        ;; next reveal-restore picks up the selection paint.
+        (should (eq (overlay-get tl 'gfm-pretty-display-bare)
+                    (overlay-get tl 'gfm-pretty-saved-display)))))))
+
 (ert-deftest lang-markdown/gfm-pretty-fences-border-face-resets-styling ()
   "Border face spec inherits the configured face but resets styling
 attrs that would otherwise leak from font-lock onto box edges (slant,
