@@ -267,7 +267,7 @@ and reveal suppresses the display when point sits on it."
       (goto-char bare-pos)
       (gfm-pretty--reveal)
       (should-not (overlay-get ov 'display))
-      (should (stringp (overlay-get ov 'gfm-pretty-callouts-saved-display)))
+      (should (stringp (overlay-get ov 'gfm-pretty-saved-display)))
       ;; Box edge returns when point leaves.
       (goto-char (point-max))
       (gfm-pretty--reveal)
@@ -376,7 +376,7 @@ no inherit chain — so emphasis faces and the default face show through."
                           (overlays-at (point-min)))))
       (should ov)
       (should-not (overlay-get ov 'display))
-      (should (stringp (overlay-get ov 'gfm-pretty-callouts-saved-display))))
+      (should (stringp (overlay-get ov 'gfm-pretty-saved-display))))
     ;; Move off the prefix; display restores.
     (goto-char (point-max))
     (gfm-pretty--reveal)
@@ -972,6 +972,847 @@ inheriting (and bleeding through) the buffer text-property face's
     (should (equal "#abcdef"
                    (gfm-pretty-fences--line-extend-bg (point-min)
                                                     (1- (point-max)))))))
+
+;;; Selection-aware decoration swap — fences
+;;
+;; Behavioural contract (driven by user feedback 2026-05-21):
+;;
+;; - Only `V'-line (linewise) evil visual selection swaps decoration
+;;   overlays to the bare (region-bg-painted) variant.  Every line in
+;;   the V-line range gets its decorations painted with `region' bg
+;;   end-to-end across the window — no exceptions for box-top, body,
+;;   or box-bottom edges.
+;;
+;; - Charwise (`v') visual, visual-block (`C-v'), vanilla `mark-active'
+;;   regions, and the no-selection state all leave decoration overlays
+;;   in their masked variant.  Emacs paints `region' bg on the buffer
+;;   chars they cover; the box decorations stay opaque.
+;;
+;; - The swap follows a per-line rule (overlay-start's line is in the
+;;   V-line range), not a position-overlap rule.  Zero-width overlays
+;;   anchored at EOL belong to that line.
+
+(defvar evil-state)
+(defvar evil-visual-selection)
+(defvar evil-visual-beginning)
+(defvar evil-visual-end)
+
+(defconst lang-markdown-tests--fences-selection-buffer
+  "para before\n\n```lisp\nbody one\nbody two\nbody three\n```\n\npara after\n"
+  "Test buffer for V-line selection scenarios.
+Line 1: para before
+Line 2: (empty)
+Line 3: ```lisp     (open fence)
+Line 4: body one
+Line 5: body two
+Line 6: body three
+Line 7: ```         (close fence)
+Line 8: (empty)
+Line 9: para after")
+
+(defun lang-markdown-tests--line-bol (n)
+  "Return position of BOL of line N (1-indexed)."
+  (save-excursion (goto-char (point-min)) (forward-line (1- n)) (point)))
+
+(defun lang-markdown-tests--line-eol (n)
+  (save-excursion (goto-char (point-min)) (forward-line (1- n)) (line-end-position)))
+
+(defun lang-markdown-tests--overlay-variant (ov)
+  "Return the swap variant for OV: `bare', `masked', `mixed', or nil.
+`mixed' is returned when OV stashes multiple swap props that resolve
+to different variants — e.g. a fences body overlay whose
+before-string is bare (lbeg in selection) but after-string is masked
+\(lend past selection end)."
+  (let ((variants
+         (delq nil
+               (mapcar
+                (lambda (entry)
+                  (let* ((prop (car entry))
+                         (base (symbol-name (cdr entry)))
+                         (masked (overlay-get
+                                  ov (intern (concat base "-masked")))))
+                    (when masked
+                      (let ((cur (overlay-get ov prop))
+                            (bare (overlay-get
+                                   ov (intern (concat base "-bare")))))
+                        (cond ((eq cur bare) 'bare)
+                              ((eq cur masked) 'masked)
+                              (t 'unknown))))))
+                gfm-pretty--variant-props))))
+    (cond
+     ((null variants) nil)
+     ((cl-every (lambda (v) (eq v 'bare)) variants) 'bare)
+     ((cl-every (lambda (v) (eq v 'masked)) variants) 'masked)
+     (t 'mixed))))
+
+(defun lang-markdown-tests--fence-variants-by-line ()
+  "Return alist `(LINE . ((KIND . VARIANT) ...))' for all fence decorations.
+Each KIND appears once per overlay; lines sorted ascending."
+  (let ((by-line (make-hash-table :test 'equal)))
+    (dolist (ov (overlays-in (point-min) (point-max)))
+      (let ((kind (overlay-get ov 'gfm-pretty-fences-kind))
+            (variant (lang-markdown-tests--overlay-variant ov)))
+        (when (and kind variant)
+          (let ((line (line-number-at-pos (overlay-start ov))))
+            (push (cons kind variant) (gethash line by-line))))))
+    (let (result)
+      (maphash (lambda (k v)
+                 (push (cons k (sort (copy-sequence v)
+                                     (lambda (a b)
+                                       (string< (symbol-name (car a))
+                                                (symbol-name (car b))))))
+                       result))
+               by-line)
+      (sort result (lambda (a b) (< (car a) (car b)))))))
+
+(defmacro lang-markdown-tests--with-fences-test-buffer (&rest body)
+  "Insert the standard fences test buffer, enable mode, run BODY."
+  (declare (indent 0))
+  `(with-temp-buffer
+     (insert lang-markdown-tests--fences-selection-buffer)
+     (goto-char (point-min))
+     (gfm-pretty-mode 1)
+     ,@body))
+
+(defmacro lang-markdown-tests--with-evil-v-line (line-beg line-end &rest body)
+  "Mimic evil V-line state covering LINE-BEG through LINE-END, run BODY.
+Forces a walker re-run by clearing the memoised last-bounds."
+  (declare (indent 2))
+  `(dlet ((mark-active nil)
+          (evil-state 'visual)
+          (evil-visual-selection 'line)
+          (evil-visual-beginning
+           (copy-marker (lang-markdown-tests--line-bol ,line-beg)))
+          (evil-visual-end
+           (copy-marker (lang-markdown-tests--line-bol (1+ ,line-end)))))
+     (setq gfm-pretty--last-selection-bounds nil)
+     (gfm-pretty--update-selection)
+     ,@body))
+
+(defmacro lang-markdown-tests--with-evil-v-char (beg-pos end-pos &rest body)
+  "Mimic evil v charwise state from BEG-POS to END-POS, run BODY."
+  (declare (indent 2))
+  `(dlet ((mark-active nil)
+          (evil-state 'visual)
+          (evil-visual-selection 'char)
+          (evil-visual-beginning (copy-marker ,beg-pos))
+          (evil-visual-end (copy-marker ,end-pos)))
+     (setq gfm-pretty--last-selection-bounds nil)
+     (gfm-pretty--update-selection)
+     ,@body))
+
+(defmacro lang-markdown-tests--with-vanilla-region (beg-pos end-pos &rest body)
+  "Activate a vanilla `mark-active' region from BEG-POS to END-POS, run BODY."
+  (declare (indent 2))
+  `(progn
+     (set-mark ,beg-pos)
+     (goto-char ,end-pos)
+     (setq deactivate-mark nil)
+     (activate-mark)
+     (setq gfm-pretty--last-selection-bounds nil)
+     (gfm-pretty--update-selection)
+     ,@body))
+
+;;; selection-bounds helper
+
+(ert-deftest lang-markdown/gfm-pretty-fences-selection-bounds-v-line-returns-range ()
+  "Evil V-line state returns the line-aligned marker range."
+  (with-temp-buffer
+    (insert "hello\nworld\n")
+    (dlet ((mark-active nil)
+           (evil-state 'visual)
+           (evil-visual-selection 'line)
+           (evil-visual-beginning (copy-marker 1))
+           (evil-visual-end (copy-marker 7)))
+      (should (equal (cons 1 7) (gfm-pretty--selection-bounds))))))
+
+(ert-deftest lang-markdown/gfm-pretty-fences-selection-bounds-charwise-returns-full-range ()
+  "Charwise (`v') visual returns the full evil-visual marker range.
+The per-overlay walker then decides which overlays are fully inside."
+  (with-temp-buffer
+    (insert "hello world\n")
+    (dlet ((mark-active nil)
+           (evil-state 'visual)
+           (evil-visual-selection 'char)
+           (evil-visual-beginning (copy-marker 2))
+           (evil-visual-end (copy-marker 8)))
+      (should (equal (cons 2 8) (gfm-pretty--selection-bounds))))))
+
+(ert-deftest lang-markdown/gfm-pretty-fences-selection-bounds-block-returns-nil ()
+  "Evil visual-block does not drive decoration swap."
+  (with-temp-buffer
+    (insert "hello\n")
+    (dlet ((mark-active nil)
+           (evil-state 'visual)
+           (evil-visual-selection 'block)
+           (evil-visual-beginning (copy-marker 1))
+           (evil-visual-end (copy-marker 6)))
+      (should-not (gfm-pretty--selection-bounds)))))
+
+(ert-deftest lang-markdown/gfm-pretty-fences-selection-bounds-vanilla-returns-full-range ()
+  "Vanilla `mark-active' region returns the full `region-beginning'/`-end' range."
+  (with-temp-buffer
+    (insert "hello world\n")
+    (transient-mark-mode 1)
+    (push-mark 2 t t)
+    (goto-char 8)
+    (should (use-region-p))
+    (should (equal (cons 2 8) (gfm-pretty--selection-bounds)))))
+
+(ert-deftest lang-markdown/gfm-pretty-fences-selection-bounds-no-region-nil ()
+  "With no selection active, bounds are nil."
+  (with-temp-buffer
+    (insert "hello\n")
+    (should-not (gfm-pretty--selection-bounds))))
+
+;;; Decoration variant stashing
+
+(ert-deftest lang-markdown/gfm-pretty-fences-decoration-stashes-both-variants ()
+  "Every fence decoration overlay stashes both masked and bare variants."
+  (lang-markdown-tests--with-fences-test-buffer
+    (let ((decoration-kinds '(top-leading top-trailing body
+                              bottom-leading bottom-trailing)))
+      (dolist (kind decoration-kinds)
+        (let ((ovs (cl-remove-if-not
+                    (lambda (o)
+                      (eq (overlay-get o 'gfm-pretty-fences-kind) kind))
+                    (overlays-in (point-min) (point-max)))))
+          (should ovs)
+          (dolist (ov ovs)
+            (should (cl-some
+                     (lambda (entry)
+                       (let ((base (symbol-name (cdr entry))))
+                         (and (overlay-get
+                               ov (intern (concat base "-masked")))
+                              (overlay-get
+                               ov (intern (concat base "-bare"))))))
+                     gfm-pretty--variant-props))))))))
+
+;;; V-line scenarios
+
+(ert-deftest lang-markdown/gfm-pretty-fences-v-line-on-open-fence-paints-top-only ()
+  "V-line on the open fence line: only top-leading and top-trailing are bare."
+  (lang-markdown-tests--with-fences-test-buffer
+    (lang-markdown-tests--with-evil-v-line 3 3
+      (should (equal
+               '((3 (top-leading . bare) (top-trailing . bare))
+                 (4 (body . masked))
+                 (5 (body . masked))
+                 (6 (body . masked))
+                 (7 (bottom-leading . masked) (bottom-trailing . masked)))
+               (lang-markdown-tests--fence-variants-by-line))))))
+
+(ert-deftest lang-markdown/gfm-pretty-fences-v-line-on-one-body-line-paints-that-body-only ()
+  "V-line on one body line: only that line's body decoration is bare."
+  (lang-markdown-tests--with-fences-test-buffer
+    (lang-markdown-tests--with-evil-v-line 5 5
+      (should (equal
+               '((3 (top-leading . masked) (top-trailing . masked))
+                 (4 (body . masked))
+                 (5 (body . bare))
+                 (6 (body . masked))
+                 (7 (bottom-leading . masked) (bottom-trailing . masked)))
+               (lang-markdown-tests--fence-variants-by-line))))))
+
+(ert-deftest lang-markdown/gfm-pretty-fences-v-line-on-close-fence-paints-bottom-only ()
+  "V-line on the close fence line: only bottom-leading and bottom-trailing bare."
+  (lang-markdown-tests--with-fences-test-buffer
+    (lang-markdown-tests--with-evil-v-line 7 7
+      (should (equal
+               '((3 (top-leading . masked) (top-trailing . masked))
+                 (4 (body . masked))
+                 (5 (body . masked))
+                 (6 (body . masked))
+                 (7 (bottom-leading . bare) (bottom-trailing . bare)))
+               (lang-markdown-tests--fence-variants-by-line))))))
+
+(ert-deftest lang-markdown/gfm-pretty-fences-v-line-whole-box-paints-everything ()
+  "V-line over the entire box: every decoration is bare."
+  (lang-markdown-tests--with-fences-test-buffer
+    (lang-markdown-tests--with-evil-v-line 3 7
+      (should (equal
+               '((3 (top-leading . bare) (top-trailing . bare))
+                 (4 (body . bare))
+                 (5 (body . bare))
+                 (6 (body . bare))
+                 (7 (bottom-leading . bare) (bottom-trailing . bare)))
+               (lang-markdown-tests--fence-variants-by-line))))))
+
+(ert-deftest lang-markdown/gfm-pretty-fences-v-line-outside-box-paints-nothing ()
+  "V-line outside the box: every decoration stays masked."
+  (lang-markdown-tests--with-fences-test-buffer
+    (lang-markdown-tests--with-evil-v-line 1 2
+      (should (equal
+               '((3 (top-leading . masked) (top-trailing . masked))
+                 (4 (body . masked))
+                 (5 (body . masked))
+                 (6 (body . masked))
+                 (7 (bottom-leading . masked) (bottom-trailing . masked)))
+               (lang-markdown-tests--fence-variants-by-line))))))
+
+(ert-deftest lang-markdown/gfm-pretty-fences-v-line-overlapping-open-and-body ()
+  "V-line covering open fence + one body line: top + that body bare."
+  (lang-markdown-tests--with-fences-test-buffer
+    (lang-markdown-tests--with-evil-v-line 3 4
+      (should (equal
+               '((3 (top-leading . bare) (top-trailing . bare))
+                 (4 (body . bare))
+                 (5 (body . masked))
+                 (6 (body . masked))
+                 (7 (bottom-leading . masked) (bottom-trailing . masked)))
+               (lang-markdown-tests--fence-variants-by-line))))))
+
+(ert-deftest lang-markdown/gfm-pretty-fences-v-line-overlapping-body-and-close ()
+  "V-line covering last body line + close fence: that body + bottom bare."
+  (lang-markdown-tests--with-fences-test-buffer
+    (lang-markdown-tests--with-evil-v-line 6 7
+      (should (equal
+               '((3 (top-leading . masked) (top-trailing . masked))
+                 (4 (body . masked))
+                 (5 (body . masked))
+                 (6 (body . bare))
+                 (7 (bottom-leading . bare) (bottom-trailing . bare)))
+               (lang-markdown-tests--fence-variants-by-line))))))
+
+;;; v / charwise / vanilla — no decoration paint
+
+(ert-deftest lang-markdown/gfm-pretty-fences-v-char-single-line-leaves-masked ()
+  "Charwise selection within one body line: nothing painted."
+  (lang-markdown-tests--with-fences-test-buffer
+    (let ((body4-bol (lang-markdown-tests--line-bol 4)))
+      (lang-markdown-tests--with-evil-v-char (+ body4-bol 2) (+ body4-bol 6)
+        (should (equal
+                 '((3 (top-leading . masked) (top-trailing . masked))
+                   (4 (body . masked))
+                   (5 (body . masked))
+                   (6 (body . masked))
+                   (7 (bottom-leading . masked) (bottom-trailing . masked)))
+                 (lang-markdown-tests--fence-variants-by-line)))))))
+
+(ert-deftest lang-markdown/gfm-pretty-fences-v-char-multi-line-paints-interior ()
+  "Charwise from mid-L4 to mid-L6: interior L5 body fully bare, L4/L6 mixed.
+L4 (start line): before-string masked (lbeg before region-beg),
+after-string bare (lend in region) → `mixed'.
+L5 (interior): both bare → `bare'.
+L6 (end line): before-string bare (lbeg in region), after-string
+masked (lend past region-end) → `mixed'."
+  (lang-markdown-tests--with-fences-test-buffer
+    (let ((body4-bol (lang-markdown-tests--line-bol 4))
+          (body6-bol (lang-markdown-tests--line-bol 6)))
+      (lang-markdown-tests--with-evil-v-char (+ body4-bol 2) (+ body6-bol 4)
+        (should (equal
+                 '((3 (top-leading . masked) (top-trailing . masked))
+                   (4 (body . mixed))
+                   (5 (body . bare))
+                   (6 (body . mixed))
+                   (7 (bottom-leading . masked) (bottom-trailing . masked)))
+                 (lang-markdown-tests--fence-variants-by-line)))))))
+
+(ert-deftest lang-markdown/gfm-pretty-fences-v-char-end-line-lhs-paints-when-covered ()
+  "End-line of v-charwise: the left `│ ' (body before-string) paints bare
+when the selection covers its position at BOL, even though the body
+overlay extends past the selection end (so the right edge stays masked
+— we want per-prop selection, not a single overlay-wide swap).
+
+Regression: a v-charwise from above the fenced block into the body
+left the end-line's left border masked, creating a 2-col cream gap
+at BOL where buffer chars on that line were already region-painted.
+The test asserts that the body overlay's `before-string' is the bare
+variant once the selection covers its anchor at lbeg."
+  (lang-markdown-tests--with-fences-test-buffer
+    (let ((l1-bol (lang-markdown-tests--line-bol 1))
+          (l5-bol (lang-markdown-tests--line-bol 5)))
+      ;; v from start of paragraph above (L1) to mid-body L5.
+      (lang-markdown-tests--with-evil-v-char l1-bol (+ l5-bol 3)
+        ;; The body overlay on L5 (selection's end-line): the before-
+        ;; string at lbeg is fully inside the selection range, so it
+        ;; should paint bare; the after-string at lend is past the
+        ;; selection end so it stays masked.
+        (let* ((body-ov (cl-find-if
+                         (lambda (o)
+                           (and (eq (overlay-get o 'gfm-pretty-fences-kind)
+                                    'body)
+                                (= (line-number-at-pos (overlay-start o)) 5)))
+                         (overlays-in (point-min) (point-max)))))
+          (should body-ov)
+          (should (eq (overlay-get body-ov 'gfm-pretty-before-bare)
+                      (overlay-get body-ov 'before-string)))
+          (should (eq (overlay-get body-ov 'gfm-pretty-after-masked)
+                      (overlay-get body-ov 'after-string))))))))
+
+(ert-deftest lang-markdown/gfm-pretty-fences-v-char-spans-top-and-body ()
+  "Charwise from mid-L3 (open fence) to mid-L5 (body): per-overlay containment.
+The open fence's `top-trailing' is zero-width at L3-eol which falls
+inside the selection, so it goes bare; `top-leading' (full-line range)
+isn't contained because L3-bol precedes the selection start, so it
+stays masked.  Body L4 (fully inside) is bare; body L5 is mixed —
+its before-string at lbeg is inside the selection (left `│ ' paints),
+but its after-string at lend is past the selection end."
+  (lang-markdown-tests--with-fences-test-buffer
+    (let ((l3-bol (lang-markdown-tests--line-bol 3))
+          (l5-bol (lang-markdown-tests--line-bol 5)))
+      (lang-markdown-tests--with-evil-v-char (+ l3-bol 1) (+ l5-bol 3)
+        (should (equal
+                 '((3 (top-leading . masked) (top-trailing . bare))
+                   (4 (body . bare))
+                   (5 (body . mixed))
+                   (6 (body . masked))
+                   (7 (bottom-leading . masked) (bottom-trailing . masked)))
+                 (lang-markdown-tests--fence-variants-by-line)))))))
+
+(ert-deftest lang-markdown/gfm-pretty-fences-vanilla-single-line-leaves-masked ()
+  "Vanilla region within one body line: nothing painted."
+  (lang-markdown-tests--with-fences-test-buffer
+    (let ((body4-bol (lang-markdown-tests--line-bol 4)))
+      (lang-markdown-tests--with-vanilla-region
+          (+ body4-bol 2) (+ body4-bol 6)
+        (should (equal
+                 '((3 (top-leading . masked) (top-trailing . masked))
+                   (4 (body . masked))
+                   (5 (body . masked))
+                   (6 (body . masked))
+                   (7 (bottom-leading . masked) (bottom-trailing . masked)))
+                 (lang-markdown-tests--fence-variants-by-line)))))))
+
+(ert-deftest lang-markdown/gfm-pretty-fences-vanilla-multi-line-paints-interior ()
+  "Vanilla region across L4-L6 paints L5 interior body bare; L4/L6 mixed.
+Same per-overlay containment as charwise: the start and end body
+overlays' before/after-strings swap independently."
+  (lang-markdown-tests--with-fences-test-buffer
+    (let ((body4-bol (lang-markdown-tests--line-bol 4))
+          (body6-bol (lang-markdown-tests--line-bol 6)))
+      (lang-markdown-tests--with-vanilla-region
+          (+ body4-bol 2) (+ body6-bol 4)
+        (should (equal
+                 '((3 (top-leading . masked) (top-trailing . masked))
+                   (4 (body . mixed))
+                   (5 (body . bare))
+                   (6 (body . mixed))
+                   (7 (bottom-leading . masked) (bottom-trailing . masked)))
+                 (lang-markdown-tests--fence-variants-by-line)))))))
+
+;;; Deselection restores masked
+
+(ert-deftest lang-markdown/gfm-pretty-fences-deselection-restores-masked ()
+  "After V-line + deselect, every decoration returns to masked."
+  (lang-markdown-tests--with-fences-test-buffer
+    (lang-markdown-tests--with-evil-v-line 3 7
+      ;; (V-line setup painted bare; below the macro exit, simulate
+      ;; deselection by running the walker outside the dlet so the
+      ;; bounds-change detection unwinds to masked.)
+      (ignore))
+    (gfm-pretty--update-selection)
+    (should (equal
+             '((3 (top-leading . masked) (top-trailing . masked))
+               (4 (body . masked))
+               (5 (body . masked))
+               (6 (body . masked))
+               (7 (bottom-leading . masked) (bottom-trailing . masked)))
+             (lang-markdown-tests--fence-variants-by-line)))))
+
+;;; Rebuild during active V-line
+
+(defun lang-markdown-tests--overlay-variant-on-line (line kind)
+  "Return variant for decoration overlay of KIND on LINE, or nil."
+  (when-let* ((ov (cl-find-if
+                   (lambda (o)
+                     (and (eq (overlay-get o 'gfm-pretty-fences-kind) kind)
+                          (= (line-number-at-pos (overlay-start o)) line)))
+                   (overlays-in (point-min) (point-max)))))
+    (lang-markdown-tests--overlay-variant ov)))
+
+(ert-deftest lang-markdown/gfm-pretty-fences-scroll-back-into-view-resets-stale-bare ()
+  "An overlay marked bare while off-screen resets when scrolled back into view.
+Regression: the bounds-memoised walker would early-return when current
+bounds matched last-seen bounds, leaving overlays that scrolled out of
+the visible window — and so weren't touched during the previous walk
+— stuck in their prior variant once scrolled back in."
+  (lang-markdown-tests--with-fences-test-buffer
+    (lang-markdown-tests--with-evil-v-line 5 5
+      (should (eq 'bare
+                  (lang-markdown-tests--overlay-variant-on-line 5 'body))))
+    ;; Simulate a scroll that hides line 5 from the visible range, then
+    ;; run the walker (with the V-line already gone since the dlet
+    ;; popped).  L5 is off-screen so it should not be updated this pass.
+    (cl-letf (((symbol-function 'gfm-pretty--visible-window-ranges)
+               (lambda ()
+                 (list (cons (point-min)
+                             (lang-markdown-tests--line-bol 4))))))
+      (gfm-pretty--update-selection))
+    ;; Now the window scrolls so L5 is visible again.  The selection
+    ;; bounds are still nil (no change), but L5 was missed last walk
+    ;; and is still bare — the walker must update it.
+    (gfm-pretty--update-selection)
+    (should (eq 'masked
+                (lang-markdown-tests--overlay-variant-on-line 5 'body)))))
+
+(ert-deftest lang-markdown/gfm-pretty-fences-rebuild-during-v-line-paints-bare ()
+  "A decorator rebuild with V-line active creates overlays already in bare state."
+  (lang-markdown-tests--with-fences-test-buffer
+    (lang-markdown-tests--with-evil-v-line 3 7
+      (gfm-pretty--rebuild (gfm-pretty--get 'fences))
+      (should (equal
+               '((3 (top-leading . bare) (top-trailing . bare))
+                 (4 (body . bare))
+                 (5 (body . bare))
+                 (6 (body . bare))
+                 (7 (bottom-leading . bare) (bottom-trailing . bare)))
+               (lang-markdown-tests--fence-variants-by-line))))))
+
+;;; Selection-aware decoration swap — callouts
+
+(defconst lang-markdown-tests--callouts-selection-buffer
+  "para before\n\n> [!NOTE]\n> body one\n> body two\n> body three\n\npara after\n"
+  "Test buffer for V-line selection scenarios on callouts.
+Line 1: para before
+Line 2: (empty)
+Line 3: > [!NOTE]      (marker)
+Line 4: > body one
+Line 5: > body two
+Line 6: > body three   (last body)
+Line 7: (empty)
+Line 8: para after")
+
+(defmacro lang-markdown-tests--with-callouts-test-buffer (&rest body)
+  "Insert the standard callouts test buffer, enable mode, run BODY."
+  (declare (indent 0))
+  `(with-temp-buffer
+     (insert lang-markdown-tests--callouts-selection-buffer)
+     (goto-char (point-min))
+     (gfm-pretty-mode 1)
+     ,@body))
+
+(defun lang-markdown-tests--callout-variants-by-line ()
+  "Return alist `(LINE . ((KIND . VARIANT) ...))' for callout decorations."
+  (let ((by-line (make-hash-table :test 'equal)))
+    (dolist (ov (overlays-in (point-min) (point-max)))
+      (let ((kind (overlay-get ov 'gfm-pretty-callouts-kind))
+            (variant (lang-markdown-tests--overlay-variant ov)))
+        (when (and kind variant)
+          (let ((line (line-number-at-pos (overlay-start ov))))
+            (push (cons kind variant) (gethash line by-line))))))
+    (let (result)
+      (maphash (lambda (k v)
+                 (push (cons k (sort (copy-sequence v)
+                                     (lambda (a b)
+                                       (string< (symbol-name (car a))
+                                                (symbol-name (car b))))))
+                       result))
+               by-line)
+      (sort result (lambda (a b) (< (car a) (car b)))))))
+
+(ert-deftest lang-markdown/gfm-pretty-callouts-decoration-stashes-both-variants ()
+  "Every callout decoration overlay stashes both masked and bare variants."
+  (lang-markdown-tests--with-callouts-test-buffer
+    (dolist (kind '(top-leading top-trailing body-prefix body-rhs))
+      (let ((ovs (cl-remove-if-not
+                  (lambda (o)
+                    (eq (overlay-get o 'gfm-pretty-callouts-kind) kind))
+                  (overlays-in (point-min) (point-max)))))
+        (should ovs)
+        (dolist (ov ovs)
+          (should (cl-some
+                   (lambda (entry)
+                     (let ((base (symbol-name (cdr entry))))
+                       (and (overlay-get
+                             ov (intern (concat base "-masked")))
+                            (overlay-get
+                             ov (intern (concat base "-bare"))))))
+                   gfm-pretty--variant-props)))))))
+
+(ert-deftest lang-markdown/gfm-pretty-callouts-v-line-on-marker-paints-top-only ()
+  "V-line on the callout marker line: only top decorations bare."
+  (lang-markdown-tests--with-callouts-test-buffer
+    (lang-markdown-tests--with-evil-v-line 3 3
+      (should (equal
+               '((3 (top-leading . bare) (top-trailing . bare))
+                 (4 (body-prefix . masked) (body-rhs . masked))
+                 (5 (body-prefix . masked) (body-rhs . masked))
+                 (6 (body-bottom . masked)
+                  (body-prefix . masked) (body-rhs . masked)))
+               (lang-markdown-tests--callout-variants-by-line))))))
+
+(ert-deftest lang-markdown/gfm-pretty-callouts-v-line-on-one-body-paints-that-body-only ()
+  "V-line on one callout body line: only that line's decorations bare."
+  (lang-markdown-tests--with-callouts-test-buffer
+    (lang-markdown-tests--with-evil-v-line 5 5
+      (should (equal
+               '((3 (top-leading . masked) (top-trailing . masked))
+                 (4 (body-prefix . masked) (body-rhs . masked))
+                 (5 (body-prefix . bare) (body-rhs . bare))
+                 (6 (body-bottom . masked)
+                  (body-prefix . masked) (body-rhs . masked)))
+               (lang-markdown-tests--callout-variants-by-line))))))
+
+(ert-deftest lang-markdown/gfm-pretty-callouts-v-line-whole-box-keeps-bottom-masked ()
+  "V-line over the entire callout: top + body bare, but `body-bottom'
+stays masked because its select-range is the line BELOW the box and
+the V-line stops at the last body line.  A V-line that extends one
+more line down (covered by the next test) paints the bottom too."
+  (lang-markdown-tests--with-callouts-test-buffer
+    (lang-markdown-tests--with-evil-v-line 3 6
+      (should (equal
+               '((3 (top-leading . bare) (top-trailing . bare))
+                 (4 (body-prefix . bare) (body-rhs . bare))
+                 (5 (body-prefix . bare) (body-rhs . bare))
+                 (6 (body-bottom . masked)
+                  (body-prefix . bare) (body-rhs . bare)))
+               (lang-markdown-tests--callout-variants-by-line))))))
+
+(ert-deftest lang-markdown/gfm-pretty-callouts-v-line-extends-past-paints-bottom ()
+  "V-line extending one line past the callout paints the bottom border bare.
+Regression: the box's bottom edge needs region bg when the selection
+crosses past the last body line into the line below."
+  (lang-markdown-tests--with-callouts-test-buffer
+    (lang-markdown-tests--with-evil-v-line 3 7
+      (should (equal
+               '((3 (top-leading . bare) (top-trailing . bare))
+                 (4 (body-prefix . bare) (body-rhs . bare))
+                 (5 (body-prefix . bare) (body-rhs . bare))
+                 (6 (body-bottom . bare)
+                  (body-prefix . bare) (body-rhs . bare)))
+               (lang-markdown-tests--callout-variants-by-line))))))
+
+(ert-deftest lang-markdown/gfm-pretty-callouts-v-line-outside-paints-nothing ()
+  "V-line outside the callout: all decorations stay masked."
+  (lang-markdown-tests--with-callouts-test-buffer
+    (lang-markdown-tests--with-evil-v-line 1 2
+      (should (equal
+               '((3 (top-leading . masked) (top-trailing . masked))
+                 (4 (body-prefix . masked) (body-rhs . masked))
+                 (5 (body-prefix . masked) (body-rhs . masked))
+                 (6 (body-bottom . masked)
+                  (body-prefix . masked) (body-rhs . masked)))
+               (lang-markdown-tests--callout-variants-by-line))))))
+
+(ert-deftest lang-markdown/gfm-pretty-callouts-v-char-multi-line-per-overlay ()
+  "Charwise from mid-L4 to mid-L6: per-overlay containment decides each.
+- L4 (start line): `body-prefix' masked (LHS chars precede the
+  selection start), `body-rhs' bare (zero-width at L4-eol falls inside
+  the range, so the right edge paints past EOL).
+- L5 (interior): both bare.
+- L6 (end line): `body-prefix' bare (selection extends past the LHS
+  chars), `body-rhs' masked (L6-eol is past the selection end),
+  `body-bottom' masked (selection doesn't reach past the callout)."
+  (lang-markdown-tests--with-callouts-test-buffer
+    (let ((l4-bol (lang-markdown-tests--line-bol 4))
+          (l6-bol (lang-markdown-tests--line-bol 6)))
+      (lang-markdown-tests--with-evil-v-char (+ l4-bol 3) (+ l6-bol 4)
+        (should (equal
+                 '((3 (top-leading . masked) (top-trailing . masked))
+                   (4 (body-prefix . masked) (body-rhs . bare))
+                   (5 (body-prefix . bare) (body-rhs . bare))
+                   (6 (body-bottom . masked)
+                    (body-prefix . bare) (body-rhs . masked)))
+                 (lang-markdown-tests--callout-variants-by-line)))))))
+
+(ert-deftest lang-markdown/gfm-pretty-callouts-v-char-end-line-lhs-paints-when-covered ()
+  "End-line `body-prefix' paints bare when the selection covers its `> ' chars.
+Regression: a v-charwise selection extending past the LHS `> ' on
+the final line used to leave the left border masked, breaking the
+visual continuity of the box border on selected rows."
+  (lang-markdown-tests--with-callouts-test-buffer
+    (let ((l4-bol (lang-markdown-tests--line-bol 4))
+          (l5-bol (lang-markdown-tests--line-bol 5)))
+      (lang-markdown-tests--with-evil-v-char (+ l4-bol 3) (+ l5-bol 5)
+        (should (eq 'bare
+                    (cdr (assq 'body-prefix
+                               (cdr (assq 5 (lang-markdown-tests--callout-variants-by-line)))))))))))
+
+(ert-deftest lang-markdown/gfm-pretty-callouts-v-char-single-line-leaves-masked ()
+  "Charwise within one body line: nothing painted."
+  (lang-markdown-tests--with-callouts-test-buffer
+    (let ((l5-bol (lang-markdown-tests--line-bol 5)))
+      (lang-markdown-tests--with-evil-v-char (+ l5-bol 3) (+ l5-bol 7)
+        (should (equal
+                 '((3 (top-leading . masked) (top-trailing . masked))
+                   (4 (body-prefix . masked) (body-rhs . masked))
+                   (5 (body-prefix . masked) (body-rhs . masked))
+                   (6 (body-bottom . masked)
+                    (body-prefix . masked) (body-rhs . masked)))
+                 (lang-markdown-tests--callout-variants-by-line)))))))
+
+;;; Selection-aware decoration swap — fences indent block
+
+(defconst lang-markdown-tests--indent-selection-buffer
+  "para before\n\n    indent line one\n    indent line two\n    indent line three\n\npara after\n"
+  "Test buffer for V-line selection scenarios on indent code blocks.
+Line 1: para before
+Line 2: (empty)
+Line 3:     indent line one
+Line 4:     indent line two
+Line 5:     indent line three   (last body line)
+Line 6: (empty)
+Line 7: para after")
+
+(defmacro lang-markdown-tests--with-indent-test-buffer (&rest body)
+  "Insert the standard indent test buffer, enable mode, run BODY."
+  (declare (indent 0))
+  `(with-temp-buffer
+     (insert lang-markdown-tests--indent-selection-buffer)
+     (goto-char (point-min))
+     (gfm-pretty-mode 1)
+     ,@body))
+
+(defun lang-markdown-tests--indent-variants-by-line (&optional kinds)
+  "Return alist `(LINE . ((KIND . VARIANT) ...))' for fences indent overlays.
+KINDS limits to specific decoration kinds when non-nil."
+  (let ((by-line (make-hash-table :test 'equal))
+        (kinds (or kinds '(indent-top indent-rhs indent-bottom))))
+    (dolist (ov (overlays-in (point-min) (point-max)))
+      (let ((kind (overlay-get ov 'gfm-pretty-fences-kind))
+            (variant (lang-markdown-tests--overlay-variant ov)))
+        (when (and kind variant (memq kind kinds))
+          (let ((line (line-number-at-pos (overlay-start ov))))
+            (push (cons kind variant) (gethash line by-line))))))
+    (let (result)
+      (maphash (lambda (k v)
+                 (push (cons k (sort (copy-sequence v)
+                                     (lambda (a b)
+                                       (string< (symbol-name (car a))
+                                                (symbol-name (car b))))))
+                       result))
+               by-line)
+      (sort result (lambda (a b) (< (car a) (car b)))))))
+
+(ert-deftest lang-markdown/gfm-pretty-fences-indent-v-line-on-one-body-paints-rhs-only ()
+  "V-line on one indent body line: only that line's indent-rhs is bare."
+  (lang-markdown-tests--with-indent-test-buffer
+    (lang-markdown-tests--with-evil-v-line 4 4
+      (should (equal
+               '((3 (indent-rhs . masked) (indent-top . masked))
+                 (4 (indent-rhs . bare))
+                 (5 (indent-bottom . masked) (indent-rhs . masked)))
+               (lang-markdown-tests--indent-variants-by-line))))))
+
+(ert-deftest lang-markdown/gfm-pretty-fences-indent-v-line-whole-block-bottom-stays-masked ()
+  "V-line over the whole indent block: indent-bottom stays masked
+because its select-range targets the line BELOW the block."
+  (lang-markdown-tests--with-indent-test-buffer
+    (lang-markdown-tests--with-evil-v-line 3 5
+      (should (equal
+               '((3 (indent-rhs . bare) (indent-top . bare))
+                 (4 (indent-rhs . bare))
+                 (5 (indent-bottom . masked) (indent-rhs . bare)))
+               (lang-markdown-tests--indent-variants-by-line))))))
+
+(ert-deftest lang-markdown/gfm-pretty-fences-indent-v-line-extends-past-paints-bottom ()
+  "V-line extending one line past the indent block paints indent-bottom bare."
+  (lang-markdown-tests--with-indent-test-buffer
+    (lang-markdown-tests--with-evil-v-line 3 6
+      (should (equal
+               '((3 (indent-rhs . bare) (indent-top . bare))
+                 (4 (indent-rhs . bare))
+                 (5 (indent-bottom . bare) (indent-rhs . bare)))
+               (lang-markdown-tests--indent-variants-by-line))))))
+
+
+;;; Selection-aware decoration swap — vanilla on callouts
+
+(ert-deftest lang-markdown/gfm-pretty-callouts-vanilla-single-line-leaves-masked ()
+  "Vanilla region within one callout body line: nothing painted."
+  (lang-markdown-tests--with-callouts-test-buffer
+    (let ((l5-bol (lang-markdown-tests--line-bol 5)))
+      (lang-markdown-tests--with-vanilla-region
+          (+ l5-bol 3) (+ l5-bol 7)
+        (should (equal
+                 '((3 (top-leading . masked) (top-trailing . masked))
+                   (4 (body-prefix . masked) (body-rhs . masked))
+                   (5 (body-prefix . masked) (body-rhs . masked))
+                   (6 (body-bottom . masked)
+                    (body-prefix . masked) (body-rhs . masked)))
+                 (lang-markdown-tests--callout-variants-by-line)))))))
+
+(ert-deftest lang-markdown/gfm-pretty-callouts-vanilla-multi-line-per-overlay ()
+  "Vanilla region across L4-L6 paints per-overlay containment."
+  (lang-markdown-tests--with-callouts-test-buffer
+    (let ((l4-bol (lang-markdown-tests--line-bol 4))
+          (l6-bol (lang-markdown-tests--line-bol 6)))
+      (lang-markdown-tests--with-vanilla-region
+          (+ l4-bol 3) (+ l6-bol 4)
+        (should (equal
+                 '((3 (top-leading . masked) (top-trailing . masked))
+                   (4 (body-prefix . masked) (body-rhs . bare))
+                   (5 (body-prefix . bare) (body-rhs . bare))
+                   (6 (body-bottom . masked)
+                    (body-prefix . bare) (body-rhs . masked)))
+                 (lang-markdown-tests--callout-variants-by-line)))))))
+
+;;; Selection-aware decoration swap — YAML helmet
+
+(defconst lang-markdown-tests--yaml-helmet-selection-buffer
+  "---\nkey: value\nother: thing\n---\n\npara after\n"
+  "Test buffer for V-line selection scenarios on YAML helmet.
+Line 1: ---        (open marker)
+Line 2: key: value
+Line 3: other: thing
+Line 4: ---        (close marker)
+Line 5: (empty)
+Line 6: para after")
+
+(defmacro lang-markdown-tests--with-yaml-helmet-buffer (&rest body)
+  (declare (indent 0))
+  `(with-temp-buffer
+     (insert lang-markdown-tests--yaml-helmet-selection-buffer)
+     (goto-char (point-min))
+     (gfm-pretty-mode 1)
+     ,@body))
+
+(ert-deftest lang-markdown/gfm-pretty-fences-yaml-helmet-v-line-whole-block-paints-all ()
+  "V-line over the whole YAML helmet: every decoration kind bare."
+  (lang-markdown-tests--with-yaml-helmet-buffer
+    (lang-markdown-tests--with-evil-v-line 1 4
+      (should (equal
+               '((1 (top-leading . bare) (top-trailing . bare))
+                 (2 (body . bare))
+                 (3 (body . bare))
+                 (4 (bottom-leading . bare) (bottom-trailing . bare)))
+               (lang-markdown-tests--fence-variants-by-line))))))
+
+(ert-deftest lang-markdown/gfm-pretty-fences-yaml-helmet-v-line-on-one-body-line ()
+  "V-line on a single YAML helmet body line: only that body is bare."
+  (lang-markdown-tests--with-yaml-helmet-buffer
+    (lang-markdown-tests--with-evil-v-line 2 2
+      (should (equal
+               '((1 (top-leading . masked) (top-trailing . masked))
+                 (2 (body . bare))
+                 (3 (body . masked))
+                 (4 (bottom-leading . masked) (bottom-trailing . masked)))
+               (lang-markdown-tests--fence-variants-by-line))))))
+
+;;; Reveal-interaction with display variant swap
+
+(ert-deftest lang-markdown/gfm-pretty-fences-reveal-aware-display-swap ()
+  "When reveal has hidden an overlay's `display' (display=nil and
+`gfm-pretty-saved-display' carries the value), the walker updates the
+saved-display slot instead of `display' — so the next reveal-restore
+picks up the right variant.
+
+Regression: without reveal-awareness, a V-line over a marker line
+whose `top-leading' is currently hidden by reveal (cursor on it) would
+leave the saved value untouched; on cursor leave, reveal would restore
+the masked display even though selection still covered the line."
+  (lang-markdown-tests--with-fences-test-buffer
+    (let* ((l3-bol (lang-markdown-tests--line-bol 3))
+           (tl (cl-find-if
+                (lambda (o)
+                  (and (eq (overlay-get o 'gfm-pretty-fences-kind) 'top-leading)
+                       (= (overlay-start o) l3-bol)))
+                (overlays-in l3-bol (1+ l3-bol))))
+           (masked (overlay-get tl 'gfm-pretty-display-masked)))
+      (should tl)
+      ;; Simulate reveal hiding top-leading: stash display in
+      ;; saved-display and clear `display'.
+      (overlay-put tl 'gfm-pretty-saved-display masked)
+      (overlay-put tl 'display nil)
+      ;; Activate a V-line over the marker line and run the walker.
+      (lang-markdown-tests--with-evil-v-line 3 3
+        ;; `display' should remain nil (reveal still hiding it).
+        (should-not (overlay-get tl 'display))
+        ;; saved-display should now hold the BARE variant so the
+        ;; next reveal-restore picks up the selection paint.
+        (should (eq (overlay-get tl 'gfm-pretty-display-bare)
+                    (overlay-get tl 'gfm-pretty-saved-display)))))))
 
 (ert-deftest lang-markdown/gfm-pretty-fences-border-face-resets-styling ()
   "Border face spec inherits the configured face but resets styling
@@ -1855,7 +2696,7 @@ region is just cell content; the trailing newline must be stripped."
       (goto-char (point-max))
       (gfm-pretty-tables--update-cursor-highlight)
       (should-not gfm-pretty-tables--highlighted-row-ov)
-      (should-not (overlay-get row-ov 'gfm-pretty-tables-saved-display))
+      (should-not (overlay-get row-ov 'gfm-pretty-saved-display))
       (should-not gfm-pretty-tables--cursor-anchor))))
 
 ;;; Header column reordering
@@ -2563,9 +3404,9 @@ window holding point."
                      (a-display (gfm-pretty-tables--display-overlay-for-anchor anchor win-a))
                      (b-display (gfm-pretty-tables--display-overlay-for-anchor anchor win-b)))
                 ;; Selected window's overlay carries the saved-display sentinel.
-                (should (overlay-get a-display 'gfm-pretty-tables-saved-display))
+                (should (overlay-get a-display 'gfm-pretty-saved-display))
                 ;; The other window's overlay does not.
-                (should-not (overlay-get b-display 'gfm-pretty-tables-saved-display))))
+                (should-not (overlay-get b-display 'gfm-pretty-saved-display))))
             (delete-window win-b)))
       (kill-buffer buf))))
 

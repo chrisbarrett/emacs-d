@@ -207,7 +207,10 @@ recomputing the symbol on every overlay creation."
 
 (defun gfm-pretty--registry-for (name tag)
   "Build a `gfm-pretty--registry' for decorator NAME with overlay TAG.
-Sub-property symbols are derived by suffixing TAG (`<tag>-anchor', etc.)."
+Sub-property symbols are derived by suffixing TAG (`<tag>-anchor', etc.).
+`saved-display' is a shared overlay-property name across all decorators
+so the selection-aware variant walker in `gfm-pretty-borders.el' can
+detect reveal-hidden overlays without per-registry plumbing."
   (let ((tag-name (symbol-name tag)))
     (gfm-pretty--make-registry
      :tag tag
@@ -215,7 +218,7 @@ Sub-property symbols are derived by suffixing TAG (`<tag>-anchor', etc.)."
      :anchor (intern (concat tag-name "-anchor"))
      :display (intern (concat tag-name "-display"))
      :revealable (intern (concat tag-name "-revealable"))
-     :saved-display (intern (concat tag-name "-saved-display")))))
+     :saved-display 'gfm-pretty-saved-display)))
 
 (defun gfm-pretty--register (registry ov)
   "Tag OV with REGISTRY's tag and remember it for bulk cleanup."
@@ -772,16 +775,23 @@ property names from the decorator's `:registry'."
 ;;; Public lifecycle entry points (used by `gfm-pretty-mode')
 
 (defun gfm-pretty--install-engine-hooks ()
-  "Install the engine's three lifecycle hooks once per buffer."
+  "Install the engine's lifecycle hooks once per buffer.
+The selection-aware variant walker (in `gfm-pretty-borders.el') is
+installed here so any decorator that stashes masked / bare variants
+on its overlays gets the swap automatically — no per-decorator
+post-command-hook wiring required."
   (add-hook 'after-change-functions #'gfm-pretty--after-change nil t)
   (add-hook 'window-configuration-change-hook #'gfm-pretty--wcc nil t)
-  (add-hook 'post-command-hook #'gfm-pretty--reveal nil t))
+  (add-hook 'post-command-hook #'gfm-pretty--reveal nil t)
+  (add-hook 'post-command-hook #'gfm-pretty--update-selection nil t))
 
 (defun gfm-pretty--remove-engine-hooks ()
-  "Remove the engine's three lifecycle hooks; cancel the rebuild timer."
+  "Remove the engine's lifecycle hooks; cancel the rebuild timer."
   (remove-hook 'after-change-functions #'gfm-pretty--after-change t)
   (remove-hook 'window-configuration-change-hook #'gfm-pretty--wcc t)
   (remove-hook 'post-command-hook #'gfm-pretty--reveal t)
+  (remove-hook 'post-command-hook #'gfm-pretty--update-selection t)
+  (setq gfm-pretty--last-selection-bounds nil)
   (when (timerp gfm-pretty--rebuild-timer)
     (cancel-timer gfm-pretty--rebuild-timer)
     (setq gfm-pretty--rebuild-timer nil)))

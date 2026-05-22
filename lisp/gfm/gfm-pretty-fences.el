@@ -311,43 +311,74 @@ left-side mask is suppressed so the indicator keeps its own bg."
                       (gfm-pretty--bottom-strings box-width face
                                                          close-buf-width))))
     ;; Top — leading on the marker line, trailing after.
-    (gfm-pretty-fences--make-display
-     open-line-beg open-line-end window
-     'gfm-pretty-fences-kind 'top-leading
-     'gfm-pretty-fences-revealable t
-     'evaporate t
-     'display (car top-split))
-    (gfm-pretty-fences--make-display
-     open-line-end open-line-end window
-     'gfm-pretty-fences-kind 'top-trailing
-     'after-string (cdr top-split))
+    (let* ((top-display-masked (car top-split))
+           (top-display-bare
+            (gfm-pretty--str-with-region-bg top-display-masked))
+           (selected (gfm-pretty--range-selected-p
+                      open-line-beg open-line-end)))
+      (gfm-pretty-fences--make-display
+       open-line-beg open-line-end window
+       'gfm-pretty-fences-kind 'top-leading
+       'gfm-pretty-fences-revealable t
+       'evaporate t
+       'gfm-pretty-display-masked top-display-masked
+       'gfm-pretty-display-bare top-display-bare
+       'display (if selected top-display-bare top-display-masked)))
+    (let* ((top-after-masked (cdr top-split))
+           (top-after-bare
+            (concat (gfm-pretty--str-with-region-bg top-after-masked)
+                    (gfm-pretty--region-tail)))
+           (selected (gfm-pretty--range-selected-p
+                      open-line-beg open-line-end)))
+      (gfm-pretty-fences--make-display
+       open-line-end open-line-end window
+       'gfm-pretty-fences-kind 'top-trailing
+       'gfm-pretty-after-masked top-after-masked
+       'gfm-pretty-after-bare top-after-bare
+       'after-string (if selected top-after-bare top-after-masked)))
     ;; Body lines — single per-window overlay carrying before/wrap/after.
     ;; Iterate via explicit text-position math, not `forward-line': inside
     ;; this overlay-creation loop, `forward-line' interacts with our
     ;; cursor-intangible / display props and can stall mid-block,
     ;; spinning on the same line forever (bisect 2026-05-08).
-    (let ((lhs (propertize (if lhs-margin "│" "│ ") 'face
-                           (gfm-pretty--normalised-border-face face)))
-          (wrap (gfm-pretty--wrap-prefix
-                 face (and lhs-margin "↪")))
-          (p body-beg))
+    (let* ((lhs-masked (propertize (if lhs-margin "│" "│ ") 'face
+                                   (gfm-pretty--normalised-border-face face)))
+           (lhs-bare (gfm-pretty--str-with-region-bg lhs-masked))
+           (wrap (gfm-pretty--wrap-prefix
+                  face (and lhs-margin "↪")))
+           (p body-beg))
       (while (< p close-line-beg)
         (let* ((lbeg p)
                (lend (save-excursion (goto-char p) (line-end-position)))
                (line-bg (gfm-pretty-fences--line-extend-bg lbeg lend))
-               (after (gfm-pretty-time-phase 'fences 'compose-overflow
-                        (if (> (- lend lbeg) content-budget)
-                            (gfm-pretty--right-after-overflow
-                             face (buffer-substring-no-properties lbeg lend)
-                             window nil line-bg)
-                          (gfm-pretty--right-after
-                           box-width face line-bg)))))
+               (after-masked (gfm-pretty-time-phase 'fences 'compose-overflow
+                               (if (> (- lend lbeg) content-budget)
+                                   (gfm-pretty--right-after-overflow
+                                    face (buffer-substring-no-properties lbeg lend)
+                                    window nil line-bg)
+                                 (gfm-pretty--right-after
+                                  box-width face line-bg))))
+               (after-bare (gfm-pretty--str-with-region-bg after-masked))
+               (before-selected (gfm-pretty--range-selected-p lbeg lbeg))
+               (after-selected (gfm-pretty--range-selected-p lend lend)))
           (gfm-pretty-fences--make-display
            lbeg lend window
            'gfm-pretty-fences-kind 'body
-           'before-string lhs
            'wrap-prefix wrap
-           'after-string after)
+           ;; The before-string at lbeg and after-string at lend swap
+           ;; INDEPENDENTLY of each other — on the end-line of a v
+           ;; charwise selection the left `│ ' should paint bare (its
+           ;; anchor lbeg is inside the selection) while the right
+           ;; edge stays masked (its anchor lend is past the selection
+           ;; end).  Per-prop select-range overrides drive this.
+           'gfm-pretty-before-select-range (cons lbeg lbeg)
+           'gfm-pretty-before-masked lhs-masked
+           'gfm-pretty-before-bare lhs-bare
+           'before-string (if before-selected lhs-bare lhs-masked)
+           'gfm-pretty-after-select-range (cons lend lend)
+           'gfm-pretty-after-masked after-masked
+           'gfm-pretty-after-bare after-bare
+           'after-string (if after-selected after-bare after-masked))
           ;; When the line carries an `:extend t' background, inset
           ;; the band on the left too by masking the first body
           ;; char's text-prop background with the system bg.
@@ -361,42 +392,64 @@ left-side mask is suppressed so the indicator keeps its own bg."
           ;; first body col IS the indicator (`+'/`-'), and its bg
           ;; is part of the annotation band.
           (when (and line-bg (not lhs-margin) (< lbeg lend))
-            (gfm-pretty-fences--make-display
-             lbeg (1+ lbeg) window
-             'gfm-pretty-fences-kind 'body-bg-inset
-             'face '(:background "unspecified-bg")))
+            (let ((selected (gfm-pretty--range-selected-p lbeg lend)))
+              (gfm-pretty-fences--make-display
+               lbeg (1+ lbeg) window
+               'gfm-pretty-fences-kind 'body-bg-inset
+               'gfm-pretty-face-masked '(:background "unspecified-bg")
+               'gfm-pretty-face-bare 'region
+               'face (if selected 'region '(:background "unspecified-bg")))))
           (setq p (min close-line-beg (1+ lend))))))
     ;; Bottom — leading on the marker line, trailing after.
-    (gfm-pretty-fences--make-display
-     close-line-beg close-line-end window
-     'gfm-pretty-fences-kind 'bottom-leading
-     'gfm-pretty-fences-revealable t
-     'evaporate t
-     'display (car bot-split))
-    (gfm-pretty-fences--make-display
-     close-line-end close-line-end window
-     'gfm-pretty-fences-kind 'bottom-trailing
-     'after-string (cdr bot-split))))
+    (let* ((bot-display-masked (car bot-split))
+           (bot-display-bare
+            (gfm-pretty--str-with-region-bg bot-display-masked))
+           (selected (gfm-pretty--range-selected-p
+                      close-line-beg close-line-end)))
+      (gfm-pretty-fences--make-display
+       close-line-beg close-line-end window
+       'gfm-pretty-fences-kind 'bottom-leading
+       'gfm-pretty-fences-revealable t
+       'evaporate t
+       'gfm-pretty-display-masked bot-display-masked
+       'gfm-pretty-display-bare bot-display-bare
+       'display (if selected bot-display-bare bot-display-masked)))
+    (let* ((bot-after-masked (cdr bot-split))
+           (bot-after-bare
+            (concat (gfm-pretty--str-with-region-bg bot-after-masked)
+                    (gfm-pretty--region-tail)))
+           (selected (gfm-pretty--range-selected-p
+                      close-line-end close-line-end)))
+      (gfm-pretty-fences--make-display
+       close-line-end close-line-end window
+       'gfm-pretty-fences-kind 'bottom-trailing
+       'gfm-pretty-after-masked bot-after-masked
+       'gfm-pretty-after-bare bot-after-bare
+       'after-string (if selected bot-after-bare bot-after-masked)))))
 
 ;;; Indent block rendering
 
 (defun gfm-pretty-fences--apply-indent-anchors (beg end indent-width face)
   "Build width-independent anchors for an indent block at [BEG, END]."
-  (let ((lhs (propertize "│ " 'face
-                         (gfm-pretty--normalised-border-face face)))
-        (first t)
-        (p beg))
+  (let* ((lhs-masked (propertize "│ " 'face
+                                 (gfm-pretty--normalised-border-face face)))
+         (lhs-bare (gfm-pretty--str-with-region-bg lhs-masked))
+         (first t)
+         (p beg))
     (while (<= p end)
       (let* ((lbeg p)
              (lend (save-excursion (goto-char p) (line-end-position)))
-             (cover-end (min (+ lbeg indent-width) lend)))
+             (cover-end (min (+ lbeg indent-width) lend))
+             (selected (gfm-pretty--range-selected-p lbeg lend)))
         ;; Cover indent chars with `│ ' display; carry cursor-intangible.
         (gfm-pretty-fences--make-anchor
          lbeg cover-end
          'gfm-pretty-fences-kind 'indent-body
          'gfm-pretty-fences-indent-first first
          'cursor-intangible t
-         'display lhs)
+         'gfm-pretty-display-masked lhs-masked
+         'gfm-pretty-display-bare lhs-bare
+         'display (if selected lhs-bare lhs-masked))
         ;; Wrap-prefix on the whole line (continuation lines).
         (gfm-pretty-fences--make-anchor
          lbeg lend
@@ -429,21 +482,60 @@ INDENT-WIDTH is the buffer indent width; FACE colours the borders."
                            (min (+ lbeg indent-width) lend) lend))
                (line-bg (gfm-pretty-fences--line-extend-bg lbeg lend))
                (overflow-p (> line-content-w content-budget))
-               (after (gfm-pretty-time-phase 'fences 'compose-overflow
-                        (if overflow-p
-                            (gfm-pretty--right-after-overflow
-                             face line-text window nil line-bg)
-                          (gfm-pretty--right-after
-                           box-width face line-bg)))))
+               (after-masked-base
+                (gfm-pretty-time-phase 'fences 'compose-overflow
+                  (if overflow-p
+                      (gfm-pretty--right-after-overflow
+                       face line-text window nil line-bg)
+                    (gfm-pretty--right-after
+                     box-width face line-bg))))
+               ;; Indent-rhs covers ONLY the right-edge of each body
+               ;; line; the bot-str on the last line is split off into
+               ;; a separate indent-bottom overlay so its selection
+               ;; check uses the line below the block (see below).
+               ;; `--right-after' already ends with a stretch-to-window
+               ;; tail so the str-with-region-bg pass alone (without a
+               ;; trailing region-tail concat) carries region bg to the
+               ;; window's right edge in the bare variant.
+               (after-masked after-masked-base)
+               (after-bare (gfm-pretty--str-with-region-bg after-masked-base))
+               (selected (gfm-pretty--range-selected-p lbeg lend)))
           (when first
-            (gfm-pretty-fences--make-display
-             lbeg lbeg window
-             'gfm-pretty-fences-kind 'indent-top
-             'before-string (concat top-str "\n")))
+            (let* ((top-masked (concat top-str "\n"))
+                   (top-bare (concat (gfm-pretty--str-with-region-bg top-str)
+                                     "\n")))
+              (gfm-pretty-fences--make-display
+               lbeg lbeg window
+               'gfm-pretty-fences-kind 'indent-top
+               'gfm-pretty-before-masked top-masked
+               'gfm-pretty-before-bare top-bare
+               'before-string (if selected top-bare top-masked))))
           (gfm-pretty-fences--make-display
            lend lend window
            'gfm-pretty-fences-kind 'indent-rhs
-           'after-string (if last-line (concat after "\n" bot-str) after))
+           'gfm-pretty-after-masked after-masked
+           'gfm-pretty-after-bare after-bare
+           'after-string (if selected after-bare after-masked))
+          (when last-line
+            (let* ((bottom-masked (concat "\n" bot-str))
+                   (bottom-bare
+                    (concat (propertize "\n" 'face 'region)
+                            (gfm-pretty--str-with-region-bg bot-str)
+                            (gfm-pretty--region-tail)))
+                   (select-range (cons (1+ lend) (1+ lend)))
+                   (bounds (gfm-pretty--selection-bounds))
+                   (bottom-selected
+                    (and bounds
+                         (<= (car bounds) (1+ lend))
+                         (< (1+ lend) (cdr bounds)))))
+              (gfm-pretty-fences--make-display
+               lend lend window
+               'gfm-pretty-fences-kind 'indent-bottom
+               'gfm-pretty-select-range select-range
+               'gfm-pretty-after-masked bottom-masked
+               'gfm-pretty-after-bare bottom-bare
+               'after-string (if bottom-selected
+                                 bottom-bare bottom-masked))))
           ;; Inset the bg band on the left by masking the first body
           ;; char (after the indent) when the line carries an
           ;; `:extend t' background.  See the fenced display path
