@@ -195,6 +195,8 @@ header-face weights and callout font-lock keywords.  The decorators
 themselves are activated by `gfm-pretty-mode' on the same hook."
     (require 'gfm-pretty)
     (require 'gfm-pretty-callouts)
+    (when (featurep 'gfm-pretty-engine)
+      (require 'gfm-pretty-blockquotes))
     (+markdown-style-header-faces)
     (gfm-pretty-callouts-install-font-lock))
   (+local-leader-set-key 'markdown-mode-map
