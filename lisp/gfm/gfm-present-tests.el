@@ -13,10 +13,6 @@
 
 ;;; Surviving surface
 
-(ert-deftest gfm-present/focus-face-defined ()
-  "`gfm-present-focus-face' is defined."
-  (should (facep 'gfm-present-focus-face)))
-
 (ert-deftest gfm-present/mode-map-defined ()
   "`gfm-present-mode-map' is a keymap."
   (should (keymapp gfm-present-mode-map)))
@@ -853,70 +849,14 @@ for tree-sitter grammars and confuse downstream tests."
     (should-not (string-match-p "run-with-idle-timer" src))))
 
 
-;;; §13 Detached narrowed-source renderer
-
-(ert-deftest gfm-present/render-narrowed-source-narrows-and-readonly ()
-  (with-temp-buffer
-    (insert "L1\nL2\nL3\nL4\nL5\n")
-    (gfm-present--render-narrowed-source (current-buffer) 2 4)
-    (save-excursion
-      (goto-char (point-min))
-      (should (looking-at "L2")))
-    (should (= 3 (count-lines (point-min) (point-max))))
-    (should buffer-read-only)
-    (should gfm-present--source-restorer)))
-
-(ert-deftest gfm-present/render-narrowed-source-applies-focus-overlays ()
-  (with-temp-buffer
-    (insert "L1\nL2\nL3\nL4\nL5\n")
-    (gfm-present--render-narrowed-source (current-buffer) 1 5 2 4)
-    (let ((focus-ovs (cl-remove-if-not
-                      (lambda (o) (eq (overlay-get o 'face) 'gfm-present-focus-face))
-                      gfm-present--source-overlays)))
-      (should (= 3 (length focus-ovs))))))
-
-(ert-deftest gfm-present/render-narrowed-source-cleans-on-rerender ()
-  (with-temp-buffer
-    (insert "L1\nL2\nL3\nL4\nL5\n")
-    (gfm-present--render-narrowed-source (current-buffer) 1 5 1 2)
-    (should (= 2 (length gfm-present--source-overlays)))
-    (gfm-present--render-narrowed-source (current-buffer) 1 5 3 5)
-    (should (= 3 (length gfm-present--source-overlays)))))
-
-(ert-deftest gfm-present/render-narrowed-source-focus-bounded-to-eol ()
-  (with-temp-buffer
-    (insert "shortline\nlonger second line\n")
-    (gfm-present--render-narrowed-source (current-buffer) 1 2 1 1)
-    (let ((ov (car gfm-present--source-overlays)))
-      (should ov)
-      (should (= (overlay-end ov)
-                 (save-excursion
-                   (goto-char (overlay-start ov))
-                   (line-end-position)))))))
-
-(ert-deftest gfm-present/render-narrowed-source-cleanup-restores-state ()
-  (let ((buf (generate-new-buffer "*pres-render-test*")))
-    (unwind-protect
-        (with-current-buffer buf
-          (insert "L1\nL2\nL3\n")
-          (gfm-present--render-narrowed-source buf 1 3)
-          (should buffer-read-only)
-          (gfm-present--cleanup-source-render)
-          (should-not buffer-read-only)
-          (should (= (- (point-max) (point-min)) (buffer-size))))
-      (let ((kill-buffer-query-functions nil)) (kill-buffer buf)))))
-
-(ert-deftest gfm-present/focus-face-no-extend ()
-  (should-not (eq t (face-attribute 'gfm-present-focus-face :extend nil t))))
-
-
 ;;; §9 Click escape: source-range link
 
 (defmacro gfm-present-tests--with-source-link-click (lines path link &rest body)
   "Set up a presentation buffer containing LINK pointing into PATH (LINES).
 LINK is a string fragment like \"#L2-L3\".  Stubs `pop-to-buffer'
-to merely set the current buffer.  Inside BODY: cursor is on the link,
-mode is enabled, and BODY can call `gfm-present-follow-link'."
+to merely set the current buffer, and `pulsar-highlight-pulse' to a
+no-op.  Inside BODY: cursor is on the link, mode is enabled, and
+BODY can call `gfm-present-follow-link'."
   (declare (indent 3))
   `(gfm-present-tests--with-temp-source ,lines ,path
      (with-temp-buffer
@@ -926,7 +866,9 @@ mode is enabled, and BODY can call `gfm-present-follow-link'."
        (search-forward "[foo]")
        (backward-char 2)
        (cl-letf (((symbol-function 'pop-to-buffer)
-                  (lambda (buffer &rest _) (set-buffer buffer) buffer)))
+                  (lambda (buffer &rest _) (set-buffer buffer) buffer))
+                 ((symbol-function 'pulsar-highlight-pulse)
+                  (lambda (&optional _ &rest _) nil)))
          ,@body))))
 
 (ert-deftest gfm-present/source-link-click-pushes-mark ()
@@ -940,26 +882,26 @@ mode is enabled, and BODY can call `gfm-present-follow-link'."
       (let ((click (point))
             (doc-buffer (current-buffer)))
         (cl-letf (((symbol-function 'pop-to-buffer)
-                   (lambda (buffer &rest _) (set-buffer buffer) buffer)))
+                   (lambda (buffer &rest _) (set-buffer buffer) buffer))
+                  ((symbol-function 'pulsar-highlight-pulse)
+                   (lambda (&optional _ &rest _) nil)))
           (gfm-present-follow-link))
         (with-current-buffer doc-buffer
           (should (member click (mapcar #'marker-position
                                         (cons (mark-marker) mark-ring)))))))))
 
-(ert-deftest gfm-present/source-link-click-opens-narrowed-readonly ()
+(ert-deftest gfm-present/source-link-click-opens-widened-at-start-line ()
   (gfm-present-tests--with-source-link-click
       '("a" "b" "c" "d" "e") tmp "#L2-L3"
     (gfm-present-follow-link)
     (let ((src (find-buffer-visiting tmp)))
       (should src)
       (with-current-buffer src
-        (should buffer-read-only)
+        (should-not buffer-read-only)
+        (should-not (buffer-narrowed-p))
         (should-not gfm-present-mode)
-        (should (= 2 (- (line-number-at-pos (point-max))
-                        (line-number-at-pos (point-min)))))
-        (save-excursion
-          (goto-char (point-min))
-          (should (looking-at "b")))))))
+        (should (= 2 (line-number-at-pos (point))))
+        (should (= (point) (line-beginning-position)))))))
 
 (ert-deftest gfm-present/source-link-click-uses-display-buffer ()
   (let (called)
@@ -971,28 +913,37 @@ mode is enabled, and BODY can call `gfm-present-follow-link'."
         (search-forward "[foo]")
         (backward-char 2)
         (cl-letf (((symbol-function 'pop-to-buffer)
-                   (lambda (buffer &rest _) (setq called t) (set-buffer buffer))))
+                   (lambda (buffer &rest _) (setq called t) (set-buffer buffer)))
+                  ((symbol-function 'pulsar-highlight-pulse)
+                   (lambda (&optional _ &rest _) nil)))
           (gfm-present-follow-link))
         (should called)))))
 
-(ert-deftest gfm-present/source-link-click-applies-focus-overlay ()
-  (gfm-present-tests--with-source-link-click
-      '("a" "b" "c" "d") tmp "#L2-L3"
-    (gfm-present-follow-link)
-    (with-current-buffer (find-buffer-visiting tmp)
-      (let ((focus-ovs (cl-remove-if-not
-                        (lambda (o) (eq (overlay-get o 'face)
-                                        'gfm-present-focus-face))
-                        (overlays-in (point-min) (point-max)))))
-        (should focus-ovs)
-        (should (= 2 (length focus-ovs)))))))
-
-(ert-deftest gfm-present/source-link-click-installs-kill-hook ()
-  (gfm-present-tests--with-source-link-click
-      '("a" "b") tmp "#L1"
-    (gfm-present-follow-link)
-    (with-current-buffer (find-buffer-visiting tmp)
-      (should (memq #'gfm-present--cleanup-source-render kill-buffer-hook)))))
+(ert-deftest gfm-present/source-link-click-pulses-requested-range ()
+  "Click invokes `pulsar-highlight-pulse' with a (BEG . END) locus covering
+the requested line range in the destination buffer."
+  (let (captured)
+    (gfm-present-tests--with-temp-source '("a" "b" "c" "d" "e") tmp
+      (with-temp-buffer
+        (insert (format "# Slide\n[foo](%s#L2-L4)\n" tmp))
+        (goto-char (point-min))
+        (gfm-present-mode 1)
+        (search-forward "[foo]")
+        (backward-char 2)
+        (cl-letf (((symbol-function 'pop-to-buffer)
+                   (lambda (buffer &rest _) (set-buffer buffer) buffer))
+                  ((symbol-function 'pulsar-highlight-pulse)
+                   (lambda (&optional locus &rest _) (setq captured locus))))
+          (gfm-present-follow-link))
+        (should (consp captured))
+        (with-current-buffer (find-buffer-visiting tmp)
+          (save-excursion
+            (goto-char (car captured))
+            (should (= 2 (line-number-at-pos))))
+          (save-excursion
+            (goto-char (cdr captured))
+            (should (= 4 (line-number-at-pos)))
+            (should (= (point) (line-end-position)))))))))
 
 (ert-deftest gfm-present/source-link-click-leaves-presentation-mode-off ()
   (gfm-present-tests--with-source-link-click
@@ -1330,8 +1281,7 @@ buffer-local revert hooks, and the minor-mode flag before
   (should (fboundp 'gfm-present-next-slide))
   (should (fboundp 'gfm-present-previous-slide))
   (should (fboundp 'gfm-present-quit))
-  (should (fboundp 'gfm-present-follow-link))
-  (should (facep 'gfm-present-focus-face)))
+  (should (fboundp 'gfm-present-follow-link)))
 
 (ert-deftest gfm-present/no-references-to-deleted-symbols ()
   (let ((src (gfm-present-tests--read-lib))
@@ -1353,7 +1303,12 @@ buffer-local revert hooks, and the minor-mode flag before
                    "gfm-present--coerce-slide"
                    "gfm-present--emit-nav-channel"
                    "gfm-present--inject-channel-capability"
-                   "gfm-present--register-channel-capability")))
+                   "gfm-present--register-channel-capability"
+                   "gfm-present--render-narrowed-source"
+                   "gfm-present--cleanup-source-render"
+                   "gfm-present--source-overlays"
+                   "gfm-present--source-restorer"
+                   "gfm-present-focus-face")))
     (dolist (sym deleted)
       (should-not (string-match-p (regexp-quote sym) src)))))
 

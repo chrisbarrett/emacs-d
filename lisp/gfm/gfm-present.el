@@ -24,16 +24,7 @@
 (declare-function magit-diff-range "magit-diff")
 (declare-function markdown-follow-link-at-point "markdown-mode")
 (declare-function markdown-follow-thing-at-point "markdown-mode")
-
-;;; Faces
-
-(defface gfm-present-focus-face
-  '((((class color) (min-colors 89) (background dark))
-     :background "grey20")
-    (((class color) (min-colors 89) (background light))
-     :background "grey90"))
-  "Face for focus highlight in narrowed-source previews."
-  :group 'gfm-present)
+(declare-function pulsar-highlight-pulse "pulsar" (&optional locus))
 
 ;;; Heading helpers
 
@@ -213,12 +204,23 @@ no match, return the symbol `pass-through'."
     (call-interactively #'markdown-follow-thing-at-point))))
 
 (defun gfm-present--follow-source-link (path start end)
-  "Open PATH narrowed to lines START..END, with focus overlay."
+  "Open PATH at line START, pulsing lines START..END inclusive.
+The destination buffer is left widened and editable; the pulse
+provides a transient locator for the range without forcing the
+reader into a narrowing."
+  (require 'pulsar)
   (let* ((resolved (if (file-name-absolute-p path) path
                      (expand-file-name path default-directory)))
          (buf (find-file-noselect resolved)))
     (pop-to-buffer buf)
-    (gfm-present--render-narrowed-source buf start end start end)))
+    (with-current-buffer buf
+      (widen)
+      (goto-char (point-min))
+      (forward-line (1- start))
+      (let ((beg (line-beginning-position)))
+        (save-excursion
+          (forward-line (- end start))
+          (pulsar-highlight-pulse (cons beg (line-end-position))))))))
 
 (defun gfm-present--follow-diff-link (parsed)
   "Open the magit diff range described by PARSED plist (§10)."
@@ -706,66 +708,6 @@ undecorated."
                 (gfm-present--make-preview-overlay
                  link-start link-end display))))))))))
 
-
-;;; Detached narrowed-source renderer (§13)
-
-(defvar-local gfm-present--source-overlays nil
-  "Buffer-local overlays applied by `gfm-present--render-narrowed-source'.")
-
-(defvar-local gfm-present--source-restorer nil
-  "Buffer-local thunk that reverts the state set up by the source renderer.")
-
-(defun gfm-present--cleanup-source-render ()
-  "Run the buffer-local restorer (if any) and clear source overlays."
-  (mapc #'delete-overlay gfm-present--source-overlays)
-  (setq gfm-present--source-overlays nil)
-  (when (functionp gfm-present--source-restorer)
-    (funcall gfm-present--source-restorer))
-  (setq gfm-present--source-restorer nil)
-  (remove-hook 'kill-buffer-hook #'gfm-present--cleanup-source-render t))
-
-(defun gfm-present--render-narrowed-source (buffer start-line end-line
-                                                     &optional focus-start focus-end)
-  "Narrow BUFFER to lines START-LINE..END-LINE and apply focus overlays.
-Sets BUFFER read-only and registers a `kill-buffer-hook' restorer.
-When FOCUS-START..FOCUS-END is given, paints `gfm-present-focus-face'
-one overlay per line from `point-at-bol' to `point-at-eol'."
-  (with-current-buffer buffer
-    (gfm-present--cleanup-source-render)
-    (let ((prev-ro buffer-read-only)
-          start-pos end-pos)
-      (save-restriction
-        (widen)
-        (save-excursion
-          (goto-char (point-min))
-          (forward-line (1- start-line))
-          (setq start-pos (point))
-          (goto-char (point-min))
-          (forward-line end-line)
-          (setq end-pos (point))))
-      (widen)
-      (narrow-to-region start-pos end-pos)
-      (when (and focus-start focus-end)
-        (save-excursion
-          (cl-loop for ln from focus-start to focus-end
-                   do (progn
-                        (goto-char (point-min))
-                        (forward-line (- ln start-line))
-                        (let* ((bol (line-beginning-position))
-                               (eol (line-end-position))
-                               (ov (make-overlay bol eol)))
-                          (overlay-put ov 'face 'gfm-present-focus-face)
-                          (overlay-put ov 'gfm-present-source t)
-                          (push ov gfm-present--source-overlays))))))
-      (setq buffer-read-only t)
-      (setq gfm-present--source-restorer
-            (let ((ro prev-ro))
-              (lambda ()
-                (let ((inhibit-read-only t)) (widen))
-                (setq buffer-read-only ro))))
-      (add-hook 'kill-buffer-hook
-                #'gfm-present--cleanup-source-render nil t)
-      buffer)))
 
 ;;; Pretty-links anchor-jump subscription
 
