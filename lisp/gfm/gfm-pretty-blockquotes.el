@@ -30,16 +30,6 @@
   "Face for the left rail painted over plain blockquote blocks."
   :group 'gfm-pretty-blockquotes)
 
-(defface gfm-pretty-blockquotes-bg-face
-  '((((background light)) :background "#f6f1e6" :extend t)
-    (((background dark))  :background "#262637" :extend t))
-  "Tinted background for the plain blockquote rectangle.
-Independent copy of `gfm-pretty-tables-row-alt-face' (the alt-row
-stripe colour used by GFM tables) so users can re-theme the
-blockquote rectangle without altering the tables stripe.  `:extend t'
-makes the bg paint past EOL up to the rhs after-string's terminator."
-  :group 'gfm-pretty-blockquotes)
-
 (defcustom gfm-pretty-blockquotes-inset-cols 'tab-width
   "Width of the gutter to the left of the blockquote rail.
 The symbol `tab-width' (the default) is resolved to the buffer's
@@ -146,75 +136,35 @@ The engine memoises this via `gfm-pretty--collect'."
 
 ;;; Rendering helpers
 
-(defconst gfm-pretty-blockquotes--anchor-face
-  '(:inherit gfm-pretty-blockquotes-bg-face :extend t)
-  "Anchor `face' spec.
-Inherits `gfm-pretty-blockquotes-bg-face' (not a baked colour) so a
-theme change refreshes overlays at the next redisplay without a
-rebuild.  Only `:background' and `:extend' propagate because the face
-itself specifies no other attributes — emphasis faces on buffer text
-\(bold, italic, link, inline code) merge through.")
-
-(defconst gfm-pretty-blockquotes--rail-face
-  '(:inherit (gfm-pretty-blockquotes-rail-face
-              gfm-pretty-blockquotes-bg-face))
-  "Face spec for the rail glyph cell — rail fg + bg face's bg.
-Stacked `:inherit' so a theme change to either face refreshes the
-overlay at redisplay.")
-
 (defun gfm-pretty-blockquotes--gutter-string (inset-cols)
-  "Build the untinted leading-gutter string used as an anchor before-string."
+  "Build the leading-gutter string used as an anchor before-string."
   (propertize (make-string inset-cols ?\s) 'face 'default))
 
 (defun gfm-pretty-blockquotes--rail-string (&optional one-char-p)
   "Build the rail display string `▌<space>' (`▌' alone when ONE-CHAR-P).
-Painted with `gfm-pretty-blockquotes-rail-face' + bg face's bg so the
-rail cell shares the tinted background.  No inset — the inset is
-emitted separately as the anchor's `before-string' so reveal exposes
-the raw `> ' source without losing the gutter."
-  (let ((rail (propertize "▌" 'face gfm-pretty-blockquotes--rail-face)))
+Painted with `gfm-pretty-blockquotes-rail-face'.  No inset — the
+inset is emitted separately as the anchor's `before-string' so
+reveal exposes the raw `> ' source without losing the gutter."
+  (let ((rail (propertize "▌" 'face 'gfm-pretty-blockquotes-rail-face)))
     (if one-char-p
         rail
-      (concat rail
-              (propertize " " 'face
-                          '(:inherit gfm-pretty-blockquotes-bg-face))))))
+      (concat rail " "))))
 
 (defun gfm-pretty-blockquotes--wrap-prefix-string (inset-cols)
   "Build the soft-wrap continuation prefix `<inset>▌<space>'.
-Three segments: INSET-COLS untinted spaces (default face), `▌' in
-`gfm-pretty-blockquotes-rail-face' with the bg face's bg, then a
-trailing space in the bg face's bg.  Continuation visual rows have
-no buffer chars at column 0 to host a before-string, so the inset
-is baked into the wrap-prefix itself."
+Continuation visual rows have no buffer chars at column 0 to host a
+before-string, so the inset is baked into the wrap-prefix itself."
   (concat (gfm-pretty-blockquotes--gutter-string inset-cols)
           (gfm-pretty-blockquotes--rail-string)))
-
-(defun gfm-pretty-blockquotes--rhs-after ()
-  "Build the per-line right-edge after-string.
-`(space :align-to (- right 1))' fills the tinted bg from EOL out to
-one column before the window margin, then a default-face `(space
-:align-to right)' terminator at the margin suppresses `:extend t'
-leak from sibling overlays (`hl-line', `region').  Window-relative
-\(not box-width-relative) so the right edge sits at a predictable
-column on every blockquote line regardless of content length."
-  (let* ((bg-face '(:inherit gfm-pretty-blockquotes-bg-face :extend t))
-         (pad (propertize " " 'display '(space :align-to (- right 1))
-                          'face bg-face))
-         (tail (propertize " " 'display '(space :align-to right)
-                           'face 'default))
-         (str (concat pad tail)))
-    (put-text-property 0 1 'cursor t str)
-    str))
 
 ;;; Rendering
 
 (defun gfm-pretty-blockquotes--apply-block-anchors (block)
   "Apply width-independent anchor overlays for BLOCK.
-Per source line: paints `gfm-pretty-blockquotes-bg-face's tint, hangs
-the untinted gutter as a `before-string' so reveal cannot eat the
-inset, and sets `wrap-prefix' to the full inset + rail string so
-soft-wrapped visual rows continue the rectangle.  Widens so blocks
-outside the current restriction can still be parsed."
+Per source line: hangs the inset gutter as a `before-string' and
+sets `wrap-prefix' to the inset + rail string so soft-wrapped
+visual rows continue the rail.  Widens so blocks outside the
+current restriction can still be parsed."
   (save-restriction
     (widen)
     (cl-destructuring-bind (beg end)
@@ -228,7 +178,6 @@ outside the current restriction can still be parsed."
                         (goto-char p) (line-end-position))))
             (gfm-pretty-blockquotes--make-anchor
              p lend
-             'face gfm-pretty-blockquotes--anchor-face
              'before-string gutter
              'wrap-prefix wrap)
             (setq p (min (1+ end) (1+ lend)))))))))
@@ -236,22 +185,16 @@ outside the current restriction can still be parsed."
 (defun gfm-pretty-blockquotes--apply-block-display (block window)
   "Apply per-WINDOW display overlays for BLOCK.
 Per source line: replaces the leading `> ' (2 chars) or bare `>'
-\(1 char) with the rail prefix, and hangs a window-relative rhs
-after-string off line-end so every blockquote line's right edge
-terminates one column before the window margin.  Both carry paired
-masked / bare properties so the engine's reveal walker exposes the
-raw source per window on point/selection overlap."
+\(1 char) with the rail prefix.  Carries paired masked / bare
+properties so the engine's reveal walker exposes the raw source
+per window on point/selection overlap."
   (save-restriction
     (widen)
     (cl-destructuring-bind (beg end)
         (gfm-pretty-blockquotes--block-payload block)
       (let* ((prefix-two (gfm-pretty-blockquotes--rail-string))
              (prefix-one (gfm-pretty-blockquotes--rail-string t))
-             (rhs (gfm-pretty-blockquotes--rhs-after))
-             (rhs-bare (concat (gfm-pretty--str-with-region-bg rhs)
-                               (gfm-pretty--region-tail)))
              (p beg))
-        (ignore window)
         (while (< p (1+ end))
           (let* ((lbeg p)
                  (lend (save-excursion
@@ -281,12 +224,6 @@ raw source per window on point/selection overlap."
                  'gfm-pretty-display-masked prefix-one
                  'gfm-pretty-display-bare bare
                  'display (if line-selected bare prefix-one)))))
-            (gfm-pretty-blockquotes--make-display
-             lend lend window
-             'gfm-pretty-blockquotes-kind 'body-rhs
-             'gfm-pretty-after-masked rhs
-             'gfm-pretty-after-bare rhs-bare
-             'after-string (if line-selected rhs-bare rhs))
             (setq p (min (1+ end) (1+ lend)))))))))
 
 (defun gfm-pretty-blockquotes--apply-block (block window)

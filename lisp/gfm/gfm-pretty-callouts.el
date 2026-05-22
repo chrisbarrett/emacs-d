@@ -872,19 +872,26 @@ only that line, missing the multi-line matcher's anchor."
                           (seq (any upper "_") (1+ (any upper digit "_"))))))
       1 'font-lock-constant-face prepend))))
 
-;; Neutralise `markdown-blockquote-face' so the face contributes nothing
-;; — no italic, no theme-imposed foreground/background, no extend.  The
-;; default face wins for plain blockquote chars; emphasis faces merge
-;; through cleanly inside callout boxes (see
-;; `gfm-pretty-callouts--apply-block-anchors').  Themes like catppuccin set
-;; `:foreground'/`:background'/`:slant' directly on this face, so
-;; `:inherit'-only fixes don't suffice — every attribute must be cleared.
+;; Strip `:background' and `:extend' from `markdown-blockquote-face' so
+;; the face does not paint a coloured stripe through blockquote text or
+;; past EOL.  Themes (e.g. catppuccin) set these attributes directly on
+;; the face — `:inherit'-only fixes don't suffice, every value must be
+;; cleared.  Run on `+theme-changed-hook' too so theme switches don't
+;; re-introduce the stripe; the original neutralisation only ran once
+;; at markdown-mode load time and lost out whenever the theme reapplied
+;; afterwards.  Italic and foreground are left alone — they're
+;; user-visible markdown emphasis on plain blockquotes and the rail-
+;; only treatment doesn't conflict with them.
+(defun gfm-pretty-callouts--strip-blockquote-face-bg (&rest _)
+  "Clear `:background' and `:extend' on `markdown-blockquote-face'."
+  (when (facep 'markdown-blockquote-face)
+    (set-face-attribute 'markdown-blockquote-face nil
+                        :background 'unspecified
+                        :extend 'unspecified)))
+
 (with-eval-after-load 'markdown-mode
-  (dolist (attr '(:family :foundry :width :height :weight :slant
-                  :underline :overline :strike-through :box
-                  :inverse-video :foreground :background
-                  :stipple :extend :inherit))
-    (set-face-attribute 'markdown-blockquote-face nil attr 'unspecified)))
+  (gfm-pretty-callouts--strip-blockquote-face-bg))
+(add-hook '+theme-changed-hook #'gfm-pretty-callouts--strip-blockquote-face-bg)
 
 ;;; gfm-pretty decorator registration
 
