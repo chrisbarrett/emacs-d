@@ -52,26 +52,49 @@ decorator can re-theme independently.
 
 ## Decisions
 
-### D1. Fixed-width rectangle, no visible right border
+### D1. Window-margin-terminated rectangle, no visible right border
 
-Mirror callouts' `(min text-width (max 80 (+ max-content 4)))` shape,
-applied to the post-inset available width:
+The rectangle's right edge sits one column before the window margin
+on every blockquote line:
 
 ```
-box-width = (min (- text-width inset)
-                 (max 80 (+ max-content 4)))
+rhs pad: (space :align-to (- right 1))   in bg face
+rhs tail: (space :align-to right)        in default face
 ```
 
-`text-width` from `gfm-pretty--available-width`; `max-content` from
-`gfm-pretty--max-line-width` with prefix length 2 (the `> `).  The
-rectangle spans columns `[inset, inset + box-width)`.
+`text-width` from `gfm-pretty--available-width` is consulted for the
+wrap-prefix width and for masked/bare reveal accounting, but NOT for
+clamping the rectangle's width — the right edge is window-margin-
+relative, period.
 
-**Alternative considered:** full-width slab with `:extend t` and no
-right cap.  Rejected — the rectangle reads as a defined shape, not a
-horizontal stripe, so a column-stop terminator is worth the rhs
-after-string and wrap-simulation cost.  Holding to the callouts
-shape also leaves room for a future right-border toggle without
-restructuring.
+**Iteration history.** An earlier draft (and an initial
+implementation) clamped the rectangle to
+`(min (- text-width inset) (max 80 (+ max-content 4)))`, mirroring
+callouts.  In practice this produced a stepped right edge under
+word-wrap: Emacs' `:extend t` paints past EOL only on the visual
+row containing EOL, so continuation rows of a long word-wrapped
+blockquote line leave default-bg cells past the wrap point.  With a
+clamped right edge, those default cells sit BETWEEN the last
+content char and the clamp column → visible "notch" per
+continuation row.  Window-margin termination concedes the defined-
+shape rectangle but makes the right edge predictable on every line,
+which the user prioritised after seeing the ragged shape on a long
+blockquote in a presentations file.
+
+**Alternative considered:** keep the clamp + simulate wrap to pad
+every visual row.  Rejected — Emacs has no per-visual-row overlay
+hook, so emulating per-row padding would require re-rendering the
+body text via a multi-line `display` string (tables-style heavy
+machinery).  Out of scope for this change.
+
+**Alternative considered:** full-width slab without the default-face
+terminator.  Rejected — `:extend t` past EOL is preempted by other
+overlays with `:extend t` (`hl-line`, `region`), so without a
+default-face terminator at the margin, point-on-line would paint
+`hl-line` to the margin and obliterate the bg face.  The 2-cell
+after-string (bg pad to `right-1`, default at `right`) is the
+minimum needed to keep the right edge stable under foreign-overlay
+interaction.
 
 ### D2. Inset gutter via `gfm-pretty-blockquotes-inset-cols`
 defcustom
@@ -107,21 +130,43 @@ inset.
 :extend t`.  Rejected — couples the two faces permanently; user
 explicitly wants a copy so re-theming one does not drag the other.
 
-### D4. Anchor layout: bg face on every line, wrap-prefix on every line
-
-Mirror callouts' anchor:
+### D4. Anchor layout: bg face + before-string gutter + wrap-prefix per line
 
 ```elisp
-(face       (:background <bg-of-bg-face> :extend t))
-(wrap-prefix <inset-spaces> + ▌ + " "  propertized for rail+bg)
+(face         (:inherit gfm-pretty-blockquotes-bg-face :extend t))
+(before-string <inset-spaces>                       in default face)
+(wrap-prefix   <inset-spaces> + ▌ + " "             propertized via face refs)
 ```
 
-The anchor face spec extracts only `:background` from
-`gfm-pretty-blockquotes-bg-face` so emphasis faces (bold, italic,
-links, inline code) on buffer text merge through without being
-clobbered by the face's other potential attributes.  `:extend t`
-ensures the bg paints past EOL until the rhs after-string's
-terminator suppresses it.
+The anchor face references `gfm-pretty-blockquotes-bg-face' by name
+(via `:inherit`) rather than baking `(face-background ...)` into the
+spec as a `:background "#xxxxxx"' colour string.  Two reasons:
+
+1. **Theme reactivity.**  A baked colour string is frozen at render
+   time; a theme change updates the face's attributes but the
+   already-rendered overlays keep their stale colour.  With
+   `:inherit` Emacs re-resolves the face at every redisplay, so
+   theme changes propagate automatically.
+2. **No emphasis clobber.**  The bg face's defface specifies only
+   `:background` and `:extend t' — no `:foreground`, `:slant`,
+   `:weight`, etc. — so inheriting from it brings ONLY those two
+   attributes through.  Emphasis faces on buffer text (bold, italic,
+   link, inline code) merge through unclobbered.
+
+`:extend t` is set explicitly on the spec so the bg paints past EOL
+until the rhs after-string's default-face terminator suppresses it.
+
+The `before-string` hangs `<inset-spaces>` (default face — no bg) off
+the line start so the untinted gutter is a property of the
+**anchor**, not the per-window prefix display.  This matters at
+reveal time: when point sits on a blockquote line the engine's
+reveal nils the per-window display overlay's `display` to expose the
+raw `> ` source.  If the inset lived inside the display string,
+nilling it would also drop the gutter and body text would jitter
+left by `inset-cols` columns.  With the gutter on the anchor's
+before-string the inset persists through reveal — the raw `> ` just
+appears at column `inset-cols` instead of being replaced by `▌ ` at
+the same column.
 
 Wrap-prefix is propertized in three segments:
 
@@ -132,21 +177,47 @@ Wrap-prefix is propertized in three segments:
 | ` ` | bg face's bg |
 
 The leading spaces deliberately render with default bg so the inset
-*is* visible as an empty gutter.
+*is* visible as an empty gutter on continuation visual rows too.
+Continuation rows have no buffer char at column 0 to host the
+anchor's before-string, so the inset is baked into the wrap-prefix
+itself.
 
 ### D5. Display layout: per-window prefix swap + per-line rhs after-string
 
 Per-window display overlay covers the source `> ` (or bare `>`).  The
-display string is:
+masked display string is `▌<space>` (or `▌` for the 1-char bare-`>'
+form).  Face propertization via `:inherit` (same theme-reactivity
+rationale as D4):
 
-```
-<inset-spaces>▌<space>
-```
+| Cell | Face spec |
+|---|---|
+| `▌` | `(:inherit (gfm-pretty-blockquotes-rail-face gfm-pretty-blockquotes-bg-face))` |
+| ` ` | `(:inherit gfm-pretty-blockquotes-bg-face)` |
 
-with the same per-segment face propertisation as the wrap-prefix.
+The inset is **not** part of this string — see D4 for why the
+gutter lives on the anchor's `before-string` instead.
+
 Carries `gfm-pretty-display-masked` (this string) and
 `gfm-pretty-display-bare` (the source with `gfm-pretty--str-with-
-region-bg`) so reveal flips it on selection / point-on-line.
+region-bg`) so the variant walker flips it on selection.  Point-on-
+line is handled by the engine's reveal walker, which nils `display`
+to expose the raw `> ` source — the anchor's gutter before-string
+keeps the body alignment stable.
+
+The per-line rhs after-string is identical on every line:
+
+```elisp
+(propertize " "
+            'display '(space :align-to (- right 1))
+            'face '(:inherit gfm-pretty-blockquotes-bg-face :extend t))
+(propertize " "
+            'display '(space :align-to right)
+            'face 'default)
+```
+
+No box-width-derived absolute column; no overflow variant; no wrap
+simulation.  Termination is always `right - 1` for bg, `right` for
+the default-face stopper.  See D1 for the iteration history.
 
 Per-window rhs after-string at line-end:
 
