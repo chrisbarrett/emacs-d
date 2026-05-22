@@ -335,13 +335,17 @@ for tree-sitter grammars and confuse downstream tests."
   (should-not (gfm-present--parse-source-link "diff:a...b"))
   (should-not (gfm-present--parse-source-link nil)))
 
-(ert-deftest gfm-present/language-from-extension ()
-  (should (equal "rust" (gfm-present--language-from-extension "x.rs")))
-  (should (equal "elisp" (gfm-present--language-from-extension "x.el")))
-  (should (equal "python" (gfm-present--language-from-extension "x.py")))
-  (should (equal "markdown" (gfm-present--language-from-extension "x.md")))
-  (should (equal "text" (gfm-present--language-from-extension "x.unknown")))
-  (should (equal "text" (gfm-present--language-from-extension nil))))
+(ert-deftest gfm-present/major-mode-for-path-resolves-via-auto-mode-alist ()
+  (let ((auto-mode-alist
+         (cons (cons (rx "." (or "ya" "y") "ml" eos) 'fundamental-mode)
+               auto-mode-alist)))
+    (should (eq 'fundamental-mode
+                (gfm-present--major-mode-for-path "config.yml")))))
+
+(ert-deftest gfm-present/major-mode-for-path-unknown-extension-falls-back ()
+  (let ((auto-mode-alist nil))
+    (should (eq #'fundamental-mode
+                (gfm-present--major-mode-for-path "x.totally-unknown-ext-xyz")))))
 
 (ert-deftest gfm-present/read-line-range-small ()
   (gfm-present-tests--with-temp-source '("line1" "line2" "line3" "line4") tmp
@@ -366,27 +370,84 @@ for tree-sitter grammars and confuse downstream tests."
     (should (eq 'invalid-range (gfm-present--read-line-range tmp 5 2)))
     (should (eq 'invalid-range (gfm-present--read-line-range tmp 100 200)))))
 
-(ert-deftest gfm-present/build-preview-fence-no-footer ()
-  (let ((s (gfm-present--build-preview-fence
-            "rust" "fn" "p" 1 5 "line1\nline2" 0)))
-    (should (string-match-p "```rust fn · p:1-5" s))
-    (should (string-match-p "line1\nline2" s))
-    (should (string-match-p "```\\'" s))
-    (should-not (string-match-p "more lines" s))))
+(ert-deftest gfm-present/source-preview-display-header-uses-markdown-code-face ()
+  (gfm-present-tests--with-temp-source '("alpha" "beta") tmp
+    (let* ((s (gfm-present--source-preview-display tmp 1 2 "lbl"))
+           (first-newline (string-match-p "\n" s))
+           (header (substring s 0 first-newline)))
+      (should (string-match-p (format "lbl · %s:1-2" (regexp-quote tmp))
+                              header))
+      (should (eq 'markdown-code-face (get-text-property 0 'face header))))))
 
-(ert-deftest gfm-present/build-preview-fence-with-footer ()
-  (let ((s (gfm-present--build-preview-fence
-            "rust" "fn" "p" 1 30 "body" 25)))
-    (should (string-match-p "\\+25 more lines · click to open" s))))
+(ert-deftest gfm-present/source-preview-display-missing-file ()
+  (let ((s (gfm-present--source-preview-display "/no/such/file" 1 5 "lbl")))
+    (should (string-match-p "(file not found: /no/such/file)" s))
+    (let* ((idx (string-match-p "(file not found" s)))
+      (should (eq 'shadow (get-text-property idx 'face s))))))
 
-(ert-deftest gfm-present/source-preview-missing-file-fence ()
-  (let ((s (gfm-present--source-preview-fence "/no/such/file" 1 5 "lbl")))
-    (should (string-match-p "(file not found: /no/such/file)" s))))
-
-(ert-deftest gfm-present/source-preview-invalid-range-fence ()
+(ert-deftest gfm-present/source-preview-display-invalid-range ()
   (gfm-present-tests--with-temp-source '("one") tmp
-    (let ((s (gfm-present--source-preview-fence tmp 100 200 "lbl")))
-      (should (string-match-p "(invalid range)" s)))))
+    (let* ((s (gfm-present--source-preview-display tmp 100 200 "lbl")))
+      (should (string-match-p "(invalid range)" s))
+      (let ((idx (string-match-p "(invalid range)" s)))
+        (should (eq 'shadow (get-text-property idx 'face s)))))))
+
+(ert-deftest gfm-present/source-preview-display-no-fence-delimiters ()
+  (gfm-present-tests--with-temp-source '("alpha" "beta") tmp
+    (let ((s (gfm-present--source-preview-display tmp 1 2 "lbl")))
+      (should-not (string-match-p "```" s)))))
+
+(ert-deftest gfm-present/source-preview-display-oversize-shadow-footer ()
+  (gfm-present-tests--with-temp-source
+      (mapcar (lambda (n) (format "line%d" n)) (number-sequence 1 20)) tmp
+    (let* ((s (gfm-present--source-preview-display tmp 1 15 "lbl"))
+           (idx (string-match "\\+5 more lines · click to open" s)))
+      (should idx)
+      (should (eq 'shadow (get-text-property idx 'face s))))))
+
+(ert-deftest gfm-present/fontify-source-applies-major-mode-face ()
+  "A custom mode mapped via `auto-mode-alist' contributes `face' to the body."
+  (let* ((mode-sym (make-symbol "gfm-present-tests--demo-mode")))
+    (eval `(define-derived-mode ,mode-sym prog-mode "demo"
+             (setq font-lock-defaults
+                   '((("\\<KEYWORD\\>" . font-lock-keyword-face))))))
+    (let ((auto-mode-alist
+           (cons (cons (rx ".gfmdemo" eos) mode-sym) auto-mode-alist)))
+      (let* ((body (gfm-present--fontify-source
+                    "/tmp/x.gfmdemo" '("KEYWORD other")))
+             (idx (string-match "KEYWORD" body)))
+        (should idx)
+        (should (eq 'font-lock-keyword-face
+                    (get-text-property idx 'face body)))))))
+
+(ert-deftest gfm-present/source-preview-display-fontifies-body ()
+  "End-to-end: small range via display helper carries major-mode faces."
+  (let ((mode-sym (make-symbol "gfm-present-tests--demo-mode-2")))
+    (eval `(define-derived-mode ,mode-sym prog-mode "demo2"
+             (setq font-lock-defaults
+                   '((("\\<HOT\\>" . font-lock-keyword-face))))))
+    (let ((auto-mode-alist
+           (cons (cons (rx ".gfmdemo2" eos) mode-sym) auto-mode-alist))
+          (path (make-temp-file "src-test-" nil ".gfmdemo2"
+                                "HOT body\nplain line\n")))
+      (unwind-protect
+          (let* ((s (gfm-present--source-preview-display path 1 2 "lbl"))
+                 (idx (string-match "HOT" s)))
+            (should idx)
+            (should (eq 'font-lock-keyword-face
+                        (get-text-property idx 'face s))))
+        (when (file-exists-p path) (delete-file path))))))
+
+(ert-deftest gfm-present/source-preview-display-unknown-ext-no-error ()
+  "Unknown extension yields a clean unfontified body without signalling."
+  (let ((auto-mode-alist nil)
+        (path (make-temp-file "src-test-" nil ".totally-unknown-ext-xyz"
+                              "alpha\nbeta\n")))
+    (unwind-protect
+        (let ((s (gfm-present--source-preview-display path 1 2 "lbl")))
+          (should (string-match-p "alpha" s))
+          (should (string-match-p "beta" s)))
+      (when (file-exists-p path) (delete-file path)))))
 
 (ert-deftest gfm-present/render-link-previews-creates-overlay ()
   (gfm-present-tests--with-temp-source '("a" "b" "c" "d") tmp
@@ -397,7 +458,8 @@ for tree-sitter grammars and confuse downstream tests."
       (let* ((ov (car gfm-present--preview-overlays))
              (display (overlay-get ov 'display)))
         (should display)
-        (should (string-match-p "b\nc" display))))))
+        (should (string-match-p "b\nc" display))
+        (should-not (string-match-p "```" display))))))
 
 (ert-deftest gfm-present/render-link-previews-does-not-mutate-buffer ()
   (gfm-present-tests--with-temp-source '("a" "b") tmp

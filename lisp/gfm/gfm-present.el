@@ -287,22 +287,11 @@ pass-through to the markdown major mode default handler."
            (end (if end-s (string-to-number end-s) start)))
       (cons path (cons start end)))))
 
-(defconst gfm-present--ext-to-lang
-  '(("rs" . "rust") ("el" . "elisp") ("py" . "python")
-    ("ts" . "typescript") ("tsx" . "typescript")
-    ("js" . "javascript") ("jsx" . "javascript")
-    ("go" . "go") ("md" . "markdown") ("c" . "c") ("h" . "c")
-    ("cpp" . "cpp") ("hpp" . "cpp") ("cc" . "cpp")
-    ("rb" . "ruby") ("java" . "java") ("kt" . "kotlin")
-    ("swift" . "swift") ("hs" . "haskell")
-    ("sh" . "bash") ("nix" . "nix"))
-  "Alist of file extension (lowercase) to fence language name.")
-
-(defun gfm-present--language-from-extension (path)
-  "Return the fence language for PATH's extension, defaulting to \"text\"."
-  (let ((ext (and path (file-name-extension path))))
-    (or (and ext (cdr (assoc (downcase ext) gfm-present--ext-to-lang)))
-        "text")))
+(defun gfm-present--major-mode-for-path (path)
+  "Return the major-mode symbol for PATH via `auto-mode-alist'.
+Falls back to `fundamental-mode' when no entry matches."
+  (or (assoc-default path auto-mode-alist #'string-match-p)
+      #'fundamental-mode))
 
 (defconst gfm-present--preview-cap 10
   "Maximum number of lines to include in a preview fence body.")
@@ -339,34 +328,57 @@ Return symbol `file-not-found' or `invalid-range' on error."
               (forward-line 1)))
           (cons (nreverse lines) extra)))))))
 
-(defun gfm-present--build-preview-fence (lang label path start end body extra)
-  "Compose a fenced code-block string for a link preview.
-Header is ``\\=`\\=`\\=`LANG LABEL · PATH:START-END\".  BODY is the
-body (already a string with newline separators).  When EXTRA > 0,
-append a footer line `+EXTRA more lines · click to open'."
-  (let ((header (format "```%s %s · %s:%d-%d" lang label path start end)))
-    (concat header "\n"
-            body "\n"
-            "```"
-            (when (and extra (> extra 0))
-              (format "\n+%d more lines · click to open" extra)))))
+(defun gfm-present--fontify-source (path lines)
+  "Return LINES joined with newlines, fontified per PATH's major-mode.
+Activates `gfm-present--major-mode-for-path' in a temp buffer with
+`buffer-file-name' set to PATH (so tree-sitter modes that key off
+the file name activate correctly), inserts the joined LINES, runs
+`font-lock-ensure', and returns `buffer-substring' so the `face'
+text properties survive into the caller."
+  (with-temp-buffer
+    (setq buffer-file-name path)
+    (unwind-protect
+        (progn
+          (let ((mode (gfm-present--major-mode-for-path path)))
+            (condition-case _err
+                (funcall mode)
+              (error (fundamental-mode))))
+          (insert (mapconcat #'identity lines "\n"))
+          (font-lock-ensure)
+          (buffer-substring (point-min) (point-max)))
+      (setq buffer-file-name nil)
+      (set-buffer-modified-p nil))))
 
-(defun gfm-present--source-preview-fence (path start end label)
-  "Build the preview fence string for source-range link PATH#L<start>-L<end>."
-  (let* ((lang (gfm-present--language-from-extension path))
+(defun gfm-present--source-preview-display (path start end label)
+  "Build the preview display string for source-range link PATH#L<start>-L<end>.
+Returns a propertised string: header line (LABEL · PATH:START-END
+under `markdown-code-face'), then body — either the major-mode-
+fontified source lines or a `shadow'-faced sentinel — then an
+optional `shadow'-faced footer when the requested range exceeded
+`gfm-present--preview-cap'."
+  (let* ((header (propertize
+                  (format "%s · %s:%d-%d" label path start end)
+                  'face 'markdown-code-face))
          (result (gfm-present--read-line-range path start end)))
     (cond
      ((eq result 'file-not-found)
-      (gfm-present--build-preview-fence
-       "text" label path start end (format "(file not found: %s)" path) 0))
+      (concat header "\n"
+              (propertize (format "(file not found: %s)" path)
+                          'face 'shadow)))
      ((eq result 'invalid-range)
-      (gfm-present--build-preview-fence
-       "text" label path start end "(invalid range)" 0))
+      (concat header "\n"
+              (propertize "(invalid range)" 'face 'shadow)))
      (t
-      (let ((body (mapconcat #'identity (car result) "\n"))
-            (extra (cdr result)))
-        (gfm-present--build-preview-fence
-         lang label path start end body extra))))))
+      (let* ((lines (car result))
+             (extra (cdr result))
+             (body (gfm-present--fontify-source path lines)))
+        (concat header "\n"
+                body
+                (when (and extra (> extra 0))
+                  (concat "\n"
+                          (propertize
+                           (format "+%d more lines · click to open" extra)
+                           'face 'shadow)))))))))
 
 (defvar-local gfm-present--preview-overlays nil
   "List of preview overlays created in this buffer.
@@ -480,9 +492,9 @@ diff links (`diff:B...H[#P]') get a fenced diff preview."
                    (end (cddr source))
                    (resolved (if (file-name-absolute-p path) path
                                (expand-file-name path default-directory)))
-                   (fence (gfm-present--source-preview-fence
-                           resolved start end label)))
-              (gfm-present--make-preview-overlay link-start link-end fence)))
+                   (display (gfm-present--source-preview-display
+                             resolved start end label)))
+              (gfm-present--make-preview-overlay link-start link-end display)))
            (diff
             (let ((fence (gfm-present--diff-preview-fence
                           wt
