@@ -299,21 +299,32 @@ bounds-beg AND END <= bounds-end."
         (and (<= (car bounds) beg) (< beg (cdr bounds)))
       (and (<= (car bounds) beg) (<= end (cdr bounds))))))
 
-(defun gfm-pretty--overlay-selected-p (ov bounds)
-  "Non-nil iff OV's effective range is inside BOUNDS.
-The effective range is `gfm-pretty-select-range' if set on OV
-(a (BEG . END) override used by decorations whose rendering position
-differs from the position that should drive the selection check —
-e.g. a box's bottom-border row, rendered on the last body line's
-after-string but logically belonging to the line below it).
-Otherwise it's the overlay's `(overlay-start . overlay-end)' range."
-  (when bounds
-    (let* ((override (overlay-get ov 'gfm-pretty-select-range))
-           (ob (if override (car override) (overlay-start ov)))
-           (oe (if override (cdr override) (overlay-end ov))))
-      (if (= ob oe)
-          (and (<= (car bounds) ob) (< ob (cdr bounds)))
-        (and (<= (car bounds) ob) (<= oe (cdr bounds)))))))
+(defun gfm-pretty--range-in-bounds-p (range bounds)
+  "Non-nil iff RANGE `(BEG . END)' is inside BOUNDS `(BEG . END)'.
+Zero-width ranges (BEG == END) require strict-< on the upper bound."
+  (when (and bounds range)
+    (let ((rb (car range)) (re (cdr range)))
+      (if (= rb re)
+          (and (<= (car bounds) rb) (< rb (cdr bounds)))
+        (and (<= (car bounds) rb) (<= re (cdr bounds)))))))
+
+(defun gfm-pretty--prop-selected-p (ov prop bounds)
+  "Non-nil iff OV's PROP-specific range is inside BOUNDS.
+Looks up the per-prop range override `gfm-pretty-PROP-select-range'
+\(e.g. `gfm-pretty-before-select-range' for `before-string') so each
+decoration prop can independently decide selection based on its
+anchor — the before-string at OV's start, the after-string at OV's
+end — without bare/masked being shared across the whole overlay.
+
+Falls back to the overlay-wide `gfm-pretty-select-range', then to the
+overlay's `(start . end)' range."
+  (let* ((entry (assq prop gfm-pretty--variant-props))
+         (base (and entry (symbol-name (cdr entry))))
+         (prop-range-key (and base (intern (concat base "-select-range"))))
+         (range (or (and prop-range-key (overlay-get ov prop-range-key))
+                    (overlay-get ov 'gfm-pretty-select-range)
+                    (cons (overlay-start ov) (overlay-end ov)))))
+    (gfm-pretty--range-in-bounds-p range bounds)))
 
 (defun gfm-pretty--with-region-face (face)
   "Return a face spec that paints `region' bg on top of FACE.
@@ -356,19 +367,27 @@ fill of their own, so the bare variant appends this so the selection
 visually reaches the window's right edge."
   (propertize " " 'display '(space :align-to right) 'face 'region))
 
-(defun gfm-pretty--apply-variant (ov variant)
-  "Apply VARIANT (`bare' or `masked') to OV's stashed swap properties.
-For each entry in `gfm-pretty--variant-props' that OV stashes, copies
-the chosen variant onto OV's live property.  `display' swaps are
-reveal-aware: when reveal has hidden the overlay (display=nil and the
-shared `gfm-pretty-saved-display' prop is non-nil), the saved value is
-updated instead so the next reveal-restore picks up the right variant."
+(defun gfm-pretty--apply-variant (ov bounds)
+  "Swap OV's stashed variants based on per-prop selection containment.
+For each entry in `gfm-pretty--variant-props' OV stashes, picks the
+bare variant when the prop's anchor range is inside BOUNDS and the
+masked variant otherwise — each prop can have a per-prop range
+override (`gfm-pretty-PROP-select-range') so e.g. a body overlay's
+before-string at lbeg and after-string at lend swap independently.
+
+`display' swaps are reveal-aware: when reveal has hidden the overlay
+\(display=nil and the shared `gfm-pretty-saved-display' prop is
+non-nil), the saved value is updated instead so the next
+reveal-restore picks up the right variant."
   (dolist (entry gfm-pretty--variant-props)
     (let* ((prop (car entry))
            (base (symbol-name (cdr entry)))
            (masked-key (intern (concat base "-masked"))))
       (when (overlay-get ov masked-key)
-        (let* ((var-key (intern (concat base "-" (symbol-name variant))))
+        (let* ((variant (if (gfm-pretty--prop-selected-p ov prop bounds)
+                            'bare
+                          'masked))
+               (var-key (intern (concat base "-" (symbol-name variant))))
                (value (overlay-get ov var-key))
                (reveal-hidden (and (eq prop 'display)
                                    (null (overlay-get ov 'display))
@@ -381,8 +400,7 @@ updated instead so the next reveal-restore picks up the right variant."
   "Swap each visible decoration overlay between masked and bare variants.
 Walks overlays in every window's visible range and, for each overlay
 carrying any stashed masked variant from `gfm-pretty--variant-props',
-chooses the bare variant when the overlay's start lies inside the
-active selection range and masked otherwise.
+delegates the per-prop selection check to `gfm-pretty--apply-variant'.
 
 Memoised on `(bounds . visible-ranges)' so pure scrolls (selection
 unchanged) still re-walk overlays that have just entered the visible
@@ -395,9 +413,7 @@ variant could be stale."
     (unless (equal key gfm-pretty--last-selection-bounds)
       (dolist (range ranges)
         (dolist (ov (overlays-in (car range) (cdr range)))
-          (let* ((selected (gfm-pretty--overlay-selected-p ov bounds))
-                 (variant (if selected 'bare 'masked)))
-            (gfm-pretty--apply-variant ov variant))))
+          (gfm-pretty--apply-variant ov bounds)))
       (setq gfm-pretty--last-selection-bounds key))))
 
 ;;; Anchor / display split helper

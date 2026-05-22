@@ -359,17 +359,26 @@ left-side mask is suppressed so the indicator keeps its own bg."
                                  (gfm-pretty--right-after
                                   box-width face line-bg))))
                (after-bare (gfm-pretty--str-with-region-bg after-masked))
-               (selected (gfm-pretty--range-selected-p lbeg lend)))
+               (before-selected (gfm-pretty--range-selected-p lbeg lbeg))
+               (after-selected (gfm-pretty--range-selected-p lend lend)))
           (gfm-pretty-fences--make-display
            lbeg lend window
            'gfm-pretty-fences-kind 'body
            'wrap-prefix wrap
+           ;; The before-string at lbeg and after-string at lend swap
+           ;; INDEPENDENTLY of each other — on the end-line of a v
+           ;; charwise selection the left `│ ' should paint bare (its
+           ;; anchor lbeg is inside the selection) while the right
+           ;; edge stays masked (its anchor lend is past the selection
+           ;; end).  Per-prop select-range overrides drive this.
+           'gfm-pretty-before-select-range (cons lbeg lbeg)
            'gfm-pretty-before-masked lhs-masked
            'gfm-pretty-before-bare lhs-bare
-           'before-string (if selected lhs-bare lhs-masked)
+           'before-string (if before-selected lhs-bare lhs-masked)
+           'gfm-pretty-after-select-range (cons lend lend)
            'gfm-pretty-after-masked after-masked
            'gfm-pretty-after-bare after-bare
-           'after-string (if selected after-bare after-masked))
+           'after-string (if after-selected after-bare after-masked))
           ;; When the line carries an `:extend t' background, inset
           ;; the band on the left too by masking the first body
           ;; char's text-prop background with the system bg.

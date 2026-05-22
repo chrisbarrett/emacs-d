@@ -1018,20 +1018,32 @@ Line 9: para after")
   (save-excursion (goto-char (point-min)) (forward-line (1- n)) (line-end-position)))
 
 (defun lang-markdown-tests--overlay-variant (ov)
-  "Return `bare' or `masked' for OV's currently-applied swap variant, or nil."
-  (cl-some (lambda (entry)
-             (let* ((prop (car entry))
-                    (base (symbol-name (cdr entry)))
-                    (masked (overlay-get
-                             ov (intern (concat base "-masked")))))
-               (when masked
-                 (let ((cur (overlay-get ov prop))
-                       (bare (overlay-get
-                              ov (intern (concat base "-bare")))))
-                   (cond ((eq cur bare) 'bare)
-                         ((eq cur masked) 'masked)
-                         (t 'unknown))))))
-           gfm-pretty--variant-props))
+  "Return the swap variant for OV: `bare', `masked', `mixed', or nil.
+`mixed' is returned when OV stashes multiple swap props that resolve
+to different variants — e.g. a fences body overlay whose
+before-string is bare (lbeg in selection) but after-string is masked
+\(lend past selection end)."
+  (let ((variants
+         (delq nil
+               (mapcar
+                (lambda (entry)
+                  (let* ((prop (car entry))
+                         (base (symbol-name (cdr entry)))
+                         (masked (overlay-get
+                                  ov (intern (concat base "-masked")))))
+                    (when masked
+                      (let ((cur (overlay-get ov prop))
+                            (bare (overlay-get
+                                   ov (intern (concat base "-bare")))))
+                        (cond ((eq cur bare) 'bare)
+                              ((eq cur masked) 'masked)
+                              (t 'unknown))))))
+                gfm-pretty--variant-props))))
+    (cond
+     ((null variants) nil)
+     ((cl-every (lambda (v) (eq v 'bare)) variants) 'bare)
+     ((cl-every (lambda (v) (eq v 'masked)) variants) 'masked)
+     (t 'mixed))))
 
 (defun lang-markdown-tests--fence-variants-by-line ()
   "Return alist `(LINE . ((KIND . VARIANT) ...))' for all fence decorations.
@@ -1278,26 +1290,64 @@ The per-overlay walker then decides which overlays are fully inside."
                  (lang-markdown-tests--fence-variants-by-line)))))))
 
 (ert-deftest lang-markdown/gfm-pretty-fences-v-char-multi-line-paints-interior ()
-  "Charwise from mid-L4 to mid-L6: interior L5 body bare, L4/L6 masked."
+  "Charwise from mid-L4 to mid-L6: interior L5 body fully bare, L4/L6 mixed.
+L4 (start line): before-string masked (lbeg before region-beg),
+after-string bare (lend in region) → `mixed'.
+L5 (interior): both bare → `bare'.
+L6 (end line): before-string bare (lbeg in region), after-string
+masked (lend past region-end) → `mixed'."
   (lang-markdown-tests--with-fences-test-buffer
     (let ((body4-bol (lang-markdown-tests--line-bol 4))
           (body6-bol (lang-markdown-tests--line-bol 6)))
       (lang-markdown-tests--with-evil-v-char (+ body4-bol 2) (+ body6-bol 4)
         (should (equal
                  '((3 (top-leading . masked) (top-trailing . masked))
-                   (4 (body . masked))
+                   (4 (body . mixed))
                    (5 (body . bare))
-                   (6 (body . masked))
+                   (6 (body . mixed))
                    (7 (bottom-leading . masked) (bottom-trailing . masked)))
                  (lang-markdown-tests--fence-variants-by-line)))))))
+
+(ert-deftest lang-markdown/gfm-pretty-fences-v-char-end-line-lhs-paints-when-covered ()
+  "End-line of v-charwise: the left `│ ' (body before-string) paints bare
+when the selection covers its position at BOL, even though the body
+overlay extends past the selection end (so the right edge stays masked
+— we want per-prop selection, not a single overlay-wide swap).
+
+Regression: a v-charwise from above the fenced block into the body
+left the end-line's left border masked, creating a 2-col cream gap
+at BOL where buffer chars on that line were already region-painted.
+The test asserts that the body overlay's `before-string' is the bare
+variant once the selection covers its anchor at lbeg."
+  (lang-markdown-tests--with-fences-test-buffer
+    (let ((l1-bol (lang-markdown-tests--line-bol 1))
+          (l5-bol (lang-markdown-tests--line-bol 5)))
+      ;; v from start of paragraph above (L1) to mid-body L5.
+      (lang-markdown-tests--with-evil-v-char l1-bol (+ l5-bol 3)
+        ;; The body overlay on L5 (selection's end-line): the before-
+        ;; string at lbeg is fully inside the selection range, so it
+        ;; should paint bare; the after-string at lend is past the
+        ;; selection end so it stays masked.
+        (let* ((body-ov (cl-find-if
+                         (lambda (o)
+                           (and (eq (overlay-get o 'gfm-pretty-fences-kind)
+                                    'body)
+                                (= (line-number-at-pos (overlay-start o)) 5)))
+                         (overlays-in (point-min) (point-max)))))
+          (should body-ov)
+          (should (eq (overlay-get body-ov 'gfm-pretty-before-bare)
+                      (overlay-get body-ov 'before-string)))
+          (should (eq (overlay-get body-ov 'gfm-pretty-after-masked)
+                      (overlay-get body-ov 'after-string))))))))
 
 (ert-deftest lang-markdown/gfm-pretty-fences-v-char-spans-top-and-body ()
   "Charwise from mid-L3 (open fence) to mid-L5 (body): per-overlay containment.
 The open fence's `top-trailing' is zero-width at L3-eol which falls
 inside the selection, so it goes bare; `top-leading' (full-line range)
 isn't contained because L3-bol precedes the selection start, so it
-stays masked.  Body L4 (fully inside) is bare; body L5 (extends past
-the selection end) is masked."
+stays masked.  Body L4 (fully inside) is bare; body L5 is mixed —
+its before-string at lbeg is inside the selection (left `│ ' paints),
+but its after-string at lend is past the selection end."
   (lang-markdown-tests--with-fences-test-buffer
     (let ((l3-bol (lang-markdown-tests--line-bol 3))
           (l5-bol (lang-markdown-tests--line-bol 5)))
@@ -1305,7 +1355,7 @@ the selection end) is masked."
         (should (equal
                  '((3 (top-leading . masked) (top-trailing . bare))
                    (4 (body . bare))
-                   (5 (body . masked))
+                   (5 (body . mixed))
                    (6 (body . masked))
                    (7 (bottom-leading . masked) (bottom-trailing . masked)))
                  (lang-markdown-tests--fence-variants-by-line)))))))
@@ -1325,7 +1375,9 @@ the selection end) is masked."
                  (lang-markdown-tests--fence-variants-by-line)))))))
 
 (ert-deftest lang-markdown/gfm-pretty-fences-vanilla-multi-line-paints-interior ()
-  "Vanilla region across L4-L6 paints L5 interior body bare; L4/L6 masked."
+  "Vanilla region across L4-L6 paints L5 interior body bare; L4/L6 mixed.
+Same per-overlay containment as charwise: the start and end body
+overlays' before/after-strings swap independently."
   (lang-markdown-tests--with-fences-test-buffer
     (let ((body4-bol (lang-markdown-tests--line-bol 4))
           (body6-bol (lang-markdown-tests--line-bol 6)))
@@ -1333,9 +1385,9 @@ the selection end) is masked."
           (+ body4-bol 2) (+ body6-bol 4)
         (should (equal
                  '((3 (top-leading . masked) (top-trailing . masked))
-                   (4 (body . masked))
+                   (4 (body . mixed))
                    (5 (body . bare))
-                   (6 (body . masked))
+                   (6 (body . mixed))
                    (7 (bottom-leading . masked) (bottom-trailing . masked)))
                  (lang-markdown-tests--fence-variants-by-line)))))))
 
