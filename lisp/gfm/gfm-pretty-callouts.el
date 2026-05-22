@@ -399,14 +399,7 @@ See `gfm-pretty-callouts--apply-block-anchors' for the widening rationale."
                           (gfm-pretty-callouts--right-after-overflow
                            border-face tint line-text window)
                         (gfm-pretty-callouts--right-after
-                         box-width border-face tint)))
-                     (after-with-bottom
-                      (cond
-                       (last-body
-                        (let ((s (concat right-after "\n" bottom-str)))
-                          (put-text-property 0 1 'cursor t s)
-                          s))
-                       (t right-after))))
+                         box-width border-face tint))))
                 ;; `> ' / bare `>' → `│ ' substitution as a per-window
                 ;; display so reveal in window A doesn't expose the
                 ;; source in B.  Source range is 2 chars for `> ',
