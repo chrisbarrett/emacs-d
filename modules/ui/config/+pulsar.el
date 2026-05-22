@@ -109,6 +109,12 @@
     (pulsar-pulse-line)))
 
 
+;;; Better-jumper integration
+
+(dolist (fn '(better-jumper-jump-backward better-jumper-jump-forward))
+  (add-to-list 'pulsar-pulse-functions fn))
+
+
 ;;; TTY pulse support
 
 (defun +pulsar--update-bg-h (&rest _)

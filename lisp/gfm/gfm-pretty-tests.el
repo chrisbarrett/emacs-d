@@ -3904,15 +3904,24 @@ window holding point."
     (should (lang-markdown-tests--link-overlay-at 13 'url))
     (should (= 2 (lang-markdown-tests--link-overlay-count-for 'inline)))))
 
-(ert-deftest lang-markdown/gfm-pretty-links-anchor-link-has-no-url-overlay ()
-  "An anchor link produces only a title-side overlay (no icon)."
+(ert-deftest lang-markdown/gfm-pretty-links-anchor-link-hides-url-span ()
+  "An anchor link produces a url-side overlay with empty `display'."
   (lang-markdown-tests--with-links-buffer
       "[Setup](#setup)\n"
     (should (lang-markdown-tests--link-overlay-at 2 'title))
-    (should (= 1 (lang-markdown-tests--link-overlay-count-for 'inline)))
-    (should-not (cl-find-if
-                 (lambda (o) (eq 'url (overlay-get o 'gfm-pretty-links-side)))
-                 (gfm-pretty--state-get 'links 'overlays)))))
+    (let ((ov (lang-markdown-tests--link-overlay-at 9 'url)))
+      (should ov)
+      (should (equal "" (overlay-get ov 'display))))
+    (should (= 2 (lang-markdown-tests--link-overlay-count-for 'inline)))))
+
+(ert-deftest lang-markdown/gfm-pretty-links-anchor-url-overlay-keeps-metadata ()
+  "The hidden anchor url overlay still carries RET-dispatch metadata."
+  (lang-markdown-tests--with-links-buffer
+      "[Setup](#setup)\n"
+    (let ((ov (lang-markdown-tests--link-overlay-at 9 'url)))
+      (should ov)
+      (should (eq 'anchor (overlay-get ov 'gfm-pretty-links-class)))
+      (should (equal "#setup" (overlay-get ov 'gfm-pretty-links-url))))))
 
 (ert-deftest lang-markdown/gfm-pretty-links-file-link-has-no-url-overlay ()
   "A file link produces only a title-side overlay (no icon)."

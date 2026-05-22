@@ -1045,6 +1045,42 @@ buffer-local revert hooks, and the minor-mode flag before
                      (default-value
                       'gfm-pretty-links-after-anchor-jump-functions))))))
 
+(ert-deftest gfm-present/around-evil-jump-widens-and-renarrows-to-point-slide ()
+  "While present-mode is on, the jump advice widens, runs ORIG, re-narrows."
+  (with-temp-buffer
+    (insert "# A\nbody A\n# B\nbody B\n# C\nbody C\n")
+    (goto-char (point-min))
+    (gfm-present-mode 1)
+    (should (equal "# A" (gfm-present-tests--narrowed-first-line)))
+    (let ((source (save-excursion
+                    (widen)
+                    (goto-char (point-min))
+                    (search-forward "body A")
+                    (point))))
+      ;; Simulate post-jump state: narrowed to # C.
+      (widen)
+      (goto-char (point-min))
+      (search-forward "body C")
+      (gfm-present--narrow-to-heading-at (point))
+      (should (equal "# C" (gfm-present-tests--narrowed-first-line)))
+      ;; Advice wraps a fake jump that returns to the source position.
+      (gfm-present--around-evil-jump
+       (lambda (&rest _) (goto-char source)))
+      (should (buffer-narrowed-p))
+      (should (equal "# A" (gfm-present-tests--narrowed-first-line)))
+      (should (= (point) source)))))
+
+(ert-deftest gfm-present/around-evil-jump-passthrough-outside-present-mode ()
+  "Outside present-mode the advice delegates to ORIG without touching narrowing."
+  (with-temp-buffer
+    (insert "# A\nbody A\n# B\nbody B\n")
+    (let ((called 0))
+      (gfm-present--around-evil-jump
+       (lambda (&rest _) (cl-incf called) (goto-char (point-max))))
+      (should (= 1 called))
+      (should-not (buffer-narrowed-p))
+      (should (= (point) (point-max))))))
+
 
 ;;; §14 Module-level cleanup
 

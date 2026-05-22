@@ -491,11 +491,14 @@ belongs to.  The overlay carries the link's resolved metadata so RET,
 eldoc, and the xref backend can read it without re-parsing."
   (let* ((class (gfm-pretty-links--link-class record))
          (display
-          (if (eq side 'title)
-              (propertize (gfm-pretty-links--link-label record)
-                          'face (gfm-pretty-links--title-face-for-class class))
+          (cond
+           ((eq side 'title)
+            (propertize (gfm-pretty-links--link-label record)
+                        'face (gfm-pretty-links--title-face-for-class class)))
+           ((eq class 'anchor) "")
+           (t
             (or (gfm-pretty-links--icon-for-target (gfm-pretty-links--link-url record))
-                ""))))
+                "")))))
     (apply #'gfm-pretty--make-display
            gfm-pretty-links--registry beg end window
            'gfm-pretty-links-class class
@@ -525,12 +528,14 @@ eldoc, and the xref backend can read it without re-parsing."
 
 (defun gfm-pretty-links--decorate-link (record window)
   "Create RECORD's per-side overlays in WINDOW.
-Degenerate records (empty title span) are skipped.  Anchor and file
-links produce only a title-side overlay; the URL span is left to
-markdown-mode's own rendering."
+Degenerate records (empty title span) are skipped.  Web links get a
+url-side icon overlay; anchor links get a url-side overlay whose
+`display' is empty, hiding the `(#slug)' span while preserving its
+metadata for RET dispatch.  File links produce only a title-side
+overlay; the URL span renders raw."
   (when (< (gfm-pretty-links--link-tbeg record) (gfm-pretty-links--link-tend record))
     (gfm-pretty-links--make-title-overlay record window)
-    (when (and (eq (gfm-pretty-links--link-class record) 'web)
+    (when (and (memq (gfm-pretty-links--link-class record) '(web anchor))
                (< (gfm-pretty-links--link-ubeg record) (gfm-pretty-links--link-uend record)))
       (gfm-pretty-links--make-url-overlay record window))))
 
@@ -618,11 +623,13 @@ runs of whitespace fold to a single hyphen; everything else drops."
 (defun gfm-pretty-links--jump-to-anchor (anchor)
   "Move point to the heading whose generated slug matches ANCHOR (no `#').
 Walks atx and setext headings across the widened buffer so anchors
-resolve regardless of current narrowing.  On a successful match, pushes
-the click site onto the mark ring, widens the buffer, moves point to
-the heading, then runs `gfm-pretty-links-after-anchor-jump-functions'
-with the target buffer position.  Signals `user-error' when no matching
-heading is found and does not run the hook."
+resolve regardless of current narrowing.  On a successful match,
+records the click site via `gfm-pretty-links--record-jump' (so
+better-jumper / evil's jump list captures it), pushes it onto the
+mark ring, widens the buffer, moves point to the heading, then runs
+`gfm-pretty-links-after-anchor-jump-functions' with the target buffer
+position.  Signals `user-error' when no matching heading is found and
+does not run the hook."
   (let ((slug (string-remove-prefix "#" anchor))
         (start (point))
         (found nil))
@@ -639,12 +646,21 @@ heading is found and does not run the hook."
                          (equal slug (gfm-pretty-links--heading-slug text)))
                 (setq found (match-beginning 0))))))))
     (if found
-        (progn (push-mark start)
+        (progn (gfm-pretty-links--record-jump start)
+               (push-mark start)
                (widen)
                (goto-char found)
                (run-hook-with-args
                 'gfm-pretty-links-after-anchor-jump-functions found))
       (user-error "No heading matches anchor: #%s" slug))))
+
+(defun gfm-pretty-links--record-jump (pos)
+  "Record POS in the active jump-list implementation, if any.
+Prefers `better-jumper-set-jump' (used by this config), falls back to
+`evil-set-jump'.  Silently noops when neither is available."
+  (cond
+   ((fboundp 'better-jumper-set-jump) (better-jumper-set-jump pos))
+   ((fboundp 'evil-set-jump) (evil-set-jump pos))))
 
 (defun gfm-pretty-links--follow-file (url)
   "Open file at URL via `find-file', expanded against the buffer's directory.
