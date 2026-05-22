@@ -273,9 +273,12 @@ and reveal suppresses the display when point sits on it."
       (gfm-pretty--reveal)
       (should (equal "│ " (overlay-get ov 'display))))))
 
-(ert-deftest lang-markdown/gfm-pretty-callouts-body-anchor-face-only-bg-and-extend ()
-  "Body-line anchor face specifies only `:background' and/or `:extend' so
-emphasis faces on buffer text merge through."
+(ert-deftest lang-markdown/gfm-pretty-callouts-body-anchor-face-inherits-tint ()
+  "Body-line anchor face references the tint face via `:inherit' only.
+No `:foreground', `:slant', `:weight', `:underline', or `:strike-through' —
+emphasis faces on buffer text must merge through.  No `:background'
+colour-string literal — theme switches must propagate at the next
+redisplay via the tint face's dynamic `:background'."
   (with-temp-buffer
     (insert "> [!NOTE]\n> Hello.\n")
     (gfm-pretty-mode 1)
@@ -293,7 +296,9 @@ emphasis faces on buffer text merge through."
           (should-not (plist-member face :underline))
           (should-not (plist-member face :strike-through))
           (should-not (plist-member face :foreground))
-          (should-not (plist-member face :inherit)))))))
+          (should-not (stringp (plist-get face :background)))
+          (should (eq (plist-get face :inherit)
+                      'gfm-pretty-callouts-note-tint-face)))))))
 
 (ert-deftest lang-markdown/gfm-pretty-callouts-body-inline-markup-faces-merge-through ()
   "Bold/italic/link/inline-code inside a callout body keep their markdown faces."
@@ -381,6 +386,155 @@ the rail decoration or past EOL.  Italic / foreground are left alone."
       (should (stringp (overlay-get ov 'display))))))
 
 ;;; Block-discovery cache
+
+;;; Tint faces — theme reactivity
+
+(defconst lang-markdown-tests--callout-tint-faces
+  '(("NOTE"      . gfm-pretty-callouts-note-tint-face)
+    ("TIP"       . gfm-pretty-callouts-tip-tint-face)
+    ("IMPORTANT" . gfm-pretty-callouts-important-tint-face)
+    ("WARNING"   . gfm-pretty-callouts-warning-tint-face)
+    ("CAUTION"   . gfm-pretty-callouts-caution-tint-face))
+  "Type label → tint face symbol, for theme-reactivity tests.")
+
+(ert-deftest lang-markdown/gfm-pretty-callouts-tint-faces-defined-empty-default ()
+  "Each per-type tint face is defined with an empty default spec.
+The defface SHALL carry no static `:background'; the colour is set
+dynamically by `gfm-pretty-callouts--refresh-faces' on theme change."
+  (dolist (entry lang-markdown-tests--callout-tint-faces)
+    (let* ((face (cdr entry))
+           (spec (face-default-spec face)))
+      (should (facep face))
+      ;; Default spec is `((t))` — a single (DISPLAY . ATTRS) entry
+      ;; whose ATTRS is empty (no static `:background').
+      (should (consp spec))
+      (dolist (clause spec)
+        (let ((attrs (cdr clause)))
+          (should-not (plist-member attrs :background)))))))
+
+(ert-deftest lang-markdown/gfm-pretty-callouts-refresh-faces-syncs-body-and-tint ()
+  "`--refresh-faces' sets body and tint `:background' to the same blend.
+Running the helper directly (mirroring a `+theme-changed-hook' fire)
+SHALL leave every tint face's `:background' equal to the corresponding
+body face's `:background' AND equal to
+`(gfm-pretty-callouts--font-lock-tint-bg <header-face>)'."
+  (gfm-pretty-callouts--refresh-faces)
+  (dolist (entry gfm-pretty-callouts--type-body-face-alist)
+    (let* ((type (car entry))
+           (body-face (cdr entry))
+           (tint-face (alist-get type gfm-pretty-callouts--type-tint-face-alist
+                                 nil nil #'string=))
+           (header-face (alist-get type gfm-pretty-callouts--type-face-alist
+                                   nil nil #'string=))
+           (expected (gfm-pretty-callouts--font-lock-tint-bg header-face))
+           (body-bg (face-attribute body-face :background nil))
+           (tint-bg (face-attribute tint-face :background nil)))
+      ;; Tests run on a TTY at CI time without a graphical theme, so
+      ;; `expected` may be nil if `+theme-default-background' is unset
+      ;; and `default's :background is unspecified.  In that case neither
+      ;; face is updated by the refresh — the equality still holds.
+      (when expected
+        (should (equal body-bg tint-bg))
+        (should (equal body-bg expected))))))
+
+(defun lang-markdown-tests--callouts-render-each-type ()
+  "Insert and render one callout of each type; return the buffer."
+  (dolist (type '("NOTE" "TIP" "IMPORTANT" "WARNING" "CAUTION"))
+    (insert (format "> [!%s]\n> body line.\n\n" type)))
+  (gfm-pretty-mode 1))
+
+(ert-deftest lang-markdown/gfm-pretty-callouts-overlays-have-no-baked-bg-strings ()
+  "No callout-tagged overlay's face spec contains a `:background' string.
+Scans every overlay registered for the callouts decorator across all
+five types and asserts none carry a baked colour literal — they must
+reference the tint face via `:inherit' so theme switches propagate."
+  (with-temp-buffer
+    (lang-markdown-tests--callouts-render-each-type)
+    (let ((ovs (cl-remove-if-not
+                (lambda (ov)
+                  (or (overlay-get ov 'gfm-pretty-callouts-anchor)
+                      (overlay-get ov 'gfm-pretty-callouts-kind)))
+                (overlays-in (point-min) (point-max)))))
+      (should ovs)
+      (cl-labels
+          ((face-spec-strs (face)
+             (cond
+              ((and (listp face) (keywordp (car face)))
+               (list face))
+              ((listp face) (mapcan #'face-spec-strs face))
+              (t nil)))
+           (check-spec (spec)
+             (should-not (stringp (plist-get spec :background))))
+           (walk-string (str)
+             (when (stringp str)
+               (let ((pos 0) (len (length str)))
+                 (while (< pos len)
+                   (let* ((next (or (next-property-change pos str) len))
+                          (face (get-text-property pos 'face str)))
+                     (dolist (s (face-spec-strs face))
+                       (check-spec s))
+                     (setq pos next)))))))
+        (dolist (ov ovs)
+          (let ((f (overlay-get ov 'face))
+                (disp (overlay-get ov 'display))
+                (after (overlay-get ov 'after-string)))
+            (dolist (s (face-spec-strs f))
+              (check-spec s))
+            (walk-string (and (stringp disp) disp))
+            (walk-string after)))))))
+
+(ert-deftest lang-markdown/gfm-pretty-callouts-anchor-face-inherits-type-tint ()
+  "Each anchor overlay's face spec carries `:inherit' = the type's tint face."
+  (with-temp-buffer
+    (lang-markdown-tests--callouts-render-each-type)
+    (dolist (entry lang-markdown-tests--callout-tint-faces)
+      (let* ((type (car entry))
+             (tint-face (cdr entry))
+             (marker-re (format "> \\[!%s\\]" type))
+             (block-beg (save-excursion (goto-char (point-min))
+                                        (re-search-forward marker-re)
+                                        (line-beginning-position)))
+             (block-end (save-excursion (goto-char block-beg)
+                                        (forward-line 1)
+                                        (line-end-position)))
+             (anchors (cl-remove-if-not
+                       (lambda (ov)
+                         (and (overlay-get ov 'gfm-pretty-callouts-anchor)
+                              (overlay-get ov 'wrap-prefix)))
+                       (overlays-in block-beg block-end))))
+        (should anchors)
+        (dolist (ov anchors)
+          (let ((face (overlay-get ov 'face)))
+            (should (eq (plist-get face :inherit) tint-face))))))))
+
+(ert-deftest lang-markdown/gfm-pretty-callouts-theme-switch-propagates-without-toggle ()
+  "Mutating the tint face's `:background' reflects without a mode toggle.
+The overlay face spec MUST continue to reference the tint face by
+`:inherit' (not bake the prior `:background' value).  This is the
+theme-reactivity contract: a `+theme-changed-hook' fire updates the
+tint face; redisplay re-resolves the overlay's `:inherit' chain and
+picks up the new background — no decorator rebuild required."
+  (with-temp-buffer
+    (insert "> [!NOTE]\n> hello.\n")
+    (gfm-pretty-mode 1)
+    (let ((prev-bg (face-attribute 'gfm-pretty-callouts-note-tint-face
+                                   :background nil)))
+      (unwind-protect
+          (progn
+            (set-face-attribute 'gfm-pretty-callouts-note-tint-face nil
+                                :background "#123456")
+            (let ((anchor (cl-find-if
+                           (lambda (ov)
+                             (and (overlay-get ov 'gfm-pretty-callouts-anchor)
+                                  (overlay-get ov 'wrap-prefix)))
+                           (overlays-in (point-min) (point-max)))))
+              (should anchor)
+              (let ((face (overlay-get anchor 'face)))
+                (should (eq (plist-get face :inherit)
+                            'gfm-pretty-callouts-note-tint-face))
+                (should-not (stringp (plist-get face :background))))))
+        (set-face-attribute 'gfm-pretty-callouts-note-tint-face nil
+                            :background prev-bg)))))
 
 (ert-deftest lang-markdown/gfm-pretty-callouts-collect-cache-eq-no-edit ()
   "Two `gfm-pretty--collect' calls on `callouts' with no edits return `eq' lists."
