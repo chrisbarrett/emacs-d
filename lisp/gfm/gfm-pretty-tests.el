@@ -4470,6 +4470,148 @@ hooks and are checked separately."
       (should hit)
       (should (eq 'tables (car hit))))))
 
+;;; gfm-pretty-blockquotes tests
+
+(require 'gfm-pretty-blockquotes)
+
+(defun lang-markdown-tests--blockquotes-display-overlays ()
+  "Return display overlays tagged by the blockquotes decorator."
+  (cl-remove-if-not
+   (lambda (ov) (overlay-get ov 'gfm-pretty-blockquotes-revealable))
+   (overlays-in (point-min) (point-max))))
+
+(defun lang-markdown-tests--blockquotes-anchor-overlays ()
+  "Return anchor overlays tagged by the blockquotes decorator."
+  (cl-remove-if-not
+   (lambda (ov) (overlay-get ov 'gfm-pretty-blockquotes-anchor))
+   (overlays-in (point-min) (point-max))))
+
+(ert-deftest lang-markdown/gfm-pretty-blockquotes-plain-renders-rail-prefix-and-wrap ()
+  "A plain `> body' line gets a `│ ' display overlay and a rail-face wrap-prefix."
+  (with-temp-buffer
+    (insert "> Pain: clutter\n")
+    (gfm-pretty-mode 1)
+    (let* ((displays (lang-markdown-tests--blockquotes-display-overlays))
+           (anchors  (lang-markdown-tests--blockquotes-anchor-overlays)))
+      (should (= 1 (length displays)))
+      (let ((ov (car displays)))
+        (should (equal "│ " (overlay-get ov 'display)))
+        (should (eq 'rail-prefix
+                    (overlay-get ov 'gfm-pretty-blockquotes-kind)))
+        (should (= 2 (- (overlay-end ov) (overlay-start ov)))))
+      (should (= 1 (length anchors)))
+      (let* ((ov (car anchors))
+             (wp (overlay-get ov 'wrap-prefix)))
+        (should (stringp wp))
+        (should (equal "│ " wp))
+        (should (let ((face (get-text-property 0 'face wp)))
+                  (or (eq face 'gfm-pretty-blockquotes-rail-face)
+                      (and (listp face)
+                           (memq 'gfm-pretty-blockquotes-rail-face
+                                 face))))))
+      (gfm-pretty-mode -1))))
+
+(ert-deftest lang-markdown/gfm-pretty-blockquotes-find-blocks-two-separated-by-blank ()
+  "Two `>'-prefixed runs separated by a blank line yield two distinct blocks."
+  (with-temp-buffer
+    (insert "> first\n\n> second\n")
+    (let ((blocks (gfm-pretty-blockquotes--find-blocks)))
+      (should (= 2 (length blocks))))))
+
+(ert-deftest lang-markdown/gfm-pretty-blockquotes-find-blocks-excludes-callout-run ()
+  "A `> [!NOTE]\\n> body' run is excluded from plain-blockquote discovery."
+  (with-temp-buffer
+    (insert "> [!NOTE]\n> body\n")
+    (should-not (gfm-pretty-blockquotes--find-blocks))))
+
+(ert-deftest lang-markdown/gfm-pretty-blockquotes-bare-gt-produces-one-char-rail ()
+  "A bare `>' continuation line gets a 1-char `│' display overlay."
+  (with-temp-buffer
+    (insert "> first\n>\n> second\n")
+    (gfm-pretty-mode 1)
+    (goto-char (point-min))
+    (should (re-search-forward (rx bol ">" eol) nil t))
+    (let* ((bare-pos (match-beginning 0))
+           (ov (cl-find-if
+                (lambda (o)
+                  (and (eq (overlay-get o 'gfm-pretty-blockquotes-kind)
+                           'rail-prefix)
+                       (= (overlay-start o) bare-pos)))
+                (overlays-at bare-pos))))
+      (should ov)
+      (should (equal "│" (overlay-get ov 'display)))
+      (should (= 1 (- (overlay-end ov) (overlay-start ov)))))
+    (gfm-pretty-mode -1)))
+
+(ert-deftest lang-markdown/gfm-pretty-blockquotes-wrap-prefix-overlay-wins-over-text-prop ()
+  "Overlay `wrap-prefix' beats markdown-mode's text-property `wrap-prefix \"> \"'."
+  (require 'markdown-mode)
+  (with-temp-buffer
+    (gfm-mode)
+    (insert "> "
+            (make-string 200 ?x)
+            "\n")
+    (font-lock-ensure)
+    (gfm-pretty-mode 1)
+    (goto-char (point-min))
+    (forward-char 2)
+    (let ((wp (get-char-property (point) 'wrap-prefix)))
+      (should (stringp wp))
+      (should (equal "│ " wp)))
+    (gfm-pretty-mode -1)))
+
+(ert-deftest lang-markdown/gfm-pretty-blockquotes-reveal-swaps-display ()
+  "Reveal suppresses the display when point sits on a blockquote line."
+  (with-temp-buffer
+    (insert "> Pain: clutter\n")
+    (gfm-pretty-mode 1)
+    (let* ((displays (lang-markdown-tests--blockquotes-display-overlays))
+           (ov (car displays)))
+      (should ov)
+      (should (equal "│ " (overlay-get ov 'display)))
+      (goto-char (overlay-start ov))
+      (gfm-pretty--reveal)
+      (should-not (overlay-get ov 'display))
+      (should (stringp (overlay-get ov 'gfm-pretty-saved-display)))
+      (goto-char (point-max))
+      (gfm-pretty--reveal)
+      (should (equal "│ " (overlay-get ov 'display))))
+    (gfm-pretty-mode -1)))
+
+(ert-deftest lang-markdown/gfm-pretty-blockquotes-narrowing-rebuild-converges ()
+  "Narrowed rebuild + widen + rebuild converges with a clean widened rebuild."
+  :tags '(narrowing-regression)
+  (with-temp-buffer
+    (insert "> first block line one\n"
+            "> first block line two\n"
+            "\n"
+            "> second block line one\n"
+            "> second block line two\n"
+            "\n"
+            "> third block line one\n"
+            "> third block line two\n")
+    (gfm-pretty-mode 1)
+    (let* ((decorator (gfm-pretty--get 'blockquotes))
+           (count-of-overlays
+            (lambda ()
+              (length
+               (cl-remove-if-not
+                #'overlay-buffer
+                (gfm-pretty--state-get 'blockquotes 'overlays))))))
+      (goto-char (point-min))
+      (search-forward "second block line one")
+      (let ((mid-beg (line-beginning-position))
+            (mid-end (save-excursion (forward-line 2) (point))))
+        (save-restriction
+          (narrow-to-region mid-beg mid-end)
+          (gfm-pretty--rebuild decorator))
+        (widen)
+        (gfm-pretty--rebuild decorator))
+      (let ((narrow-then-widen (funcall count-of-overlays)))
+        (gfm-pretty--rebuild decorator)
+        (should (= narrow-then-widen (funcall count-of-overlays)))))
+    (gfm-pretty-mode -1)))
+
 (provide 'gfm-pretty-tests)
 
 ;;; gfm-pretty-tests.el ends here

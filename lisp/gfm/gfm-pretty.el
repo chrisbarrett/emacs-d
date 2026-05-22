@@ -28,6 +28,7 @@
   (require 'gfm-pretty-borders)
   (require 'gfm-pretty-engine)
   (require 'gfm-pretty-callouts)
+  (require 'gfm-pretty-blockquotes)
   (require 'gfm-pretty-fences)
   (require 'gfm-pretty-tables)
   (require 'gfm-pretty-hrule)
