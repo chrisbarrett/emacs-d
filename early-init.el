@@ -108,14 +108,27 @@
 
   ;; Themes aren't initialised until after early-init, so we can't access the
   ;; background colour yet.
+  ;;
+  ;; Source bg from the cached theme bg (`+theme-default-background', set up by
+  ;; `modules/tty/init.el'). On tty frames `(face-attribute 'default :background)'
+  ;; returns the `"unspecified-bg"' sentinel — stamping that onto fringe /
+  ;; window-divider :foreground leaks colour lookups through to the always-alive
+  ;; macOS daemon frame's `ns_defined_color', which doesn't filter the sentinel
+  ;; and floods *Messages* with `Unable to load color "unspecified-bg"' on every
+  ;; redisplay that forces face_change=true (e.g. pulse animation). See
+  ;; `openspec/specs/tty/spec.md'.
   (unless in-early-init
-    (let ((bg (face-attribute 'default :background)))
-      (dolist (face '(fringe
-                      window-divider
-                      window-divider-first-pixel
-                      window-divider-last-pixel))
-        (face-spec-reset-face face)
-        (set-face-foreground face bg)))))
+    (let ((bg (or (and (boundp '+theme-default-background)
+                       +theme-default-background)
+                  (face-attribute 'default :background))))
+      (when (and (stringp bg)
+                 (not (string-prefix-p "unspecified" bg)))
+        (dolist (face '(fringe
+                        window-divider
+                        window-divider-first-pixel
+                        window-divider-last-pixel))
+          (face-spec-reset-face face)
+          (set-face-foreground face bg))))))
 
 (+sync-frame-parameters t)
 (add-hook '+theme-changed-hook #'+sync-frame-parameters)
