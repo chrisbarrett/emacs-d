@@ -491,11 +491,14 @@ belongs to.  The overlay carries the link's resolved metadata so RET,
 eldoc, and the xref backend can read it without re-parsing."
   (let* ((class (gfm-pretty-links--link-class record))
          (display
-          (if (eq side 'title)
-              (propertize (gfm-pretty-links--link-label record)
-                          'face (gfm-pretty-links--title-face-for-class class))
+          (cond
+           ((eq side 'title)
+            (propertize (gfm-pretty-links--link-label record)
+                        'face (gfm-pretty-links--title-face-for-class class)))
+           ((eq class 'anchor) "")
+           (t
             (or (gfm-pretty-links--icon-for-target (gfm-pretty-links--link-url record))
-                ""))))
+                "")))))
     (apply #'gfm-pretty--make-display
            gfm-pretty-links--registry beg end window
            'gfm-pretty-links-class class
@@ -525,12 +528,14 @@ eldoc, and the xref backend can read it without re-parsing."
 
 (defun gfm-pretty-links--decorate-link (record window)
   "Create RECORD's per-side overlays in WINDOW.
-Degenerate records (empty title span) are skipped.  Anchor and file
-links produce only a title-side overlay; the URL span is left to
-markdown-mode's own rendering."
+Degenerate records (empty title span) are skipped.  Web links get a
+url-side icon overlay; anchor links get a url-side overlay whose
+`display' is empty, hiding the `(#slug)' span while preserving its
+metadata for RET dispatch.  File links produce only a title-side
+overlay; the URL span renders raw."
   (when (< (gfm-pretty-links--link-tbeg record) (gfm-pretty-links--link-tend record))
     (gfm-pretty-links--make-title-overlay record window)
-    (when (and (eq (gfm-pretty-links--link-class record) 'web)
+    (when (and (memq (gfm-pretty-links--link-class record) '(web anchor))
                (< (gfm-pretty-links--link-ubeg record) (gfm-pretty-links--link-uend record)))
       (gfm-pretty-links--make-url-overlay record window))))
 
