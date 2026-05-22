@@ -330,31 +330,26 @@ faces."
     (should (eq (face-attribute face :weight nil) 'unspecified))
     (should (eq (face-attribute face :underline nil) 'unspecified))))
 
-(ert-deftest lang-markdown/gfm-pretty-callouts-blockquote-face-neutralised ()
-  "After applying the lang-markdown override, `markdown-blockquote-face'
-contributes no visible attributes — no italic, no foreground/background,
-no inherit chain — so emphasis faces and the default face show through."
+(ert-deftest lang-markdown/gfm-pretty-callouts-blockquote-face-bg-stripped ()
+  "`gfm-pretty-callouts--strip-blockquote-face-bg' clears `:background'
+and `:extend' so theme-imposed blockquote stripes don't paint through
+the rail decoration or past EOL.  Italic / foreground are left alone."
   (require 'markdown-mode)
-  (let ((attrs '(:family :foundry :width :height :weight :slant
-                 :underline :overline :strike-through :box
-                 :inverse-video :foreground :background
-                 :stipple :extend :inherit))
-        (prev (mapcar (lambda (a)
-                        (cons a (face-attribute 'markdown-blockquote-face a nil)))
-                      '(:family :foundry :width :height :weight :slant
-                        :underline :overline :strike-through :box
-                        :inverse-video :foreground :background
-                        :stipple :extend :inherit))))
+  (let ((prev-bg (face-attribute 'markdown-blockquote-face :background nil))
+        (prev-extend (face-attribute 'markdown-blockquote-face :extend nil)))
     (unwind-protect
         (progn
-          (dolist (a attrs)
-            (set-face-attribute 'markdown-blockquote-face nil a 'unspecified))
-          (dolist (a attrs)
-            (should (eq (face-attribute 'markdown-blockquote-face a nil)
-                        'unspecified))))
-      (dolist (cell prev)
-        (set-face-attribute 'markdown-blockquote-face nil
-                            (car cell) (cdr cell))))))
+          (set-face-attribute 'markdown-blockquote-face nil
+                              :background "#abcdef"
+                              :extend t)
+          (gfm-pretty-callouts--strip-blockquote-face-bg)
+          (should (eq (face-attribute 'markdown-blockquote-face :background nil)
+                      'unspecified))
+          (should (eq (face-attribute 'markdown-blockquote-face :extend nil)
+                      'unspecified)))
+      (set-face-attribute 'markdown-blockquote-face nil
+                          :background prev-bg
+                          :extend prev-extend))))
 
 (ert-deftest lang-markdown/gfm-pretty-callouts-marker-only-callout-renders-bottom ()
   "A callout with no body lines still gets a bottom border."
@@ -4486,29 +4481,72 @@ hooks and are checked separately."
    (lambda (ov) (overlay-get ov 'gfm-pretty-blockquotes-anchor))
    (overlays-in (point-min) (point-max))))
 
-(ert-deftest lang-markdown/gfm-pretty-blockquotes-plain-renders-rail-prefix-and-wrap ()
-  "A plain `> body' line gets a `▌ ' display overlay and a rail-face wrap-prefix."
+(defun lang-markdown-tests--blockquotes-wrap-prefix (n)
+  "Build the expected inset+rail+space wrap-prefix for inset width N."
+  (gfm-pretty-blockquotes--wrap-prefix-string n))
+
+(ert-deftest lang-markdown/gfm-pretty-blockquotes-inset-cols-default-tracks-tab-width ()
+  "Default defcustom value resolves to current `tab-width'."
   (with-temp-buffer
-    (insert "> Pain: clutter\n")
-    (gfm-pretty-mode 1)
-    (let* ((displays (lang-markdown-tests--blockquotes-display-overlays))
-           (anchors  (lang-markdown-tests--blockquotes-anchor-overlays)))
-      (should (= 1 (length displays)))
-      (let ((ov (car displays)))
-        (should (equal "▌ " (overlay-get ov 'display)))
-        (should (eq 'rail-prefix
-                    (overlay-get ov 'gfm-pretty-blockquotes-kind)))
-        (should (= 2 (- (overlay-end ov) (overlay-start ov)))))
-      (should (= 1 (length anchors)))
-      (let* ((ov (car anchors))
-             (wp (overlay-get ov 'wrap-prefix)))
+    (setq-local tab-width 5)
+    (let ((gfm-pretty-blockquotes-inset-cols 'tab-width))
+      (should (= 5 (gfm-pretty-blockquotes--inset-cols))))
+    (let ((gfm-pretty-blockquotes-inset-cols 2))
+      (should (= 2 (gfm-pretty-blockquotes--inset-cols))))))
+
+(ert-deftest lang-markdown/gfm-pretty-blockquotes-anchor-before-string-is-gutter ()
+  "Anchor `before-string' is INSET-COLS default-face spaces."
+  (with-temp-buffer
+    (let ((gfm-pretty-blockquotes-inset-cols 4))
+      (insert "> hello\n")
+      (gfm-pretty-mode 1)
+      (let* ((anchors (lang-markdown-tests--blockquotes-anchor-overlays))
+             (bs (overlay-get (car anchors) 'before-string)))
+        (should (stringp bs))
+        (should (= 4 (length bs)))
+        (should (equal "    " (substring-no-properties bs)))
+        (should (eq 'default (get-text-property 0 'face bs))))
+      (gfm-pretty-mode -1))))
+
+(ert-deftest lang-markdown/gfm-pretty-blockquotes-wrap-prefix-3-segments ()
+  "Anchor `wrap-prefix' is the inset + `▌' + space string in rail-face."
+  (with-temp-buffer
+    (let ((gfm-pretty-blockquotes-inset-cols 4))
+      (insert "> hello\n")
+      (gfm-pretty-mode 1)
+      (let* ((anchors (lang-markdown-tests--blockquotes-anchor-overlays))
+             (wp (overlay-get (car anchors) 'wrap-prefix)))
         (should (stringp wp))
-        (should (equal "▌ " wp))
-        (should (let ((face (get-text-property 0 'face wp)))
-                  (or (eq face 'gfm-pretty-blockquotes-rail-face)
-                      (and (listp face)
-                           (memq 'gfm-pretty-blockquotes-rail-face
-                                 face))))))
+        (should (= 6 (length wp)))
+        (should (equal (substring wp 0 4) "    "))
+        (should (equal (substring wp 4 5) "▌"))
+        (should (equal (substring wp 5 6) " "))
+        (should (eq 'default (get-text-property 0 'face wp)))
+        (should (eq 'gfm-pretty-blockquotes-rail-face
+                    (get-text-property 4 'face wp))))
+      (gfm-pretty-mode -1))))
+
+(ert-deftest lang-markdown/gfm-pretty-blockquotes-plain-renders-rail-prefix-and-wrap ()
+  "A plain `> body' line gets a `▌<space>' display and an inset wrap-prefix."
+  (with-temp-buffer
+    (let ((gfm-pretty-blockquotes-inset-cols 4))
+      (insert "> Pain: clutter\n")
+      (gfm-pretty-mode 1)
+      (let* ((displays (lang-markdown-tests--blockquotes-display-overlays))
+             (anchors  (lang-markdown-tests--blockquotes-anchor-overlays))
+             (expected-wrap (lang-markdown-tests--blockquotes-wrap-prefix 4))
+             (expected-display (gfm-pretty-blockquotes--rail-string)))
+        (should (= 1 (length displays)))
+        (let ((ov (car displays)))
+          (should (equal expected-display (overlay-get ov 'display)))
+          (should (eq 'rail-prefix
+                      (overlay-get ov 'gfm-pretty-blockquotes-kind)))
+          (should (= 2 (- (overlay-end ov) (overlay-start ov)))))
+        (should (= 1 (length anchors)))
+        (let* ((ov (car anchors))
+               (wp (overlay-get ov 'wrap-prefix)))
+          (should (stringp wp))
+          (should (equal expected-wrap wp))))
       (gfm-pretty-mode -1))))
 
 (ert-deftest lang-markdown/gfm-pretty-blockquotes-find-blocks-two-separated-by-blank ()
@@ -4527,56 +4565,119 @@ hooks and are checked separately."
 (ert-deftest lang-markdown/gfm-pretty-blockquotes-bare-gt-produces-one-char-rail ()
   "A bare `>' continuation line gets a 1-char `▌' display overlay."
   (with-temp-buffer
-    (insert "> first\n>\n> second\n")
-    (gfm-pretty-mode 1)
-    (goto-char (point-min))
-    (should (re-search-forward (rx bol ">" eol) nil t))
-    (let* ((bare-pos (match-beginning 0))
-           (ov (cl-find-if
-                (lambda (o)
-                  (and (eq (overlay-get o 'gfm-pretty-blockquotes-kind)
-                           'rail-prefix)
-                       (= (overlay-start o) bare-pos)))
-                (overlays-at bare-pos))))
-      (should ov)
-      (should (equal "▌" (overlay-get ov 'display)))
-      (should (= 1 (- (overlay-end ov) (overlay-start ov)))))
-    (gfm-pretty-mode -1)))
+    (let ((gfm-pretty-blockquotes-inset-cols 4))
+      (insert "> first\n>\n> second\n")
+      (gfm-pretty-mode 1)
+      (goto-char (point-min))
+      (should (re-search-forward (rx bol ">" eol) nil t))
+      (let* ((bare-pos (match-beginning 0))
+             (ov (cl-find-if
+                  (lambda (o)
+                    (and (eq (overlay-get o 'gfm-pretty-blockquotes-kind)
+                             'rail-prefix)
+                         (= (overlay-start o) bare-pos)))
+                  (overlays-at bare-pos)))
+             (expected (gfm-pretty-blockquotes--rail-string t)))
+        (should ov)
+        (should (equal expected (overlay-get ov 'display)))
+        (should (= 1 (- (overlay-end ov) (overlay-start ov)))))
+      (gfm-pretty-mode -1))))
 
 (ert-deftest lang-markdown/gfm-pretty-blockquotes-wrap-prefix-overlay-wins-over-text-prop ()
   "Overlay `wrap-prefix' beats markdown-mode's text-property `wrap-prefix \"> \"'."
   (require 'markdown-mode)
   (with-temp-buffer
-    (gfm-mode)
-    (insert "> "
-            (make-string 200 ?x)
-            "\n")
-    (font-lock-ensure)
-    (gfm-pretty-mode 1)
-    (goto-char (point-min))
-    (forward-char 2)
-    (let ((wp (get-char-property (point) 'wrap-prefix)))
-      (should (stringp wp))
-      (should (equal "▌ " wp)))
-    (gfm-pretty-mode -1)))
+    (let ((gfm-pretty-blockquotes-inset-cols 4))
+      (gfm-mode)
+      (insert "> "
+              (make-string 200 ?x)
+              "\n")
+      (font-lock-ensure)
+      (gfm-pretty-mode 1)
+      (goto-char (point-min))
+      (forward-char 2)
+      (let ((wp (get-char-property (point) 'wrap-prefix))
+            (expected (lang-markdown-tests--blockquotes-wrap-prefix 4)))
+        (should (stringp wp))
+        (should (equal expected wp)))
+      (gfm-pretty-mode -1))))
+
+(ert-deftest lang-markdown/gfm-pretty-blockquotes-prefix-display-carries-masked-bare ()
+  "Each prefix-display overlay carries paired masked / bare variants."
+  (with-temp-buffer
+    (let ((gfm-pretty-blockquotes-inset-cols 4))
+      (insert "> Pain: clutter\n")
+      (gfm-pretty-mode 1)
+      (let* ((ov (car (lang-markdown-tests--blockquotes-display-overlays)))
+             (masked (overlay-get ov 'gfm-pretty-display-masked))
+             (bare (overlay-get ov 'gfm-pretty-display-bare)))
+        (should (stringp masked))
+        (should (stringp bare))
+        (should (equal masked (gfm-pretty-blockquotes--rail-string))))
+      (gfm-pretty-mode -1))))
+
+(ert-deftest lang-markdown/gfm-pretty-blockquotes-region-flips-prefix-to-bare ()
+  "Active region over the line flips the prefix display to the bare variant."
+  (with-temp-buffer
+    (let ((gfm-pretty-blockquotes-inset-cols 4))
+      (insert "> Pain: clutter\n")
+      (gfm-pretty-mode 1)
+      (transient-mark-mode 1)
+      (push-mark (point-min) t t)
+      (goto-char (point-max))
+      (setq deactivate-mark nil)
+      (activate-mark)
+      (setq gfm-pretty--last-selection-bounds nil)
+      (gfm-pretty--update-selection)
+      (let ((prefix-ov (car (lang-markdown-tests--blockquotes-display-overlays))))
+        (should (equal (overlay-get prefix-ov 'display)
+                       (overlay-get prefix-ov 'gfm-pretty-display-bare))))
+      (deactivate-mark)
+      (gfm-pretty-mode -1))))
 
 (ert-deftest lang-markdown/gfm-pretty-blockquotes-reveal-swaps-display ()
-  "Reveal suppresses the display when point sits on a blockquote line."
+  "Reveal hides the masked display when point sits on a blockquote line.
+The variant walker keeps `gfm-pretty-saved-display' in sync with the
+masked / bare variant pair so subsequent reveal-restore picks the
+right value."
   (with-temp-buffer
-    (insert "> Pain: clutter\n")
-    (gfm-pretty-mode 1)
-    (let* ((displays (lang-markdown-tests--blockquotes-display-overlays))
-           (ov (car displays)))
-      (should ov)
-      (should (equal "▌ " (overlay-get ov 'display)))
-      (goto-char (overlay-start ov))
-      (gfm-pretty--reveal)
-      (should-not (overlay-get ov 'display))
-      (should (stringp (overlay-get ov 'gfm-pretty-saved-display)))
-      (goto-char (point-max))
-      (gfm-pretty--reveal)
-      (should (equal "▌ " (overlay-get ov 'display))))
-    (gfm-pretty-mode -1)))
+    (let ((gfm-pretty-blockquotes-inset-cols 4))
+      (insert "> Pain: clutter\n")
+      (gfm-pretty-mode 1)
+      (let* ((displays (lang-markdown-tests--blockquotes-display-overlays))
+             (ov (car displays))
+             (expected (gfm-pretty-blockquotes--rail-string)))
+        (should ov)
+        (should (equal expected (overlay-get ov 'display)))
+        (goto-char (overlay-start ov))
+        (gfm-pretty--reveal)
+        (should-not (overlay-get ov 'display))
+        (should (stringp (overlay-get ov 'gfm-pretty-saved-display)))
+        (goto-char (point-max))
+        (gfm-pretty--reveal)
+        (should (equal expected (overlay-get ov 'display))))
+      (gfm-pretty-mode -1))))
+
+(ert-deftest lang-markdown/gfm-pretty-blockquotes-reveal-preserves-inset ()
+  "Reveal nils the prefix display but the anchor's gutter before-string stays.
+Without the persistent before-string, exposing the raw `> ' source
+would unshift body text by INSET-COLS cols and create the jitter the
+user reported."
+  (with-temp-buffer
+    (let ((gfm-pretty-blockquotes-inset-cols 4))
+      (insert "> Pain: clutter\n")
+      (gfm-pretty-mode 1)
+      (let* ((displays (lang-markdown-tests--blockquotes-display-overlays))
+             (anchors (lang-markdown-tests--blockquotes-anchor-overlays))
+             (display-ov (car displays))
+             (anchor-ov (car anchors)))
+        (goto-char (overlay-start display-ov))
+        (gfm-pretty--reveal)
+        (should-not (overlay-get display-ov 'display))
+        (let ((bs (overlay-get anchor-ov 'before-string)))
+          (should (stringp bs))
+          (should (= 4 (length bs)))))
+      (gfm-pretty-mode -1))))
 
 (ert-deftest lang-markdown/gfm-pretty-blockquotes-narrowing-rebuild-converges ()
   "Narrowed rebuild + widen + rebuild converges with a clean widened rebuild."

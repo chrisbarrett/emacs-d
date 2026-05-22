@@ -30,6 +30,24 @@
   "Face for the left rail painted over plain blockquote blocks."
   :group 'gfm-pretty-blockquotes)
 
+(defcustom gfm-pretty-blockquotes-inset-cols 'tab-width
+  "Width of the gutter to the left of the blockquote rail.
+The symbol `tab-width' (the default) is resolved to the buffer's
+`tab-width' at render time; an integer pins the gutter width
+independent of `tab-width'."
+  :type '(choice integer (const :tag "Buffer's tab-width" tab-width))
+  :group 'gfm-pretty-blockquotes)
+
+(defun gfm-pretty-blockquotes--inset-cols ()
+  "Resolved inset width: integer literal or current `tab-width'."
+  (let ((v gfm-pretty-blockquotes-inset-cols))
+    (cond ((integerp v) (max 0 v))
+          ((eq v 'tab-width) (max 0 tab-width))
+          ((and (symbolp v) (boundp v))
+           (let ((sv (symbol-value v)))
+             (if (integerp sv) (max 0 sv) tab-width)))
+          (t tab-width))))
+
 ;;; Overlay registry
 
 (defconst gfm-pretty-blockquotes--registry
@@ -116,72 +134,96 @@ The engine memoises this via `gfm-pretty--collect'."
              :payload b))
           (gfm-pretty-blockquotes--find-blocks)))
 
+;;; Rendering helpers
+
+(defun gfm-pretty-blockquotes--gutter-string (inset-cols)
+  "Build the leading-gutter string used as an anchor before-string."
+  (propertize (make-string inset-cols ?\s) 'face 'default))
+
+(defun gfm-pretty-blockquotes--rail-string (&optional one-char-p)
+  "Build the rail display string `▌<space>' (`▌' alone when ONE-CHAR-P).
+Painted with `gfm-pretty-blockquotes-rail-face'.  No inset — the
+inset is emitted separately as the anchor's `before-string' so
+reveal exposes the raw `> ' source without losing the gutter."
+  (let ((rail (propertize "▌" 'face 'gfm-pretty-blockquotes-rail-face)))
+    (if one-char-p
+        rail
+      (concat rail " "))))
+
+(defun gfm-pretty-blockquotes--wrap-prefix-string (inset-cols)
+  "Build the soft-wrap continuation prefix `<inset>▌<space>'.
+Continuation visual rows have no buffer chars at column 0 to host a
+before-string, so the inset is baked into the wrap-prefix itself."
+  (concat (gfm-pretty-blockquotes--gutter-string inset-cols)
+          (gfm-pretty-blockquotes--rail-string)))
+
 ;;; Rendering
 
 (defun gfm-pretty-blockquotes--apply-block-anchors (block)
   "Apply width-independent anchor overlays for BLOCK.
-Per source line, sets `wrap-prefix' to a propertised `▌ ' in
-`gfm-pretty-blockquotes-rail-face' so soft-wrapped visual rows
-continue the rail.  Widens so blocks outside the current restriction
-can still be parsed."
+Per source line: hangs the inset gutter as a `before-string' and
+sets `wrap-prefix' to the inset + rail string so soft-wrapped
+visual rows continue the rail.  Widens so blocks outside the
+current restriction can still be parsed."
   (save-restriction
     (widen)
     (cl-destructuring-bind (beg end)
         (gfm-pretty-blockquotes--block-payload block)
-      (let ((wrap (propertize "▌ " 'face
-                              'gfm-pretty-blockquotes-rail-face))
-            (p beg))
+      (let* ((inset-cols (gfm-pretty-blockquotes--inset-cols))
+             (gutter (gfm-pretty-blockquotes--gutter-string inset-cols))
+             (wrap (gfm-pretty-blockquotes--wrap-prefix-string inset-cols))
+             (p beg))
         (while (< p (1+ end))
           (let ((lend (save-excursion
                         (goto-char p) (line-end-position))))
             (gfm-pretty-blockquotes--make-anchor
-             p lend 'wrap-prefix wrap)
+             p lend
+             'before-string gutter
+             'wrap-prefix wrap)
             (setq p (min (1+ end) (1+ lend)))))))))
 
 (defun gfm-pretty-blockquotes--apply-block-display (block window)
   "Apply per-WINDOW display overlays for BLOCK.
-Per source line, replaces the leading `> ' (2 chars) with `▌ ' or
-the bare `>' (1 char) with `▌', both painted in
-`gfm-pretty-blockquotes-rail-face'.  Carries the engine's revealable
-property so point/region overlap exposes the raw source per window."
+Per source line: replaces the leading `> ' (2 chars) or bare `>'
+\(1 char) with the rail prefix.  Carries paired masked / bare
+properties so the engine's reveal walker exposes the raw source
+per window on point/selection overlap."
   (save-restriction
     (widen)
     (cl-destructuring-bind (beg end)
         (gfm-pretty-blockquotes--block-payload block)
-      (let ((rail-two (propertize "▌ " 'face
-                                  'gfm-pretty-blockquotes-rail-face))
-            (rail-one (propertize "▌" 'face
-                                  'gfm-pretty-blockquotes-rail-face))
-            (p beg))
+      (let* ((prefix-two (gfm-pretty-blockquotes--rail-string))
+             (prefix-one (gfm-pretty-blockquotes--rail-string t))
+             (p beg))
         (while (< p (1+ end))
           (let* ((lbeg p)
                  (lend (save-excursion
                          (goto-char p) (line-end-position)))
-                 (selected (gfm-pretty--range-selected-p lbeg lend)))
+                 (line-selected (gfm-pretty--range-selected-p lbeg lend)))
             (cond
              ((and (>= (- lend lbeg) 2)
                    (eq (char-after lbeg) ?>)
                    (eq (char-after (1+ lbeg)) ?\s))
-              (let ((bare (gfm-pretty--str-with-region-bg rail-two)))
+              (let ((bare (gfm-pretty--str-with-region-bg prefix-two)))
                 (gfm-pretty-blockquotes--make-display
                  lbeg (+ lbeg 2) window
                  'gfm-pretty-blockquotes-kind 'rail-prefix
                  'gfm-pretty-blockquotes-revealable t
                  'evaporate t
-                 'gfm-pretty-display-masked rail-two
+                 'gfm-pretty-display-masked prefix-two
                  'gfm-pretty-display-bare bare
-                 'display (if selected bare rail-two))))
+                 'display (if line-selected bare prefix-two))))
              ((and (= (- lend lbeg) 1)
                    (eq (char-after lbeg) ?>))
-              (let ((bare (gfm-pretty--str-with-region-bg rail-one)))
+              (let ((bare (gfm-pretty--str-with-region-bg prefix-one)))
                 (gfm-pretty-blockquotes--make-display
                  lbeg (1+ lbeg) window
                  'gfm-pretty-blockquotes-kind 'rail-prefix
                  'gfm-pretty-blockquotes-revealable t
                  'evaporate t
-                 'gfm-pretty-display-masked rail-one
+                 'gfm-pretty-display-masked prefix-one
                  'gfm-pretty-display-bare bare
-                 'display (if selected bare rail-one)))))
+                 'display (if line-selected bare prefix-one)))))
             (setq p (min (1+ end) (1+ lend)))))))))
 
 (defun gfm-pretty-blockquotes--apply-block (block window)

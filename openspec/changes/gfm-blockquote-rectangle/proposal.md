@@ -1,35 +1,34 @@
 ## Why
 
-Plain GFM blockquotes currently render as a bare left-rail glyph
-(`▌ `) with no background and no inset, so they read as "lines that
-happen to start with a bar" rather than as a distinct paragraph-set-
-aside region.  Callouts already prove that a tinted rectangle reads
-unambiguously as a set-aside block; lifting that visual treatment
-(minus the type-coloured borders) to plain blockquotes gives the two
-block kinds a consistent grammar — set-aside content always lives in
-a tinted rectangle with a left rail — while keeping callouts'
-chromatic typing as the distinguishing axis.
+Plain GFM blockquotes currently render the left rail (`▌ `) flush
+with the buffer's left margin.  An inset gutter makes the rail read
+more clearly as a structural marker for set-aside content rather
+than "lines that happen to start with a bar", and it visually
+distances the blockquote from the surrounding flowing prose.
+
+(An earlier iteration of this change added a tinted background
+across the full rectangle.  It was removed after the user found
+that Emacs' `:extend t` paints past EOL only on the visual row
+containing EOL — word-wrapped blockquotes ended up with a stepped
+right edge on continuation rows.  See design.md "Iteration history"
+for the full story.  The remaining change is the inset gutter +
+rail, theme-static.)
 
 ## What Changes
 
-- Plain blockquotes render as a tinted rectangle with a left rail at
-  a configurable column inset (default `tab-width`).
-- The rectangle has no top, right, or bottom border — only the
-  existing left rail (`▌ `).  The right edge is a column-defined
-  stop where the tinted background terminates and a `(space :align-to
-  right)` in the default face suppresses `:extend` leak past it.
-- A new defcustom `gfm-pretty-blockquotes-inset-cols` (default
-  `tab-width`) controls the gutter width between the buffer's left
-  margin and the rail glyph.
-- A new face `gfm-pretty-blockquotes-bg-face` (independent copy of
-  `gfm-pretty-tables-row-alt-face` with `:extend t`) provides the
-  rectangle's tinted background.
-- The decorator now follows the callouts anchor / per-window display
-  split: anchors carry the bg face and the inset-aware
-  `wrap-prefix`; per-window display overlays carry the prefix swap
-  and a right-edge after-string.
-- Reveal mirrors callouts' masked↔bare swap so point/region on a
-  blockquote line exposes the raw `> ` source.
+- Plain blockquote lines render their rail (`▌ `) at a configurable
+  column inset (default `tab-width`) instead of at column 0.
+- A new defcustom `gfm-pretty-blockquotes-inset-cols` (default the
+  symbol `tab-width`) controls the gutter width.  Integer values
+  pin a fixed width independent of `tab-width`.
+- The decorator now follows the callouts anchor / per-window
+  display split: anchors carry the `before-string` inset gutter and
+  the inset + rail `wrap-prefix`; per-window display overlays carry
+  the `> ` → `▌<space>` (or `>` → `▌`) swap with masked / bare
+  variants for the engine's reveal walker.
+- The anchor's `before-string` MUST persist through reveal so
+  point-on-line exposes the raw `> ` source at the SAME column the
+  masked rail occupies (no horizontal jitter of body text).
 
 ## Capabilities
 
@@ -39,23 +38,23 @@ None.
 
 ### Modified Capabilities
 
-- `gfm-pretty`: the blockquotes decorator's rendering contract
-  changes from "left-rail glyph only" to "tinted rectangle with left
-  rail, inset gutter, and reveal-aware masking", and gains a new
-  customisation knob plus a new face.
+- `gfm-pretty`: the blockquotes decorator gains an inset-cols
+  defcustom and emits an anchor `before-string` for the gutter; the
+  rendering contract changes from "rail at col 0" to "rail at col
+  `inset-cols`, gutter to the left in default face".
 
 ## Impact
 
-- `lisp/gfm/gfm-pretty-blockquotes.el`: rewrite of `--apply-block-
-  anchors` and `--apply-block-display` to add the bg face, inset
-  gutter, and right-edge after-string.  New defcustom and defface.
-- `lisp/gfm/gfm-pretty-tests.el`: existing blockquote display-string
-  assertions updated for the new inset + rectangle shape; new tests
-  for bg face, inset defcustom, and rhs after-string.
+- `lisp/gfm/gfm-pretty-blockquotes.el`: rewrite of
+  `--apply-block-anchors` and `--apply-block-display`; new
+  defcustom and helper.
+- `lisp/gfm/gfm-pretty-tests.el`: existing blockquote display
+  assertions updated for the inset; new tests for the defcustom,
+  the before-string gutter, the wrap-prefix shape, and the
+  reveal-preserves-inset invariant.
 - `openspec/specs/gfm-pretty/spec.md`: delta updates the existing
-  "Blockquote left-rail rendering", "Blockquote rail face", and
-  "Blockquote source reveal" requirements and adds requirements for
-  the inset defcustom, bg face, and rectangle right-edge.
+  "Blockquote left-rail rendering" and "Blockquote source reveal"
+  requirements and adds the inset-cols defcustom requirement.
 - No engine changes — existing seams in `gfm-pretty-borders` and
-  `gfm-pretty-engine` already support the anchor / per-window display
-  split and the masked/bare reveal pattern.
+  `gfm-pretty-engine` already support the anchor / per-window
+  display split and the masked/bare reveal pattern.
