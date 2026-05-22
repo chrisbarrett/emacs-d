@@ -167,91 +167,105 @@ The engine memoises this via `gfm-pretty--collect'."
 
 ;;; Rendering
 
-(defun gfm-pretty-callouts--upright (str face &optional bg weight)
-  "Propertize STR with FACE forced upright; optionally set background BG.
+(defun gfm-pretty-callouts--upright (str face &optional tint-face weight)
+  "Propertize STR with FACE forced upright; optionally tinted via TINT-FACE.
 The display string sits over buffer text whose face may carry
 `:slant italic'; unspecified attributes leak from the underlying face,
-so anchor `:slant normal'.  BG paints the box's tinted background onto
-each decoration char.  WEIGHT, when non-nil, pins `:weight' (use
-`light' for hairline box chars; leave nil for the title so its weight
-inherits from FACE)."
-  (let* ((spec `(:inherit ,face :slant normal))
-         (spec (if bg (append spec (list :background bg)) spec))
+so anchor `:slant normal'.  TINT-FACE, when non-nil, is a face symbol
+whose `:background' (set dynamically by
+`gfm-pretty-callouts--refresh-faces') paints the box's tinted
+background onto each decoration char — referenced via `:inherit' so
+theme switches propagate to existing overlays without a decorator
+rebuild.  WEIGHT, when non-nil, pins `:weight' (use `light' for
+hairline box chars; leave nil for the title so its weight inherits
+from FACE).
+
+`:inherit' order is `(TINT-FACE FACE)' so TINT-FACE's `:background'
+wins and FACE's `:foreground' wins."
+  (let* ((spec (if tint-face
+                   `(:inherit (,tint-face ,face) :slant normal)
+                 `(:inherit ,face :slant normal)))
          (spec (if weight (append spec (list :weight weight)) spec)))
     (propertize str 'face spec)))
 
-(defun gfm-pretty-callouts--callout-top-strings (width title face buffer-width &optional bg)
+(defun gfm-pretty-callouts--callout-top-strings (width title face buffer-width &optional tint-face)
   "Build (LEADING . TRAILING) split for the top border.
 
 Layout: `┌─ TITLE ─...─┐'.  WIDTH is total box width, TITLE the type
 label, FACE the border colour, BUFFER-WIDTH the marker line's char
-count, BG the optional tinted background.  LEADING covers exactly
-BUFFER-WIDTH columns so it can be set as the marker overlay's
-`display' (matching the buffer footprint); TRAILING is hung off the
-line-end as an after-string."
+count, TINT-FACE the optional per-type tint face inherited for the
+panel background.  LEADING covers exactly BUFFER-WIDTH columns so it
+can be set as the marker overlay's `display' (matching the buffer
+footprint); TRAILING is hung off the line-end as an after-string."
   (let* ((title-w (string-width title))
          ;; Layout: `┌─ TITLE ─...─┐'.  Decorations occupy 5 cols
          ;; (`┌', `─', ` ', ` ' after title, `┐'); the rest of the
          ;; line is the title and trailing dash fill.
          (dash-fill (max 1 (- width 5 title-w)))
          (full (concat
-                (gfm-pretty-callouts--upright "┌─ " face bg 'light)
-                (gfm-pretty-callouts--upright title face bg)
-                (gfm-pretty-callouts--upright " " face bg)
-                (gfm-pretty-callouts--upright (make-string dash-fill ?─) face bg 'light)
-                (gfm-pretty-callouts--upright "┐" face bg 'light)))
+                (gfm-pretty-callouts--upright "┌─ " face tint-face 'light)
+                (gfm-pretty-callouts--upright title face tint-face)
+                (gfm-pretty-callouts--upright " " face tint-face)
+                (gfm-pretty-callouts--upright (make-string dash-fill ?─) face tint-face 'light)
+                (gfm-pretty-callouts--upright "┐" face tint-face 'light)))
          (full-len (length full))
          (split-at (min buffer-width full-len)))
     (cons (substring full 0 split-at)
           (substring full split-at))))
 
-(defun gfm-pretty-callouts--callout-bottom-string (width face &optional bg)
-  "Build the bottom border string of WIDTH cols, tinted with BG."
-  (concat (gfm-pretty-callouts--upright "└" face bg 'light)
-          (gfm-pretty-callouts--upright (make-string (max 1 (- width 2)) ?─) face bg 'light)
-          (gfm-pretty-callouts--upright "┘" face bg 'light)))
+(defun gfm-pretty-callouts--callout-bottom-string (width face &optional tint-face)
+  "Build the bottom border string of WIDTH cols, tinted via TINT-FACE."
+  (concat (gfm-pretty-callouts--upright "└" face tint-face 'light)
+          (gfm-pretty-callouts--upright (make-string (max 1 (- width 2)) ?─) face tint-face 'light)
+          (gfm-pretty-callouts--upright "┘" face tint-face 'light)))
 
-(defun gfm-pretty-callouts--right-after (box-width face bg)
+(defun gfm-pretty-callouts--right-after (box-width face tint-face)
   "Build the body-line right-edge after-string.
 Pads with `space :align-to' to BOX-WIDTH-2, then a tinted gap, then
 `│'.  Carries the `cursor' text property so cursor motion crosses it.
 
+TINT-FACE, when non-nil, is the per-type tint face symbol; the align
+spacer inherits from it so theme switches reflow without rebuilding.
 A trailing `(space :align-to right)' in the default face fills the
 visual line from `│' to the window's right edge, masking any
 `:extend t' past-EOL fill that a foreign overlay (`hl-line',
 `region') would otherwise paint past the border — see
 `gfm-pretty--right-after' for the rationale."
-  (let* ((align-face (let ((spec `(:inherit ,face :slant normal)))
-                       (if bg (append spec (list :background bg)) spec)))
+  (let* ((align-face (if tint-face
+                         `(:inherit (,tint-face ,face) :slant normal)
+                       `(:inherit ,face :slant normal)))
          (str (concat
                (propertize " "
                            'display `(space :align-to ,(- box-width 2))
                            'face align-face)
-               (gfm-pretty-callouts--upright " " face bg)
-               (gfm-pretty-callouts--upright "│" face bg 'light)
+               (gfm-pretty-callouts--upright " " face tint-face)
+               (gfm-pretty-callouts--upright "│" face tint-face 'light)
                (propertize " "
                            'display '(space :align-to right)
                            'face 'default))))
     (put-text-property 0 1 'cursor t str)
     str))
 
-(defun gfm-pretty-callouts--right-after-overflow (face bg line-text window)
+(defun gfm-pretty-callouts--right-after-overflow (face tint-face line-text window)
   "Build the right-edge after-string for a wrapped body line.
 Simulates word-wrap of `│ ' + LINE-TEXT in WINDOW's width to compute
 how much padding is needed before the closing `│' on the final wrapped
-visual row.  A trailing `(space :align-to right)' in the default face
-extends the last wrapped row to the window edge, suppressing past-EOL
-`:extend' leaks — see `gfm-pretty-callouts--right-after'."
+visual row.  TINT-FACE, when non-nil, supplies the tinted background
+via `:inherit' so theme switches propagate without rebuild.  A
+trailing `(space :align-to right)' in the default face extends the
+last wrapped row to the window edge, suppressing past-EOL `:extend'
+leaks — see `gfm-pretty-callouts--right-after'."
   (let* ((text-width (gfm-pretty--available-width window))
          (visual-col (gfm-pretty--last-visual-col
                       (concat "│ " line-text) text-width
                       gfm-pretty--wrap-prefix-w))
          (target-col (1- text-width))
          (pad-len (max 0 (- target-col visual-col)))
-         (face-spec (let ((s `(:inherit ,face :slant normal)))
-                      (if bg (append s (list :background bg)) s)))
+         (face-spec (if tint-face
+                        `(:inherit (,tint-face ,face) :slant normal)
+                      `(:inherit ,face :slant normal)))
          (pad (propertize (make-string pad-len ?\s) 'face face-spec))
-         (pipe (gfm-pretty-callouts--upright "│" face bg 'light))
+         (pipe (gfm-pretty-callouts--upright "│" face tint-face 'light))
          (tail (propertize " " 'display '(space :align-to right)
                            'face 'default))
          (str (concat pad pipe tail)))
@@ -276,22 +290,28 @@ overlay engine."
     (let* ((type-face (alist-get type gfm-pretty-callouts--type-faces
                                   nil nil #'string=))
            (border-face (or type-face 'gfm-pretty-callouts-box-face))
-           (tint (gfm-pretty-callouts--tinted-bg border-face))
-           ;; Anchor face specifies only background tint and `:extend
-           ;; t'; all other attributes left unspecified so emphasis
+           (tint-face (alist-get type gfm-pretty-callouts--type-tint-face-alist
+                                 nil nil #'string=))
+           ;; Anchor face references the tint face by name (never bakes
+           ;; a `:background "#hex"' literal), so theme changes
+           ;; propagate to existing overlays at the next redisplay.
+           ;; Leaves every other attribute unspecified so emphasis
            ;; faces on buffer text (bold, italic, link, inline code)
            ;; merge through.  Blockquote-italic suppression now lives
            ;; at the face layer — see the `set-face-attribute' for
            ;; `markdown-blockquote-face' in `lang-markdown/init.el'.
-           (bg-face (if tint
-                        `(:background ,tint :extend t)
+           (bg-face (if tint-face
+                        `(:inherit ,tint-face :extend t)
                       '(:extend t)))
+           ;; `:inherit' order matters: TINT-FACE first so its
+           ;; `:background' wins, BORDER-FACE second so its
+           ;; `:foreground' wins (tint face carries no fg).
            (wrap (propertize "│ " 'face
-                             (let ((s `(:inherit ,border-face
-                                        :slant normal :weight light)))
-                               (if tint
-                                   (append s (list :background tint))
-                                 s)))))
+                             (if tint-face
+                                 `(:inherit (,tint-face ,border-face)
+                                   :slant normal :weight light)
+                               `(:inherit ,border-face
+                                 :slant normal :weight light)))))
       ;; Per-line anchor: tinted background + wrap-prefix on body lines.
       ;; Iterate via position math — `forward-line' inside the
       ;; overlay-creation loop interacts with cursor-intangible /
@@ -327,7 +347,8 @@ See `gfm-pretty-callouts--apply-block-anchors' for the widening rationale."
     (let* ((type-face (alist-get type gfm-pretty-callouts--type-faces
                                   nil nil #'string=))
            (border-face (or type-face 'gfm-pretty-callouts-box-face))
-           (tint (gfm-pretty-callouts--tinted-bg border-face))
+           (tint-face (alist-get type gfm-pretty-callouts--type-tint-face-alist
+                                 nil nil #'string=))
            (text-width (gfm-pretty--available-width window))
            (marker-line-end (save-excursion
                               (goto-char beg) (line-end-position)))
@@ -347,10 +368,10 @@ See `gfm-pretty-callouts--apply-block-anchors' for the widening rationale."
            (box-width (min text-width (max 80 (+ max-content 4))))
            (content-budget (- box-width 4))
            (top-split (gfm-pretty-callouts--callout-top-strings
-                       box-width type border-face marker-buf-w tint))
+                       box-width type border-face marker-buf-w tint-face))
            (bottom-str (gfm-pretty-callouts--callout-bottom-string
-                        box-width border-face tint))
-           (edge (gfm-pretty-callouts--upright "│ " border-face tint))
+                        box-width border-face tint-face))
+           (edge (gfm-pretty-callouts--upright "│ " border-face tint-face))
            (last-right-after-ov nil))
       ;; Top — leading on marker line, trailing after.
       (let* ((top-display-masked (car top-split))
@@ -397,9 +418,9 @@ See `gfm-pretty-callouts--apply-block-anchors' for the widening rationale."
                      (right-after
                       (if overflow-p
                           (gfm-pretty-callouts--right-after-overflow
-                           border-face tint line-text window)
+                           border-face tint-face line-text window)
                         (gfm-pretty-callouts--right-after
-                         box-width border-face tint))))
+                         box-width border-face tint-face))))
                 ;; `> ' / bare `>' → `│ ' substitution as a per-window
                 ;; display so reveal in window A doesn't expose the
                 ;; source in B.  Source range is 2 chars for `> ',
@@ -663,6 +684,44 @@ See `gfm-pretty-callouts-note-body-face' for the empty-spec rationale."
 `gfm-pretty-callouts-note-body-face' for the empty-spec rationale."
   :group 'markdown-faces)
 
+(defface gfm-pretty-callouts-note-tint-face
+  '((t))
+  "Overlay-cell tint face for [!NOTE] callouts.
+Default spec is intentionally empty — `:background' is set dynamically
+from the per-type blend by `gfm-pretty-callouts--refresh-faces' on
+`+theme-changed-hook'.  Overlay face specs reference this face via
+`:inherit' rather than baking a `:background \"#hex\"' literal so theme
+switches propagate to existing overlays at the next redisplay."
+  :group 'markdown-faces)
+
+(defface gfm-pretty-callouts-tip-tint-face
+  '((t))
+  "Overlay-cell tint face for [!TIP] callouts.
+See `gfm-pretty-callouts-note-tint-face' for the dynamic-background
+contract."
+  :group 'markdown-faces)
+
+(defface gfm-pretty-callouts-important-tint-face
+  '((t))
+  "Overlay-cell tint face for [!IMPORTANT] callouts.
+See `gfm-pretty-callouts-note-tint-face' for the dynamic-background
+contract."
+  :group 'markdown-faces)
+
+(defface gfm-pretty-callouts-warning-tint-face
+  '((t))
+  "Overlay-cell tint face for [!WARNING] callouts.
+See `gfm-pretty-callouts-note-tint-face' for the dynamic-background
+contract."
+  :group 'markdown-faces)
+
+(defface gfm-pretty-callouts-caution-tint-face
+  '((t))
+  "Overlay-cell tint face for [!CAUTION]/[!CRITICAL] callouts.
+See `gfm-pretty-callouts-note-tint-face' for the dynamic-background
+contract."
+  :group 'markdown-faces)
+
 (defface gfm-pretty-callouts-prettier-ignore-comment-face
   '((t :inherit shadow :weight light))
   "Face for prettier-ignore comments."
@@ -728,6 +787,18 @@ bold there to keep the headings legible."
     ("CRITICAL"  . gfm-pretty-callouts-caution-body-face))
   "Map of GFM callout type label to its body (tinted background) face.")
 
+(defconst gfm-pretty-callouts--type-tint-face-alist
+  '(("NOTE"      . gfm-pretty-callouts-note-tint-face)
+    ("TIP"       . gfm-pretty-callouts-tip-tint-face)
+    ("IMPORTANT" . gfm-pretty-callouts-important-tint-face)
+    ("WARNING"   . gfm-pretty-callouts-warning-tint-face)
+    ("CAUTION"   . gfm-pretty-callouts-caution-tint-face)
+    ("CRITICAL"  . gfm-pretty-callouts-caution-tint-face))
+  "Map of GFM callout type label to its overlay tint face.
+Overlay face specs reference these faces by name via `:inherit' so
+theme switches propagate to existing overlays at the next redisplay
+without a decorator rebuild.")
+
 (defun gfm-pretty-callouts--font-lock-tint-bg (face)
   "Return a hex colour 10% from FACE's foreground toward the theme bg.
 Mirrors `gfm-pretty-callouts--tinted-bg' so body face background matches the
@@ -746,16 +817,25 @@ overlay's tinted panel.  Returns nil if either colour is unresolvable."
                      '(2))))))
 
 ;;;###autoload
-(defun gfm-pretty-callouts--refresh-body-faces (&rest _)
-  "Recompute `:background' on each callout body face from the current theme.
-Also clears `:slant', `:weight', and `:underline' on each body face.
-Body faces are prepended to body chars via `font-lock-prepend-text-property',
-so any attribute they specify shadows the markdown emphasis faces beneath
+(defun gfm-pretty-callouts--refresh-faces (&rest _)
+  "Recompute per-type tints from the current theme.
+For each callout type, computes the 10%-toward-bg blend ONCE from the
+type's header face and sets `:background' on both the body face (used
+by font-lock on body chars) AND the tint face (referenced via
+`:inherit' from overlay face specs).  Sharing a single blend call
+between body and tint faces prevents drift between buffer-char tinting
+and overlay-cell tinting.
+
+Body faces additionally have `:slant', `:weight', and `:underline'
+cleared: they are prepended via `font-lock-prepend-text-property', so
+any attribute they specify shadows the markdown emphasis faces beneath
 them in the merge — emphasis would silently disappear inside callout
-bodies."
+bodies otherwise."
   (dolist (entry gfm-pretty-callouts--type-body-face-alist)
     (let* ((type (car entry))
            (body-face (cdr entry))
+           (tint-face (alist-get type gfm-pretty-callouts--type-tint-face-alist
+                                 nil nil #'string=))
            (header-face (alist-get type gfm-pretty-callouts--type-face-alist
                                    nil nil #'string=))
            (tint (and header-face
@@ -765,11 +845,17 @@ bodies."
                           :weight 'unspecified
                           :underline 'unspecified)
       (when tint
-        (set-face-background body-face tint)))))
+        (set-face-background body-face tint)
+        (when tint-face
+          (set-face-background tint-face tint))))))
 
-(gfm-pretty-callouts--refresh-body-faces)
+(defalias 'gfm-pretty-callouts--refresh-body-faces
+  #'gfm-pretty-callouts--refresh-faces
+  "Backwards-compatible alias for `gfm-pretty-callouts--refresh-faces'.")
 
-(add-hook '+theme-changed-hook #'gfm-pretty-callouts--refresh-body-faces)
+(gfm-pretty-callouts--refresh-faces)
+
+(add-hook '+theme-changed-hook #'gfm-pretty-callouts--refresh-faces)
 
 (defun gfm-pretty-callouts--font-lock-block-end (marker-eol)
   "Return EOL of the last `>'-prefixed line following MARKER-EOL."
