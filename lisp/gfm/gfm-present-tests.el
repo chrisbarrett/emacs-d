@@ -370,40 +370,197 @@ for tree-sitter grammars and confuse downstream tests."
     (should (eq 'invalid-range (gfm-present--read-line-range tmp 5 2)))
     (should (eq 'invalid-range (gfm-present--read-line-range tmp 100 200)))))
 
-(ert-deftest gfm-present/source-preview-display-header-uses-markdown-code-face ()
+;;; Box-preview helpers
+
+(ert-deftest gfm-present/abbrev-source-path-uses-project-relative ()
+  "When PATH is inside a project, the result is project-relative."
+  (let* ((root (file-name-as-directory (make-temp-file "pres-proj-" t)))
+         (subdir (expand-file-name "subdir/" root))
+         (abs (expand-file-name "file.rs" subdir)))
+    (unwind-protect
+        (progn
+          (make-directory subdir t)
+          (cl-letf (((symbol-function 'project-current)
+                     (lambda (&optional _ &rest _) (list 'transient root)))
+                    ((symbol-function 'project-root)
+                     (lambda (_p) root)))
+            (should (equal "subdir/file.rs"
+                           (gfm-present--abbrev-source-path abs)))))
+      (delete-directory root t))))
+
+(ert-deftest gfm-present/abbrev-source-path-passes-through-nil ()
+  "Nil or empty PATH is returned unchanged."
+  (should-not (gfm-present--abbrev-source-path nil))
+  (should (equal "" (gfm-present--abbrev-source-path ""))))
+
+(ert-deftest gfm-present/fit-label-into-border-passes-through-short ()
+  (should (equal "auth.rs:1-5"
+                 (gfm-present--fit-label-into-border "auth.rs:1-5" 30))))
+
+(ert-deftest gfm-present/fit-label-into-border-keeps-basename-on-overflow ()
+  (let ((res (gfm-present--fit-label-into-border
+              "deeply/nested/dir/auth.rs:1-5" 18)))
+    (should (string-prefix-p "…/" res))
+    (should (string-match-p "auth.rs:1-5" res))
+    (should (<= (string-width res) 18))))
+
+(ert-deftest gfm-present/fit-label-into-border-falls-back-to-plain-ellipsis ()
+  "A label without a `/' falls back to a leading-ellipsis tail."
+  (let ((res (gfm-present--fit-label-into-border
+              "abcdefghijklmnopqrstuvwxyz" 6)))
+    (should (string-prefix-p "…" res))
+    (should (<= (string-width res) 6))))
+
+(ert-deftest gfm-present/truncate-line-to-width-short-passthrough ()
+  (should (equal "abc" (gfm-present--truncate-line-to-width "abc" 10))))
+
+(ert-deftest gfm-present/truncate-line-to-width-suffixes-ellipsis ()
+  (let ((s (gfm-present--truncate-line-to-width "0123456789abcdef" 6)))
+    (should (= 6 (string-width s)))
+    (should (string-suffix-p "…" s))))
+
+(ert-deftest gfm-present/standalone-link-p-whole-line ()
+  (with-temp-buffer
+    (insert "[lbl](modules/auth.rs#L42-L48)\n")
+    (goto-char (point-min))
+    (should (re-search-forward gfm-present--md-link-rx nil t))
+    (should (gfm-present--standalone-link-p
+             (match-beginning 0) (match-end 0)))))
+
+(ert-deftest gfm-present/standalone-link-p-list-item ()
+  (with-temp-buffer
+    (insert "- [lbl](modules/auth.rs#L42-L48)\n")
+    (goto-char (point-min))
+    (should (re-search-forward gfm-present--md-link-rx nil t))
+    (should (gfm-present--standalone-link-p
+             (match-beginning 0) (match-end 0)))))
+
+(ert-deftest gfm-present/standalone-link-p-blockquote ()
+  (with-temp-buffer
+    (insert "> [lbl](modules/auth.rs#L42-L48)\n")
+    (goto-char (point-min))
+    (should (re-search-forward gfm-present--md-link-rx nil t))
+    (should (gfm-present--standalone-link-p
+             (match-beginning 0) (match-end 0)))))
+
+(ert-deftest gfm-present/standalone-link-p-mid-prose-rejected ()
+  (with-temp-buffer
+    (insert "See [lbl](modules/auth.rs#L42-L48) for details.\n")
+    (goto-char (point-min))
+    (should (re-search-forward gfm-present--md-link-rx nil t))
+    (should-not (gfm-present--standalone-link-p
+                 (match-beginning 0) (match-end 0)))))
+
+(ert-deftest gfm-present/standalone-link-p-trailing-text-rejected ()
+  (with-temp-buffer
+    (insert "[lbl](modules/auth.rs#L42-L48) and that's the bit\n")
+    (goto-char (point-min))
+    (should (re-search-forward gfm-present--md-link-rx nil t))
+    (should-not (gfm-present--standalone-link-p
+                 (match-beginning 0) (match-end 0)))))
+
+(ert-deftest gfm-present/abbrev-diff-refs-shortens-40-hex ()
+  (should (equal "abcdef0"
+                 (gfm-present--abbrev-diff-refs
+                  "abcdef0123456789abcdef0123456789abcdef01"))))
+
+(ert-deftest gfm-present/abbrev-diff-refs-passes-branches-through ()
+  (should (equal "main" (gfm-present--abbrev-diff-refs "main")))
+  (should (equal "HEAD~1" (gfm-present--abbrev-diff-refs "HEAD~1"))))
+
+
+;;; Box renderer
+
+(ert-deftest gfm-present/box-display-has-corner-glyphs ()
+  (let ((s (gfm-present--box-display
+            :label "foo:1-2" :body "alpha\nbeta" :extra 0)))
+    (should (eq ?┌ (aref s 0)))
+    (should (eq ?┘ (aref s (1- (length s)))))))
+
+(ert-deftest gfm-present/box-display-embeds-label-in-top-border ()
+  (let ((s (gfm-present--box-display
+            :label "src:42-48" :body "x" :extra 0)))
+    (should (string-match-p "┌─ src:42-48 " s))))
+
+(ert-deftest gfm-present/box-display-bottom-border-bare-when-no-extra ()
+  (let ((s (gfm-present--box-display
+            :label "lbl" :body "x" :extra 0)))
+    (should-not (string-match-p "\\+[0-9]+ more lines" s))))
+
+(ert-deftest gfm-present/box-display-bottom-border-embeds-extra ()
+  (let ((s (gfm-present--box-display
+            :label "lbl" :body "x" :extra 5)))
+    (should (string-match-p "└─ \\+5 more lines " s))))
+
+(ert-deftest gfm-present/box-display-lhs-margin-removes-inner-padding ()
+  "LHS-margin mode wraps body lines with `│' on both sides — no inner gap."
+  (let* ((s (gfm-present--box-display
+             :label "lbl" :body "+added" :extra 0 :lhs-margin t))
+         (lines (split-string s "\n")))
+    ;; Body is the middle line; it should start with `│+'.
+    (should (string-match-p "^│\\+added" (nth 1 lines)))))
+
+(ert-deftest gfm-present/box-display-truncates-overlong-body-line ()
+  "Body lines wider than the interior budget are ellipsised."
+  (let* ((long (make-string 200 ?x))
+         (s (gfm-present--box-display
+             :label "lbl" :body long :extra 0))
+         (lines (split-string s "\n"))
+         (body-line (nth 1 lines)))
+    ;; Body line ends with the right border, but the content prior to it
+    ;; should have been truncated and carry `…' before the trailing
+    ;; padding/border.
+    (should (string-match-p "…" body-line))))
+
+
+;;; §6 Source-range link preview overlay
+
+(ert-deftest gfm-present/source-preview-display-has-box-borders ()
   (gfm-present-tests--with-temp-source '("alpha" "beta") tmp
-    (let* ((s (gfm-present--source-preview-display tmp 1 2 "lbl"))
-           (first-newline (string-match-p "\n" s))
-           (header (substring s 0 first-newline)))
-      (should (string-match-p (format "lbl · %s:1-2" (regexp-quote tmp))
-                              header))
-      (should (eq 'markdown-code-face (get-text-property 0 'face header))))))
-
-(ert-deftest gfm-present/source-preview-display-missing-file ()
-  (let ((s (gfm-present--source-preview-display "/no/such/file" 1 5 "lbl")))
-    (should (string-match-p "(file not found: /no/such/file)" s))
-    (let* ((idx (string-match-p "(file not found" s)))
-      (should (eq 'shadow (get-text-property idx 'face s))))))
-
-(ert-deftest gfm-present/source-preview-display-invalid-range ()
-  (gfm-present-tests--with-temp-source '("one") tmp
-    (let* ((s (gfm-present--source-preview-display tmp 100 200 "lbl")))
-      (should (string-match-p "(invalid range)" s))
-      (let ((idx (string-match-p "(invalid range)" s)))
-        (should (eq 'shadow (get-text-property idx 'face s)))))))
+    (let ((s (gfm-present--source-preview-display tmp 1 2)))
+      (should (eq ?┌ (aref s 0)))
+      (should (eq ?┘ (aref s (1- (length s))))))))
 
 (ert-deftest gfm-present/source-preview-display-no-fence-delimiters ()
   (gfm-present-tests--with-temp-source '("alpha" "beta") tmp
-    (let ((s (gfm-present--source-preview-display tmp 1 2 "lbl")))
+    (let ((s (gfm-present--source-preview-display tmp 1 2)))
       (should-not (string-match-p "```" s)))))
 
-(ert-deftest gfm-present/source-preview-display-oversize-shadow-footer ()
+(ert-deftest gfm-present/source-preview-display-top-border-has-path-and-range ()
+  (gfm-present-tests--with-temp-source '("alpha" "beta") tmp
+    (let* ((fill-column 200)
+           (s (gfm-present--source-preview-display tmp 1 2))
+           (top (substring s 0 (string-match-p "\n" s)))
+           (abbrev (gfm-present--abbrev-source-path tmp)))
+      (should (string-match-p (regexp-quote (format "%s:1-2" abbrev)) top)))))
+
+(ert-deftest gfm-present/source-preview-display-omits-markdown-label ()
+  "The preview surface SHALL NOT contain the markdown `[label]' text."
+  (gfm-present-tests--with-temp-source '("alpha" "beta") tmp
+    (let ((s (gfm-present--source-preview-display tmp 1 2)))
+      (should-not (string-match-p "my-custom-label" s)))))
+
+(ert-deftest gfm-present/source-preview-display-missing-file-bare-sentinel ()
+  (let ((s (gfm-present--source-preview-display "/no/such/file" 1 5)))
+    (should (string-match-p "\\[broken preview\\]" s))
+    (should (string-match-p "file not found" s))
+    (should-not (string-match-p "┌\\|└" s))))
+
+(ert-deftest gfm-present/source-preview-display-invalid-range-bare-sentinel ()
+  (gfm-present-tests--with-temp-source '("one") tmp
+    (let ((s (gfm-present--source-preview-display tmp 100 200)))
+      (should (string-match-p "\\[broken preview\\]" s))
+      (should (string-match-p "invalid range" s))
+      (should-not (string-match-p "┌\\|└" s)))))
+
+(ert-deftest gfm-present/source-preview-display-oversize-footer-in-bottom-border ()
   (gfm-present-tests--with-temp-source
       (mapcar (lambda (n) (format "line%d" n)) (number-sequence 1 20)) tmp
-    (let* ((s (gfm-present--source-preview-display tmp 1 15 "lbl"))
-           (idx (string-match "\\+5 more lines · click to open" s)))
-      (should idx)
-      (should (eq 'shadow (get-text-property idx 'face s))))))
+    (let* ((s (gfm-present--source-preview-display tmp 1 15))
+           (lines (split-string s "\n"))
+           (bot (car (last lines))))
+      (should (string-match-p "\\+5 more lines" bot))
+      (should-not (string-match-p "click to open" s)))))
 
 (ert-deftest gfm-present/fontify-source-applies-major-mode-face ()
   "A custom mode mapped via `auto-mode-alist' contributes `face' to the body."
@@ -431,7 +588,7 @@ for tree-sitter grammars and confuse downstream tests."
           (path (make-temp-file "src-test-" nil ".gfmdemo2"
                                 "HOT body\nplain line\n")))
       (unwind-protect
-          (let* ((s (gfm-present--source-preview-display path 1 2 "lbl"))
+          (let* ((s (gfm-present--source-preview-display path 1 2))
                  (idx (string-match "HOT" s)))
             (should idx)
             (should (eq 'font-lock-keyword-face
@@ -444,7 +601,7 @@ for tree-sitter grammars and confuse downstream tests."
         (path (make-temp-file "src-test-" nil ".totally-unknown-ext-xyz"
                               "alpha\nbeta\n")))
     (unwind-protect
-        (let ((s (gfm-present--source-preview-display path 1 2 "lbl")))
+        (let ((s (gfm-present--source-preview-display path 1 2)))
           (should (string-match-p "alpha" s))
           (should (string-match-p "beta" s)))
       (when (file-exists-p path) (delete-file path)))))
@@ -452,19 +609,48 @@ for tree-sitter grammars and confuse downstream tests."
 (ert-deftest gfm-present/render-link-previews-creates-overlay ()
   (gfm-present-tests--with-temp-source '("a" "b" "c" "d") tmp
     (with-temp-buffer
-      (insert (format "# Slide\nSee [foo](%s#L2-L3) here.\n" tmp))
+      (insert (format "# Slide\n[foo](%s#L2-L3)\n" tmp))
       (gfm-present--render-link-previews)
       (should (= 1 (length gfm-present--preview-overlays)))
       (let* ((ov (car gfm-present--preview-overlays))
              (display (overlay-get ov 'display)))
         (should display)
-        (should (string-match-p "b\nc" display))
+        (should (string-match-p "b" display))
+        (should (string-match-p "c" display))
         (should-not (string-match-p "```" display))))))
+
+(ert-deftest gfm-present/render-link-previews-skips-mid-prose-link ()
+  (gfm-present-tests--with-temp-source '("a" "b") tmp
+    (with-temp-buffer
+      (insert (format "# Slide\nSee [foo](%s#L1) for details.\n" tmp))
+      (gfm-present--render-link-previews)
+      (should (= 0 (length gfm-present--preview-overlays))))))
+
+(ert-deftest gfm-present/render-link-previews-skips-link-with-trailing-text ()
+  (gfm-present-tests--with-temp-source '("a" "b") tmp
+    (with-temp-buffer
+      (insert (format "# Slide\n[foo](%s#L1) and that's the bit\n" tmp))
+      (gfm-present--render-link-previews)
+      (should (= 0 (length gfm-present--preview-overlays))))))
+
+(ert-deftest gfm-present/render-link-previews-list-item-link ()
+  (gfm-present-tests--with-temp-source '("a" "b") tmp
+    (with-temp-buffer
+      (insert (format "# Slide\n- [foo](%s#L1)\n" tmp))
+      (gfm-present--render-link-previews)
+      (should (= 1 (length gfm-present--preview-overlays))))))
+
+(ert-deftest gfm-present/render-link-previews-blockquote-link ()
+  (gfm-present-tests--with-temp-source '("a" "b") tmp
+    (with-temp-buffer
+      (insert (format "# Slide\n> [foo](%s#L1)\n" tmp))
+      (gfm-present--render-link-previews)
+      (should (= 1 (length gfm-present--preview-overlays))))))
 
 (ert-deftest gfm-present/render-link-previews-does-not-mutate-buffer ()
   (gfm-present-tests--with-temp-source '("a" "b") tmp
     (with-temp-buffer
-      (insert (format "# Slide\n[foo](%s#L1) text\n" tmp))
+      (insert (format "# Slide\n[foo](%s#L1)\n" tmp))
       (let ((before-text (buffer-string)))
         (gfm-present--render-link-previews)
         (should (equal before-text (buffer-string)))))))
@@ -472,7 +658,7 @@ for tree-sitter grammars and confuse downstream tests."
 (ert-deftest gfm-present/clear-link-previews-removes-overlays ()
   (gfm-present-tests--with-temp-source '("a" "b") tmp
     (with-temp-buffer
-      (insert (format "# Slide\n[foo](%s#L1) text\n" tmp))
+      (insert (format "# Slide\n[foo](%s#L1)\n" tmp))
       (gfm-present--render-link-previews)
       (should (= 1 (length gfm-present--preview-overlays)))
       (gfm-present--clear-link-previews)
@@ -541,15 +727,62 @@ for tree-sitter grammars and confuse downstream tests."
         (should (= 5 (plist-get r :extra)))
         (should (= 10 (length (split-string (plist-get r :body) "\n"))))))))
 
-(ert-deftest gfm-present/diff-preview-fence-empty-says-no-changes ()
+(ert-deftest gfm-present/diff-preview-display-empty-bare-sentinel ()
   (gfm-present-tests--with-fake-call-process "" 0
-    (let ((s (gfm-present--diff-preview-fence "/wt" "B" "H" nil "lbl")))
-      (should (string-match-p "(no changes)" s)))))
+    (let ((s (gfm-present--diff-preview-display "/wt" "B" "H" nil)))
+      (should (string-match-p "\\[broken preview\\]" s))
+      (should (string-match-p "no changes" s))
+      (should-not (string-match-p "┌\\|└" s)))))
 
-(ert-deftest gfm-present/diff-preview-fence-error-shows-first-line ()
+(ert-deftest gfm-present/diff-preview-display-error-bare-sentinel ()
   (gfm-present-tests--with-fake-call-process "fatal: bad object\nmore\n" 128
-    (let ((s (gfm-present--diff-preview-fence "/wt" "B" "H" nil "lbl")))
-      (should (string-match-p "(git error: fatal: bad object)" s)))))
+    (let ((s (gfm-present--diff-preview-display "/wt" "B" "H" nil)))
+      (should (string-match-p "\\[broken preview\\]" s))
+      (should (string-match-p "git error: fatal: bad object" s))
+      (should-not (string-match-p "┌\\|└" s)))))
+
+(ert-deftest gfm-present/diff-preview-display-has-box-borders ()
+  (gfm-present-tests--with-fake-call-process "+added line\n" 0
+    (let ((s (gfm-present--diff-preview-display "/wt" "main" "feature" nil)))
+      (should (eq ?┌ (aref s 0)))
+      (should (eq ?┘ (aref s (1- (length s))))))))
+
+(ert-deftest gfm-present/diff-preview-display-top-border-embeds-base...head ()
+  (gfm-present-tests--with-fake-call-process "+added line\n" 0
+    (let* ((s (gfm-present--diff-preview-display "/wt" "main" "feature" nil))
+           (top (substring s 0 (string-match-p "\n" s))))
+      (should (string-match-p "main\\.\\.\\.feature" top)))))
+
+(ert-deftest gfm-present/diff-preview-display-top-border-embeds-path-with-em-dash ()
+  (gfm-present-tests--with-fake-call-process "+added line\n" 0
+    (let* ((s (gfm-present--diff-preview-display
+               "/wt" "main" "feature" "src/foo.rs"))
+           (top (substring s 0 (string-match-p "\n" s))))
+      (should (string-match-p "main\\.\\.\\.feature — src/foo.rs" top)))))
+
+(ert-deftest gfm-present/diff-preview-display-shortens-40-hex-shas ()
+  (let ((sha-a "abcdef0123456789abcdef0123456789abcdef01")
+        (sha-b "0123456789abcdef0123456789abcdef01234567"))
+    (gfm-present-tests--with-fake-call-process "+x\n" 0
+      (let* ((s (gfm-present--diff-preview-display "/wt" sha-a sha-b nil))
+             (top (substring s 0 (string-match-p "\n" s))))
+        (should (string-match-p "abcdef0\\.\\.\\.0123456" top))
+        (should-not (string-match-p sha-a top))
+        (should-not (string-match-p sha-b top))))))
+
+(ert-deftest gfm-present/diff-preview-display-lhs-margin-body-shape ()
+  "LHS-margin body lines start with `│' followed directly by the diff indicator."
+  (gfm-present-tests--with-fake-call-process "+added\n-removed\n unchanged\n" 0
+    (let* ((s (gfm-present--diff-preview-display "/wt" "B" "H" nil))
+           (lines (split-string s "\n"))
+           (body (cl-subseq lines 1 -1)))
+      (dolist (line body)
+        (should (string-match-p "^│[-+ ]" line))))))
+
+(ert-deftest gfm-present/diff-preview-display-omits-markdown-label ()
+  (gfm-present-tests--with-fake-call-process "+x\n" 0
+    (let ((s (gfm-present--diff-preview-display "/wt" "B" "H" nil)))
+      (should-not (string-match-p "my-custom-label" s)))))
 
 (ert-deftest gfm-present/render-link-previews-handles-diff-link ()
   (gfm-present-tests--with-fake-call-process "diff line 1\n" 0
