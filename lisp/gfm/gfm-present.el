@@ -578,6 +578,7 @@ one overlay per line from `point-at-bol' to `point-at-eol'."
                       (kbd "C-c q") #'gfm-present-quit
                       (kbd "RET")   #'gfm-present-follow-link)))
 
+;;;###autoload
 (define-minor-mode gfm-present-mode
   "Buffer-local presentation mode for a markdown document.
 Enabling narrows to the H1 region containing point; disabling
