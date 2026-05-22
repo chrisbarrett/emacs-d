@@ -198,6 +198,7 @@ themselves are activated by `gfm-pretty-mode' on the same hook."
     (+markdown-style-header-faces)
     (gfm-pretty-callouts-install-font-lock))
   (+local-leader-set-key 'markdown-mode-map
+    "p" '(gfm-present-mode :wk "presentation mode")
     "l" '(markdown-toggle-url-hiding :wk "toggle URLs")
     "f" '(markdown-insert-footnote :wk "insert footnote")
     "t" '((lambda () (interactive) (gfm-pretty-toggle-decorator 'tables))
