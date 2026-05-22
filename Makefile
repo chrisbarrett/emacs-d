@@ -1,4 +1,4 @@
-.PHONY: test test-quick setup-hooks help build-affected test-affected lint-affected pre-commit
+.PHONY: test test-quick help build-affected test-affected lint-affected pre-commit
 
 # Module lib files that contribute to autoloads
 MODULE_LIB_FILES := $(wildcard modules/*/lib.el) \
@@ -14,7 +14,6 @@ help:
 	@echo "  test-affected  - Run ERT tests for transitively affected files"
 	@echo "  lint-affected  - Run checkdoc on directly affected files"
 	@echo "  pre-commit     - Run lint-affected, build-affected, test-affected in sequence"
-	@echo "  setup-hooks    - Install prek hooks"
 
 lisp/+autoloads.el: $(MODULE_LIB_FILES)
 	@echo "Generating $@..."
@@ -23,7 +22,7 @@ lisp/+autoloads.el: $(MODULE_LIB_FILES)
 		--eval "(require '+modules)" \
 		--eval "(+autoloads-rebuild)"
 
-test: setup-hooks lisp/+autoloads.el
+test: lisp/+autoloads.el
 	./scripts/run-tests.sh
 	./scripts/byte-compile.sh
 	./scripts/checkdoc.sh
@@ -80,8 +79,3 @@ lint-affected:
 	fi
 
 pre-commit: lisp/+autoloads.el lint-affected build-affected test-affected
-
-setup-hooks:
-	@if [ ! -f .git/hooks/pre-commit ]; then \
-		nix develop --command prek install; \
-	fi
