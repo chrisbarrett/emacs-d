@@ -16,6 +16,11 @@
 (require 'ert)
 (require 'subr-x)
 
+;; -Q skips early-init.el, so mirror its load-prefer-newer setting here.
+;; Without this, stale .elc files mask freshly-edited .el sources and
+;; tests run against bytecode that doesn't reflect the working tree.
+(setq load-prefer-newer t)
+
 (defvar +test-runner-root-dir
   (file-name-directory (or load-file-name buffer-file-name))
   "Root directory of the Emacs configuration.")
