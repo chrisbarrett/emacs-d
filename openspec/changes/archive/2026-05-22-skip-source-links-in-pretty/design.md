@@ -10,7 +10,7 @@ pure function of that string and returns one of `web`, `anchor`,
 The closest precedent for an *exclusion* is the code-region skip
 (gfm-pretty/spec.md:1590-1632), implemented by
 `gfm-pretty-links--in-code-p` (gfm-pretty-links.el:242-249) and
-consulted inside `gfm-pretty-links--filter-overlapping` so excluded
+consulted inside `gfm-pretty-links--blocks-in-range` so excluded
 records are dropped before overlay construction.
 
 Two URL forms collide with `gfm-present-mode`:
@@ -49,7 +49,7 @@ Two URL forms collide with `gfm-present-mode`:
 
 Add `gfm-pretty-links--skip-url-p` taking the URL string. Returns
 non-nil when URL matches source-range or diff regex. The
-`gfm-pretty-links--filter-overlapping` (gfm-pretty-links.el:419-445)
+`gfm-pretty-links--blocks-in-range` (gfm-pretty-links.el:427-453)
 pass already drops records via `unless (or …)`; extend the `or` arm
 to include `(gfm-pretty-links--skip-url-p (record-url ...))`.
 

@@ -138,6 +138,34 @@ empty / nil) is web."
     ('file   'gfm-pretty-links-file-face)
     (_       gfm-pretty-links-title-face)))
 
+;;; URL-form exclusions (owned by `gfm-present-mode')
+
+(defconst gfm-pretty-links--source-range-url-rx
+  (rx bos
+      (+ (not (any "#")))           ; path
+      "#L" (+ digit)
+      (? "-L" (+ digit))
+      eos)
+  "Regexp matching `<path>#L<n>[-L<n>]' source-range URLs.")
+
+(defconst gfm-pretty-links--diff-url-rx
+  (rx bos "diff:"
+      (+ nonl) "..."                ; base...
+      (+ (not (any "#")))           ; head (no `#')
+      (? "#" (* nonl))              ; optional file scope
+      eos)
+  "Regexp matching `diff:<base>...<head>[#<path>]' diff URLs.")
+
+(defun gfm-pretty-links--skip-url-p (url)
+  "Non-nil when URL is owned by `gfm-present-mode' and must be skipped.
+Source-range (`<path>#L<n>[-L<n>]') and diff (`diff:<base>...<head>')
+URLs render through gfm-present's own overlays and RET dispatch.
+Decorating them here would either stack display strings (visual
+garbling) or shadow gfm-present's RET via overlay-keymap precedence."
+  (and url
+       (or (string-match-p gfm-pretty-links--source-range-url-rx url)
+           (string-match-p gfm-pretty-links--diff-url-rx url))))
+
 ;;; Link records
 
 (cl-defstruct (gfm-pretty-links--link
@@ -444,6 +472,8 @@ lines are excluded entirely."
       (let ((span (gfm-pretty-links--record-span record)))
         (unless (or (gfm-pretty-links--pos-in-ranges-p (car span) ref-def-ranges)
                     (gfm-pretty-links--in-code-p (car span))
+                    (gfm-pretty-links--skip-url-p
+                     (gfm-pretty-links--link-url record))
                     (cl-some (lambda (c)
                                (gfm-pretty--region-overlaps-p span c))
                              claimed))

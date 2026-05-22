@@ -105,5 +105,58 @@
         (should (member click (mapcar #'marker-position
                                       (cons (mark-marker) mark-ring))))))))
 
+
+;;; URL-form skip (source-range / diff URLs owned by gfm-present)
+
+(defun gfm-pretty-links-tests--blocks (text)
+  "Return link records discovered in TEXT.
+Loads TEXT into a fresh `markdown-mode' buffer (hooks delayed),
+rebuilds the reference-definition alist, and runs the discovery filter
+over the whole buffer."
+  (with-temp-buffer
+    (insert text)
+    (delay-mode-hooks (markdown-mode))
+    (gfm-pretty-links--build-ref-def-alist)
+    (gfm-pretty-links--blocks-in-range (point-min) (point-max))))
+
+(ert-deftest gfm-pretty-links/skip-inline-source-range-link ()
+  "Inline `path#L<a>-L<b>' link produces no decoration record."
+  (should (null (gfm-pretty-links-tests--blocks
+                 "see [snippet](/repo/foo.yml#L13-L22) inline\n"))))
+
+(ert-deftest gfm-pretty-links/skip-inline-source-link-single-line ()
+  "Single-line `path#L<n>' link is also skipped."
+  (should (null (gfm-pretty-links-tests--blocks
+                 "see [line](/repo/x.el#L42)\n"))))
+
+(ert-deftest gfm-pretty-links/skip-inline-diff-link ()
+  "Inline `diff:<base>...<head>' link produces no decoration record."
+  (should (null (gfm-pretty-links-tests--blocks
+                 "see [changed](diff:main...feature)\n"))))
+
+(ert-deftest gfm-pretty-links/skip-inline-diff-link-with-file-scope ()
+  "Diff link with `#path' suffix is skipped."
+  (should (null (gfm-pretty-links-tests--blocks
+                 "see [changed](diff:main...feature#path/to/file.el)\n"))))
+
+(ert-deftest gfm-pretty-links/skip-reference-link-resolving-to-source-range ()
+  "Reference link whose definition resolves to a source-range URL is skipped."
+  (should (null (gfm-pretty-links-tests--blocks
+                 "see [snippet][src] inline\n\n[src]: /repo/foo.yml#L13-L22\n"))))
+
+(ert-deftest gfm-pretty-links/plain-file-link-still-decorated ()
+  "Plain file link (no `#L...' suffix) still produces a `file' record."
+  (let ((records (gfm-pretty-links-tests--blocks
+                  "run [ops](./scripts/x.sh)\n")))
+    (should (= 1 (length records)))
+    (should (eq 'file (gfm-pretty-links--link-class (car records))))))
+
+(ert-deftest gfm-pretty-links/plain-anchor-link-still-decorated ()
+  "Plain anchor link (no source-range shape) still produces an `anchor' record."
+  (let ((records (gfm-pretty-links-tests--blocks
+                  "see [Setup](#setup)\n")))
+    (should (= 1 (length records)))
+    (should (eq 'anchor (gfm-pretty-links--link-class (car records))))))
+
 (provide 'gfm-pretty-links-tests)
 ;;; gfm-pretty-links-tests.el ends here
