@@ -1,4 +1,14 @@
-## ADDED Requirements
+# contributor-internals Specification
+
+## Purpose
+
+Internals-facing. Covers the contributor-facing tooling axis: the prek
+pre-commit pipeline, its baseline checks, the contract between prek and
+the local gate scripts, and the relationship between the flake devShell,
+the Makefile, and `scripts/`. The pipeline gates every commit and is the
+source of truth for "what passes/fails before merge".
+
+## Requirements
 
 ### Requirement: Pre-commit config is native prek TOML
 

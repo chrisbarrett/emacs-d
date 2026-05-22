@@ -1,0 +1,54 @@
+#:schema https://json.schemastore.org/prek.json
+
+# prek hooks for the Emacs configuration.
+# Install: handled by flake.nix shellHook.
+# Run manually: prek run --all-files
+
+exclude = { glob = "{templates,capture-templates,file-templates,site,var,elpaca,eln-cache,.worktrees}/**" }
+
+[[repos]]
+repo = "https://github.com/pre-commit/pre-commit-hooks"
+rev = "v6.0.0"
+hooks = [
+  # `--chars=` overrides the default whitespace set (which includes
+  # form-feed / `^L`). Emacs uses form-feed as page-break navigation
+  # markers, so we strip only space and tab.
+  { id = "trailing-whitespace", args = ["--chars= \t"] },
+  { id = "end-of-file-fixer" },
+  { id = "mixed-line-ending", args = ["--fix=lf"] },
+  { id = "check-yaml" },
+  { id = "check-toml" },
+  { id = "check-json" },
+  { id = "check-merge-conflict" },
+  { id = "check-added-large-files" },
+  { id = "check-executables-have-shebangs" },
+  { id = "check-shebang-scripts-are-executable" },
+  { id = "check-case-conflict" },
+]
+
+[[repos]]
+repo = "local"
+
+[[repos.hooks]]
+id = "byte-compile"
+name = "Byte compilation"
+language = "system"
+entry = "nix develop --command ./scripts/byte-compile.sh --affected"
+pass_filenames = false
+always_run = true
+
+[[repos.hooks]]
+id = "checkdoc"
+name = "Checkdoc"
+language = "system"
+entry = "nix develop --command ./scripts/checkdoc.sh --affected"
+pass_filenames = false
+always_run = true
+
+[[repos.hooks]]
+id = "ert-tests"
+name = "ERT tests"
+language = "system"
+entry = "nix develop --command ./scripts/run-tests.sh --affected"
+pass_filenames = false
+always_run = true

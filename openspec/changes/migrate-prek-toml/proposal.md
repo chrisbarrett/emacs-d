@@ -27,9 +27,13 @@ built-in checks for free.
 - Scope built-in fixers to exclude `templates/`, `capture-templates/`,
   `file-templates/`, `site/`, `var/`, `elpaca/`, `eln-cache/` — anywhere
   literal-content templates or generated artefacts live.
-- Switch the three local hooks (ert-tests, byte-compile, checkdoc) to
-  `pass_filenames = true` with glob filters. Scripts now receive the
-  filename set from prek instead of re-running `git diff` internally.
+- Local hooks (ert-tests, byte-compile, checkdoc) keep their current
+  dispatch shape (`pass_filenames = false`, `always_run = true`) and
+  scripts continue to compute their own affected set via
+  `scripts/affected.sh`. Flipping to prek-driven filename dispatch
+  belongs to the follow-up change that moves the dependency graph into
+  Emacs — without that, switching now would lose transitive-dependent
+  expansion.
 - Wrap local hook entries in `nix develop --command` so prek runs them
   with `TREESIT_EXTRA_LOAD_PATH` populated even when invoked outside the
   devShell.
@@ -57,8 +61,10 @@ _None._ No existing spec covers contributor tooling.
 - `Makefile` — drop `setup-hooks` target and the `test: setup-hooks`
   dependency. No other changes in this slice.
 - `scripts/run-tests.sh`, `scripts/byte-compile.sh`, `scripts/checkdoc.sh`
-  — accept positional filenames from prek; existing `--affected` flag and
-  no-args full-run branch retained for Makefile use.
+  — unchanged in this slice. Scripts already accept `--affected`,
+  positional filenames, and no args; prek continues to invoke them via
+  `--affected`.
+- `flake.lock` — bumped to pick up prek ≥ 0.3.0 for native TOML support.
 - Repo content may be touched by autofixers on first run (trailing
   whitespace, EOF newline). Pre-flight sweep + scoped excludes contain the
   blast radius.

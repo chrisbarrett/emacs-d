@@ -30,14 +30,16 @@ design.
   directive and prek-native idioms.
 - Enable a baseline of built-in hygiene checks scoped away from
   literal-content directories.
-- Make prek the source of truth for staged-file dispatch — scripts receive
-  filenames from prek, no longer git-diff internally for the prek path.
 - Ensure local hooks run inside `nix develop` regardless of caller
   environment.
 - Reduce hook-install duplication to a single canonical entry point.
 
 **Non-Goals:**
 
+- Flipping local hooks to `pass_filenames = true`. That requires
+  transitive-dependent expansion to live somewhere prek can call;
+  currently it lives in `scripts/affected.sh`. Belongs to the dep-graph
+  change.
 - Rewriting `affected.sh` / `affected-tests.sh` in Elisp. Dep-graph rework
   is a separate change.
 - Collapsing the three gate scripts into one dispatcher. Separate change.
@@ -60,11 +62,14 @@ Alternatives considered:
 - **Keep yaml**: works, but loses prek-native features (glob, `env`,
   `priority`, `minimum_prek_version`) and discoverable schema. Rejected —
   no portability benefit since this repo only ever runs `prek`.
-- **Use `prek util yaml-to-toml`**: lossy (comments dropped) and produces
-  inline-table style. Used as a starting skeleton, then hand-edited.
 
 Toml file carries `#:schema https://json.schemastore.org/prek.json` on
 line 1 for editor completion.
+
+Native TOML support landed in prek 0.3.0; the repo's pinned nixpkgs
+(2026-01-25) shipped prek 0.2.30 which is YAML-only. Bumping the
+`nixpkgs` flake input to 2026-05-21 picks up prek 0.3.11. The flake.lock
+update is part of this change.
 
 ### Decision: built-in hook set
 
@@ -72,7 +77,7 @@ Enable from `pre-commit/pre-commit-hooks v6.0.0`:
 
 | Hook | Rationale | Fixer? |
 |---|---|---|
-| `trailing-whitespace` | catches editor drift | yes |
+| `trailing-whitespace` (`--chars= \t`) | catches editor drift; arg pins fixer to space+tab so Emacs form-feed (`^L`) page-break markers are preserved | yes |
 | `end-of-file-fixer` | POSIX text-file convention | yes |
 | `mixed-line-ending` w/ `--fix=lf` | repo is unix-only | yes |
 | `check-yaml` | flake/prek configs would fail loudly | no |
@@ -98,26 +103,36 @@ may be semantic), generated artefacts, or third-party builds. Trailing
 whitespace inside `.el` files in `lisp/`/`modules/`/`lib/` is non-semantic
 and safe to strip.
 
-### Decision: `pass_filenames = true` with glob filters
+### Decision: local hooks keep `pass_filenames = false`, `always_run = true`
 
-Each local hook gains:
+Each local hook continues to be invoked as `--affected`:
 
 ```toml
-files = { glob = "**/*.el" }
-exclude = { glob = "**/*-tests.el" }
-pass_filenames = true
+[[repos.hooks]]
+id = "byte-compile"
+language = "system"
+entry = "nix develop --command ./scripts/byte-compile.sh --affected"
+pass_filenames = false
+always_run = true
 ```
 
-Prek matches staged files against the glob and passes them as argv. The
-scripts retain three branches:
+Rationale: `scripts/affected.sh` and `scripts/affected-tests.sh` compute
+the **transitive dependent set** of staged elisp files — change
+`lisp/+core.el` and byte-compile / tests run on every file that
+(transitively) requires `+core`. Flipping to `pass_filenames = true`
+with a glob filter would shrink scope to the directly-staged files
+only, missing downstream breakage.
 
-1. No args → run all (Makefile / manual path).
-2. Single arg `--affected` → preserve existing behaviour (Makefile
-   `*-affected` targets).
-3. Positional filenames → run on the given set (new prek path).
+The follow-up dep-graph change relocates that transitive expansion into
+Emacs and exposes it as a callable, at which point the local hooks can
+flip to `pass_filenames = true` cleanly.
 
-The script's git-diff path is unused under prek but kept for explicit
-`--affected` callers. Removing it is the next change's concern.
+Alternatives considered:
+- **`pass_filenames = true` + glob now**: smaller diff, but lossy as
+  above. Rejected.
+- **`pass_filenames = true` + glob + script expands argv → transitive
+  set internally**: doable, but pushes the dep-graph reform into this
+  change. Rejected — staying scoped.
 
 ### Decision: `nix develop --command` wrapping
 
@@ -149,6 +164,13 @@ devShell already cannot reasonably run `make test` (no `prek` in PATH).
 - **Autofixer first run will rewrite files.** → Pre-flight sweep before
   enabling; commit the cleanup separately so the gate-enable commit has
   zero file changes.
+- **`trailing-whitespace` strips Emacs form-feed (`^L`) markers by
+  default.** → `args = ["--chars= \t"]` limits the fixer to space and
+  tab. Form-feed page breaks (used by `forward-page` /
+  `backward-page` navigation across top-level Lisp sections) are
+  preserved. Surfaced during verification — pre-flight regex
+  `' +$'` did not detect this because the files had no plain trailing
+  spaces, only form-feeds.
 - **Templates with intentional trailing whitespace.** → Scoped exclude
   glob covers `templates/`, `capture-templates/`, `file-templates/`. Audit
   output of `git ls-files templates capture-templates file-templates | xargs grep -lE ' +$'`
@@ -156,9 +178,9 @@ devShell already cannot reasonably run `make test` (no `prek` in PATH).
 - **`nix develop --command` overhead on every hook run.** → Single-digit
   hundred-ms when already in devShell. Acceptable; if it becomes
   measurable later, switch to a re-exec guard.
-- **`pass_filenames=true` changes script invocation contract.** → Scripts
-  retain `--affected` and no-args branches; new positional branch is
-  additive. Behaviour change is local to the prek code-path.
+- **Migration changes no script behaviour.** → Local hooks invoke
+  `<script> --affected`, exactly as the legacy yaml did. The only
+  change is the wrapping in `nix develop --command`.
 - **YAML/TOML/JSON check may fail on first run.** → Run `prek run --all-files --hook-stage manual`
   before enabling at default stage; fix any existing offenders in the
   same cleanup commit as the autofix sweep.
@@ -170,14 +192,26 @@ devShell already cannot reasonably run `make test` (no `prek` in PATH).
 1. Pre-flight sweep: enumerate files the fixers would touch.
 2. Cleanup commit: strip trailing whitespace / fix EOF newlines on
    in-scope files only.
-3. Add `prek.toml` with built-in hooks AND local hooks in their new
-   `pass_filenames=true` shape; delete `.pre-commit-config.yaml` in the
-   same commit.
-4. Update scripts: add positional-filenames branch alongside existing
-   `--affected` and no-args branches.
+3. Bump `flake.lock` to nixpkgs carrying prek ≥ 0.3.0 for native TOML.
+4. Add `prek.toml` with built-in hooks plus local hooks (in their
+   existing `--affected` shape, wrapped with `nix develop --command`);
+   delete `.pre-commit-config.yaml` in the same commit.
 5. Remove `make setup-hooks` target and `test: setup-hooks` dependency.
 6. Verify: `prek validate-config` clean; `prek run --all-files` green
    inside devShell; spot-check `make test` still runs.
 
 Rollback: `git revert` the migration commit; `.pre-commit-config.yaml`
 returns from history. No state outside the repo to roll back.
+
+## Follow-up
+
+The pre-flight regex `grep -lE ' +$'` used in tasks 1.1 silently missed
+files containing `^L` (form-feed) with no plain trailing space. The
+`trailing-whitespace` hook treats form-feed as whitespace and stripped
+them on first run. Surfaced during verification; fixed by passing
+`--chars= \t` to the hook.
+
+When the dep-graph follow-up change runs its own pre-flight sweep,
+broaden the probe so similar surprises surface earlier — e.g.
+`LC_ALL=C grep -PE '[\t\v\f ]+$'`, or replace the regex with a
+language-aware Emacs batch scan that respects buffer-text semantics.
