@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+# Query the Elisp file-dependency graph.
+#
+# Usage:
+#   scripts/dep-graph affected [--from-git | <file>...]
+#   scripts/dep-graph affected-tests [--from-git | <file>...]
+#   scripts/dep-graph print
+#
+# Output (affected / affected-tests):
+#   Newline-separated paths, or the sentinel `all` (no input files)
+#   or `none` (input files present but no graph hit).
+set -euo pipefail
+
+cd "$(dirname "$0")/.."
+ROOT=$(pwd)
+
+exec emacs -Q --batch \
+  --eval "(add-to-list 'load-path \"$ROOT/lisp/dep-graph\")" \
+  --eval "(require 'dep-graph)" \
+  --eval "(dep-graph-main)" \
+  -- "$@"

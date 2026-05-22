@@ -10,7 +10,7 @@ cd "$(dirname "$0")/.."
 
 # Handle --affected flag
 if [[ $# -eq 1 && "$1" == "--affected" ]]; then
-  mapfile -t affected < <(./scripts/affected-tests.sh)
+  mapfile -t affected < <(./scripts/dep-graph affected-tests --from-git)
   if [[ ${#affected[@]} -eq 0 ]]; then
     echo "No affected test files"
     exit 0

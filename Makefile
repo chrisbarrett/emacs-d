@@ -28,7 +28,7 @@ test: lisp/+autoloads.el
 	./scripts/checkdoc.sh
 
 test-quick: lisp/+autoloads.el
-	@affected=$$(./scripts/affected-tests.sh); \
+	@affected=$$(./scripts/dep-graph affected-tests --from-git); \
 	if [ "$$affected" = "none" ]; then \
 		echo "No affected test files"; \
 	elif [ "$$affected" = "all" ]; then \
@@ -38,7 +38,7 @@ test-quick: lisp/+autoloads.el
 	fi
 
 build-affected: lisp/+autoloads.el
-	@affected=$$(./scripts/affected.sh); \
+	@affected=$$(./scripts/dep-graph affected --from-git); \
 	if [ "$$affected" = "none" ]; then \
 		echo "No affected files to compile"; \
 	elif [ "$$affected" = "all" ]; then \
@@ -48,7 +48,7 @@ build-affected: lisp/+autoloads.el
 	fi
 
 test-affected: lisp/+autoloads.el
-	@affected=$$(./scripts/affected.sh); \
+	@affected=$$(./scripts/dep-graph affected --from-git); \
 	if [ "$$affected" = "none" ]; then \
 		echo "No affected test files"; \
 	elif [ "$$affected" = "all" ]; then \
