@@ -37,6 +37,6 @@
 
 ## 4. Archive
 
-- [ ] 4.1 Run `/opsx:archive` to fold the delta spec into
+- [x] 4.1 Run `/opsx:archive` to fold the delta spec into
       `openspec/specs/tty/spec.md` and move this change directory to
       `openspec/changes/archive/`.
