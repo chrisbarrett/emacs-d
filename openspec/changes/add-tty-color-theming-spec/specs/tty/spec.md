@@ -69,20 +69,26 @@ directly, not `(face-background 'default …)`.
   `+tty-clear-bg-h` overwrites the live frames' default `:background`
   with the sentinel
 
-### Requirement: sentinel never leaks onto `:foreground` of any face
+### Requirement: sentinels never cross-stamped onto the wrong attribute
 
 The string `"unspecified-bg"` SHALL NOT appear as the `:foreground`
-attribute value of any face — neither at theme-load time nor on any
-later face refresh hook. The same prohibition applies to
-`"unspecified-fg"`.
+attribute value of any face. Symmetrically, `"unspecified-fg"` SHALL
+NOT appear as the `:background` attribute value of any face.
 
-Rationale: the sentinel is silently filtered by Emacs's tty colour
+The two sentinel strings are meaningful only on the matching
+attribute of the `default` face: `"unspecified-bg"` on `default
+:background` (tty pass-through), and `"unspecified-fg"` on `default
+:foreground` (Emacs's own initial value). Any other placement is a
+cross-stamp.
+
+Rationale: each sentinel is silently filtered by Emacs's tty colour
 resolver (`tty_defined_color` in `src/xfaces.c`) but NOT by every
 graphic colour resolver — notably `ns_defined_color` in
-`src/nsterm.m` returns failure for it. A daemon hosting both kinds
-of frames will emit `Unable to load color "unspecified-bg"` into
-`*Messages*` on every face re-realisation if the sentinel is stamped
-onto a non-default face.
+`src/nsterm.m` returns failure. A daemon hosting both kinds of
+frames will emit `Unable to load color "unspecified-bg"` into
+`*Messages*` on every face re-realisation if the sentinel is
+cross-stamped, because face_change=true forces realisation across
+all alive frames.
 
 Code paths that paint frame ornamentation faces (e.g. fringe,
 window-divider) from the default background SHALL consult
@@ -90,12 +96,17 @@ window-divider) from the default background SHALL consult
 the paint if the cached value is missing or starts with
 `"unspecified"`.
 
-#### Scenario: no face has sentinel as foreground
+#### Scenario: no face has bg-sentinel as foreground
 
 - **WHEN** the user runs `(face-list)` and inspects every face's
   `:foreground` attribute
-- **THEN** no face's `:foreground` is `"unspecified-bg"` or
-  `"unspecified-fg"`
+- **THEN** no face's `:foreground` is `"unspecified-bg"`
+
+#### Scenario: no face has fg-sentinel as background
+
+- **WHEN** the user runs `(face-list)` and inspects every face's
+  `:background` attribute
+- **THEN** no face's `:background` is `"unspecified-fg"`
 
 #### Scenario: pulse animation emits no colour-load warning
 
@@ -188,8 +199,9 @@ or starts with `"unspecified"`.
 - **WHEN** `after-init-hook` has run
 - **THEN** the `:foreground` attribute of each of `fringe`,
   `window-divider`, `window-divider-first-pixel`, and
-  `window-divider-last-pixel` is either unspecified or equals
-  `+theme-default-background`, never `"unspecified-bg"`
+  `window-divider-last-pixel` is either `'unspecified` (the symbol,
+  meaning unset) or equals `+theme-default-background`, never
+  `"unspecified-bg"`
 
 #### Scenario: skipped when cache unavailable
 
