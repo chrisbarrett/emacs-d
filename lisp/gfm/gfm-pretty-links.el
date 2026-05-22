@@ -81,6 +81,14 @@
   :doc "Keymap active inside a decorated link's title-side overlay."
   "RET" #'gfm-pretty-links-follow-link-at-point)
 
+(defvar gfm-pretty-links-after-anchor-jump-functions nil
+  "Abnormal hook run after a successful anchor-link jump.
+Each function receives one argument: the target buffer position (start
+of the matched heading line, in widened coordinates).  The hook fires
+after `gfm-pretty-links--jump-to-anchor' has widened the buffer and
+moved point.  Subscribers can use it to restore their preferred
+narrowing or apply additional decoration.  Not run on a miss.")
+
 ;;; Buffer-local state
 
 (defvar-local gfm-pretty-links--ref-def-alist nil
@@ -579,25 +587,33 @@ runs of whitespace fold to a single hyphen; everything else drops."
 
 (defun gfm-pretty-links--jump-to-anchor (anchor)
   "Move point to the heading whose generated slug matches ANCHOR (no `#').
-Walks atx and setext headings from `point-min'.  Signals `user-error'
-when no matching heading is found.  Pushes the prior position onto the
-mark ring."
+Walks atx and setext headings across the widened buffer so anchors
+resolve regardless of current narrowing.  On a successful match, pushes
+the click site onto the mark ring, widens the buffer, moves point to
+the heading, then runs `gfm-pretty-links-after-anchor-jump-functions'
+with the target buffer position.  Signals `user-error' when no matching
+heading is found and does not run the hook."
   (let ((slug (string-remove-prefix "#" anchor))
         (start (point))
         (found nil))
     (save-excursion
-      (goto-char (point-min))
-      (save-match-data
-        (while (and (not found)
-                    (re-search-forward markdown-regex-header nil t))
-          (let* ((text (or (match-string-no-properties 5)
-                           (match-string-no-properties 1))))
-            (when (and text
-                       (equal slug (gfm-pretty-links--heading-slug text)))
-              (setq found (match-beginning 0)))))))
+      (save-restriction
+        (widen)
+        (goto-char (point-min))
+        (save-match-data
+          (while (and (not found)
+                      (re-search-forward markdown-regex-header nil t))
+            (let* ((text (or (match-string-no-properties 5)
+                             (match-string-no-properties 1))))
+              (when (and text
+                         (equal slug (gfm-pretty-links--heading-slug text)))
+                (setq found (match-beginning 0))))))))
     (if found
         (progn (push-mark start)
-               (goto-char found))
+               (widen)
+               (goto-char found)
+               (run-hook-with-args
+                'gfm-pretty-links-after-anchor-jump-functions found))
       (user-error "No heading matches anchor: #%s" slug))))
 
 (defun gfm-pretty-links--follow-file (url)

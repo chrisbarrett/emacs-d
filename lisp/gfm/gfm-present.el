@@ -14,9 +14,11 @@
 ;; Forward declarations for byte-compiler.
 (defvar gfm-present-mode nil)
 (defvar gfm-present-mode-map)
+(defvar gfm-pretty-links-after-anchor-jump-functions)
 (declare-function evil-define-key* "evil-core")
 (declare-function evil-make-overriding-map "evil-core")
 (declare-function evil-normalize-keymaps "evil-core")
+(declare-function gfm-pretty-links--jump-to-anchor "gfm-pretty-links" (anchor))
 (declare-function magit-diff-range "magit-diff")
 (declare-function markdown-follow-link-at-point "markdown-mode")
 (declare-function markdown-follow-thing-at-point "markdown-mode")
@@ -552,6 +554,17 @@ one overlay per line from `point-at-bol' to `point-at-eol'."
                 #'gfm-present--cleanup-source-render nil t)
       buffer)))
 
+;;; Pretty-links anchor-jump subscription
+
+(defun gfm-present--after-anchor-jump (target-pos)
+  "Re-narrow to the H1 region containing TARGET-POS after a pretty-links jump.
+Registered on `gfm-pretty-links-after-anchor-jump-functions' (buffer-
+locally) while `gfm-present-mode' is on, so RET on a decorated anchor
+link lands narrowed to the target's slide region.  Also refreshes link
+preview overlays for the new slide."
+  (gfm-present--narrow-to-heading-at target-pos)
+  (gfm-present--render-link-previews))
+
 ;;; Minor mode
 
 (defvar-local gfm-present--owned-buffer nil
@@ -595,6 +608,8 @@ so it takes precedence over evil-state bindings."
     (when (fboundp 'evil-normalize-keymaps) (evil-normalize-keymaps))
     (add-hook 'before-revert-hook #'gfm-present--remember-position nil t)
     (add-hook 'after-revert-hook #'gfm-present--restore-position nil t)
+    (add-hook 'gfm-pretty-links-after-anchor-jump-functions
+              #'gfm-present--after-anchor-jump nil t)
     (gfm-present--narrow-to-heading-at (point))
     (gfm-present--render-link-previews))
    (t
@@ -604,6 +619,8 @@ so it takes precedence over evil-state bindings."
     (when (fboundp 'evil-normalize-keymaps) (evil-normalize-keymaps))
     (remove-hook 'before-revert-hook #'gfm-present--remember-position t)
     (remove-hook 'after-revert-hook #'gfm-present--restore-position t)
+    (remove-hook 'gfm-pretty-links-after-anchor-jump-functions
+                 #'gfm-present--after-anchor-jump t)
     (gfm-present--clear-link-previews)
     (widen))))
 

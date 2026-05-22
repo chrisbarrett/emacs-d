@@ -924,6 +924,66 @@ buffer-local revert hooks, and the minor-mode flag before
       (let ((kill-buffer-query-functions nil)) (kill-buffer)))))
 
 
+;;; §5b Pretty-links anchor-jump integration
+
+(ert-deftest gfm-present/anchor-jump-narrows-to-target-h1 ()
+  "RET on a pretty-links anchor lands narrowed to the target's slide region."
+  (require 'gfm-pretty-links)
+  (with-temp-buffer
+    (insert "# Slide one\n[jump](#filter-shape-change) here.\n\n"
+            "# Filter shape change\ndetails\n")
+    (goto-char (point-min))
+    (gfm-present-mode 1)
+    (should (equal "# Slide one" (gfm-present-tests--narrowed-first-line)))
+    (gfm-pretty-links--jump-to-anchor "#filter-shape-change")
+    (should (buffer-narrowed-p))
+    (should (equal "# Filter shape change"
+                   (gfm-present-tests--narrowed-first-line)))
+    (should (looking-at "# Filter shape change"))))
+
+(ert-deftest gfm-present/anchor-jump-rebuilds-link-previews ()
+  "After a pretty-links anchor jump, the new slide's previews refresh."
+  (require 'gfm-pretty-links)
+  (gfm-present-tests--with-temp-source '("a" "b") tmp
+    (with-temp-buffer
+      (insert (format
+               "# Slide one\n[jump](#target)\n\n# Target\n[foo](%s#L1-L2)\n"
+               tmp))
+      (goto-char (point-min))
+      (gfm-present-mode 1)
+      (should (= 0 (length gfm-present--preview-overlays)))
+      (gfm-pretty-links--jump-to-anchor "#target")
+      (should (= 1 (length gfm-present--preview-overlays))))))
+
+(ert-deftest gfm-present/registers-anchor-jump-hook-on-enable ()
+  "Mode enable adds `gfm-present--after-anchor-jump' to the buffer-local hook."
+  (require 'gfm-pretty-links)
+  (with-temp-buffer
+    (gfm-present-mode 1)
+    (should (memq #'gfm-present--after-anchor-jump
+                  gfm-pretty-links-after-anchor-jump-functions))))
+
+(ert-deftest gfm-present/removes-anchor-jump-hook-on-disable ()
+  "Mode disable removes the present-mode subscriber from the hook."
+  (require 'gfm-pretty-links)
+  (with-temp-buffer
+    (gfm-present-mode 1)
+    (gfm-present-mode -1)
+    (should-not (memq #'gfm-present--after-anchor-jump
+                      gfm-pretty-links-after-anchor-jump-functions))))
+
+(ert-deftest gfm-present/anchor-jump-hook-is-buffer-local ()
+  "The anchor-jump subscriber is added with LOCAL=t, not globally."
+  (require 'gfm-pretty-links)
+  (let ((global-before (default-value
+                        'gfm-pretty-links-after-anchor-jump-functions)))
+    (with-temp-buffer
+      (gfm-present-mode 1)
+      (should (equal global-before
+                     (default-value
+                      'gfm-pretty-links-after-anchor-jump-functions))))))
+
+
 ;;; §14 Module-level cleanup
 
 (defun gfm-present-tests--read-lib ()
