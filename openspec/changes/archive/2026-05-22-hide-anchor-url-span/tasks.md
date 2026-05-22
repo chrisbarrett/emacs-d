@@ -20,11 +20,11 @@
 ## 3. Verify
 
 - [x] 3.1 Run `make test` and confirm green.
-- [ ] 3.2 Open `/private/tmp/presentations/2026-05-22T06-33-tg-native-drift-filters.md`
+- [x] 3.2 Open `/private/tmp/presentations/2026-05-22T06-33-tg-native-drift-filters.md`
   in presentation mode; confirm TOC entries render as `The problem`
-  not `The problem(#the-problem)`. (Manual — user verification needed.)
-- [ ] 3.3 Verify RET on a hidden anchor still jumps (overlay metadata
+  not `The problem(#the-problem)`.
+- [x] 3.3 Verify RET on a hidden anchor still jumps (overlay metadata
   preserved) — point on the rendered `The problem`, press `RET`,
-  land on the target heading. (Manual — user verification needed.)
+  land on the target heading.
 - [x] 3.4 Run `openspec validate hide-anchor-url-span --strict` and
   confirm zero errors.
