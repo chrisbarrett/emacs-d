@@ -4,10 +4,10 @@
 
 ;; Decorator that renders plain GitHub Flavored Markdown blockquotes
 ;; (runs of `^>'-prefixed lines without a `[!TYPE]' marker) as a
-;; continuous left rail.  Replaces the leading `> ' with `│ ' (or `>'
-;; with `│' on bare continuation lines) via a per-window display
+;; continuous left rail.  Replaces the leading `> ' with `▌ ' (or `>'
+;; with `▌' on bare continuation lines) via a per-window display
 ;; overlay and overrides `markdown-mode's `wrap-prefix "> "' with an
-;; overlay `wrap-prefix "│ "' so soft-wrapped visual continuation
+;; overlay `wrap-prefix "▌ "' so soft-wrapped visual continuation
 ;; rows continue the rail.
 ;;
 ;; Callout-typed blockquotes are owned by `gfm-pretty-callouts'; this
@@ -26,7 +26,7 @@
   :group 'markdown-faces)
 
 (defface gfm-pretty-blockquotes-rail-face
-  '((t :inherit shadow))
+  '((t :inherit font-lock-constant-face))
   "Face for the left rail painted over plain blockquote blocks."
   :group 'gfm-pretty-blockquotes)
 
@@ -120,7 +120,7 @@ The engine memoises this via `gfm-pretty--collect'."
 
 (defun gfm-pretty-blockquotes--apply-block-anchors (block)
   "Apply width-independent anchor overlays for BLOCK.
-Per source line, sets `wrap-prefix' to a propertised `│ ' in
+Per source line, sets `wrap-prefix' to a propertised `▌ ' in
 `gfm-pretty-blockquotes-rail-face' so soft-wrapped visual rows
 continue the rail.  Widens so blocks outside the current restriction
 can still be parsed."
@@ -128,7 +128,7 @@ can still be parsed."
     (widen)
     (cl-destructuring-bind (beg end)
         (gfm-pretty-blockquotes--block-payload block)
-      (let ((wrap (propertize "│ " 'face
+      (let ((wrap (propertize "▌ " 'face
                               'gfm-pretty-blockquotes-rail-face))
             (p beg))
         (while (< p (1+ end))
@@ -140,17 +140,17 @@ can still be parsed."
 
 (defun gfm-pretty-blockquotes--apply-block-display (block window)
   "Apply per-WINDOW display overlays for BLOCK.
-Per source line, replaces the leading `> ' (2 chars) with `│ ' or
-the bare `>' (1 char) with `│', both painted in
+Per source line, replaces the leading `> ' (2 chars) with `▌ ' or
+the bare `>' (1 char) with `▌', both painted in
 `gfm-pretty-blockquotes-rail-face'.  Carries the engine's revealable
 property so point/region overlap exposes the raw source per window."
   (save-restriction
     (widen)
     (cl-destructuring-bind (beg end)
         (gfm-pretty-blockquotes--block-payload block)
-      (let ((rail-two (propertize "│ " 'face
+      (let ((rail-two (propertize "▌ " 'face
                                   'gfm-pretty-blockquotes-rail-face))
-            (rail-one (propertize "│" 'face
+            (rail-one (propertize "▌" 'face
                                   'gfm-pretty-blockquotes-rail-face))
             (p beg))
         (while (< p (1+ end))

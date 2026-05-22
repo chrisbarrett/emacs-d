@@ -4487,7 +4487,7 @@ hooks and are checked separately."
    (overlays-in (point-min) (point-max))))
 
 (ert-deftest lang-markdown/gfm-pretty-blockquotes-plain-renders-rail-prefix-and-wrap ()
-  "A plain `> body' line gets a `│ ' display overlay and a rail-face wrap-prefix."
+  "A plain `> body' line gets a `▌ ' display overlay and a rail-face wrap-prefix."
   (with-temp-buffer
     (insert "> Pain: clutter\n")
     (gfm-pretty-mode 1)
@@ -4495,7 +4495,7 @@ hooks and are checked separately."
            (anchors  (lang-markdown-tests--blockquotes-anchor-overlays)))
       (should (= 1 (length displays)))
       (let ((ov (car displays)))
-        (should (equal "│ " (overlay-get ov 'display)))
+        (should (equal "▌ " (overlay-get ov 'display)))
         (should (eq 'rail-prefix
                     (overlay-get ov 'gfm-pretty-blockquotes-kind)))
         (should (= 2 (- (overlay-end ov) (overlay-start ov)))))
@@ -4503,7 +4503,7 @@ hooks and are checked separately."
       (let* ((ov (car anchors))
              (wp (overlay-get ov 'wrap-prefix)))
         (should (stringp wp))
-        (should (equal "│ " wp))
+        (should (equal "▌ " wp))
         (should (let ((face (get-text-property 0 'face wp)))
                   (or (eq face 'gfm-pretty-blockquotes-rail-face)
                       (and (listp face)
@@ -4525,7 +4525,7 @@ hooks and are checked separately."
     (should-not (gfm-pretty-blockquotes--find-blocks))))
 
 (ert-deftest lang-markdown/gfm-pretty-blockquotes-bare-gt-produces-one-char-rail ()
-  "A bare `>' continuation line gets a 1-char `│' display overlay."
+  "A bare `>' continuation line gets a 1-char `▌' display overlay."
   (with-temp-buffer
     (insert "> first\n>\n> second\n")
     (gfm-pretty-mode 1)
@@ -4539,7 +4539,7 @@ hooks and are checked separately."
                        (= (overlay-start o) bare-pos)))
                 (overlays-at bare-pos))))
       (should ov)
-      (should (equal "│" (overlay-get ov 'display)))
+      (should (equal "▌" (overlay-get ov 'display)))
       (should (= 1 (- (overlay-end ov) (overlay-start ov)))))
     (gfm-pretty-mode -1)))
 
@@ -4557,7 +4557,7 @@ hooks and are checked separately."
     (forward-char 2)
     (let ((wp (get-char-property (point) 'wrap-prefix)))
       (should (stringp wp))
-      (should (equal "│ " wp)))
+      (should (equal "▌ " wp)))
     (gfm-pretty-mode -1)))
 
 (ert-deftest lang-markdown/gfm-pretty-blockquotes-reveal-swaps-display ()
@@ -4568,14 +4568,14 @@ hooks and are checked separately."
     (let* ((displays (lang-markdown-tests--blockquotes-display-overlays))
            (ov (car displays)))
       (should ov)
-      (should (equal "│ " (overlay-get ov 'display)))
+      (should (equal "▌ " (overlay-get ov 'display)))
       (goto-char (overlay-start ov))
       (gfm-pretty--reveal)
       (should-not (overlay-get ov 'display))
       (should (stringp (overlay-get ov 'gfm-pretty-saved-display)))
       (goto-char (point-max))
       (gfm-pretty--reveal)
-      (should (equal "│ " (overlay-get ov 'display))))
+      (should (equal "▌ " (overlay-get ov 'display))))
     (gfm-pretty-mode -1)))
 
 (ert-deftest lang-markdown/gfm-pretty-blockquotes-narrowing-rebuild-converges ()
