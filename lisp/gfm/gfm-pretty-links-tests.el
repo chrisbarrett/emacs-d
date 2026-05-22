@@ -105,6 +105,21 @@
         (should (member click (mapcar #'marker-position
                                       (cons (mark-marker) mark-ring))))))))
 
+(ert-deftest gfm-pretty-links/jump-to-anchor-records-better-jumper-at-click-site ()
+  "Successful jump records the click site in better-jumper's jump list."
+  (with-temp-buffer
+    (insert "# Top\nclickpoint here\n# Target\n")
+    (let ((gfm-pretty-links-after-anchor-jump-functions nil)
+          (recorded nil))
+      (cl-letf (((symbol-function 'better-jumper-set-jump)
+                 (lambda (&optional pos) (push (or pos (point)) recorded))))
+        (goto-char (point-min))
+        (search-forward "clickpoint")
+        (let ((click (point)))
+          (gfm-pretty-links--jump-to-anchor "#target")
+          (should (= 1 (length recorded)))
+          (should (= click (car recorded))))))))
+
 
 ;;; URL-form skip (source-range / diff URLs owned by gfm-present)
 

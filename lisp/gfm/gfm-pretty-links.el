@@ -623,11 +623,13 @@ runs of whitespace fold to a single hyphen; everything else drops."
 (defun gfm-pretty-links--jump-to-anchor (anchor)
   "Move point to the heading whose generated slug matches ANCHOR (no `#').
 Walks atx and setext headings across the widened buffer so anchors
-resolve regardless of current narrowing.  On a successful match, pushes
-the click site onto the mark ring, widens the buffer, moves point to
-the heading, then runs `gfm-pretty-links-after-anchor-jump-functions'
-with the target buffer position.  Signals `user-error' when no matching
-heading is found and does not run the hook."
+resolve regardless of current narrowing.  On a successful match,
+records the click site via `gfm-pretty-links--record-jump' (so
+better-jumper / evil's jump list captures it), pushes it onto the
+mark ring, widens the buffer, moves point to the heading, then runs
+`gfm-pretty-links-after-anchor-jump-functions' with the target buffer
+position.  Signals `user-error' when no matching heading is found and
+does not run the hook."
   (let ((slug (string-remove-prefix "#" anchor))
         (start (point))
         (found nil))
@@ -644,12 +646,21 @@ heading is found and does not run the hook."
                          (equal slug (gfm-pretty-links--heading-slug text)))
                 (setq found (match-beginning 0))))))))
     (if found
-        (progn (push-mark start)
+        (progn (gfm-pretty-links--record-jump start)
+               (push-mark start)
                (widen)
                (goto-char found)
                (run-hook-with-args
                 'gfm-pretty-links-after-anchor-jump-functions found))
       (user-error "No heading matches anchor: #%s" slug))))
+
+(defun gfm-pretty-links--record-jump (pos)
+  "Record POS in the active jump-list implementation, if any.
+Prefers `better-jumper-set-jump' (used by this config), falls back to
+`evil-set-jump'.  Silently noops when neither is available."
+  (cond
+   ((fboundp 'better-jumper-set-jump) (better-jumper-set-jump pos))
+   ((fboundp 'evil-set-jump) (evil-set-jump pos))))
 
 (defun gfm-pretty-links--follow-file (url)
   "Open file at URL via `find-file', expanded against the buffer's directory.

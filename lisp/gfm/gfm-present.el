@@ -577,6 +577,29 @@ preview overlays for the new slide."
   (gfm-present--narrow-to-heading-at target-pos)
   (gfm-present--render-link-previews))
 
+(defun gfm-present--around-evil-jump (orig &rest args)
+  "Around-advice for evil jump commands.
+While `gfm-present-mode' is on, widens before delegating to ORIG so the
+target jump-list position is reachable, then re-narrows to the slide
+containing point and refreshes link previews.  Outside present-mode,
+calls ORIG with ARGS unchanged."
+  (if (bound-and-true-p gfm-present-mode)
+      (progn (widen)
+             (apply orig args)
+             (gfm-present--narrow-to-heading-at (point))
+             (gfm-present--render-link-previews))
+    (apply orig args)))
+
+(with-eval-after-load 'evil
+  (advice-add 'evil-jump-backward :around #'gfm-present--around-evil-jump)
+  (advice-add 'evil-jump-forward :around #'gfm-present--around-evil-jump))
+
+(with-eval-after-load 'better-jumper
+  (advice-add 'better-jumper-jump-backward :around
+              #'gfm-present--around-evil-jump)
+  (advice-add 'better-jumper-jump-forward :around
+              #'gfm-present--around-evil-jump))
+
 ;;; Minor mode
 
 (defvar-local gfm-present--owned-buffer nil
