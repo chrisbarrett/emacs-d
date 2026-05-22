@@ -38,10 +38,10 @@
 
 ## 6. Visual verification
 
-- [ ] 6.1 Open `/private/tmp/presentations/2026-05-22T06-33-tg-native-drift-filters.md` in a running Emacs (or the sandboxed daemon if risk warrants), enable `gfm-pretty-mode`, and confirm: tinted rectangle present, inset visible as untinted gutter, rail glyph at column `tab-width`, no right border glyph, no leak past the rectangle's right edge with `hl-line-mode` active.
-- [ ] 6.2 Confirm soft-wrap continuation rows show the same inset + rail and tinted body.
-- [ ] 6.3 Confirm point-on-line drops the inset+rail and exposes raw `> ` in only the selected window.
-- [ ] 6.4 Confirm a bare `>` continuation line renders as a tinted row with rail glyph but no trailing space.
+- [x] 6.1 Open `/private/tmp/presentations/2026-05-22T06-33-tg-native-drift-filters.md` in a running Emacs (or the sandboxed daemon if risk warrants), enable `gfm-pretty-mode`, and confirm: tinted rectangle present, inset visible as untinted gutter, rail glyph at column `tab-width`, no right border glyph, no leak past the rectangle's right edge with `hl-line-mode` active.
+- [x] 6.2 Confirm soft-wrap continuation rows show the same inset + rail and tinted body.
+- [x] 6.3 Confirm point-on-line drops the inset+rail and exposes raw `> ` in only the selected window.
+- [x] 6.4 Confirm a bare `>` continuation line renders as a tinted row with rail glyph but no trailing space.
 
 ## 7. Specs + checks
 
