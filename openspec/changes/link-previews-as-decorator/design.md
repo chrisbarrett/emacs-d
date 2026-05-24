@@ -150,23 +150,18 @@ narrow re-render as a special-case fast-path.  Rejected — the
 engine's after-change handler already debounces; running it
 through the same path keeps the codebase simpler.
 
-### D5. Obsolete aliases for the moved symbols
+### D5. Rename in-tree consumers directly — no obsolete aliases
 
-```elisp
-(define-obsolete-function-alias 'gfm-present--render-link-previews
-  'gfm-pretty-link-previews--rebuild "29.1")
-(define-obsolete-function-alias 'gfm-present--source-preview-display
-  'gfm-pretty-link-previews--source-display "29.1")
-…
-```
+This config is the sole consumer of the moved symbols (the user
+confirmed: "we are only consumer").  Every in-tree call site —
+`gfm-present.el`, `gfm-present-tests.el`, the relocated decorator
+tests — switches to the new `gfm-pretty-link-previews--` names in
+one pass.
 
-All previously-public-from-present-mode symbols get an alias.
-Internal-only helpers (the ones whose name never escaped
-`gfm-present.el`) don't need an alias — but adding them is cheap
-and pre-empts future re-discovery.
-
-**Alternative considered:** no aliases, rename cleanly.  Rejected
-— the user has dotfiles that may bind keys to these functions.
+**Alternative considered:** keep `define-obsolete-function-alias`
+entries pointing the old `gfm-present--` symbols at the new ones.
+Rejected — there are no out-of-tree callers to protect, so the
+aliases would be dead weight and obscure the public surface.
 
 ## Risks / Trade-offs
 

@@ -32,7 +32,8 @@
   (require 'gfm-pretty-fences)
   (require 'gfm-pretty-tables)
   (require 'gfm-pretty-hrule)
-  (require 'gfm-pretty-links))
+  (require 'gfm-pretty-links)
+  (require 'gfm-pretty-link-previews))
 
 
 ;;; Per-decorator toggle

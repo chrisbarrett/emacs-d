@@ -12,6 +12,8 @@
 (require 'project)
 (require 'gfm-pretty)
 (require 'gfm-pretty-borders)
+(require 'gfm-pretty-engine)
+(require 'gfm-pretty-link-previews)
 
 ;; Forward declarations for byte-compiler.
 (defvar gfm-present-mode nil)
@@ -119,7 +121,7 @@ When the document has no H1s, leave the buffer widened."
       (gfm-present--narrow-to-heading-at next)
       (goto-char (point-min))
       (when gfm-present-mode
-        (gfm-present--render-link-previews)))))
+        (gfm-present--rebuild-link-previews)))))
 
 (defun gfm-present-previous-slide ()
   "Retreat to the previous H1 and narrow there.  Silent no-op at first."
@@ -134,7 +136,7 @@ When the document has no H1s, leave the buffer widened."
       (gfm-present--narrow-to-heading-at prev)
       (goto-char (point-min))
       (when gfm-present-mode
-        (gfm-present--render-link-previews)))))
+        (gfm-present--rebuild-link-previews)))))
 
 ;;; Link parsing + dispatch
 
@@ -177,11 +179,6 @@ no match, return the symbol `pass-through'."
             (cons found (gfm-present--heading-region found))
           'pass-through)))))
 
-(defconst gfm-present--md-link-rx
-  (rx "[" (group (* (not (any "[" "]" "\n")))) "]"
-      "(" (group (* (not (any ")" "\n")))) ")")
-  "Regexp matching a markdown `[label](url)' link.")
-
 (defun gfm-present--link-url-at-point ()
   "Return the URL of the markdown link at point, or nil."
   (save-excursion
@@ -190,10 +187,17 @@ no match, return the symbol `pass-through'."
           (bol (line-beginning-position))
           found)
       (goto-char bol)
-      (while (and (not found) (re-search-forward gfm-present--md-link-rx eol t))
+      (while (and (not found)
+                  (re-search-forward
+                   gfm-pretty-link-previews--md-link-rx eol t))
         (when (and (<= (match-beginning 0) p) (<= p (match-end 0)))
           (setq found (match-string-no-properties 2))))
       found)))
+
+(defun gfm-present--rebuild-link-previews ()
+  "Trigger a link-previews decorator rebuild when it is enabled."
+  (when (gfm-pretty--state-get 'link-previews 'enabled-p)
+    (gfm-pretty--rebuild (gfm-pretty--get 'link-previews))))
 
 (defun gfm-present--follow-link-fallback ()
   "Delegate link follow to `markdown-mode's default handler."
@@ -242,9 +246,9 @@ pass-through to the markdown major mode default handler."
   (let* ((url (gfm-present--link-url-at-point))
          (slug (and url (gfm-present--parse-heading-link url)))
          (source (and url (not slug)
-                      (gfm-present--parse-source-link url)))
+                      (gfm-pretty-link-previews--parse-source-link url)))
          (diff (and url (not slug) (not source)
-                    (gfm-present--parse-diff-link url))))
+                    (gfm-pretty-link-previews--parse-diff-link url))))
     (cond
      (slug
       (let ((result (gfm-present--dispatch-heading-link slug)))
@@ -259,7 +263,7 @@ pass-through to the markdown major mode default handler."
             (narrow-to-region (car region) (cdr region))
             (goto-char heading-pos)
             (when gfm-present-mode
-              (gfm-present--render-link-previews)))))))
+              (gfm-present--rebuild-link-previews)))))))
      (source
       (push-mark (point) t)
       (gfm-present--follow-source-link
@@ -272,441 +276,7 @@ pass-through to the markdown major mode default handler."
       (gfm-present--follow-link-fallback)))))
 
 
-;;; Box-preview helpers
 
-(defun gfm-present--abbrev-source-path (path)
-  "Return PATH abbreviated for top-border display.
-Project-relative when PATH is inside a project (resolved against
-PATH's own directory, not the visiting buffer); otherwise
-`abbreviate-file-name'.  Nil or empty PATH returns PATH unchanged."
-  (cond
-   ((or (null path) (and (stringp path) (string-empty-p path))) path)
-   (t
-    (let* ((abs (expand-file-name path))
-           (dir (file-name-directory (or (file-truename abs) abs)))
-           (proj (and dir
-                      (let ((default-directory dir))
-                        (project-current)))))
-      (cond
-       ((and proj (file-in-directory-p abs (project-root proj)))
-        (file-relative-name abs (project-root proj)))
-       (t (abbreviate-file-name abs)))))))
-
-(defun gfm-present--fit-label-into-border (label budget)
-  "Truncate LABEL to fit within BUDGET cells, preserving trailing range.
-Returns LABEL when it already fits.  When LABEL contains a `/'
-separator and the trailing path component (with the `:start-end'
-range suffix) fits within BUDGET minus the leading `…/' marker,
-returns `…/<basename>:<start>-<end>'.  Otherwise truncates with a
-plain leading `…'."
-  (cond
-   ((or (null label) (<= (string-width label) (max 0 budget))) label)
-   (t
-    (let* ((slash (and (string-match-p "/" label)
-                       (cl-position ?/ label :from-end t)))
-           (tail (and slash (substring label (1+ slash))))
-           (ellipsis-path (and tail (concat "…/" tail))))
-      (cond
-       ((and ellipsis-path (<= (string-width ellipsis-path) budget))
-        ellipsis-path)
-       (t
-        (let* ((available (max 0 (1- budget)))
-               (suffix (gfm-present--right-substring-by-width
-                        label available)))
-          (concat "…" suffix))))))))
-
-(defun gfm-present--right-substring-by-width (s cells)
-  "Return the trailing substring of S whose `string-width' is at most CELLS."
-  (let ((len (length s))
-        (i (length s))
-        (acc 0))
-    (while (and (> i 0)
-                (let ((next (+ acc (char-width (aref s (1- i))))))
-                  (when (<= next cells)
-                    (setq acc next)
-                    t)))
-      (setq i (1- i)))
-    (substring s i len)))
-
-(defun gfm-present--truncate-line-to-width (line cell-budget)
-  "Return LINE truncated to CELL-BUDGET cells with `…' on overflow.
-Truncation is measured via `string-width' (cell count).  Text
-properties on the retained head of LINE are preserved."
-  (truncate-string-to-width line cell-budget nil nil "…"))
-
-(defun gfm-present--standalone-link-p (link-start link-end)
-  "Return non-nil when [LINK-START, LINK-END) span is a standalone link.
-A link is standalone when its line, with the `[label](url)' span
-removed, is whitespace plus at most one list-item marker (`- ',
-`* ', `+ ', `<n>. ') or a blockquote marker (`> ').
-
-Callers MUST pass explicit positions rather than rely on global
-match-data, since intervening `string-match' calls in parser helpers
-\(e.g. `gfm-present--parse-source-link') will have clobbered it."
-  (save-excursion
-    (goto-char link-start)
-    (let ((bol (line-beginning-position)))
-      (goto-char link-end)
-      (let* ((eol (line-end-position))
-             (rest (concat
-                    (buffer-substring-no-properties bol link-start)
-                    (buffer-substring-no-properties link-end eol))))
-        (and (string-match-p
-              (rx bos (* blank)
-                  (? (or "- " "* " "+ " "> "
-                         (: (+ digit) ". ")))
-                  (* blank) eos)
-              rest)
-             t)))))
-
-;;; Box renderer
-
-(defun gfm-present--box-display (&rest plist)
-  "Return a propertised multi-line box display string.
-PLIST keys:
-  :label       string for the top border (already abbreviated).
-  :body        body string (multi-line, pre-fontified).
-  :extra       integer; when > 0, embedded as `+N more lines' in
-               the bottom border.
-  :lhs-margin  non-nil for LHS-margin mode (`│' instead of `│ ',
-               2-col decoration width to match `\\=`\\=`\\=`diff' fences).
-
-Box width follows
-`(min available-width (max 80 (+ longest-body-line decoration-w)))'
-mirroring `gfm-pretty-fences--apply-bordered-display'."
-  (let* ((label (plist-get plist :label))
-         (body (or (plist-get plist :body) ""))
-         (extra (or (plist-get plist :extra) 0))
-         (lhs-margin (plist-get plist :lhs-margin))
-         (deco-w (if lhs-margin 2 4))
-         (avail (gfm-pretty--available-width))
-         (body-lines (split-string body "\n"))
-         (longest (apply #'max 0 (mapcar #'string-width body-lines)))
-         (box-w (min avail (max 80 (+ longest deco-w))))
-         (interior-w (max 1 (- box-w deco-w)))
-         (face 'gfm-pretty-border-face)
-         (fitted (gfm-present--fit-label-into-border
-                  (or label "") (max 1 (- box-w 5))))
-         (top (gfm-present--box-top-border fitted box-w face))
-         (bot (gfm-present--box-bottom-border extra box-w face))
-         (decorated (mapconcat
-                     (lambda (line)
-                       (gfm-present--box-line line interior-w
-                                              lhs-margin face))
-                     body-lines "\n")))
-    (concat top "\n" decorated "\n" bot)))
-
-(defun gfm-present--box-top-border (label width face)
-  "Build the top-border string of WIDTH cells embedding LABEL.
-LABEL and fill dashes carry FACE."
-  (let* ((label-w (string-width label))
-         ;; `┌─ ' (3) + LABEL + ` ' (1) + dashes + `┐' (1) = WIDTH.
-         (fill-w (max 1 (- width 3 label-w 1 1))))
-    (concat
-     (propertize "┌─ " 'face face)
-     (propertize label 'face face)
-     (propertize " " 'face face)
-     (propertize (make-string fill-w ?─) 'face face)
-     (propertize "┐" 'face face))))
-
-(defun gfm-present--box-bottom-border (extra width face)
-  "Build the bottom-border string of WIDTH cells.
-When EXTRA > 0 the border embeds `+N more lines'; otherwise it is a
-bare run of `─' between corners.  FACE is applied throughout."
-  (cond
-   ((and (integerp extra) (> extra 0))
-    (let* ((tag (format "+%d more lines" extra))
-           (tag-w (string-width tag))
-           (fill-w (max 1 (- width 3 tag-w 1 1))))
-      (concat
-       (propertize "└─ " 'face face)
-       (propertize tag 'face face)
-       (propertize " " 'face face)
-       (propertize (make-string fill-w ?─) 'face face)
-       (propertize "┘" 'face face))))
-   (t
-    (let ((fill-w (max 1 (- width 2))))
-      (concat
-       (propertize "└" 'face face)
-       (propertize (make-string fill-w ?─) 'face face)
-       (propertize "┘" 'face face))))))
-
-(defun gfm-present--box-line (line interior-w lhs-margin face)
-  "Return LINE padded/truncated to INTERIOR-W cells wrapped in box edges.
-When LHS-MARGIN is non-nil the wrap is `│' / `│' with no inner
-padding; otherwise `│ ' / ` │'.  Border glyphs carry FACE."
-  (let* ((truncated (gfm-present--truncate-line-to-width line interior-w))
-         (w (string-width truncated))
-         (pad-w (max 0 (- interior-w w)))
-         (padded (concat truncated (make-string pad-w ?\s))))
-    (cond
-     (lhs-margin
-      (concat (propertize "│" 'face face)
-              padded
-              (propertize "│" 'face face)))
-     (t
-      (concat (propertize "│ " 'face face)
-              padded
-              (propertize " │" 'face face))))))
-
-(defun gfm-present--abbrev-diff-refs (ref)
-  "Return REF shortened to 7 chars when it is a 40-char hex SHA.
-Branch names, tags and short refs are returned unchanged."
-  (cond
-   ((and (stringp ref)
-         (string-match-p (rx bos (= 40 hex) eos) ref))
-    (substring ref 0 7))
-   (t ref)))
-
-;;; Source-range link parsing + preview
-
-(defconst gfm-present--source-link-rx
-  (rx bos (group (+ (not (any "#"))))
-      "#L" (group (+ digit))
-      (? "-L" (group (+ digit)))
-      eos)
-  "Regexp matching a `path#L<start>[-L<end>]'-form link URL.")
-
-(defun gfm-present--parse-source-link (url)
-  "Return (PATH . (START . END)) for source-range URL, or nil."
-  (when (and (stringp url)
-             (string-match gfm-present--source-link-rx url))
-    (let* ((path (match-string 1 url))
-           (start (string-to-number (match-string 2 url)))
-           (end-s (match-string 3 url))
-           (end (if end-s (string-to-number end-s) start)))
-      (cons path (cons start end)))))
-
-(defun gfm-present--major-mode-for-path (path)
-  "Return the major-mode symbol for PATH via `auto-mode-alist'.
-Falls back to `fundamental-mode' when no entry matches."
-  (or (assoc-default path auto-mode-alist #'string-match-p)
-      #'fundamental-mode))
-
-(defconst gfm-present--preview-cap 10
-  "Maximum number of lines to include in a preview fence body.")
-
-(defun gfm-present--read-line-range (path start end)
-  "Read PATH lines START..END (1-based, inclusive).
-Return (LINES . EXTRA) where LINES is up to 10 strings (no
-newlines) and EXTRA is the count of additional lines past the cap.
-Return symbol `file-not-found' or `invalid-range' on error."
-  (cond
-   ((not (and path (file-readable-p path))) 'file-not-found)
-   ((or (not (integerp start)) (not (integerp end))
-        (< start 1) (< end start))
-    'invalid-range)
-   (t
-    (catch 'result
-      (with-temp-buffer
-        (insert-file-contents path)
-        (goto-char (point-min))
-        (when (> (forward-line (1- start)) 0)
-          (throw 'result 'invalid-range))
-        (when (eobp)
-          (throw 'result 'invalid-range))
-        (let* ((requested (1+ (- end start)))
-               (cap gfm-present--preview-cap)
-               (take (min requested cap))
-               (extra (max 0 (- requested cap)))
-               (lines nil))
-          (dotimes (_ take)
-            (unless (eobp)
-              (push (buffer-substring-no-properties
-                     (line-beginning-position) (line-end-position))
-                    lines)
-              (forward-line 1)))
-          (cons (nreverse lines) extra)))))))
-
-(defun gfm-present--fontify-source (path lines)
-  "Return LINES joined with newlines, fontified per PATH's major-mode.
-Activates `gfm-present--major-mode-for-path' in a temp buffer with
-`buffer-file-name' set to PATH (so tree-sitter modes that key off
-the file name activate correctly), inserts the joined LINES, runs
-`font-lock-ensure', and returns `buffer-substring' so the `face'
-text properties survive into the caller."
-  (with-temp-buffer
-    (setq buffer-file-name path)
-    (unwind-protect
-        (progn
-          (let ((mode (gfm-present--major-mode-for-path path)))
-            (condition-case _err
-                (funcall mode)
-              (error (fundamental-mode))))
-          (insert (mapconcat #'identity lines "\n"))
-          (font-lock-ensure)
-          (buffer-substring (point-min) (point-max)))
-      (setq buffer-file-name nil)
-      (set-buffer-modified-p nil))))
-
-(defun gfm-present--source-preview-display (path start end)
-  "Build the preview display string for source-range link PATH#L<start>-L<end>.
-Returns a propertised string: either a `gfm-pretty-border-face' box
-\(top border embeds `<abbrev-path>:<start>-<end>'; body is the
-major-mode-fontified source lines; bottom border embeds `+N more
-lines' when the requested range exceeded `gfm-present--preview-cap')
-or a bare `shadow'-faced `[broken preview] …' sentinel on
-file-not-found / invalid-range."
-  (let* ((abbrev (gfm-present--abbrev-source-path path))
-         (label (format "%s:%d-%d" (or abbrev path) start end))
-         (result (gfm-present--read-line-range path start end)))
-    (cond
-     ((eq result 'file-not-found)
-      (propertize (format "[broken preview] %s — file not found" label)
-                  'face 'shadow))
-     ((eq result 'invalid-range)
-      (propertize (format "[broken preview] %s — invalid range" label)
-                  'face 'shadow))
-     (t
-      (let* ((lines (car result))
-             (extra (cdr result))
-             (body (gfm-present--fontify-source path lines)))
-        (gfm-present--box-display
-         :label label :body body :extra extra :lhs-margin nil))))))
-
-(defvar-local gfm-present--preview-overlays nil
-  "List of preview overlays created in this buffer.
-See `gfm-present--render-link-previews'.")
-
-(defun gfm-present--clear-link-previews ()
-  "Delete all preview overlays in the current buffer."
-  (mapc #'delete-overlay gfm-present--preview-overlays)
-  (setq gfm-present--preview-overlays nil))
-
-(defun gfm-present--make-preview-overlay (link-start link-end fence)
-  "Create a preview overlay covering LINK-START..LINK-END showing FENCE."
-  (let ((ov (make-overlay link-start link-end)))
-    (overlay-put ov 'display fence)
-    (overlay-put ov 'gfm-present t)
-    (push ov gfm-present--preview-overlays)
-    ov))
-
-;;; Diff-range link parsing + preview
-
-(defun gfm-present--parse-diff-link (url)
-  "Parse `diff:<base>...<head>[#<path>]'.
-Returns (:base BASE :head HEAD :path PATH-OR-NIL) or nil."
-  (when (and (stringp url) (string-prefix-p "diff:" url))
-    (let* ((rest (substring url 5))
-           (sep (string-match-p "\\.\\.\\." rest)))
-      (when sep
-        (let* ((base (substring rest 0 sep))
-               (after (substring rest (+ sep 3)))
-               (hash (string-match-p "#" after))
-               (head (if hash (substring after 0 hash) after))
-               (path (and hash (substring after (1+ hash)))))
-          (when (and (> (length base) 0) (> (length head) 0))
-            (list :base base :head head :path path)))))))
-
-(defun gfm-present--diff-preview-argv (worktree base head &optional path)
-  "Build argv for `git -C WORKTREE diff B...H [-- P]'."
-  (let ((argv (list "git" "-C" worktree "diff"
-                    (format "%s...%s" base head))))
-    (if path
-        (append argv (list "--" path))
-      argv)))
-
-(defun gfm-present--run-diff-preview (worktree base head &optional path)
-  "Run `git diff B...H [-- P]' from WORKTREE.
-Return a plist (:status STATUS :body BODY :extra EXTRA) where STATUS is
-`ok', `no-changes', or `error'."
-  (let* ((argv (gfm-present--diff-preview-argv worktree base head path))
-         (cap gfm-present--preview-cap)
-         (output nil)
-         (exit nil))
-    (with-temp-buffer
-      (setq exit (apply #'call-process (car argv) nil t nil (cdr argv)))
-      (setq output (buffer-string)))
-    (cond
-     ((not (zerop exit))
-      (let ((first-line (car (split-string output "\n" t))))
-        (list :status 'error :body (or first-line "git error") :extra 0)))
-     ((zerop (length (string-trim output)))
-      (list :status 'no-changes :body "(no changes)" :extra 0))
-     (t
-      (let* ((all-lines (split-string output "\n"))
-             (lines (if (and all-lines
-                             (string-empty-p (car (last all-lines))))
-                        (butlast all-lines)
-                      all-lines))
-             (n (length lines))
-             (take (min cap n))
-             (head-lines (cl-subseq lines 0 take))
-             (extra (max 0 (- n cap))))
-        (list :status 'ok
-              :body (mapconcat #'identity head-lines "\n")
-              :extra extra))))))
-
-(defun gfm-present--diff-preview-display (worktree base head path)
-  "Build the preview display string for diff link BASE...HEAD[#PATH].
-Returns a propertised string: either an LHS-margin
-`gfm-pretty-border-face' box (top border embeds `<base>...<head>'
-or `<base>...<head> — <path>', with 40-hex SHAs shortened to 7
-chars; body is the first lines of `git diff' run in WORKTREE) or a
-bare `shadow'-faced `[broken preview] …' sentinel on `no-changes' /
-git-error states."
-  (let* ((short-base (gfm-present--abbrev-diff-refs base))
-         (short-head (gfm-present--abbrev-diff-refs head))
-         (refs (format "%s...%s" short-base short-head))
-         (label (if path (format "%s — %s" refs path) refs))
-         (qualifier (if path (format "[%s]" path) ""))
-         (sentinel-prefix (concat refs qualifier))
-         (result (gfm-present--run-diff-preview worktree base head path))
-         (status (plist-get result :status))
-         (body (plist-get result :body))
-         (extra (plist-get result :extra)))
-    (cond
-     ((eq status 'error)
-      (propertize
-       (format "[broken preview] %s — git error: %s"
-               sentinel-prefix body)
-       'face 'shadow))
-     ((eq status 'no-changes)
-      (propertize
-       (format "[broken preview] %s — no changes" sentinel-prefix)
-       'face 'shadow))
-     (t
-      (gfm-present--box-display
-       :label label :body body :extra extra :lhs-margin t)))))
-
-(defun gfm-present--render-link-previews ()
-  "Scan the current narrowing and render preview overlays for standalone links.
-Source-range links (`path#L<a>-L<b>') get a boxed source preview;
-diff links (`diff:B...H[#P]') get a boxed diff preview.  Links that
-do not satisfy `gfm-present--standalone-link-p' are left
-undecorated."
-  (gfm-present--clear-link-previews)
-  (let ((wt default-directory))
-    (save-excursion
-      (goto-char (point-min))
-      (while (re-search-forward gfm-present--md-link-rx nil t)
-        (let* ((url (match-string-no-properties 2))
-               (link-start (match-beginning 0))
-               (link-end (match-end 0))
-               (source (gfm-present--parse-source-link url))
-               (diff (and (not source) (gfm-present--parse-diff-link url))))
-          (when (and (or source diff)
-                     (gfm-present--standalone-link-p
-                      link-start link-end))
-            (cond
-             (source
-              (let* ((path (car source))
-                     (start (cadr source))
-                     (end (cddr source))
-                     (resolved (if (file-name-absolute-p path) path
-                                 (expand-file-name path default-directory)))
-                     (display (gfm-present--source-preview-display
-                               resolved start end)))
-                (gfm-present--make-preview-overlay
-                 link-start link-end display)))
-             (diff
-              (let ((display (gfm-present--diff-preview-display
-                              wt
-                              (plist-get diff :base)
-                              (plist-get diff :head)
-                              (plist-get diff :path))))
-                (gfm-present--make-preview-overlay
-                 link-start link-end display))))))))))
 
 
 ;;; Pretty-links anchor-jump subscription
@@ -718,7 +288,7 @@ locally) while `gfm-present-mode' is on, so RET on a decorated anchor
 link lands narrowed to the target's slide region.  Also refreshes link
 preview overlays for the new slide."
   (gfm-present--narrow-to-heading-at target-pos)
-  (gfm-present--render-link-previews))
+  (gfm-present--rebuild-link-previews))
 
 (defun gfm-present--around-evil-jump (orig &rest args)
   "Around-advice for evil jump commands.
@@ -730,7 +300,7 @@ calls ORIG with ARGS unchanged."
       (progn (widen)
              (apply orig args)
              (gfm-present--narrow-to-heading-at (point))
-             (gfm-present--render-link-previews))
+             (gfm-present--rebuild-link-previews))
     (apply orig args)))
 
 (with-eval-after-load 'evil
@@ -789,7 +359,9 @@ so it takes precedence over evil-state bindings."
     (add-hook 'gfm-pretty-links-after-anchor-jump-functions
               #'gfm-present--after-anchor-jump nil t)
     (gfm-present--narrow-to-heading-at (point))
-    (gfm-present--render-link-previews))
+    (unless (bound-and-true-p gfm-pretty-mode)
+      (gfm-pretty-mode 1))
+    (gfm-present--rebuild-link-previews))
    (t
     (setq minor-mode-overriding-map-alist
           (assq-delete-all 'gfm-present-mode
@@ -799,7 +371,6 @@ so it takes precedence over evil-state bindings."
     (remove-hook 'after-revert-hook #'gfm-present--restore-position t)
     (remove-hook 'gfm-pretty-links-after-anchor-jump-functions
                  #'gfm-present--after-anchor-jump t)
-    (gfm-present--clear-link-previews)
     (widen))))
 
 ;;;###autoload
@@ -909,7 +480,7 @@ state as before."
       (unless gfm-present-mode
         (gfm-present-mode 1))
       (when gfm-present-mode
-        (gfm-present--render-link-previews))
+        (gfm-present--rebuild-link-previews))
       (let ((win (get-buffer-window (current-buffer))))
         (when (and win fingerprint (> (length fingerprint) 0))
           (set-window-start
