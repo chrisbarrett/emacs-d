@@ -928,6 +928,8 @@ The blockquotes decorator's `:apply-block-fn` SHALL render the rail with an inse
 - A per-window display overlay substituting the two-char `> ` prefix on each blockquote line with `▌<space>` (rail in `gfm-pretty-blockquotes-rail-face`, trailing space unfaced).
 - A per-window display overlay substituting the one-char bare `>` form with `▌` (no trailing space — matches the 1-char source).
 
+**Coexistence with `link-previews`.**  When a `>` line contains a standalone source-range or diff-range link, the blockquotes decorator SHALL still lay its rail overlays (anchor + display) on that line as for any other `>` line — the rail covers the leading `> ` chars and the preview overlay covers the link span; they paint disjoint ranges on the same buffer line.  The preview decorator is responsible for emitting a matching rail on its own body / bottom-border visual rows so a multi-line blockquote with prose before / after the preview reads as one continuous rail.
+
 The decorator SHALL NOT paint a tinted background on the blockquote rectangle, a top / bottom border, or a right-edge terminator after-string.  An earlier draft applied a tinted background spanning each line's content + an after-string padding the bg out to the window margin — it was removed after the user found that Emacs' `:extend t` paints past EOL only on the visual row containing EOL, so a word-wrapped blockquote's intermediate continuation rows were left with default-bg cells between content and the intended right edge (a ragged stepped appearance).  Without per-visual-row padding mechanics (which Emacs does not expose), no clean rectangle is reachable; the rail-only treatment side-steps the issue.
 
 The decorator's `:apply-block-fn` SHALL call `gfm-pretty-borders--apply-with-anchors` (or an equivalent engine seam) so anchor overlays are laid at most once per (block, rebuild pass) while per-window display overlays apply once per window.
@@ -951,6 +953,14 @@ The decorator's `:apply-block-fn` SHALL call `gfm-pretty-borders--apply-with-anc
 - **WHEN** the decorator renders
 - **THEN** visual row 1 shows the inset gutter then `▌ ` then the first chunk of text
 - **AND** continuation visual rows show the inset gutter then `▌ ` then the wrapped continuation (the `wrap-prefix` overlay wins over `markdown-mode`'s `wrap-prefix "> "` text property)
+
+#### Scenario: blockquote line containing a preview keeps the rail
+
+- **GIVEN** a line `> [fn](modules/auth.rs#L1-L3)` with both `gfm-pretty-blockquotes` and `gfm-pretty-link-previews` enabled
+- **WHEN** the decorators render
+- **THEN** the `gfm-pretty-blockquotes` rail overlays (anchor + display) are present on that line — the rail covers the leading `> ` chars
+- **AND** the preview's box-top renders to the right of the rail on the same visual row
+- **AND** the preview's body and bottom-border rows carry their own `<inset>▌<space>` prefix so the rail visually continues through the box
 
 ### Requirement: Blockquote rail face
 
@@ -2351,6 +2361,17 @@ The major-mode resolution SHALL be a pure function of `<path>` via `auto-mode-al
 
 The underlying buffer text SHALL NOT be modified — overlays use `display` properties only.
 
+**Marker-aware continuation prefix.**  When the link span begins at a buffer position whose preceding characters on the same line are non-empty (a list-item marker `- ` / `* ` / `+ ` / `<n>. `, or a blockquote marker `> ` before the link), every line of the display string EXCEPT the first SHALL be prefixed with a `continuation-prefix` string whose visual width equals the column at which the first display line begins.  The first display line is left bare — it inherits its column from the overlay's buffer position.
+
+The continuation prefix is chosen to mirror what surrounds the link's line:
+
+- **Blockquote context** (the line begins with `>` AND the `blockquotes` decorator is enabled): the prefix SHALL equal the rail's wrap-prefix string, i.e. `(make-string inset-cols ?\s)` followed by `▌` (in `gfm-pretty-blockquotes-rail-face`) followed by a space.  This makes the rail flow continuously through the preview's body and bottom rows so a multi-line blockquote containing prose before/after the preview reads as one block.
+- **List-item context** (or any other non-empty leading run): the prefix SHALL be `(make-string indent ?\s)` in the default face.
+
+Lines whose link span starts at the line's beginning (`indent = 0`) SHALL render without any continuation prefix.
+
+The blockquote rail decorator SHALL continue to render its rail overlay on a `> ` line containing a preview — i.e., the blockquote decorator MUST NOT suppress its per-line rail on preview lines.  The preview's continuation prefix takes care of the rail on the box's body rows.
+
 #### Scenario: small range renders fontified body inside a box
 
 - **GIVEN** a standalone link `[fn](modules/auth.rs#L42-L48)` on its own line
@@ -2376,12 +2397,28 @@ The underlying buffer text SHALL NOT be modified — overlays use `display` prop
 - **THEN** the overlay's body contains the first 10 lines of the file
 - **AND** the bottom border embeds `+30 more lines`
 
+#### Scenario: list-item preview aligns under marker
+
+- **GIVEN** a line `- [fn](modules/auth.rs#L1-L3)`
+- **WHEN** previews are rendered
+- **THEN** the overlay's first display line starts with `┌` (no leading indent — the overlay's display position already puts `┌` at the visual column of `[')
+- **AND** every body line starts with two leading spaces before `│`
+- **AND** the bottom border starts with two leading spaces before `└`
+
+#### Scenario: blockquote preview keeps the rail flowing through the box
+
+- **GIVEN** a line `> [fn](modules/auth.rs#L1-L3)` with the `blockquotes` decorator enabled and default inset
+- **WHEN** previews are rendered
+- **THEN** the overlay's first display line starts with `┌` (no leading prefix — its visual column comes from the buffer position of `[`)
+- **AND** every body line is prefixed with `<inset-spaces>▌<space>` so the `▌` rail glyph is visible at the same column as adjacent `> ` lines outside the preview
+- **AND** the bottom border line carries the same `<inset-spaces>▌<space>` prefix
+
 ### Requirement: Diff-range link preview overlay rendering
 
 For each standalone link whose URL matches `diff:<base>...<head>` (with optional `#<path>` fragment), the `link-previews` decorator SHALL place an overlay on the link's full markdown expression whose `display` property is a propertised multi-line string composed of:
 
 1. A **top border** in `gfm-pretty-border-face` of the form `┌─ <base>...<head> ──…──┐` when the URL has no path qualifier, or `┌─ <base>...<head> — <path> ──…──┐` when path-scoped.  Refs matching `(rx bos (= 40 hex) eos)` SHALL be shortened to their first 7 characters before being embedded in the label; branch names and tags pass through unchanged.
-2. A **body** of up to 10 lines from `git diff <base>...<head> [-- <path>]` executed from the buffer's worktree.  Body lines SHALL render in **LHS-margin mode**: each line is prefixed with a single `│` (no left padding) and suffixed with `│`, so the first body column is the `+`/`-`/` ` diff indicator.  Box interior decoration width is 2 cols (matching authored ` ```diff ` fences via `gfm-pretty-fences--lhs-margin-langs`).
+2. A **body** of up to 10 lines from `git diff <base>...<head> [-- <path>]` executed from the buffer's worktree.  Body lines SHALL render in **LHS-margin mode**: each line is prefixed with a single `│` (no left padding) and suffixed with `│`, so the first body column is the `+`/`-`/` ` diff indicator.  Box interior decoration width is 2 cols (matching authored ` ```diff ` fences via `gfm-pretty-fences--lhs-margin-langs`).  Body lines SHALL be fontified by activating `diff-mode` in a temp buffer, inserting the joined lines, running `font-lock-ensure`, and capturing the resulting `face` text properties.  Added lines SHALL carry `diff-added` (or its mode-resolved family), removed lines `diff-removed`, hunk headers `diff-hunk-header`, file headers `diff-file-header`, and context lines `diff-context` — the `diff-mode` defaults.
 3. Body-line truncation as for source previews, applied to the interior width minus 1 cell with a trailing `…`.
 4. A **bottom border** in `gfm-pretty-border-face`.
    - When the diff exceeds the 10-line cap, the bottom border SHALL embed `+N more lines`.
@@ -2394,6 +2431,8 @@ When `git` exits non-zero, the overlay SHALL render as a bare single-line sentin
 The markdown label SHALL NOT appear anywhere in the rendered preview surface.
 
 The box width formula is identical to source-range previews, substituting `decoration-w` 2 for LHS-margin mode.
+
+**Marker-aware indent** applies identically to diff previews: when the link span follows a list-item or blockquote marker on the same line, the top border, every body line, and the bottom border SHALL be prefixed with `(make-string indent ?\s)`.
 
 #### Scenario: diff link renders box-bordered preview
 
@@ -2418,6 +2457,13 @@ The box width formula is identical to source-range previews, substituting `decor
 - **THEN** the overlay's `display` string is a single line
 - **AND** contains `[broken preview]` and `no changes`
 
+#### Scenario: diff body carries diff-mode faces
+
+- **GIVEN** a standalone diff link whose `git diff` output contains at least one `+`-prefixed line and one `-`-prefixed line
+- **WHEN** previews are rendered
+- **THEN** at least one position inside an added line carries a `face` text property derived from `diff-added`
+- **AND** at least one position inside a removed line carries a `face` text property derived from `diff-removed`
+
 ### Requirement: Link previews refresh on edit and window-configuration change
 
 The `link-previews` decorator SHALL participate in the engine's standard rebuild lifecycle:
@@ -2439,3 +2485,49 @@ The decorator SHALL NOT install file-system watchers, idle timers (beyond the en
 - **GIVEN** a rendered preview overlay in window W of width N
 - **WHEN** W's width changes to M
 - **THEN** the preview overlay's box width re-clamps to `min(M, max(80, longest-body-line + decoration-w))`
+
+### Requirement: Link previews — RET dispatch
+
+Every `link-previews` decorator overlay SHALL carry a `keymap` text property binding `RET` (and `<return>`) to `gfm-pretty-link-previews-follow-link-at-point`.
+
+`gfm-pretty-link-previews-follow-link-at-point` SHALL:
+
+- Identify the preview overlay at point via the `gfm-pretty-link-previews-display` overlay property; signal a `user-error` when none is found.
+- For source-range overlays (`gfm-pretty-link-previews-kind` is `source`): resolve the path against the buffer's `default-directory` if relative, then `find-file` the target, narrow nothing, move point to the start line, and pulse the requested range when `pulsar-highlight-pulse` is `fboundp`.
+- For diff-range overlays (`gfm-pretty-link-previews-kind` is `diff`): `(require 'magit nil t)`; when `magit-diff-range` is `fboundp` call it with `<base>...<head>` (no extra args) and, when the parsed URL has a `:path`, pass `(list path)` as the files argument.  When `magit-diff-range` is absent, fall back to populating a `*Diff*` buffer with `git -C <worktree> diff <base>...<head> [-- <path>]` output and `pop-to-buffer` it in `diff-mode`.
+- Before navigating, push the current point onto the local mark ring via `push-mark`.
+
+The overlay-borne keymap SHALL be active only while point is inside the overlay; outside the overlay, the buffer's normal RET binding (typically `markdown-follow-link-at-point`) SHALL run unmodified.
+
+`gfm-present-follow-link` (presentation-mode's RET) MAY delegate to `gfm-pretty-link-previews-follow-link-at-point` when the link at point is a preview-eligible standalone source-range or diff-range link, OR continue to use its own dispatch — both routes SHALL produce the same observable outcome.
+
+#### Scenario: RET on source preview opens target
+
+- **GIVEN** a buffer with `gfm-pretty-mode` enabled and a standalone source-range preview overlay rendered
+- **WHEN** the user presses RET with point inside the overlay's span
+- **THEN** the target file is opened in another window
+- **AND** point in the target buffer is at the start of the requested start line
+- **AND** the start position is pushed onto the originating buffer's mark ring
+
+#### Scenario: RET on diff preview dispatches to magit when available
+
+- **GIVEN** a buffer with `gfm-pretty-mode` enabled and a standalone diff-range preview overlay rendered
+- **AND** `magit-diff-range` is `fboundp`
+- **WHEN** the user presses RET with point inside the overlay's span
+- **THEN** `magit-diff-range` is called with `<base>...<head>`
+- **AND** when the link has a `:path`, the call includes `(list <path>)` as the files argument
+
+#### Scenario: RET on diff preview falls back to `*Diff*` buffer when magit is absent
+
+- **GIVEN** a buffer with `gfm-pretty-mode` enabled and a standalone diff-range preview overlay rendered
+- **AND** `magit-diff-range` is NOT `fboundp`
+- **WHEN** the user presses RET with point inside the overlay's span
+- **THEN** a `*Diff*` buffer is populated from `git diff <base>...<head> [-- <path>]` run in the worktree
+- **AND** the buffer is shown in `diff-mode`
+
+#### Scenario: RET outside any preview overlay falls through
+
+- **GIVEN** a buffer with `gfm-pretty-mode` enabled, a preview overlay rendered, and point on a non-overlay link in the same buffer
+- **WHEN** the user presses RET
+- **THEN** the preview decorator's keymap does not fire
+- **AND** the buffer's normal RET binding handles the link
