@@ -208,35 +208,12 @@ no match, return the symbol `pass-through'."
     (call-interactively #'markdown-follow-thing-at-point))))
 
 (defun gfm-present--follow-source-link (path start end)
-  "Open PATH at line START, pulsing lines START..END inclusive.
-The destination buffer is left widened and editable; the pulse
-provides a transient locator for the range without forcing the
-reader into a narrowing."
-  (require 'pulsar)
-  (let* ((resolved (if (file-name-absolute-p path) path
-                     (expand-file-name path default-directory)))
-         (buf (find-file-noselect resolved)))
-    (pop-to-buffer buf)
-    (with-current-buffer buf
-      (widen)
-      (goto-char (point-min))
-      (forward-line (1- start))
-      (let ((beg (line-beginning-position)))
-        (save-excursion
-          (forward-line (- end start))
-          (pulsar-highlight-pulse (cons beg (line-end-position))))))))
+  "Open PATH at line START, pulsing lines START..END inclusive."
+  (gfm-pretty-link-previews--follow-source-link path start end))
 
 (defun gfm-present--follow-diff-link (parsed)
-  "Open the magit diff range described by PARSED plist (§10)."
-  (let ((base (plist-get parsed :base))
-        (head (plist-get parsed :head))
-        (path (plist-get parsed :path)))
-    (unless (require 'magit nil t)
-      (user-error "magit is required to follow diff links"))
-    (when (fboundp 'magit-diff-range)
-      (if path
-          (magit-diff-range (format "%s...%s" base head) nil (list path))
-        (magit-diff-range (format "%s...%s" base head))))))
+  "Open the diff range described by PARSED plist."
+  (gfm-pretty-link-previews--follow-diff-link parsed default-directory))
 
 (defun gfm-present-follow-link ()
   "Follow the markdown link at point.

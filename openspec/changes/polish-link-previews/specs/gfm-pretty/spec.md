@@ -27,7 +27,16 @@ The major-mode resolution SHALL be a pure function of `<path>` via `auto-mode-al
 
 The underlying buffer text SHALL NOT be modified — overlays use `display` properties only.
 
-**Marker-aware indent.**  When the link span begins at a buffer position whose preceding characters on the same line are non-empty (the line carries a list-item marker `- `, `* `, `+ `, `<n>. `, or a blockquote marker `> ` before the link), every line of the display string — top border, every body line, and bottom border — SHALL be prefixed with `(make-string indent ?\s)` where `indent = (link-start - (line-beginning-position))`.  This aligns the box top, body, and bottom border at the same column, immediately to the right of the marker glyph.  Lines whose link span starts at the line's beginning (`indent = 0`) SHALL render without leading indent (unchanged from prior behaviour).
+**Marker-aware continuation prefix.**  When the link span begins at a buffer position whose preceding characters on the same line are non-empty (a list-item marker `- ` / `* ` / `+ ` / `<n>. `, or a blockquote marker `> ` before the link), every line of the display string EXCEPT the first SHALL be prefixed with a `continuation-prefix` string whose visual width equals the column at which the first display line begins.  The first display line is left bare — it inherits its column from the overlay's buffer position.
+
+The continuation prefix is chosen to mirror what surrounds the link's line:
+
+- **Blockquote context** (the line begins with `>` AND the `blockquotes` decorator is enabled): the prefix SHALL equal the rail's wrap-prefix string, i.e. `(make-string inset-cols ?\s)` followed by `▌` (in `gfm-pretty-blockquotes-rail-face`) followed by a space.  This makes the rail flow continuously through the preview's body and bottom rows so a multi-line blockquote containing prose before/after the preview reads as one block.
+- **List-item context** (or any other non-empty leading run): the prefix SHALL be `(make-string indent ?\s)` in the default face.
+
+Lines whose link span starts at the line's beginning (`indent = 0`) SHALL render without any continuation prefix.
+
+The blockquote rail decorator SHALL continue to render its rail overlay on a `> ` line containing a preview — i.e., the blockquote decorator MUST NOT suppress its per-line rail on preview lines.  The preview's continuation prefix takes care of the rail on the box's body rows.
 
 #### Scenario: small range renders fontified body inside a box
 
@@ -58,17 +67,17 @@ The underlying buffer text SHALL NOT be modified — overlays use `display` prop
 
 - **GIVEN** a line `- [fn](modules/auth.rs#L1-L3)`
 - **WHEN** previews are rendered
-- **THEN** the overlay's `display` string starts with two leading spaces before `┌`
+- **THEN** the overlay's first display line starts with `┌` (no leading indent — the overlay's display position already puts `┌` at the visual column of `[')
 - **AND** every body line starts with two leading spaces before `│`
 - **AND** the bottom border starts with two leading spaces before `└`
 
-#### Scenario: blockquote preview aligns under marker
+#### Scenario: blockquote preview keeps the rail flowing through the box
 
-- **GIVEN** a line `> [fn](modules/auth.rs#L1-L3)`
+- **GIVEN** a line `> [fn](modules/auth.rs#L1-L3)` with the `blockquotes` decorator enabled and default inset
 - **WHEN** previews are rendered
-- **THEN** the overlay's `display` string starts with two leading spaces before `┌`
-- **AND** every body line starts with two leading spaces before `│`
-- **AND** the bottom border starts with two leading spaces before `└`
+- **THEN** the overlay's first display line starts with `┌` (no leading prefix — its visual column comes from the buffer position of `[`)
+- **AND** every body line is prefixed with `<inset-spaces>▌<space>` so the `▌` rail glyph is visible at the same column as adjacent `> ` lines outside the preview
+- **AND** the bottom border line carries the same `<inset-spaces>▌<space>` prefix
 
 
 ### Requirement: Diff-range link preview overlay rendering
@@ -132,7 +141,7 @@ The blockquotes decorator's `:apply-block-fn` SHALL render the rail with an inse
 - A per-window display overlay substituting the two-char `> ` prefix on each blockquote line with `▌<space>` (rail in `gfm-pretty-blockquotes-rail-face`, trailing space unfaced).
 - A per-window display overlay substituting the one-char bare `>` form with `▌` (no trailing space — matches the 1-char source).
 
-**Suppression on link-previews lines.**  When a blockquote source line is fully covered by a `link-previews` display overlay (detected by walking `overlays-in` for the line and checking for the property name returned by `(gfm-pretty--registry-display gfm-pretty-link-previews--registry)`), the blockquotes decorator SHALL NOT lay any overlay (anchor or display) for that line.  Plain blockquote lines without a link-previews overlay keep all rail overlays as specified.  This avoids the visual duplication of two left borders (`▌` rail + `┌` box edge) on a `> [link](url)` preview line.
+**Coexistence with `link-previews`.**  When a `>` line contains a standalone source-range or diff-range link, the blockquotes decorator SHALL still lay its rail overlays (anchor + display) on that line as for any other `>` line — the rail covers the leading `> ` chars and the preview overlay covers the link span; they paint disjoint ranges on the same buffer line.  The preview decorator is responsible for emitting a matching rail on its own body / bottom-border visual rows so a multi-line blockquote with prose before / after the preview reads as one continuous rail.
 
 The decorator SHALL NOT paint a tinted background on the blockquote rectangle, a top / bottom border, or a right-edge terminator after-string.  An earlier draft applied a tinted background spanning each line's content + an after-string padding the bg out to the window margin — it was removed after the user found that Emacs' `:extend t` paints past EOL only on the visual row containing EOL, so a word-wrapped blockquote's intermediate continuation rows were left with default-bg cells between content and the intended right edge (a ragged stepped appearance).  Without per-visual-row padding mechanics (which Emacs does not expose), no clean rectangle is reachable; the rail-only treatment side-steps the issue.
 
@@ -158,13 +167,13 @@ The decorator's `:apply-block-fn` SHALL call `gfm-pretty-borders--apply-with-anc
 - **THEN** visual row 1 shows the inset gutter then `▌ ` then the first chunk of text
 - **AND** continuation visual rows show the inset gutter then `▌ ` then the wrapped continuation (the `wrap-prefix` overlay wins over `markdown-mode`'s `wrap-prefix "> "` text property)
 
-#### Scenario: blockquote line covered by link-previews overlay omits rail
+#### Scenario: blockquote line containing a preview keeps the rail
 
 - **GIVEN** a line `> [fn](modules/auth.rs#L1-L3)` with both `gfm-pretty-blockquotes` and `gfm-pretty-link-previews` enabled
 - **WHEN** the decorators render
-- **THEN** no `gfm-pretty-blockquotes` overlay (anchor or display) covers any part of that line
-- **AND** the `link-previews` overlay's box is the only left edge visible on that line
-- **AND** adjacent `>` lines without a preview overlay still carry the rail
+- **THEN** the `gfm-pretty-blockquotes` rail overlays (anchor + display) are present on that line — the rail covers the leading `> ` chars
+- **AND** the preview's box-top renders to the right of the rail on the same visual row
+- **AND** the preview's body and bottom-border rows carry their own `<inset>▌<space>` prefix so the rail visually continues through the box
 
 
 ## ADDED Requirements

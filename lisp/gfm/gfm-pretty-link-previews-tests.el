@@ -629,6 +629,238 @@ exercises the same width-clamp pathway the engine's
             (should (= 1 (length (gfm-pretty-link-previews-tests--overlays)))))
         (gfm-pretty-mode -1)))))
 
+
+;;; Marker-aware indent (5.1 / 5.2 / 5.3)
+
+(ert-deftest gfm-pretty-link-previews/list-item-preview-indents-under-marker ()
+  "A `- [foo](path#L1-L3)' preview lays its top border bare and indents
+body + bottom by 2 spaces so they align under the top's `┌'.
+The overlay's first line is rendered at the buffer column of `[' (col
+2 here), so its `┌' is already at visual column 2; subsequent display
+lines need the explicit 2-space prefix to land at the same column."
+  (gfm-pretty-link-previews-tests--with-temp-source
+      '("alpha" "beta" "gamma") tmp
+    (with-temp-buffer
+      (insert (format "- [foo](%s#L1-L3)\n" tmp))
+      (gfm-pretty-link-previews--rebuild)
+      (let* ((ov (car (gfm-pretty-link-previews-tests--overlays)))
+             (display (overlay-get ov 'display))
+             (lines (split-string display "\n"))
+             (top (car lines))
+             (bot (car (last lines)))
+             (body (butlast (cdr lines))))
+        (should (string-prefix-p "┌" top))
+        (should (string-suffix-p "┐" top))
+        (should (string-prefix-p "  └" bot))
+        (should (string-suffix-p "┘" bot))
+        (dolist (line body)
+          (should (string-prefix-p "  │" line))
+          (should (string-suffix-p "│" line)))))))
+
+(ert-deftest gfm-pretty-link-previews/blockquote-preview-prefixes-with-rail ()
+  "A `> [foo](...)' preview leaves the top bare and prefixes body /
+bottom rows with the blockquote rail wrap-prefix so the rail flows
+through the box (so adjacent `>'-prefixed prose lines join visually)."
+  (require 'gfm-pretty-blockquotes)
+  (gfm-pretty-link-previews-tests--with-temp-source
+      '("alpha" "beta" "gamma") tmp
+    (with-temp-buffer
+      (insert (format "> [foo](%s#L1-L3)\n" tmp))
+      (gfm-pretty-mode 1)
+      (unwind-protect
+          (let* ((ov (car (gfm-pretty-link-previews-tests--overlays)))
+                 (display (overlay-get ov 'display))
+                 (lines (split-string display "\n"))
+                 (bot (car (last lines)))
+                 (body (butlast (cdr lines))))
+            (should (string-prefix-p "┌" (car lines)))
+            ;; Every non-first row should contain the rail glyph.
+            (should (string-match-p "▌" bot))
+            (dolist (line body)
+              (should (string-match-p "▌" line))))
+        (gfm-pretty-mode -1)))))
+
+(ert-deftest gfm-pretty-link-previews/whole-line-preview-has-no-indent ()
+  "A whole-line `[foo](path#L1-L3)' preview keeps indent 0 throughout."
+  (gfm-pretty-link-previews-tests--with-temp-source
+      '("alpha" "beta" "gamma") tmp
+    (with-temp-buffer
+      (insert (format "[foo](%s#L1-L3)\n" tmp))
+      (gfm-pretty-link-previews--rebuild)
+      (let* ((ov (car (gfm-pretty-link-previews-tests--overlays)))
+             (display (overlay-get ov 'display))
+             (lines (split-string display "\n")))
+        (should (string-prefix-p "┌" (car lines)))
+        (should (string-prefix-p "└" (car (last lines))))))))
+
+
+;;; Blockquote-rail coexistence (5.4)
+
+(ert-deftest gfm-pretty-link-previews/blockquote-rail-coexists-with-preview ()
+  "On a `> [link]' preview line, the blockquotes rail stays — both
+decorators paint on the same line in non-overlapping ranges.  The
+plain `> text' line below also keeps its rail."
+  (require 'gfm-pretty-blockquotes)
+  (gfm-pretty-link-previews-tests--with-temp-source '("alpha" "beta") tmp
+    (with-temp-buffer
+      (insert (format "> [foo](%s#L1-L2)\n> plain blockquote text\n" tmp))
+      (gfm-pretty-mode 1)
+      (unwind-protect
+          (let* ((preview-line-beg (point-min))
+                 (preview-line-end (save-excursion
+                                     (goto-char (point-min))
+                                     (line-end-position)))
+                 (rail-prop (gfm-pretty--registry-display
+                             gfm-pretty-blockquotes--registry))
+                 (preview-line-bq-ovs
+                  (cl-remove-if-not
+                   (lambda (ov) (overlay-get ov rail-prop))
+                   (overlays-in preview-line-beg preview-line-end)))
+                 (plain-line-beg (save-excursion
+                                   (goto-char (point-min))
+                                   (forward-line 1)
+                                   (point)))
+                 (plain-line-end (save-excursion
+                                   (goto-char plain-line-beg)
+                                   (line-end-position)))
+                 (plain-line-bq-ovs
+                  (cl-remove-if-not
+                   (lambda (ov) (overlay-get ov rail-prop))
+                   (overlays-in plain-line-beg plain-line-end))))
+            (should (> (length preview-line-bq-ovs) 0))
+            (should (> (length plain-line-bq-ovs) 0)))
+        (gfm-pretty-mode -1)))))
+
+
+;;; Diff body fontification (5.5)
+
+(ert-deftest gfm-pretty-link-previews/fontify-diff-applies-diff-faces ()
+  "diff-mode font-lock paints `diff-added' on `+' lines and `diff-removed' on `-'."
+  (require 'diff-mode)
+  (let* ((body "+added one\n-removed one\n context\n")
+         (out (gfm-pretty-link-previews--fontify-diff body))
+         (added-idx (string-match "+added" out))
+         (removed-idx (string-match "-removed" out)))
+    (should added-idx)
+    (should removed-idx)
+    (let ((added-face (get-text-property added-idx 'face out))
+          (removed-face (get-text-property removed-idx 'face out)))
+      (should (or (eq added-face 'diff-added)
+                  (and (listp added-face) (memq 'diff-added added-face))
+                  (and (facep added-face)
+                       (eq (face-attribute added-face :inherit nil t)
+                           'diff-added))))
+      (should (or (eq removed-face 'diff-removed)
+                  (and (listp removed-face) (memq 'diff-removed removed-face))
+                  (and (facep removed-face)
+                       (eq (face-attribute removed-face :inherit nil t)
+                           'diff-removed)))))))
+
+(ert-deftest gfm-pretty-link-previews/diff-preview-display-carries-diff-faces ()
+  "End-to-end: stubbed `git diff' output round-trips through `diff-mode'.
+
+`-fontify-diff' renders bare `+'/`-' lines (no file or hunk header) with
+diff-mode's `+'/`-'-line keywords applying `diff-indicator-added' /
+`diff-indicator-removed' on the leading sigil; assert each surviving
+into the boxed display string at the position `string-match' returns."
+  (require 'diff-mode)
+  (gfm-pretty-link-previews-tests--with-fake-call-process
+      "+new line\n-old line\n" 0
+    (let* ((s (gfm-pretty-link-previews--diff-preview-display
+               "/wt" "B" "H" nil))
+           (added-idx (string-match "\\+new line" s))
+           (removed-idx (string-match "-old line" s)))
+      (should added-idx)
+      (should removed-idx)
+      ;; The `+' sigil itself carries `diff-indicator-added'.  The `-'
+      ;; line is at end-of-buffer in the temp `diff-mode' buffer; in
+      ;; that position diff-mode's regex anchors don't fire, so the
+      ;; first char isn't fontified.  Check the position one past, on
+      ;; the line's body, where the unanchored `diff-removed' regex
+      ;; (matching the whole `-' line) DOES fontify.
+      (should (get-text-property added-idx 'face s))
+      (should (get-text-property (1+ removed-idx) 'face s)))))
+
+
+;;; RET dispatch (5.6 / 5.7 / 5.8)
+
+(ert-deftest gfm-pretty-link-previews/follow-source-opens-target ()
+  "RET on a source-range overlay opens the target via `find-file-noselect'."
+  (gfm-pretty-link-previews-tests--with-temp-source
+      '("alpha" "beta" "gamma") tmp
+    (with-temp-buffer
+      (insert (format "[foo](%s#L2-L3)\n" tmp))
+      (gfm-pretty-link-previews--rebuild)
+      (let ((popped nil))
+        (cl-letf (((symbol-function 'pop-to-buffer)
+                   (lambda (buf &rest _) (setq popped buf) (set-buffer buf) buf))
+                  ((symbol-function 'pulsar-highlight-pulse)
+                   (lambda (&optional _ &rest _) nil)))
+          (goto-char (overlay-start
+                      (car (gfm-pretty-link-previews-tests--overlays))))
+          (gfm-pretty-link-previews-follow-link-at-point)
+          (should popped)
+          (with-current-buffer popped
+            (should (= 2 (line-number-at-pos (point))))))))))
+
+(ert-deftest gfm-pretty-link-previews/follow-diff-prefers-magit ()
+  "RET on a diff overlay dispatches to `magit-diff-range' when available."
+  (gfm-pretty-link-previews-tests--with-fake-call-process "+x\n" 0
+    (with-temp-buffer
+      (insert "[change](diff:main...HEAD#foo.el)\n")
+      (gfm-pretty-link-previews--rebuild)
+      (goto-char (overlay-start
+                  (car (gfm-pretty-link-previews-tests--overlays))))
+      (let ((captured nil)
+            (orig-require (symbol-function 'require)))
+        (cl-letf (((symbol-function 'require)
+                   (lambda (feat &rest args)
+                     (cond ((eq feat 'magit) t)
+                           (t (apply orig-require feat args)))))
+                  ((symbol-function 'magit-diff-range)
+                   (lambda (range &optional _args files)
+                     (setq captured (list range files)))))
+          (gfm-pretty-link-previews-follow-link-at-point)
+          (should (equal "main...HEAD" (nth 0 captured)))
+          (should (equal '("foo.el") (nth 1 captured))))))))
+
+(ert-deftest gfm-pretty-link-previews/follow-diff-falls-back-to-diff-buffer ()
+  "RET on a diff overlay without magit populates a `*Diff*' buffer."
+  (let (popped call-args)
+    (gfm-pretty-link-previews-tests--with-fake-call-process "+x\n" 0
+      (with-temp-buffer
+        (insert "[change](diff:main...HEAD)\n")
+        (gfm-pretty-link-previews--rebuild)
+        (goto-char (overlay-start
+                    (car (gfm-pretty-link-previews-tests--overlays))))
+        (let ((orig-require (symbol-function 'require)))
+          (cl-letf (((symbol-function 'require)
+                     (lambda (feat &rest args)
+                       (cond ((eq feat 'magit) nil)
+                             ((eq feat 'diff-mode) t)
+                             (t (apply orig-require feat args)))))
+                    ((symbol-function 'call-process)
+                     (lambda (&rest args)
+                       (setq call-args args)
+                       (insert "fake diff body\n")
+                       0))
+                    ((symbol-function 'diff-mode) (lambda () nil))
+                    ((symbol-function 'pop-to-buffer)
+                     (lambda (buf &rest _) (setq popped buf) buf)))
+            (gfm-pretty-link-previews-follow-link-at-point)
+            (should popped)
+            (should (equal "*Diff*" (buffer-name popped)))
+            (should (member "diff" call-args))
+            (should (member "main...HEAD" call-args))))))))
+
+(ert-deftest gfm-pretty-link-previews/follow-link-outside-overlay-signals ()
+  "Calling the follow command off a preview overlay signals `user-error'."
+  (with-temp-buffer
+    (insert "no preview here\n")
+    (goto-char (point-min))
+    (should-error (gfm-pretty-link-previews-follow-link-at-point)
+                  :type 'user-error)))
+
 (provide 'gfm-pretty-link-previews-tests)
 
 ;;; gfm-pretty-link-previews-tests.el ends here

@@ -536,18 +536,36 @@ the requested line range in the destination buffer."
         (gfm-present-follow-link)
         (should (= 1 called))))))
 
-(ert-deftest gfm-present/diff-link-click-no-magit-signals ()
-  (let ((orig-require (symbol-function 'require)))
+(ert-deftest gfm-present/diff-link-click-no-magit-falls-back ()
+  "Diff click without magit falls back to a `*Diff*' buffer."
+  (let ((orig-require (symbol-function 'require))
+        (call-process-args nil)
+        (popped nil))
     (cl-letf (((symbol-function 'require)
                (lambda (feat &rest args)
-                 (if (eq feat 'magit) nil (apply orig-require feat args)))))
+                 (cond
+                  ((eq feat 'magit) nil)
+                  ((eq feat 'diff-mode) t)
+                  (t (apply orig-require feat args)))))
+              ((symbol-function 'call-process)
+               (lambda (&rest args)
+                 (setq call-process-args args)
+                 (insert "fake diff body\n")
+                 0))
+              ((symbol-function 'diff-mode) (lambda () nil))
+              ((symbol-function 'pop-to-buffer)
+               (lambda (buf &rest _) (setq popped buf) buf)))
       (with-temp-buffer
         (insert "# Slide\n[change](diff:main...HEAD)\n")
         (goto-char (point-min))
         (gfm-present-mode 1)
         (search-forward "[change]")
         (backward-char 2)
-        (should-error (gfm-present-follow-link) :type 'user-error)))))
+        (gfm-present-follow-link)
+        (should popped)
+        (should (equal "*Diff*" (buffer-name popped)))
+        (should (member "diff" call-process-args))
+        (should (member "main...HEAD" call-process-args))))))
 
 
 ;;; §12 Document revert resilience

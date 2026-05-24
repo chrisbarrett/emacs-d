@@ -22,6 +22,11 @@
 (require 'gfm-pretty-borders)
 (require 'gfm-pretty-engine)
 
+;; `diff-refine' is the buffer-local control for `diff-mode' inline-hunk
+;; refinement; we let-bind it dynamically inside `--fontify-diff'.  The
+;; defvar promotes it to special so lexical-binding does not warn.
+(defvar diff-refine)
+
 (defgroup gfm-pretty-link-previews nil
   "Source/diff link preview overlays for GFM markdown buffers."
   :group 'markdown-faces)
@@ -233,6 +238,60 @@ padding; otherwise `│ ' / ` │'.  Border glyphs carry FACE."
               padded
               (propertize " │" 'face face))))))
 
+(defun gfm-pretty-link-previews--prefix-block (s prefix)
+  "Prepend PREFIX to every newline-separated line of S except the first.
+PREFIX should be a (propertised) string whose cell-width matches the
+visual column at which the overlay's first display line begins.
+
+The first line is left bare because the overlay's `display' property
+renders it starting at the buffer column where the overlay begins —
+which is exactly the column we want.  Subsequent lines start at
+visual column 0 of a new visual row and need the explicit PREFIX so
+their leading glyph (`│' / `└') lands under the first line's `┌'.
+
+A nil or empty PREFIX returns S unchanged."
+  (cond
+   ((or (null prefix) (string-empty-p prefix)) s)
+   (t
+    (let* ((lines (split-string s "\n"))
+           (head (car lines))
+           (tail (cdr lines)))
+      (concat head
+              (mapconcat (lambda (line) (concat "\n" prefix line)) tail ""))))))
+
+(defvar gfm-pretty-blockquotes--registry)
+(declare-function gfm-pretty-blockquotes--wrap-prefix-string
+                  "gfm-pretty-blockquotes" (inset-cols))
+(declare-function gfm-pretty-blockquotes--inset-cols "gfm-pretty-blockquotes" ())
+
+(defun gfm-pretty-link-previews--continuation-prefix (range)
+  "Return the per-visual-line prefix string for non-first display rows.
+For a link whose line begins with a blockquote marker (`>') AND the
+`gfm-pretty-blockquotes' decorator is enabled in this buffer, the
+prefix mirrors the rail's wrap-prefix (`<inset>▌<space>') so the
+left rail flows through the box's body rows.  Otherwise the prefix
+is a plain run of `indent' spaces in the default face."
+  (save-restriction
+    (widen)
+    (save-excursion
+      (goto-char (car range))
+      (let* ((bol (line-beginning-position))
+             (indent (- (point) bol))
+             (blockquote-p (eq (char-after bol) ?>))
+             (blockquotes-on
+              (and blockquote-p
+                   (boundp 'gfm-pretty-blockquotes--registry)
+                   gfm-pretty-blockquotes--registry
+                   (gfm-pretty--state-get 'blockquotes 'enabled-p))))
+        (cond
+         (blockquotes-on
+          (require 'gfm-pretty-blockquotes)
+          (gfm-pretty-blockquotes--wrap-prefix-string
+           (gfm-pretty-blockquotes--inset-cols)))
+         ((> indent 0)
+          (propertize (make-string indent ?\s) 'face 'default))
+         (t ""))))))
+
 (defun gfm-pretty-link-previews--box-display (&rest plist)
   "Return a propertised multi-line box display string.
 PLIST keys:
@@ -243,16 +302,26 @@ PLIST keys:
   :lhs-margin  non-nil for LHS-margin mode (`│' instead of `│ ',
                2-col decoration width to match `\\=`\\=`\\=`diff' fences).
   :window      target window for available-width measurement.
+  :prefix      string (possibly propertised); when non-empty, every
+               display line EXCEPT the first is prefixed with this
+               string so the box body / bottom border align under
+               the top border's first glyph.  The first line is
+               left bare — it inherits its column from the overlay's
+               buffer position.
 
 Box width follows
-`(min available-width (max 80 (+ longest-body-line decoration-w)))'."
+`(min available-width (max 80 (+ longest-body-line decoration-w)))'.
+Box width is measured BEFORE the optional prefix — the prefix does
+not consume box-interior cells."
   (let* ((label (plist-get plist :label))
          (body (or (plist-get plist :body) ""))
          (extra (or (plist-get plist :extra) 0))
          (lhs-margin (plist-get plist :lhs-margin))
          (window (plist-get plist :window))
+         (prefix (or (plist-get plist :prefix) ""))
+         (prefix-w (string-width prefix))
          (deco-w (if lhs-margin 2 4))
-         (avail (gfm-pretty--available-width window))
+         (avail (max 1 (- (gfm-pretty--available-width window) prefix-w)))
          (body-lines (split-string body "\n"))
          (longest (apply #'max 0 (mapcar #'string-width body-lines)))
          (box-w (min avail (max 80 (+ longest deco-w))))
@@ -267,7 +336,8 @@ Box width follows
                        (gfm-pretty-link-previews--box-line
                         line interior-w lhs-margin face))
                      body-lines "\n")))
-    (concat top "\n" decorated "\n" bot)))
+    (gfm-pretty-link-previews--prefix-block
+     (concat top "\n" decorated "\n" bot) prefix)))
 
 
 ;;; Source-range preview
@@ -331,16 +401,50 @@ text properties survive into the caller."
       (setq buffer-file-name nil)
       (set-buffer-modified-p nil))))
 
-(defun gfm-pretty-link-previews--source-preview-display (path start end &optional window)
+(defun gfm-pretty-link-previews--fontify-diff (body)
+  "Return BODY (a multi-line string of `git diff' output) with diff faces.
+Activates `diff-mode' in a temp buffer, inserts BODY, runs
+`font-lock-ensure', and returns the propertised `buffer-substring'
+so `diff-added' / `diff-removed' / `diff-hunk-header' / etc.  text
+properties survive into the caller.  Binds `diff-refine' to nil to
+avoid the smerge refinement path, which can trip on synthetic
+hunks and is purely a UI nicety we do not need in a 10-line
+preview.  Returns BODY unchanged when `diff-mode' is unavailable."
+  (cond
+   ((not (require 'diff-mode nil t)) body)
+   (t
+    (let ((diff-refine nil)
+          (inhibit-read-only t))
+      (with-temp-buffer
+        (diff-mode)
+        (insert body)
+        ;; `diff-mode' font-lock anchors expect each `+'/`-' line to
+        ;; end with a newline; trailing line without one is skipped
+        ;; by the regex.  Pad if missing, then trim from the result.
+        (let ((added-newline nil))
+          (when (and (> (point-max) (point-min))
+                     (not (eq (char-before (point-max)) ?\n)))
+            (goto-char (point-max))
+            (insert "\n")
+            (setq added-newline t))
+          (font-lock-ensure)
+          (let ((s (buffer-substring (point-min) (point-max))))
+            (if added-newline (substring s 0 -1) s))))))))
+
+(defun gfm-pretty-link-previews--source-preview-display
+    (path start end &optional window prefix)
   "Build the preview display string for source-range link PATH#L<start>-L<end>.
-WINDOW (optional) is forwarded to width measurement.
+WINDOW (optional) is forwarded to width measurement.  PREFIX
+(optional) is a per-visual-row prefix applied to non-first display
+rows so the box aligns under a leading marker (list / blockquote).
 
 Returns a propertised string: either a `gfm-pretty-border-face' box
 \(top border embeds `<abbrev-path>:<start>-<end>'; body is the
 major-mode-fontified source lines; bottom border embeds `+N more
 lines' when the requested range exceeded
 `gfm-pretty-link-previews--preview-cap') or a bare `shadow'-faced
-`[broken preview] …' sentinel on file-not-found / invalid-range."
+`[broken preview] …' sentinel on file-not-found / invalid-range.
+Sentinels are single-line; they get no prefix."
   (let* ((abbrev (gfm-pretty-link-previews--abbrev-source-path path))
          (label (format "%s:%d-%d" (or abbrev path) start end))
          (result (gfm-pretty-link-previews--read-line-range path start end)))
@@ -357,7 +461,7 @@ lines' when the requested range exceeded
              (body (gfm-pretty-link-previews--fontify-source path lines)))
         (gfm-pretty-link-previews--box-display
          :label label :body body :extra extra :lhs-margin nil
-         :window window))))))
+         :window window :prefix prefix))))))
 
 
 ;;; Diff-range preview
@@ -402,17 +506,21 @@ Return a plist (:status STATUS :body BODY :extra EXTRA) where STATUS is
               :body (mapconcat #'identity head-lines "\n")
               :extra extra))))))
 
-(defun gfm-pretty-link-previews--diff-preview-display (worktree base head path &optional window)
+(defun gfm-pretty-link-previews--diff-preview-display
+    (worktree base head path &optional window prefix)
   "Build the preview display string for diff link BASE...HEAD[#PATH].
 WORKTREE is the directory `git diff' runs in.  WINDOW is forwarded
-to width measurement.
+to width measurement.  PREFIX (optional) is a per-visual-row prefix
+applied to non-first display rows so the box aligns under a leading
+marker (list / blockquote).
 
 Returns a propertised string: either an LHS-margin
 `gfm-pretty-border-face' box (top border embeds `<base>...<head>'
 or `<base>...<head> — <path>', with 40-hex SHAs shortened to 7
-chars; body is the first lines of `git diff' run in WORKTREE) or a
-bare `shadow'-faced `[broken preview] …' sentinel on `no-changes' /
-git-error states."
+chars; body is the first lines of `git diff' run in WORKTREE,
+fontified by `diff-mode') or a bare `shadow'-faced
+`[broken preview] …' sentinel on `no-changes' / git-error states.
+Sentinels are single-line; they get no prefix."
   (let* ((short-base (gfm-pretty-link-previews--abbrev-diff-refs base))
          (short-head (gfm-pretty-link-previews--abbrev-diff-refs head))
          (refs (format "%s...%s" short-base short-head))
@@ -436,8 +544,106 @@ git-error states."
        'face 'shadow))
      (t
       (gfm-pretty-link-previews--box-display
-       :label label :body body :extra extra :lhs-margin t
-       :window window)))))
+       :label label
+       :body (gfm-pretty-link-previews--fontify-diff body)
+       :extra extra :lhs-margin t
+       :window window :prefix prefix)))))
+
+
+;;; Link follow — RET dispatch
+
+(declare-function magit-diff-range "magit-diff" (rev &optional args files))
+(declare-function pulsar-highlight-pulse "pulsar" (&optional locus))
+
+(defun gfm-pretty-link-previews--follow-source-link (path start end)
+  "Open PATH at line START, pulsing lines START..END inclusive.
+The destination buffer is left widened and editable; the pulse
+provides a transient locator for the range without forcing the
+reader into a narrowing."
+  (let* ((resolved (if (file-name-absolute-p path) path
+                     (expand-file-name path default-directory)))
+         (buf (find-file-noselect resolved)))
+    (pop-to-buffer buf)
+    (with-current-buffer buf
+      (widen)
+      (goto-char (point-min))
+      (forward-line (1- start))
+      (when (require 'pulsar nil t)
+        (let ((beg (line-beginning-position)))
+          (save-excursion
+            (forward-line (- end start))
+            (pulsar-highlight-pulse (cons beg (line-end-position)))))))))
+
+(defun gfm-pretty-link-previews--follow-diff-link (parsed worktree)
+  "Open the diff range described by PARSED plist, run from WORKTREE.
+When `magit-diff-range' is available, delegate to it.  Otherwise
+populate a `*Diff*' buffer from `git -C WORKTREE diff B...H [-- P]'
+output and show it in `diff-mode'."
+  (let ((base (plist-get parsed :base))
+        (head (plist-get parsed :head))
+        (path (plist-get parsed :path)))
+    (cond
+     ((and (require 'magit nil t) (fboundp 'magit-diff-range))
+      (if path
+          (magit-diff-range (format "%s...%s" base head) nil (list path))
+        (magit-diff-range (format "%s...%s" base head))))
+     (t
+      (let* ((buf (get-buffer-create "*Diff*"))
+             (argv (gfm-pretty-link-previews--diff-preview-argv
+                    (or worktree default-directory) base head path)))
+        (with-current-buffer buf
+          (let ((inhibit-read-only t))
+            (erase-buffer)
+            (apply #'call-process (car argv) nil t nil (cdr argv))
+            (goto-char (point-min)))
+          (when (require 'diff-mode nil t) (diff-mode)))
+        (pop-to-buffer buf))))))
+
+(defun gfm-pretty-link-previews--overlay-at (pos)
+  "Return the preview overlay at POS, or nil.
+Identified by the registrys `display' property."
+  (let ((prop (gfm-pretty--registry-display
+               gfm-pretty-link-previews--registry)))
+    (cl-find-if (lambda (ov) (overlay-get ov prop))
+                (overlays-at pos))))
+
+;;;###autoload
+(defun gfm-pretty-link-previews-follow-link-at-point ()
+  "Follow the link under the preview overlay at point.
+Source-range overlays open the file at the start line and pulse
+the range; diff-range overlays open the underlying diff via
+`magit-diff-range' when available or a `*Diff*' buffer otherwise.
+Signals a `user-error' when point is not inside a preview overlay."
+  (interactive)
+  (let ((ov (gfm-pretty-link-previews--overlay-at (point))))
+    (unless ov
+      (user-error "gfm-pretty-link-previews: no preview overlay at point"))
+    (let ((kind (overlay-get ov 'gfm-pretty-link-previews-kind))
+          (payload (overlay-get ov 'gfm-pretty-link-previews-payload)))
+      (push-mark (point) t)
+      (cond
+       ((eq kind 'source)
+        ;; payload = (source PATH START END RESOLVED).
+        (gfm-pretty-link-previews--follow-source-link
+         (nth 4 payload)
+         (nth 2 payload)
+         (nth 3 payload)))
+       ((eq kind 'diff)
+        (let ((spec (cdr payload)))
+          (gfm-pretty-link-previews--follow-diff-link
+           (list :base (plist-get spec :base)
+                 :head (plist-get spec :head)
+                 :path (plist-get spec :path))
+           (plist-get spec :worktree))))
+       (t (user-error "gfm-pretty-link-previews: unknown overlay kind %s"
+                      kind))))))
+
+(defvar-keymap gfm-pretty-link-previews-overlay-map
+  :doc "Keymap active on a `link-previews' decorator preview overlay.
+Bound on each preview overlay via its `keymap' property — fires
+only when point is inside the overlay's range."
+  "RET"      #'gfm-pretty-link-previews-follow-link-at-point
+  "<return>" #'gfm-pretty-link-previews-follow-link-at-point)
 
 
 ;;; Decorator protocol
@@ -500,12 +706,18 @@ match.  Engine memoises via `gfm-pretty--collect'."
     (nreverse blocks)))
 
 (defun gfm-pretty-link-previews--apply-block (block window)
-  "Apply a per-WINDOW display overlay for preview BLOCK."
+  "Apply a per-WINDOW display overlay for preview BLOCK.
+Computes a marker-aware continuation prefix so the box body / bottom
+border align under the top border's `┌'.  When the link's line is a
+blockquote and the `blockquotes' decorator is on, the prefix mirrors
+its `▌'-rail wrap-prefix so the rail flows through the box's body
+rows."
   (save-restriction
     (widen)
     (let* ((range (gfm-pretty-link-previews--block-range block))
            (payload (gfm-pretty-link-previews--block-payload block))
            (kind (car payload))
+           (prefix (gfm-pretty-link-previews--continuation-prefix range))
            (display
             (cond
              ((eq kind 'source)
@@ -514,7 +726,7 @@ match.  Engine memoises via `gfm-pretty--collect'."
                (nth 4 payload)
                (nth 2 payload)
                (nth 3 payload)
-               window))
+               window prefix))
              ((eq kind 'diff)
               (let ((spec (cdr payload)))
                 (gfm-pretty-link-previews--diff-preview-display
@@ -522,12 +734,14 @@ match.  Engine memoises via `gfm-pretty--collect'."
                  (plist-get spec :base)
                  (plist-get spec :head)
                  (plist-get spec :path)
-                 window))))))
+                 window prefix))))))
       (when display
         (gfm-pretty--make-display
          gfm-pretty-link-previews--registry
          (car range) (cdr range) window
          'gfm-pretty-link-previews-kind kind
+         'gfm-pretty-link-previews-payload payload
+         'keymap gfm-pretty-link-previews-overlay-map
          'evaporate t
          'display display)))))
 
