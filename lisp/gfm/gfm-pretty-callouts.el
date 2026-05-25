@@ -42,6 +42,8 @@
 (require 'gfm-pretty-borders)
 (require 'gfm-pretty-engine)
 
+(defvar gfm-pretty-callouts--type-tint-face-alist)
+
 (defgroup gfm-pretty-callouts nil
   "Box overlays for GitHub Flavored Markdown callouts."
   :group 'markdown-faces)
