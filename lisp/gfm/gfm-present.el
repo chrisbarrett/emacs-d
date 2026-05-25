@@ -99,6 +99,20 @@ When the document has no H1s, leave the buffer widened."
                  (end (or next (point-max))))
             (narrow-to-region first end))))))))
 
+;;; Header-line counter
+
+(defun gfm-present--refresh-header ()
+  "Recompute the slide-count `header-line-format' buffer-locally.
+Sets the value to a string like \"2/5\" when point is inside an H1's
+region, or nil when the document has no H1s (or point precedes the
+first H1)."
+  (let* ((positions (gfm-present--all-h1-positions))
+         (current (gfm-present--current-h1-start))
+         (index (and current
+                     (cl-position current positions :test #'=))))
+    (setq header-line-format
+          (and index (format "%d/%d" (1+ index) (length positions))))))
+
 ;;; Navigation commands
 
 (defun gfm-present--current-h1-start ()
@@ -120,6 +134,7 @@ When the document has no H1s, leave the buffer widened."
     (when next
       (gfm-present--narrow-to-heading-at next)
       (goto-char (point-min))
+      (gfm-present--refresh-header)
       (when gfm-present-mode
         (gfm-present--rebuild-link-previews)))))
 
@@ -135,6 +150,7 @@ When the document has no H1s, leave the buffer widened."
     (when prev
       (gfm-present--narrow-to-heading-at prev)
       (goto-char (point-min))
+      (gfm-present--refresh-header)
       (when gfm-present-mode
         (gfm-present--rebuild-link-previews)))))
 
@@ -239,6 +255,7 @@ pass-through to the markdown major mode default handler."
             (widen)
             (narrow-to-region (car region) (cdr region))
             (goto-char heading-pos)
+            (gfm-present--refresh-header)
             (when gfm-present-mode
               (gfm-present--rebuild-link-previews)))))))
      (source
@@ -265,6 +282,7 @@ locally) while `gfm-present-mode' is on, so RET on a decorated anchor
 link lands narrowed to the target's slide region.  Also refreshes link
 preview overlays for the new slide."
   (gfm-present--narrow-to-heading-at target-pos)
+  (gfm-present--refresh-header)
   (gfm-present--rebuild-link-previews))
 
 (defun gfm-present--around-evil-jump (orig &rest args)
@@ -295,14 +313,23 @@ calls ORIG with ARGS unchanged."
 (defvar-local gfm-present--owned-buffer nil
   "Non-nil when the current buffer was opened solely by `gfm-present-markdown'.")
 
+(defun gfm-present--exit ()
+  "Disable `gfm-present-mode' in the current buffer.
+Bound via `[remap widen]' so `C-x n w' ends the presentation cleanly
+instead of leaving the keymap active over a widened buffer; the
+mode-disable branch already widens."
+  (interactive)
+  (gfm-present-mode -1))
+
 (defvar-keymap gfm-present-mode-map
   :doc "Keymap for `gfm-present-mode'."
-  "C-n"   #'gfm-present-next-slide
-  "C-f"   #'gfm-present-next-slide
-  "C-p"   #'gfm-present-previous-slide
-  "C-b"   #'gfm-present-previous-slide
-  "C-c q" #'gfm-present-quit
-  "RET"   #'gfm-present-follow-link)
+  "C-n"          #'gfm-present-next-slide
+  "C-f"          #'gfm-present-next-slide
+  "C-p"          #'gfm-present-previous-slide
+  "C-b"          #'gfm-present-previous-slide
+  "C-c q"        #'gfm-present-quit
+  "RET"          #'gfm-present-follow-link
+  "<remap> <widen>" #'gfm-present--exit)
 
 (with-eval-after-load 'evil
   (when (fboundp 'evil-make-overriding-map)
@@ -336,6 +363,7 @@ so it takes precedence over evil-state bindings."
     (add-hook 'gfm-pretty-links-after-anchor-jump-functions
               #'gfm-present--after-anchor-jump nil t)
     (gfm-present--narrow-to-heading-at (point))
+    (gfm-present--refresh-header)
     (unless (bound-and-true-p gfm-pretty-mode)
       (gfm-pretty-mode 1))
     (gfm-present--rebuild-link-previews))
@@ -348,6 +376,7 @@ so it takes precedence over evil-state bindings."
     (remove-hook 'after-revert-hook #'gfm-present--restore-position t)
     (remove-hook 'gfm-pretty-links-after-anchor-jump-functions
                  #'gfm-present--after-anchor-jump t)
+    (setq header-line-format nil)
     (widen))))
 
 ;;;###autoload
@@ -456,6 +485,7 @@ state as before."
       (setq gfm-present--revert-anchor nil)
       (unless gfm-present-mode
         (gfm-present-mode 1))
+      (gfm-present--refresh-header)
       (when gfm-present-mode
         (gfm-present--rebuild-link-previews))
       (let ((win (get-buffer-window (current-buffer))))

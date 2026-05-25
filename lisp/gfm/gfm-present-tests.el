@@ -799,6 +799,95 @@ buffer-local revert hooks, and the minor-mode flag before
       (should (= (point) (point-max))))))
 
 
+;;; Slide-count header line
+
+(ert-deftest gfm-present/header-line-shows-counter-on-enable ()
+  "Enabling on slide 2 of 5 sets `header-line-format' to \"2/5\"."
+  (with-temp-buffer
+    (insert "# A\n# B\nbody B\n# C\n# D\n# E\n")
+    (search-backward "body B")
+    (gfm-present-mode 1)
+    (should (equal "2/5" header-line-format))))
+
+(ert-deftest gfm-present/header-line-nil-when-no-h1s ()
+  "Document with no H1s leaves `header-line-format' nil on enable."
+  (with-temp-buffer
+    (insert "no headings here\njust text\n")
+    (gfm-present-mode 1)
+    (should-not header-line-format)))
+
+(ert-deftest gfm-present/header-line-cleared-on-disable ()
+  "Disabling the mode resets `header-line-format' to nil."
+  (with-temp-buffer
+    (insert "# A\n# B\n")
+    (goto-char (point-min))
+    (gfm-present-mode 1)
+    (should header-line-format)
+    (gfm-present-mode -1)
+    (should-not header-line-format)))
+
+(ert-deftest gfm-present/header-line-updates-on-next-slide ()
+  "`next-slide' updates header `2/5' → `3/5'."
+  (with-temp-buffer
+    (insert "# A\n# B\nbody B\n# C\n# D\n# E\n")
+    (search-backward "body B")
+    (gfm-present-mode 1)
+    (should (equal "2/5" header-line-format))
+    (gfm-present-next-slide)
+    (should (equal "3/5" header-line-format))))
+
+(ert-deftest gfm-present/header-line-updates-on-previous-slide ()
+  "`previous-slide' updates header `2/5' → `1/5'."
+  (with-temp-buffer
+    (insert "# A\n# B\nbody B\n# C\n# D\n# E\n")
+    (search-backward "body B")
+    (gfm-present-mode 1)
+    (should (equal "2/5" header-line-format))
+    (gfm-present-previous-slide)
+    (should (equal "1/5" header-line-format))))
+
+(ert-deftest gfm-present/header-line-updates-on-follow-link ()
+  "Following an in-doc heading link updates header to the target's index."
+  (with-temp-buffer
+    (insert "# One\n[jump](#four)\n# Two\n# Three\n# Four\nbody\n# Five\n")
+    (goto-char (point-min))
+    (gfm-present-mode 1)
+    (search-forward "[jump]")
+    (backward-char 2)
+    (gfm-present-follow-link)
+    (should (equal "4/5" header-line-format))))
+
+
+;;; Widen remap
+
+(ert-deftest gfm-present/widen-keybinding-disables-mode ()
+  "`C-x n w' disables `gfm-present-mode' and widens the buffer."
+  (with-temp-buffer
+    (insert "# A\nbody A\n# B\nbody B\n")
+    (search-backward "body A")
+    (gfm-present-mode 1)
+    (should gfm-present-mode)
+    (should (buffer-narrowed-p))
+    (call-interactively (key-binding (kbd "C-x n w")))
+    (should-not gfm-present-mode)
+    (should-not (buffer-narrowed-p))))
+
+(ert-deftest gfm-present/widen-keybinding-disables-mode-from-evil-normal ()
+  "`C-x n w' from evil normal state disables the mode and widens."
+  (skip-unless (require 'evil nil t))
+  (with-temp-buffer
+    (insert "# A\nbody A\n# B\nbody B\n")
+    (search-backward "body A")
+    (when (fboundp 'evil-local-mode) (evil-local-mode 1))
+    (when (fboundp 'evil-normal-state) (evil-normal-state))
+    (gfm-present-mode 1)
+    (should gfm-present-mode)
+    (should (buffer-narrowed-p))
+    (call-interactively (key-binding (kbd "C-x n w")))
+    (should-not gfm-present-mode)
+    (should-not (buffer-narrowed-p))))
+
+
 ;;; §14 Module-level cleanup
 
 (defun gfm-present-tests--read-lib ()
