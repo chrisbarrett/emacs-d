@@ -28,4 +28,4 @@
 
 - [x] 5.1 Run `make test-quick` and address any regressions.
 - [x] 5.2 Run `make test` (full suite, including narrowing regression tag) inside `nix develop` so `TREESIT_EXTRA_LOAD_PATH` is set for tree-sitter-dependent tests.
-- [ ] 5.3 Manually reproduce the original symptom: open a markdown file with a table near top, enable `gfm-pretty-mode`, externally rewrite the file so the table shifts, observe `j`/`k` motion behaves correctly without pinballing.
+- [x] 5.3 Manually reproduce the original symptom: open a markdown file with a table near top, enable `gfm-pretty-mode`, externally rewrite the file so the table shifts, observe `j`/`k` motion behaves correctly without pinballing. (Verified via sandboxed emacs repro: main reproduced `pinball-stale-bug` with point landing at offset 32 inside the preface; fix produced `stale-but-gated-safe` with point held at 55 until next rebuild.)
