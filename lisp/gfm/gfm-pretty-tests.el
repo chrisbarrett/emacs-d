@@ -4867,6 +4867,156 @@ user reported."
         (should (= narrow-then-widen (funcall count-of-overlays)))))
     (gfm-pretty-mode -1)))
 
+;;; Engine stale-p
+
+(ert-deftest lang-markdown/gfm-pretty-engine-stale-p-set-on-rebuild ()
+  "Rebuild stamps `last-rebuild-tick' and `gfm-pretty--stale-p' returns nil."
+  (with-temp-buffer
+    (insert "| A | B |\n| - | - |\n| 1 | 2 |\n")
+    (gfm-pretty-mode 1)
+    (should-not (gfm-pretty--stale-p 'tables))
+    (should (eq (gfm-pretty--state-get 'tables 'last-rebuild-tick)
+                (buffer-chars-modified-tick)))
+    (gfm-pretty-mode -1)))
+
+(ert-deftest lang-markdown/gfm-pretty-engine-stale-p-advances-on-edit ()
+  "An edit advances the buffer tick; `gfm-pretty--stale-p' flips to non-nil."
+  (with-temp-buffer
+    (insert "| A | B |\n| - | - |\n| 1 | 2 |\n")
+    (gfm-pretty-mode 1)
+    (should-not (gfm-pretty--stale-p 'tables))
+    (let ((inhibit-modification-hooks t))
+      (goto-char (point-min))
+      (insert "preface\n"))
+    (should (gfm-pretty--stale-p 'tables))
+    ;; Force a fresh rebuild — slate cleared again.
+    (gfm-pretty-tables--rebuild)
+    (should-not (gfm-pretty--stale-p 'tables))
+    (gfm-pretty-mode -1)))
+
+(ert-deftest lang-markdown/gfm-pretty-engine-stale-p-nil-on-disable ()
+  "Disabling a decorator nils `last-rebuild-tick' and stale-p becomes non-nil."
+  (with-temp-buffer
+    (insert "| A | B |\n| - | - |\n| 1 | 2 |\n")
+    (gfm-pretty-mode 1)
+    (gfm-pretty-mode -1)
+    (should (null (gfm-pretty--state-get 'tables 'last-rebuild-tick)))
+    (should (gfm-pretty--stale-p 'tables))))
+
+;;; Revert hook navigation safety
+
+(ert-deftest lang-markdown/gfm-pretty-tables-before-revert-clears-state ()
+  "`before-revert-hook' empties overlays and nils every position slot."
+  (with-temp-buffer
+    (insert "| A | B |\n| - | - |\n| 1 | 2 |\n")
+    (gfm-pretty-mode 1)
+    (should (gfm-pretty--state-get 'tables 'overlays))
+    (gfm-pretty--before-revert)
+    (should-not (gfm-pretty--state-get 'tables 'overlays))
+    (dolist (slot '(dirty-region last-window-state hidden-ovs
+                                 anchors-laid last-rebuild-tick))
+      (should-not (gfm-pretty--state-get 'tables slot)))))
+
+(ert-deftest lang-markdown/gfm-pretty-tables-stale-snap-is-skipped ()
+  "When the tables decorator is stale, snap-to-cell does not move point."
+  (with-temp-buffer
+    (insert "| A | B |\n| - | - |\n| 1 | 2 |\n")
+    (gfm-pretty-mode 1)
+    (let ((gfm-pretty--rebuild-timer nil))
+      (gfm-pretty-tables--rebuild))
+    (goto-char (point-min))
+    (search-forward "| 1 |")
+    ;; Park point between the cell-bounds end and the closing `|',
+    ;; i.e. on column-gap territory where snap WOULD normally rewind.
+    (forward-char -1)
+    (let ((parked (point))
+          (inhibit-modification-hooks t))
+      (goto-char (point-min))
+      (insert "preface\n")
+      (when (timerp gfm-pretty--rebuild-timer)
+        (cancel-timer gfm-pretty--rebuild-timer)
+        (setq gfm-pretty--rebuild-timer nil))
+      (should (gfm-pretty--stale-p 'tables))
+      (goto-char parked)
+      (gfm-pretty-tables--maybe-snap-to-cell)
+      (should (= parked (point))))))
+
+(ert-deftest lang-markdown/gfm-pretty-tables-nav-after-revert ()
+  "After `revert-buffer' the new overlays reflect the file's new layout.
+`row-down' from inside the new table lands in the next row's first cell."
+  (let ((path (make-temp-file "gfm-pretty-tables-nav-revert-" nil ".md"))
+        buf)
+    (unwind-protect
+        (progn
+          (with-temp-file path
+            (insert "| A | B |\n| - | - |\n| 1 | 2 |\n| 3 | 4 |\n"))
+          (setq buf (find-file-noselect path))
+          (with-current-buffer buf
+            (gfm-pretty-mode 1)
+            (let ((gfm-pretty--rebuild-timer nil))
+              (gfm-pretty-tables--rebuild)))
+          (with-temp-file path
+            (insert "preface line one\npreface line two\npreface line three\n\n"
+                    "| A | B |\n| - | - |\n| 1 | 2 |\n| 3 | 4 |\n"))
+          (with-current-buffer buf
+            (revert-buffer t t)
+            (should-not (gfm-pretty--stale-p 'tables))
+            (goto-char (point-min))
+            (should (search-forward "| 1 " nil t))
+            (goto-char (line-beginning-position))
+            (let* ((info (gfm-pretty-tables--cell-info-at-point))
+                   (cb (and info
+                            (overlay-get (car info)
+                                         'gfm-pretty-tables-cell-bounds))))
+              (should info)
+              (should (consp cb))
+              ;; Every cell-bound pair must lie within the row's line.
+              (dolist (b cb)
+                (should (>= (car b) (line-beginning-position)))
+                (should (<= (cdr b) (line-end-position)))))
+            (gfm-pretty-tables-row-down)
+            ;; Point lands inside the next row's first cell (right
+            ;; after the opening `|'); the line itself begins `| 3 '.
+            (should (string-prefix-p
+                     "| 3 "
+                     (buffer-substring-no-properties
+                      (line-beginning-position)
+                      (line-end-position))))))
+      (when (buffer-live-p buf) (kill-buffer buf))
+      (when (file-exists-p path) (delete-file path)))))
+
+(ert-deftest lang-markdown/gfm-pretty-tables-nav-after-burst-edit-is-stale-safe ()
+  "After a programmatic edit advances the tick but no rebuild runs,
+the cell-aware `j' shim falls through to `evil-next-line' rather
+than reading stale `cell-bounds'."
+  (skip-unless (require 'evil nil t))
+  (with-temp-buffer
+    (insert "| A | B |\n| - | - |\n| 1 | 2 |\n| 3 | 4 |\n")
+    (gfm-pretty-mode 1)
+    (let ((gfm-pretty--rebuild-timer nil))
+      (gfm-pretty-tables--rebuild))
+    (should-not (gfm-pretty--stale-p 'tables))
+    (goto-char (point-min))
+    (let ((inhibit-modification-hooks t))
+      (insert "preface\n"))
+    ;; Cancel any timer the after-change handler might have armed; we
+    ;; want to verify behaviour BEFORE the engine rebuilds.
+    (when (timerp gfm-pretty--rebuild-timer)
+      (cancel-timer gfm-pretty--rebuild-timer)
+      (setq gfm-pretty--rebuild-timer nil))
+    (should (gfm-pretty--stale-p 'tables))
+    (goto-char (point-min))
+    (should (search-forward "| 1 " nil t))
+    (goto-char (line-beginning-position))
+    (let ((start (point))
+          baseline shim)
+      (call-interactively #'evil-next-line)
+      (setq baseline (point))
+      (goto-char start)
+      (gfm-pretty-tables--evil-j)
+      (setq shim (point))
+      (should (= shim baseline)))))
+
 (provide 'gfm-pretty-tests)
 
 ;;; gfm-pretty-tests.el ends here
