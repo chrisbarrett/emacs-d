@@ -15,6 +15,17 @@
 (require 'cl-lib)
 (require 'gfm-pretty-engine)
 
+;; Forward declarations: evil's selection state vars are touched by
+;; `gfm-pretty--current-visual-selection-bounds' under
+;; `bound-and-true-p' guards, but the byte-compiler still flags the
+;; bare references inside the `and' body.  Declare them here so the
+;; --affected pre-commit lane compiles cleanly without pulling evil
+;; into the require chain.
+(defvar evil-state)
+(defvar evil-visual-selection)
+(defvar evil-visual-beginning)
+(defvar evil-visual-end)
+
 (defgroup gfm-pretty-borders nil
   "Shared border-drawing primitives for GFM block decorators."
   :group 'markdown-faces)

@@ -28,6 +28,26 @@
 
 (defvar gfm-pretty-tables--row-map)
 
+;; Forward declarations: the cell-aware motion shims funcall evil
+;; commands only when evil is loaded (their wrappers exist for the
+;; row keymap's [remap ...] bindings).  Declared here so the
+;; --affected pre-commit byte-compile lane resolves the symbols
+;; without requiring evil at compile time.
+(declare-function evil-backward-char       "evil-commands")
+(declare-function evil-forward-char        "evil-commands")
+(declare-function evil-next-line           "evil-commands")
+(declare-function evil-previous-line       "evil-commands")
+(declare-function evil-first-non-blank     "evil-commands")
+(declare-function evil-end-of-line         "evil-commands")
+(declare-function evil-forward-word-begin  "evil-commands")
+(declare-function evil-forward-WORD-begin  "evil-commands")
+(declare-function evil-forward-word-end    "evil-commands")
+(declare-function evil-forward-WORD-end    "evil-commands")
+(declare-function evil-backward-word-begin "evil-commands")
+(declare-function evil-backward-WORD-begin "evil-commands")
+(declare-function evil-beginning-of-line   "evil-commands")
+(declare-function evil-yank-line           "evil-commands")
+
 (defgroup gfm-pretty-tables nil
   "Visual treatment for GitHub Flavored Markdown tables."
   :group 'markdown-faces)
@@ -1083,12 +1103,18 @@ restriction can still be parsed and re-rendered."
 (defun gfm-pretty-tables--rebuild ()
   "Remove and recreate all gfm-pretty-tables overlays.
 Re-applies the active-cell highlight afterwards so cell selection
-survives window-configuration changes and other rebuild triggers."
+survives window-configuration changes and other rebuild triggers.
+Stamps the engine's `last-rebuild-tick' so direct callers — e.g.
+`--insert-new-row-after-current', `--swap-columns', the test harness
+— clear `gfm-pretty--stale-p' without round-tripping through the
+engine wrapper."
   (let ((gfm-pretty-tables--width-cache (make-hash-table :test 'eq)))
     (gfm-pretty-tables--remove-overlays)
     (gfm-pretty-tables--apply-overlays)
     (gfm-pretty--state-set 'tables 'last-window-state
                            (gfm-pretty-tables--window-state))
+    (gfm-pretty--state-set 'tables 'last-rebuild-tick
+                           (buffer-chars-modified-tick))
     (gfm-pretty-tables--update-cursor-highlight)))
 
 (defun gfm-pretty-tables--rebuild-block (block)
@@ -1615,18 +1641,25 @@ and clobber another command's message (e.g. `Copied:').")
     (setq gfm-pretty-tables--cursor-anchor pos)))
 
 (defun gfm-pretty-tables--cell-info-at-point ()
-  "Return (ROW-OV . CELL-IDX) for point inside a navigable table row, else nil."
-  (let* ((ov (cl-find-if (lambda (o)
-                           (overlay-get o 'gfm-pretty-tables-cell-bounds))
-                         (overlays-at (point))))
-         (cb (and ov (overlay-get ov 'gfm-pretty-tables-cell-bounds))))
-    (when cb
-      (cons ov
-            (or (cl-position-if (lambda (b)
-                                  (and (>= (point) (car b))
-                                       (< (point) (cdr b))))
-                                cb)
-                0)))))
+  "Return (ROW-OV . CELL-IDX) for point inside a navigable table row, else nil.
+Returns nil when the tables decorator's overlay state is stale
+relative to the current `buffer-chars-modified-tick'
+\(`gfm-pretty--stale-p').  This propagates through every public
+cell-aware command — they all key off this predicate — so a stale
+overlay's `cell-bounds' integer list is never dereferenced as a
+buffer position."
+  (unless (gfm-pretty--stale-p 'tables)
+    (let* ((ov (cl-find-if (lambda (o)
+                             (overlay-get o 'gfm-pretty-tables-cell-bounds))
+                           (overlays-at (point))))
+           (cb (and ov (overlay-get ov 'gfm-pretty-tables-cell-bounds))))
+      (when cb
+        (cons ov
+              (or (cl-position-if (lambda (b)
+                                    (and (>= (point) (car b))
+                                         (< (point) (cdr b))))
+                                  cb)
+                  0))))))
 
 (defun gfm-pretty-tables--apply-cell-highlight (display dcb idx)
   "Return a copy of DISPLAY with cell IDX painted with the active-cell face.
@@ -1697,7 +1730,19 @@ Also anchors the visible cursor at the cell's first buffer char."
   "Highlight the active cell at point and hide the buffer cursor.
 The cursor is hidden because tty Emacs always renders it at the
 overlay's right edge regardless of any `cursor' positioning hints, so
-the highlight alone conveys cell selection."
+the highlight alone conveys cell selection.
+
+When the tables decorator's overlay state is stale relative to the
+current buffer tick (`gfm-pretty--stale-p'), any existing highlight
+is hidden and the function returns without reading `cell-bounds' —
+the next rebuild repaints the correct cell."
+  (cond
+   ((gfm-pretty--stale-p 'tables)
+    (when gfm-pretty-tables--current-highlight-key
+      (gfm-pretty-tables--hide-cursor-highlight)
+      (setq gfm-pretty-tables--current-highlight-key nil
+            gfm-pretty-tables--last-hinted-cell nil)))
+   (t
   (gfm-pretty-tables--maybe-snap-to-cell)
   (let ((info (gfm-pretty-tables--cell-info-at-point)))
     (cond
@@ -1719,7 +1764,7 @@ the highlight alone conveys cell selection."
       (when gfm-pretty-tables--current-highlight-key
         (gfm-pretty-tables--hide-cursor-highlight)
         (setq gfm-pretty-tables--current-highlight-key nil
-              gfm-pretty-tables--last-hinted-cell nil))))))
+              gfm-pretty-tables--last-hinted-cell nil))))))))
 
 ;;; Cell-wise navigation
 
@@ -1974,7 +2019,11 @@ row is invisible (e.g. inside a folded outline heading) so motion
 through hidden text does not pull point into a hidden table.  Also
 skipped while `isearch-mode' is active or `this-command' is a
 search-style command so search results that land on a column gap
-or border are not rewound."
+or border are not rewound.  Bailed out early when the tables
+decorator's overlay state is stale relative to the current buffer
+tick (`gfm-pretty--stale-p'); the next rebuild restores correct
+snap behaviour."
+  (unless (gfm-pretty--stale-p 'tables)
   (let* ((lbeg (line-beginning-position))
          (row-ov (cl-find-if
                   (lambda (o) (overlay-get o 'gfm-pretty-tables-cell-bounds))
@@ -1991,7 +2040,7 @@ or border are not rewound."
                                         (< (point) (cdr b))))
                        cb)))
         (unless in-cell
-          (gfm-pretty-tables--goto-cell row-ov 0))))))
+          (gfm-pretty-tables--goto-cell row-ov 0)))))))
 
 (defmacro gfm-pretty-tables--define-evil-motion (name table-fn evil-fn fall-through)
   "Define NAME as a wrapper dispatching between TABLE-FN and EVIL-FN.
@@ -1999,20 +2048,31 @@ When point is in a table, TABLE-FN runs first.  If it returns nil
 \(no-op at an edge) and FALL-THROUGH is non-nil, EVIL-FN runs as a
 fallback so motion can escape the table; otherwise the no-op is
 silent.  Outside a table, EVIL-FN runs directly; if FALL-THROUGH is
-the symbol `snap', a post-call landing in a table snaps to cell 0."
+the symbol `snap', a post-call landing in a table snaps to cell 0.
+
+When the tables decorator's overlay state is stale relative to the
+current `buffer-chars-modified-tick' (`gfm-pretty--stale-p'), the
+wrapper bypasses TABLE-FN entirely — running EVIL-FN as if point
+were outside any table — and skips the snap step even when
+FALL-THROUGH is `snap'.  This prevents `goto-char' against
+cached integer offsets that the next rebuild has yet to refresh."
   `(defun ,name ()
      ,(format "Cell-aware shim for `%s'." evil-fn)
      (interactive)
      (cond
+      ((gfm-pretty--stale-p 'tables)
+       (call-interactively #',evil-fn))
       ((gfm-pretty-tables--cell-info-at-point)
        (or (,table-fn)
            ,(when fall-through
               `(progn (call-interactively #',evil-fn)
                       ,(when (eq fall-through 'snap)
-                         '(gfm-pretty-tables--maybe-snap-to-cell))))))
+                         '(unless (gfm-pretty--stale-p 'tables)
+                            (gfm-pretty-tables--maybe-snap-to-cell)))))))
       (t (call-interactively #',evil-fn)
          ,(when (eq fall-through 'snap)
-            '(gfm-pretty-tables--maybe-snap-to-cell))))))
+            '(unless (gfm-pretty--stale-p 'tables)
+               (gfm-pretty-tables--maybe-snap-to-cell)))))))
 
 (gfm-pretty-tables--define-evil-motion gfm-pretty-tables--evil-h gfm-pretty-tables-cell-backward  evil-backward-char           nil)
 (gfm-pretty-tables--define-evil-motion gfm-pretty-tables--evil-l gfm-pretty-tables-cell-forward   evil-forward-char            nil)

@@ -95,7 +95,13 @@ PLIST keys:
 - `hidden-ovs'        revealable overlays whose display is suppressed
 - `anchors-laid'      list of block ranges with anchors laid this pass
 - `rebuild-stats'     plist (:count :total :last :max) of generic timing
-- `phase-totals'      decorator-published phase timings (alist)")
+- `phase-totals'      decorator-published phase timings (alist)
+- `last-rebuild-tick' `buffer-chars-modified-tick' captured at the
+                      end of the last completed rebuild, or nil
+                      (decorator disabled / freshly toggled / revert
+                      teardown).  Lets dependents detect overlay
+                      state older than the current buffer via
+                      `gfm-pretty--stale-p'.")
 
 (defvar-local gfm-pretty--rebuild-timer nil
   "Single idle rebuild timer driving engine-scheduled rebuilds.")
@@ -502,7 +508,10 @@ Emits a `display-warning' of severity `:warning' when DURATION exceeds
 
 (defun gfm-pretty--rebuild-block (decorator block)
   "Tear down BLOCK's overlays and reapply just that block.
-Times the operation into DECORATOR NAME's `rebuild-stats' slot."
+Times the operation into DECORATOR NAME's `rebuild-stats' slot.
+Stamps `last-rebuild-tick' on completion: the rest of the buffer's
+overlays are unchanged and therefore still aligned with the current
+buffer tick, so the decorator's overall freshness is restored."
   (let* ((name (gfm-pretty--decorator-name decorator))
          (registry (gfm-pretty--decorator-registry decorator))
          (range-fn (gfm-pretty--decorator-range-fn decorator))
@@ -512,7 +521,9 @@ Times the operation into DECORATOR NAME's `rebuild-stats' slot."
     (gfm-pretty--with-stats name
       (gfm-pretty--remove-overlays registry (car range) (cdr range))
       (dolist (window windows)
-        (funcall apply-block block window)))))
+        (funcall apply-block block window)))
+    (gfm-pretty--state-set name 'last-rebuild-tick
+                           (buffer-chars-modified-tick))))
 
 (defun gfm-pretty--pace-window-rebuild (decorator buf queue window)
   "Render the next block in QUEUE for WINDOW in BUF using DECORATOR.
@@ -621,7 +632,17 @@ Times the call into the engine's per-decorator `rebuild-stats' slot."
                 (funcall apply-block block window))))))))
     (gfm-pretty--state-set name 'dirty-region nil)
     (gfm-pretty--state-set name 'last-window-state
-                           (gfm-pretty--window-state))))
+                           (gfm-pretty--window-state))
+    (gfm-pretty--state-set name 'last-rebuild-tick
+                           (buffer-chars-modified-tick))))
+
+(defun gfm-pretty--stale-p (name)
+  "Non-nil when decorator NAME's overlays are older than the current buffer.
+Returns t when no rebuild has completed (slot nil) or when the slot's
+tick is strictly less than `buffer-chars-modified-tick'.  Returns nil
+when the slot equals the current tick (overlays in sync)."
+  (let ((tick (gfm-pretty--state-get name 'last-rebuild-tick)))
+    (or (null tick) (< tick (buffer-chars-modified-tick)))))
 
 ;;; Scoped-rebuild routing (engine-owned)
 
@@ -772,6 +793,40 @@ property names from the decorator's `:registry'."
        (reveal-fn (funcall reveal-fn))
        (t (gfm-pretty--reveal-for decorator))))))
 
+(defun gfm-pretty--before-revert ()
+  "Engine `before-revert-hook' handler.
+For each enabled decorator: bulk-remove its overlays via the
+registry and nil every position-bearing state slot
+\(`dirty-region', `last-window-state', `hidden-ovs', `anchors-laid',
+`last-rebuild-tick').  Also cancel the engine's pending idle rebuild
+timer so nothing fires against the about-to-be-replaced contents."
+  (unless (buffer-base-buffer)
+    (dolist (decorator (gfm-pretty--enabled-decorators))
+      (let ((name (gfm-pretty--decorator-name decorator))
+            (registry (gfm-pretty--decorator-registry decorator)))
+        (when registry (gfm-pretty--remove-overlays registry))
+        (gfm-pretty--state-set name 'dirty-region nil)
+        (gfm-pretty--state-set name 'last-window-state nil)
+        (gfm-pretty--state-set name 'hidden-ovs nil)
+        (gfm-pretty--state-set name 'anchors-laid nil)
+        (gfm-pretty--state-set name 'last-rebuild-tick nil)))
+    (when (timerp gfm-pretty--rebuild-timer)
+      (cancel-timer gfm-pretty--rebuild-timer)
+      (setq gfm-pretty--rebuild-timer nil))))
+
+(defun gfm-pretty--after-revert ()
+  "Engine `after-revert-hook' handler.
+Runs the scheduled-rebuild routine synchronously so every enabled
+decorator has a fresh overlay set — and `last-rebuild-tick' aligned
+with the current buffer tick — before control returns to the user.
+Any `dirty-region' set by `insert-file-contents REPLACE=t' is cleared
+first so the scheduler routes through the full-rebuild path."
+  (unless (buffer-base-buffer)
+    (dolist (decorator (gfm-pretty--enabled-decorators))
+      (gfm-pretty--state-set
+       (gfm-pretty--decorator-name decorator) 'dirty-region nil))
+    (gfm-pretty--scheduled-rebuild)))
+
 ;;; Public lifecycle entry points (used by `gfm-pretty-mode')
 
 (defun gfm-pretty--install-engine-hooks ()
@@ -783,7 +838,9 @@ post-command-hook wiring required."
   (add-hook 'after-change-functions #'gfm-pretty--after-change nil t)
   (add-hook 'window-configuration-change-hook #'gfm-pretty--wcc nil t)
   (add-hook 'post-command-hook #'gfm-pretty--reveal nil t)
-  (add-hook 'post-command-hook #'gfm-pretty--update-selection nil t))
+  (add-hook 'post-command-hook #'gfm-pretty--update-selection nil t)
+  (add-hook 'before-revert-hook #'gfm-pretty--before-revert nil t)
+  (add-hook 'after-revert-hook #'gfm-pretty--after-revert nil t))
 
 (defun gfm-pretty--remove-engine-hooks ()
   "Remove the engine's lifecycle hooks; cancel the rebuild timer."
@@ -791,6 +848,8 @@ post-command-hook wiring required."
   (remove-hook 'window-configuration-change-hook #'gfm-pretty--wcc t)
   (remove-hook 'post-command-hook #'gfm-pretty--reveal t)
   (remove-hook 'post-command-hook #'gfm-pretty--update-selection t)
+  (remove-hook 'before-revert-hook #'gfm-pretty--before-revert t)
+  (remove-hook 'after-revert-hook #'gfm-pretty--after-revert t)
   (setq gfm-pretty--last-selection-bounds nil)
   (when (timerp gfm-pretty--rebuild-timer)
     (cancel-timer gfm-pretty--rebuild-timer)
@@ -815,6 +874,7 @@ post-command-hook wiring required."
     (gfm-pretty--state-set name 'hidden-ovs nil)
     (gfm-pretty--state-set name 'anchors-laid nil)
     (gfm-pretty--state-set name 'blocks-cache nil)
+    (gfm-pretty--state-set name 'last-rebuild-tick nil)
     (when on-disable (funcall on-disable))
     (when registry (gfm-pretty--remove-overlays registry))))
 
