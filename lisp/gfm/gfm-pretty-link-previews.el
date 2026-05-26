@@ -108,6 +108,124 @@ clobbered it."
              t)))))
 
 
+;;; Bare-line recognition and preformatted-context exclusion
+
+(defconst gfm-pretty-link-previews--bare-line-rx
+  (rx bol (* blank)
+      (? (or "- " "* " "+ " "> "
+             (: (+ digit) ". ")))
+      (* blank)
+      (group (+ (not (any blank "\n"))))
+      (* blank) eol)
+  "Regexp matching a candidate bare-line URL token.
+Group 1 captures the candidate URL token.")
+
+(defconst gfm-pretty-link-previews--fence-open-rx
+  (rx bol (* blank) (group "```" (* "`")))
+  "Regexp matching the opening of a fenced code block.
+Group 1 captures the backtick run; the closing fence MUST have a
+backtick run at least as long.")
+
+(defun gfm-pretty-link-previews--fence-ranges ()
+  "Return (OPEN-BOL . CLOSE-EOL) ranges covering fenced code blocks.
+Computed once per `--collect-blocks' call on the widened buffer.
+Implemented locally rather than `require'-ing `gfm-pretty-fences' so
+the link-previews decorator does not depend on the fences decorator
+being loaded or enabled."
+  (let (ranges)
+    (save-restriction
+      (widen)
+      (save-excursion
+        (save-match-data
+          (goto-char (point-min))
+          (while (re-search-forward
+                  gfm-pretty-link-previews--fence-open-rx nil t)
+            (let* ((open-bol (line-beginning-position))
+                   (open-ticks (match-string-no-properties 1))
+                   (close-rx (rx-to-string
+                              `(seq bol (* blank)
+                                    ,open-ticks (* "`")
+                                    (* blank) eol)
+                              t))
+                   (close-eol nil))
+              (forward-line 1)
+              (while (and (not close-eol) (not (eobp)))
+                (cond
+                 ((looking-at close-rx)
+                  (setq close-eol (line-end-position)))
+                 (t (forward-line 1))))
+              (push (cons open-bol (or close-eol (point-max))) ranges)
+              (goto-char (or close-eol (point-max)))
+              (unless (eobp) (forward-line 1)))))))
+    (nreverse ranges)))
+
+(defun gfm-pretty-link-previews--inside-any-range-p (pos ranges)
+  "Non-nil if POS lies within any (BEG . END) in RANGES.
+Thin wrapper over `gfm-pretty--in-ranges-p' to keep call sites local
+to this module."
+  (gfm-pretty--in-ranges-p pos ranges))
+
+(defun gfm-pretty-link-previews--line-indent-cols ()
+  "Return leading-whitespace column count for the current line.
+Tabs count as one column each — matches the approximation used by
+`gfm-pretty-fences--line-indent' for code-block detection."
+  (save-excursion
+    (beginning-of-line)
+    (let ((start (point)))
+      (skip-chars-forward " \t")
+      (- (point) start))))
+
+(defun gfm-pretty-link-previews--inline-code-wrap-p ()
+  "Non-nil when the current line's significant content is `` `<token>` ''.
+Marker-strip mirrors the bare-line rx: optional leading whitespace +
+at most one list/blockquote marker.  After stripping, the remainder
+must start and end with a backtick and contain no inner backtick or
+whitespace."
+  (save-excursion
+    (beginning-of-line)
+    (let* ((eol (line-end-position))
+           (line (buffer-substring-no-properties (point) eol))
+           (stripped
+            (and (string-match
+                  (rx bos (* blank)
+                      (? (or "- " "* " "+ " "> "
+                             (: (+ digit) ". ")))
+                      (* blank)
+                      (group (* nonl))
+                      (* blank) eos)
+                  line)
+                 (match-string 1 line))))
+      (and stripped
+           (>= (length stripped) 2)
+           (eq (aref stripped 0) ?`)
+           (eq (aref stripped (1- (length stripped))) ?`)
+           (not (string-match-p "[ \t`]" (substring stripped 1 -1)))))))
+
+(defun gfm-pretty-link-previews--bare-source-path-ok-p (path)
+  "Non-nil when PATH contains at least one `/'.
+Bare-line source-range references with basename-only paths (e.g.
+`auth.rs#L1') are rejected to suppress false positives on prose."
+  (and (stringp path) (string-match-p "/" path)))
+
+(defun gfm-pretty-link-previews--token-bounds-on-line ()
+  "Return (TOKEN-START . TOKEN-END) for the current bare-line match.
+Assumes the caller has just matched `--bare-line-rx' on the current
+line; reads from the live match-data."
+  (cons (match-beginning 1) (match-end 1)))
+
+(defun gfm-pretty-link-previews--preformatted-line-p (pos fence-ranges)
+  "Non-nil when the line containing POS is preformatted.
+Preformatted means inside any FENCE-RANGES pair, leading-whitespace
+indent ≥ 4 columns, or wrapped on its own line in inline code.  See
+the `link-previews — preformatted-context exclusion' requirement."
+  (save-excursion
+    (goto-char pos)
+    (or (gfm-pretty-link-previews--inside-any-range-p
+         pos fence-ranges)
+        (>= (gfm-pretty-link-previews--line-indent-cols) 4)
+        (gfm-pretty-link-previews--inline-code-wrap-p))))
+
+
 ;;; Path / refs abbreviation
 
 (defun gfm-pretty-link-previews--abbrev-source-path (path)
@@ -661,13 +779,17 @@ PAYLOAD is (KIND . SPEC) where KIND is `source' or `diff':
 (defun gfm-pretty-link-previews--collect-blocks ()
   "Scan the widened buffer for standalone source/diff links.
 Returns a list of `gfm-pretty-link-previews--block' structs, one per
-match.  Engine memoises via `gfm-pretty--collect'."
+match.  Two passes: first `[label](url)' bracketed matches (the
+authoritative form), then bare-line URL-only matches that survive
+the preformatted-context gate.  Engine memoises via
+`gfm-pretty--collect'."
   (let ((wt default-directory)
         blocks)
     (save-restriction
       (widen)
       (save-excursion
         (save-match-data
+          ;; Pass 1: bracketed `[label](url)' matches.
           (goto-char (point-min))
           (while (re-search-forward
                   gfm-pretty-link-previews--md-link-rx nil t)
@@ -702,7 +824,46 @@ match.  Engine memoises via `gfm-pretty--collect'."
                                         :head (plist-get diff :head)
                                         :path (plist-get diff :path)
                                         :worktree wt))
-                        blocks)))))))))
+                        blocks))))))
+          ;; Pass 2: bare-line URL-only matches.
+          (let ((fence-ranges (gfm-pretty-link-previews--fence-ranges)))
+            (goto-char (point-min))
+            (while (not (eobp))
+              (when (looking-at gfm-pretty-link-previews--bare-line-rx)
+                (let* ((token (match-string-no-properties 1))
+                       (bounds (gfm-pretty-link-previews--token-bounds-on-line))
+                       (source (gfm-pretty-link-previews--parse-source-link
+                                token))
+                       (diff (and (not source)
+                                  (gfm-pretty-link-previews--parse-diff-link
+                                   token))))
+                  (when (and (or source diff)
+                             (not (gfm-pretty-link-previews--preformatted-line-p
+                                   (line-beginning-position) fence-ranges)))
+                    (cond
+                     (source
+                      (let* ((path (car source))
+                             (start (cadr source))
+                             (end (cddr source)))
+                        (when (gfm-pretty-link-previews--bare-source-path-ok-p
+                               path)
+                          (let ((resolved (expand-file-name
+                                           path default-directory)))
+                            (push (gfm-pretty-link-previews--make-block
+                                   :range bounds
+                                   :payload (list 'source path start end
+                                                  resolved))
+                                  blocks)))))
+                     (diff
+                      (push (gfm-pretty-link-previews--make-block
+                             :range bounds
+                             :payload (list 'diff
+                                            :base (plist-get diff :base)
+                                            :head (plist-get diff :head)
+                                            :path (plist-get diff :path)
+                                            :worktree wt))
+                            blocks))))))
+              (forward-line 1))))))
     (nreverse blocks)))
 
 (defun gfm-pretty-link-previews--apply-block (block window)

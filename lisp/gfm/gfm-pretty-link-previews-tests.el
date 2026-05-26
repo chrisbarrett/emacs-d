@@ -861,6 +861,191 @@ into the boxed display string at the position `string-match' returns."
     (should-error (gfm-pretty-link-previews-follow-link-at-point)
                   :type 'user-error)))
 
+;;; Bare-line reference discovery
+
+(ert-deftest gfm-pretty-link-previews/bare-absolute-path-creates-overlay ()
+  "Bare absolute `<path>#L<a>-L<b>' on its own line gets a preview."
+  (gfm-pretty-link-previews-tests--with-temp-source
+      '("alpha" "beta" "gamma") tmp
+    (with-temp-buffer
+      (insert (format "%s#L1-L3\n" tmp))
+      (let ((fill-column 200))
+        (gfm-pretty-link-previews--rebuild))
+      (let ((ovs (gfm-pretty-link-previews-tests--overlays)))
+        (should (= 1 (length ovs)))
+        (let* ((ov (car ovs))
+               (display (overlay-get ov 'display))
+               (abbrev (gfm-pretty-link-previews--abbrev-source-path tmp)))
+          (should display)
+          (should (string-match-p (regexp-quote (format "%s:1-3" abbrev))
+                                  display))
+          ;; Overlay range covers just the URL token, not a leading marker.
+          (should (= (overlay-start ov) 1))
+          (should (= (overlay-end ov) (+ 1 (length (format "%s#L1-L3" tmp))))))))))
+
+(ert-deftest gfm-pretty-link-previews/bare-tilde-path-expands-via-expand-file-name ()
+  "Bare `~/path#L<a>-L<b>' resolves via `expand-file-name'."
+  (with-temp-buffer
+    (insert "~/foo/bar.rs#L1-L3\n")
+    (gfm-pretty-link-previews--rebuild)
+    (let* ((ovs (gfm-pretty-link-previews-tests--overlays))
+           (ov (car ovs))
+           (payload (overlay-get ov 'gfm-pretty-link-previews-payload))
+           (resolved (nth 4 payload)))
+      (should (= 1 (length ovs)))
+      (should (equal (expand-file-name "~/foo/bar.rs") resolved)))))
+
+(ert-deftest gfm-pretty-link-previews/bare-relative-path-resolved-against-default-directory ()
+  "Bare relative `<dir>/<file>#L<a>-L<b>' resolves against `default-directory'."
+  (let ((default-directory "/wt/proj/"))
+    (with-temp-buffer
+      (setq default-directory "/wt/proj/")
+      (insert "modules/auth.rs#L42-L48\n")
+      (gfm-pretty-link-previews--rebuild)
+      (let* ((ovs (gfm-pretty-link-previews-tests--overlays))
+             (ov (car ovs))
+             (payload (overlay-get ov 'gfm-pretty-link-previews-payload))
+             (resolved (nth 4 payload)))
+        (should (= 1 (length ovs)))
+        (should (equal "/wt/proj/modules/auth.rs" resolved))))))
+
+(ert-deftest gfm-pretty-link-previews/bare-basename-only-creates-no-overlay ()
+  "Basename-only bare reference (no `/' in path) is rejected."
+  (with-temp-buffer
+    (insert "auth.rs#L1-L5\n")
+    (gfm-pretty-link-previews--rebuild)
+    (should (= 0 (length (gfm-pretty-link-previews-tests--overlays))))))
+
+(ert-deftest gfm-pretty-link-previews/bare-diff-range-creates-lhs-margin-overlay ()
+  "Bare `diff:<base>...<head>#<path>' on its own line renders the diff box."
+  (gfm-pretty-link-previews-tests--with-fake-call-process "+added\n-removed\n" 0
+    (with-temp-buffer
+      (insert "diff:abc1234...def5678#main.tf\n")
+      (gfm-pretty-link-previews--rebuild)
+      (let ((ovs (gfm-pretty-link-previews-tests--overlays)))
+        (should (= 1 (length ovs)))
+        (let* ((ov (car ovs))
+               (display (overlay-get ov 'display))
+               (lines (split-string display "\n"))
+               (body (cl-subseq lines 1 -1)))
+          (should (string-match-p "abc1234\\.\\.\\.def5678" (car lines)))
+          (dolist (line body)
+            (should (string-match-p "^│[-+ ]" line))))))))
+
+(ert-deftest gfm-pretty-link-previews/bare-list-item-overlay-covers-token-only ()
+  "`- <bare-url>' overlay starts at the token, not the `- ' marker."
+  (gfm-pretty-link-previews-tests--with-temp-source '("a" "b" "c") tmp
+    (with-temp-buffer
+      (insert (format "- %s#L1-L3\n" tmp))
+      (gfm-pretty-link-previews--rebuild)
+      (let* ((ovs (gfm-pretty-link-previews-tests--overlays))
+             (ov (car ovs))
+             (display (overlay-get ov 'display))
+             (lines (split-string display "\n"))
+             (bot (car (last lines)))
+             (body (butlast (cdr lines))))
+        (should (= 1 (length ovs)))
+        ;; Overlay starts at column 2 (after `- ').
+        (should (= 3 (overlay-start ov)))
+        ;; Continuation prefix = 2 spaces so `│'/`└' land under the `┌'.
+        (should (string-prefix-p "  └" bot))
+        (dolist (line body)
+          (should (string-prefix-p "  │" line)))))))
+
+(ert-deftest gfm-pretty-link-previews/bare-blockquote-overlay-uses-rail-prefix ()
+  "`> <bare-url>' overlay continuation prefix mirrors the blockquote rail."
+  (require 'gfm-pretty-blockquotes)
+  (gfm-pretty-link-previews-tests--with-temp-source '("a" "b" "c") tmp
+    (with-temp-buffer
+      (insert (format "> %s#L1-L3\n" tmp))
+      (gfm-pretty-mode 1)
+      (unwind-protect
+          (let* ((ovs (gfm-pretty-link-previews-tests--overlays))
+                 (ov (car ovs))
+                 (display (overlay-get ov 'display))
+                 (lines (split-string display "\n"))
+                 (bot (car (last lines)))
+                 (body (butlast (cdr lines))))
+            (should (= 1 (length ovs)))
+            (should (string-match-p "▌" bot))
+            (dolist (line body)
+              (should (string-match-p "▌" line))))
+        (gfm-pretty-mode -1)))))
+
+
+;;; Bare-line preformatted-context exclusion
+
+(ert-deftest gfm-pretty-link-previews/bare-in-triple-backtick-fence-is-skipped ()
+  "Bare reference inside a ```...``` fence creates no overlay."
+  (with-temp-buffer
+    (insert "```\n")
+    (insert "/abs/path/main.rs#L1-L3\n")
+    (insert "```\n")
+    (gfm-pretty-link-previews--rebuild)
+    (should (= 0 (length (gfm-pretty-link-previews-tests--overlays))))))
+
+(ert-deftest gfm-pretty-link-previews/bare-in-four-backtick-fence-is-skipped ()
+  "Bare reference inside a ````...```` fence creates no overlay."
+  (with-temp-buffer
+    (insert "````\n")
+    (insert "/abs/path/main.rs#L1-L3\n")
+    (insert "````\n")
+    (gfm-pretty-link-previews--rebuild)
+    (should (= 0 (length (gfm-pretty-link-previews-tests--overlays))))))
+
+(ert-deftest gfm-pretty-link-previews/bare-with-four-space-indent-is-skipped ()
+  "Bare reference with 4-space leading indent is treated as preformatted."
+  (with-temp-buffer
+    (insert "    /abs/path/main.rs#L1-L3\n")
+    (gfm-pretty-link-previews--rebuild)
+    (should (= 0 (length (gfm-pretty-link-previews-tests--overlays))))))
+
+(ert-deftest gfm-pretty-link-previews/bare-wrapped-in-inline-code-is-skipped ()
+  "Bare reference wrapped in `…` on its own line is left undecorated."
+  (with-temp-buffer
+    (insert "`/abs/path/main.rs#L1-L3`\n")
+    (gfm-pretty-link-previews--rebuild)
+    (should (= 0 (length (gfm-pretty-link-previews-tests--overlays))))))
+
+(ert-deftest gfm-pretty-link-previews/bare-embedded-in-prose-is-skipped ()
+  "Bare reference in a prose sentence is left undecorated."
+  (with-temp-buffer
+    (insert "See /abs/path/main.rs#L1-L3 for details.\n")
+    (gfm-pretty-link-previews--rebuild)
+    (should (= 0 (length (gfm-pretty-link-previews-tests--overlays))))))
+
+(ert-deftest gfm-pretty-link-previews/bare-toggle-decorator-tears-down-and-rebuilds ()
+  "Toggling `link-previews' off then on tears down and recreates the bare overlay."
+  (gfm-pretty-link-previews-tests--with-temp-source '("a" "b" "c") tmp
+    (with-temp-buffer
+      (insert (format "%s#L1-L2\n" tmp))
+      (gfm-pretty-mode 1)
+      (unwind-protect
+          (progn
+            (should (= 1 (length (gfm-pretty-link-previews-tests--overlays))))
+            (gfm-pretty-toggle-decorator 'link-previews)
+            (should (= 0 (length (gfm-pretty-link-previews-tests--overlays))))
+            (gfm-pretty-toggle-decorator 'link-previews)
+            (should (= 1 (length (gfm-pretty-link-previews-tests--overlays)))))
+        (gfm-pretty-mode -1)))))
+
+(ert-deftest gfm-pretty-link-previews/bare-and-bracketed-coexist-on-adjacent-lines ()
+  "Adjacent bracketed and bare references both produce one overlay each."
+  (gfm-pretty-link-previews-tests--with-temp-source '("a" "b") tmp
+    (with-temp-buffer
+      (insert (format "[foo](%s#L1)\n%s#L1-L2\n" tmp tmp))
+      (gfm-pretty-link-previews--rebuild)
+      (let ((ovs (gfm-pretty-link-previews-tests--overlays)))
+        (should (= 2 (length ovs)))
+        ;; The two overlays cover disjoint ranges (no double-decoration).
+        (let ((spans (sort (mapcar (lambda (ov)
+                                     (cons (overlay-start ov)
+                                           (overlay-end ov)))
+                                   ovs)
+                           (lambda (a b) (< (car a) (car b))))))
+          (should (<= (cdr (nth 0 spans)) (car (nth 1 spans)))))))))
+
+
 (provide 'gfm-pretty-link-previews-tests)
 
 ;;; gfm-pretty-link-previews-tests.el ends here
