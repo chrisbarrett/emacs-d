@@ -5381,6 +5381,169 @@ phase-ordered iterator yields the atom first."
                 (should (> (length links-after) 0))))))
       (kill-buffer buf))))
 
+;;; gfm-pretty-tables — numeric column right-alignment
+
+(ert-deftest lang-markdown/gfm-pretty-tables-numeric-cell-p-recognises-plain-forms ()
+  "Plain numeric forms are accepted; markup-only or formatted forms are not."
+  :tags '(tables-align)
+  (dolist (s '("0" "42" "-3" "+7" "1.5" "-0.001" "1e10" "2.5E-3" "  42  "))
+    (should (gfm-pretty-tables--numeric-cell-p s)))
+  (dolist (s '("" "1,234" "$5.99" "42%" "0x1f" "1_000" "nan" "abc" "."))
+    (should-not (gfm-pretty-tables--numeric-cell-p s))))
+
+(ert-deftest lang-markdown/gfm-pretty-tables-column-alignment-all-numeric ()
+  "Column whose body cells are all numeric flips to right alignment."
+  :tags '(tables-align)
+  (let ((align (gfm-pretty-tables--column-alignment
+                '(("script-a" "actor" "123")
+                  ("script-b" "actor" "304")
+                  ("script-c" "actor" "95"))
+                3)))
+    (should (eq (aref align 0) 'left))
+    (should (eq (aref align 1) 'left))
+    (should (eq (aref align 2) 'right))))
+
+(ert-deftest lang-markdown/gfm-pretty-tables-column-alignment-sparse-numeric ()
+  "A column with empty body cells still right-aligns if remaining cells are numeric."
+  :tags '(tables-align)
+  (let ((align (gfm-pretty-tables--column-alignment
+                '(("12") ("") ("7") ("") ("99"))
+                1)))
+    (should (eq (aref align 0) 'right))))
+
+(ert-deftest lang-markdown/gfm-pretty-tables-column-alignment-mixed-stays-left ()
+  "A single non-numeric body cell pins the column to left alignment."
+  :tags '(tables-align)
+  (let ((align (gfm-pretty-tables--column-alignment
+                '(("12") ("abc") ("7"))
+                1)))
+    (should (eq (aref align 0) 'left))))
+
+(ert-deftest lang-markdown/gfm-pretty-tables-column-alignment-all-empty-stays-left ()
+  "Columns with only empty body cells stay left-aligned."
+  :tags '(tables-align)
+  (let ((align (gfm-pretty-tables--column-alignment
+                '(("") ("") (""))
+                1)))
+    (should (eq (aref align 0) 'left))))
+
+(ert-deftest lang-markdown/gfm-pretty-tables-column-alignment-signed-decimal-scientific ()
+  "Signed, decimal, and scientific forms all qualify."
+  :tags '(tables-align)
+  (let ((align (gfm-pretty-tables--column-alignment
+                '(("-3.14") ("+0.5") ("1e10"))
+                1)))
+    (should (eq (aref align 0) 'right))))
+
+(ert-deftest lang-markdown/gfm-pretty-tables-column-alignment-commas-stay-left ()
+  "Thousands-separator forms are NOT numeric — column stays left."
+  :tags '(tables-align)
+  (let ((align (gfm-pretty-tables--column-alignment
+                '(("1,234") ("5,678"))
+                1)))
+    (should (eq (aref align 0) 'left))))
+
+(ert-deftest lang-markdown/gfm-pretty-tables-column-alignment-percent-stays-left ()
+  "Percent forms are NOT numeric — column stays left."
+  :tags '(tables-align)
+  (let ((align (gfm-pretty-tables--column-alignment
+                '(("42%") ("7%"))
+                1)))
+    (should (eq (aref align 0) 'left))))
+
+(ert-deftest lang-markdown/gfm-pretty-tables-compose-row-default-stays-left ()
+  "Omitting `col-align' preserves the legacy trailing-pad layout."
+  :tags '(tables-align)
+  (let ((s (gfm-pretty-tables--compose-row '("a") (vector 5) 'body-default)))
+    (should (string-match-p (rx "│ a     │") s))))
+
+(ert-deftest lang-markdown/gfm-pretty-tables-compose-row-right-pads-leading ()
+  "`col-align' of `right' pads the cell on its leading edge."
+  :tags '(tables-align)
+  (let ((s (gfm-pretty-tables--compose-row '("a") (vector 5) 'body-default
+                                           (vector 'right))))
+    (should (string-match-p (rx "│     a │") s))))
+
+(ert-deftest lang-markdown/gfm-pretty-tables-compose-row-mixed-alignments ()
+  "Mixed alignment vector pads each column according to its own slot."
+  :tags '(tables-align)
+  ;; Two cells of width 3 share a single-space gap.  Left-aligned `a' keeps
+  ;; its trailing padding; right-aligned `1' shifts its padding to the
+  ;; leading edge, so seven spaces sit between the digits.
+  (let ((s (gfm-pretty-tables--compose-row '("a" "1") (vector 3 3) 'body-default
+                                           (vector 'left 'right))))
+    (should (string-match-p (rx "│ a       1 │") s))))
+
+(ert-deftest lang-markdown/gfm-pretty-tables-compose-row-header-honours-alignment ()
+  "Right alignment applies to header rows too."
+  :tags '(tables-align)
+  (let ((s (gfm-pretty-tables--compose-row '("LOC") (vector 5) 'header
+                                           (vector 'right))))
+    (should (string-match-p (rx "│   LOC │") s))))
+
+(ert-deftest lang-markdown/gfm-pretty-tables-wrapped-numeric-pads-leading ()
+  "Every visual line of a wrapped right-aligned cell pads on the leading edge."
+  :tags '(tables-align)
+  (let* ((row (gfm-pretty-tables--compose-multiline-row
+               '("12345") (vector 3) 'body-default
+               (vector 'right)))
+         (lines (split-string row "\n")))
+    (should (= (length lines) 2))
+    ;; First chunk "123" fills the column exactly (no pad either side).
+    (should (string-match-p (rx "│ 123 │") (nth 0 lines)))
+    ;; Second chunk "45" gets a leading pad space, not a trailing one.
+    (should (string-match-p (rx "│  45 │") (nth 1 lines)))))
+
+(ert-deftest lang-markdown/gfm-pretty-tables-bounds-vec-parity-across-alignments ()
+  "Per-cell char bounds match byte-for-byte across left/right alignment."
+  :tags '(tables-align)
+  (let* ((cells '("alpha" "12" "x"))
+         (col-widths (vector 5 4 1))
+         (left-align (vector 'left 'left 'left))
+         (right-align (vector 'right 'right 'right))
+         (left-str (gfm-pretty-tables--compose-row cells col-widths 'body-default
+                                                   left-align))
+         (right-str (gfm-pretty-tables--compose-row cells col-widths 'body-default
+                                                    right-align))
+         (bounds (gfm-pretty-tables--row-char-bounds cells col-widths)))
+    (should (= (length left-str) (length right-str)))
+    ;; Bounds depend only on cell-len and col-widths, not on alignment;
+    ;; the same parsed table must yield identical (BEG . END) pairs
+    ;; regardless of pad placement.
+    (dolist (b bounds)
+      (should (<= (cdr b) (length left-str)))
+      (should (<= (cdr b) (length right-str))))))
+
+(ert-deftest lang-markdown/gfm-pretty-tables-row-layout-bounds-parity-across-alignments ()
+  "Packed bounds-vec is unaffected by per-column alignment choice."
+  :tags '(tables-align)
+  (let* ((cells '("alpha" "beta gamma" "d"))
+         (col-widths (vector 5 4 1))
+         (layout (gfm-pretty-tables--row-layout cells col-widths))
+         (vec (gfm-pretty-tables--row-layout-bounds-vec layout))
+         (n-cells (gfm-pretty-tables--row-layout-n-cells layout))
+         (n-lines (gfm-pretty-tables--row-layout-n-lines layout))
+         (left-rows (mapcar (lambda (lc)
+                              (gfm-pretty-tables--compose-row
+                               lc col-widths 'body-default
+                               (vector 'left 'left 'left)))
+                            (gfm-pretty-tables--row-layout-line-cells layout)))
+         (right-rows (mapcar (lambda (lc)
+                               (gfm-pretty-tables--compose-row
+                                lc col-widths 'body-default
+                                (vector 'right 'right 'right)))
+                             (gfm-pretty-tables--row-layout-line-cells layout))))
+    ;; Per-line lengths agree, so every (BEG . END) in vec stays in range.
+    (cl-loop for left in left-rows
+             for right in right-rows
+             do (should (= (length left) (length right))))
+    (cl-loop for line below n-lines
+             for str-len = (length (nth line left-rows))
+             do (cl-loop for cell below n-cells
+                         for base = (* 2 (+ (* line n-cells) cell))
+                         do (should (<= (aref vec base) str-len))
+                            (should (<= (aref vec (1+ base)) str-len))))))
+
 (provide 'gfm-pretty-tests)
 
 ;;; gfm-pretty-tests.el ends here
