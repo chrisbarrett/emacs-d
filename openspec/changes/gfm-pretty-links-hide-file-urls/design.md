@@ -61,12 +61,32 @@ adds a second visual moving piece (separate face, separate placement
 heuristic) and diverges from `web`'s structure where the icon lives
 on the URL-side overlay.
 
+### Decision: strip wrapping backticks at the display layer
+
+A label of the form `` `pretty` `` is just visual noise in a
+fixed-width font when the entire title is wrapped. Strip the wrap at
+display time only — a helper `--strip-wrapping-backticks` runs over
+the label in `--make-overlay`'s title branch. The `--link-label` slot
+and `gfm-pretty-links-label` overlay property keep the original
+string, so eldoc and xref still surface the source representation.
+
+"Wrapping" means: starts and ends with `` ` `` AND no interior
+`` ` `` between them. Labels like `` say `hi` world `` are left
+intact — partial code spans inside prose are legitimate markdown that
+the user expects to read literally.
+
+**Alternative considered:** strip at scan time (mutate the label in
+the record). Rejected — `gfm-pretty-links-label` is part of the
+overlay's public metadata surface, and consumers (eldoc, xref) read
+the source representation. Display-time stripping is a strict
+projection, no behaviour change for downstream readers.
+
 ### Decision: spec delta on `gfm-pretty`
 
 The behaviour is normatively described in `openspec/specs/gfm-pretty/spec.md`,
-requirement *URL-side icon rendering*, scenario *File link omits icon*.
-Both the requirement body and the scenario change. Delta uses
-`## MODIFIED Requirements`.
+requirement *URL-side icon rendering*, scenario *File link omits icon*,
+and requirement *Title-side overlay rendering* (for the backtick
+strip). All deltas live under `## MODIFIED Requirements`.
 
 ### Decision: file URL hiding survives missing `nerd-icons`
 

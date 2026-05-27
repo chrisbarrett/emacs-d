@@ -136,6 +136,18 @@ empty / nil) is web."
    ((string-match-p gfm-pretty-links--file-prefix-re url) 'file)
    (t 'web)))
 
+(defun gfm-pretty-links--strip-wrapping-backticks (s)
+  "Return S without a single pair of wrapping backticks, when present.
+A pair is \"wrapping\" only when S begins and ends with `, and the
+inner substring has no `, so labels like `foo` strip but `say `hi`
+world' is left untouched."
+  (if (and (>= (length s) 2)
+           (eq (aref s 0) ?`)
+           (eq (aref s (1- (length s))) ?`)
+           (not (string-search "`" (substring s 1 -1))))
+      (substring s 1 -1)
+    s))
+
 (defun gfm-pretty-links--title-face-for-class (class)
   "Return the title-side face for link CLASS."
   (pcase class
@@ -498,7 +510,8 @@ eldoc, and the xref backend can read it without re-parsing."
          (display
           (cond
            ((eq side 'title)
-            (propertize (gfm-pretty-links--link-label record)
+            (propertize (gfm-pretty-links--strip-wrapping-backticks
+                         (gfm-pretty-links--link-label record))
                         'face (gfm-pretty-links--title-face-for-class class)))
            ((eq class 'anchor) "")
            (t

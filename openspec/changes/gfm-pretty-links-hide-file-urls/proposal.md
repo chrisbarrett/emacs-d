@@ -22,6 +22,11 @@ L535 says the URL renders raw.
   its empty-string display.
 - Commentary at the top of `gfm-pretty-links.el` and on
   `decorate-link` SHALL be reconciled to describe the new behaviour.
+- The title-side overlay SHALL strip a single pair of wrapping
+  backticks from the displayed label (e.g. `` `pretty` `` → `pretty`)
+  for all link classes. Labels with interior backticks display
+  unchanged. The overlay's `gfm-pretty-links-label` metadata SHALL
+  retain the original unstripped label.
 
 ## Capabilities
 
@@ -32,6 +37,9 @@ L535 says the URL renders raw.
   file-type glyph (with `""` fallback when `nerd-icons` is unavailable).
   Scenario *File link omits icon* updates to assert the icon overlay
   exists; a new scenario covers the `nerd-icons`-unavailable fallback.
+- `gfm-pretty`: requirement *Title-side overlay rendering* gains
+  backtick-stripping behaviour for fully wrapped labels, with two new
+  scenarios covering wrap and interior-backtick cases.
 
 ## Impact
 

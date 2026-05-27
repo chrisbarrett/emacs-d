@@ -52,10 +52,26 @@
       fallback.
 - [x] 4.5 Run `make test` — full suite green.
 
-## 5. Verify
+## 5. Strip wrapping backticks from title display
 
-- [x] 5.1 `make test` — full suite green.
-- [ ] 5.2 Open the original repro file in a live Emacs session and
-      confirm the EOF list renders with file icons:
+- [x] 5.0 Test: title overlay strips wrapping backticks
+      (`gfm-pretty-links/title-strips-wrapping-backticks`):
+      `` [`pretty`](./x.hcl) `` → title `display` = `pretty`;
+      `gfm-pretty-links-label` overlay prop = `` `pretty` `` (unmodified).
+- [x] 5.0a Test: title overlay keeps interior backticks
+      (`gfm-pretty-links/title-keeps-interior-backticks`):
+      `` [say `hi` world](./x.md) `` → title `display` = `say \`hi\` world`.
+- [x] 5.0b Update existing `file-link-with-code-label-hides-url-span`
+      to assert title `display` = `pretty` (no backticks).
+- [x] 5.0c Add helper `gfm-pretty-links--strip-wrapping-backticks` and
+      apply it in `--make-overlay`'s title branch.
+- [x] 5.0d Run `make test` — full suite green.
+
+## 6. Verify
+
+- [x] 6.1 `make test` — full suite green.
+- [ ] 6.2 Open the original repro file in a live Emacs session and
+      confirm the EOF list renders with file icons and stripped
+      backticks:
       `~/src/gotracksuit/platform/live__worktrees/sre-569-extra-gh-environment-support/_stacks/tf-repos/README.md`.
-- [x] 5.3 `openspec validate gfm-pretty-links-hide-file-urls` still clean.
+- [x] 6.3 `openspec validate gfm-pretty-links-hide-file-urls` still clean.

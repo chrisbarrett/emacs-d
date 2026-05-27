@@ -223,7 +223,7 @@ Returns the buffer (caller is inside `with-temp-buffer')."
            (title-ov (gfm-pretty-links-tests--overlay-at title-pos 'title))
            (url-ov (gfm-pretty-links-tests--overlay-at url-pos 'url)))
       (should title-ov)
-      (should (equal "`pretty`"
+      (should (equal "pretty"
                      (substring-no-properties
                       (overlay-get title-ov 'display))))
       (should (eq 'gfm-pretty-links-file-face
@@ -247,6 +247,50 @@ Returns the buffer (caller is inside `with-temp-buffer')."
         (should ov)
         (should (equal "" (overlay-get ov 'display)))
         (should (eq 'file (overlay-get ov 'gfm-pretty-links-class)))))))
+
+
+;;; Wrapping backtick stripping on title side
+
+(ert-deftest gfm-pretty-links/title-strips-wrapping-backticks ()
+  "Fully backtick-wrapped label shows without backticks; metadata keeps them."
+  (with-temp-buffer
+    (gfm-pretty-links-tests--rebuild-in "see [`pretty`](./x.hcl)\n")
+    (let* ((title-pos (save-excursion
+                       (goto-char (point-min))
+                       (search-forward "[`pretty`]")
+                       (- (point) 2)))
+           (ov (gfm-pretty-links-tests--overlay-at title-pos 'title)))
+      (should ov)
+      (should (equal "pretty"
+                     (substring-no-properties (overlay-get ov 'display))))
+      (should (equal "`pretty`"
+                     (overlay-get ov 'gfm-pretty-links-label))))))
+
+(ert-deftest gfm-pretty-links/title-keeps-interior-backticks ()
+  "Interior backticks in the label are not stripped from the display."
+  (with-temp-buffer
+    (gfm-pretty-links-tests--rebuild-in "see [say `hi` world](./x.md)\n")
+    (let* ((title-pos (save-excursion
+                       (goto-char (point-min))
+                       (search-forward "[say `hi` world]")
+                       (- (point) 2)))
+           (ov (gfm-pretty-links-tests--overlay-at title-pos 'title)))
+      (should ov)
+      (should (equal "say `hi` world"
+                     (substring-no-properties (overlay-get ov 'display)))))))
+
+(ert-deftest gfm-pretty-links/strip-wrapping-backticks-helper ()
+  "Unit checks on the strip helper."
+  (should (equal "x" (gfm-pretty-links--strip-wrapping-backticks "`x`")))
+  (should (equal "" (gfm-pretty-links--strip-wrapping-backticks "``")))
+  (should (equal "plain"
+                 (gfm-pretty-links--strip-wrapping-backticks "plain")))
+  (should (equal "a `b` c"
+                 (gfm-pretty-links--strip-wrapping-backticks "a `b` c")))
+  (should (equal "`only-leading"
+                 (gfm-pretty-links--strip-wrapping-backticks "`only-leading")))
+  (should (equal "only-trailing`"
+                 (gfm-pretty-links--strip-wrapping-backticks "only-trailing`"))))
 
 (provide 'gfm-pretty-links-tests)
 ;;; gfm-pretty-links-tests.el ends here
