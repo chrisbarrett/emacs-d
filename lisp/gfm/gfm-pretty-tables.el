@@ -196,6 +196,14 @@ bounds fall back to plain string measurement."
              collect (gfm-pretty-tables--fontify-cell
                       cell buffer (and b (car b)) (and b (cdr b))))))
 
+(defun gfm-pretty-tables--source-row-cells (line-beg line-end)
+  "Return raw trimmed source cells for the row spanning LINE-BEG..LINE-END.
+Source cells skip the fontification pass, so callers checking shape
+\(e.g. column-alignment numeric detection) never see markdown inline
+markup interfere with the value."
+  (gfm-pretty-tables--split-row
+   (buffer-substring-no-properties line-beg line-end)))
+
 (defun gfm-pretty-tables--invisible-p (val spec)
   "Non-nil if invisibility property VAL is hidden under SPEC.
 SPEC is a `buffer-invisibility-spec' value."
@@ -519,6 +527,51 @@ rebuild path; this helper exists for filtered callers."
                       all)
       all)))
 
+;;; Column alignment
+
+(defconst gfm-pretty-tables--numeric-cell-rx
+  (rx bos
+      (? (any "+-"))
+      (+ digit)
+      (? "." (* digit))
+      (? (any "eE") (? (any "+-")) (+ digit))
+      eos)
+  "Regex matching a plain numeric cell value.
+Matches optional sign, digits, optional decimal portion, and optional
+scientific exponent.  Thousands separators, percent signs, currency
+sigils, and units are intentionally excluded.")
+
+(defun gfm-pretty-tables--numeric-cell-p (cell)
+  "Non-nil if CELL is a plain numeric value after trimming.
+CELL is the raw source cell text — not the fontified rendering — so
+inline markdown markup never disqualifies a numeric cell."
+  (and cell
+       (string-match-p gfm-pretty-tables--numeric-cell-rx
+                       (string-trim cell))))
+
+(defun gfm-pretty-tables--column-alignment (body-rows n-cols)
+  "Return a per-column alignment vector for BODY-ROWS of width N-COLS.
+Each slot is `right' iff every body-row cell in that column is either
+numeric or empty after trimming AND at least one cell is numeric;
+otherwise `left'.  Header content is not consulted."
+  (let ((align (make-vector n-cols 'left)))
+    (cl-loop for i below n-cols do
+             (let ((any-numeric nil)
+                   (all-num-or-empty t))
+               (cl-loop for row in body-rows
+                        while all-num-or-empty
+                        do (let* ((cell (or (nth i row) ""))
+                                  (trimmed (string-trim cell)))
+                             (cond
+                              ((string-empty-p trimmed) nil)
+                              ((string-match-p
+                                gfm-pretty-tables--numeric-cell-rx trimmed)
+                               (setq any-numeric t))
+                              (t (setq all-num-or-empty nil)))))
+               (when (and any-numeric all-num-or-empty)
+                 (aset align i 'right))))
+    align))
+
 ;;; Column widths
 
 (defun gfm-pretty-tables--column-widths (rows)
@@ -660,9 +713,15 @@ than WIDTH are hard-broken.  An empty CELL returns (\"\")."
 
 ;;; Compose strings
 
-(defun gfm-pretty-tables--compose-row (cells col-widths role)
+(defun gfm-pretty-tables--compose-row (cells col-widths role &optional col-align)
   "Compose ROLE row's display string from CELLS and COL-WIDTHS.
 ROLE is one of `header', `body-default', or `body-alt'.
+
+COL-ALIGN, when non-nil, is a vector of `left'/`right' symbols parallel
+to COL-WIDTHS controlling per-column pad placement.  `right' places the
+pad on the leading edge so cell content flushes to the column's right
+boundary; `left' (the default for omitted or unrecognised entries)
+keeps the legacy trailing-pad behaviour.
 
 Default-bg segments (gap chars, default-bg cells, header cells) are
 left un-faced so they inherit the active `default' face.  This lets
@@ -684,7 +743,11 @@ pane dim track those segments automatically without any rebuild."
              for cell = (or (nth i cells) "")
              for cell-w = (gfm-pretty-tables--visible-width cell)
              for pad = (max 0 (- w cell-w))
-             for rendered = (concat " " cell (make-string pad ?\s) " ")
+             for align = (if col-align (aref col-align i) 'left)
+             for pad-str = (make-string pad ?\s)
+             for rendered = (pcase align
+                              ('right (concat " " pad-str cell " "))
+                              (_      (concat " " cell pad-str " ")))
              do (when cell-face
                   (add-face-text-property 0 (length rendered)
                                           cell-face t rendered))
@@ -758,21 +821,29 @@ strings in `line-cells' are no longer needed after composition)."
   (cons (gfm-pretty-tables--row-layout-n-cells layout)
         (gfm-pretty-tables--row-layout-bounds-vec layout)))
 
-(defun gfm-pretty-tables--compose-row-from-layout (layout col-widths role)
-  "Compose ROLE row's display string from pre-computed LAYOUT and COL-WIDTHS."
+(defun gfm-pretty-tables--compose-row-from-layout (layout col-widths role
+                                                          &optional col-align)
+  "Compose ROLE row's display string from pre-computed LAYOUT and COL-WIDTHS.
+COL-ALIGN, when non-nil, is forwarded to `gfm-pretty-tables--compose-row'
+so every visual line of the layout shares the same per-column pad
+placement."
   (mapconcat (lambda (line-cells)
-               (gfm-pretty-tables--compose-row line-cells col-widths role))
+               (gfm-pretty-tables--compose-row line-cells col-widths
+                                               role col-align))
              (gfm-pretty-tables--row-layout-line-cells layout)
              "\n"))
 
-(defun gfm-pretty-tables--compose-multiline-row (cells col-widths role)
+(defun gfm-pretty-tables--compose-multiline-row (cells col-widths role
+                                                       &optional col-align)
   "Compose ROLE row from CELLS, wrapping each to its column in COL-WIDTHS.
 Returns a string in which visual lines are joined by newlines.  All
 cells in the row are padded to the tallest cell's height with empty
-strings, so the column grid stays aligned across visual lines."
+strings, so the column grid stays aligned across visual lines.
+COL-ALIGN, when non-nil, is forwarded to
+`gfm-pretty-tables--compose-row-from-layout'."
   (gfm-pretty-tables--compose-row-from-layout
    (gfm-pretty-tables--row-layout cells col-widths)
-   col-widths role))
+   col-widths role col-align))
 
 (defun gfm-pretty-tables--row-char-bounds (cells col-widths)
   "Return per-cell (BEG . END) offsets for CELLS at COL-WIDTHS.
@@ -923,11 +994,14 @@ BLOCK is (HEADER-BEG DELIM-BEG BODY-BEG BODY-END)."
 
 (defun gfm-pretty-tables--apply-table-display (window header-beg header-end
                                         delim-beg delim-end body-positions
-                                        header-cells body-rows)
+                                        header-cells body-rows
+                                        &optional body-source-rows)
   "Build per-WINDOW display overlays for a parsed table.
 WINDOW is either a window object (overlays restrict to it) or nil
 \(unrestricted fallback).  Other args are the parse output produced by
-`gfm-pretty-tables--apply-table'."
+`gfm-pretty-tables--apply-table'.  BODY-SOURCE-ROWS, when non-nil, is
+the list of raw source-cell lists used to compute per-column
+alignment; when nil the alignment defaults to all-left."
   (let* ((all-rows (cons header-cells body-rows))
          (natural (gfm-pretty-tables--time-phase 'layout
                     (gfm-pretty-tables--column-widths all-rows)))
@@ -937,6 +1011,9 @@ WINDOW is either a window object (overlays restrict to it) or nil
                       (- (gfm-pretty-tables--available-width window) overhead)))
          (col-widths (gfm-pretty-tables--time-phase 'layout
                        (gfm-pretty-tables--fit-widths natural budget)))
+         (col-align (gfm-pretty-tables--time-phase 'layout
+                      (gfm-pretty-tables--column-alignment
+                       (or body-source-rows body-rows) n-cols)))
          (box-width (gfm-pretty-tables--box-width col-widths))
          (top (gfm-pretty-tables--top-border box-width))
          (bottom (gfm-pretty-tables--bottom-border box-width))
@@ -952,7 +1029,7 @@ WINDOW is either a window object (overlays restrict to it) or nil
       (let ((header-display
              (gfm-pretty-tables--time-phase 'compose
                (gfm-pretty-tables--compose-row-from-layout
-                header-layout col-widths 'header))))
+                header-layout col-widths 'header col-align))))
         (gfm-pretty-tables--make-display
          header-beg header-end window
          header-display (concat top "\n") nil
@@ -967,7 +1044,7 @@ WINDOW is either a window object (overlays restrict to it) or nil
                for role = (if (cl-evenp idx) 'body-alt 'body-default)
                for str = (gfm-pretty-tables--time-phase 'compose
                            (gfm-pretty-tables--compose-row-from-layout
-                            layout col-widths role))
+                            layout col-widths role col-align))
                do (gfm-pretty-tables--make-display
                    lbeg lend window
                    str nil (and last-p (concat "\n" bottom))
@@ -978,7 +1055,10 @@ WINDOW is either a window object (overlays restrict to it) or nil
   "Parse the table at HEADER-BEG..BODY-END, returning a plist.
 Keys: :header-beg :header-end :delim-beg :delim-end :body-positions
 \(list of (LBEG . LEND) per body row in source order),
-:header-cells (fontified strings), :body-rows (list of cell-lists)."
+:header-cells (fontified strings), :body-rows (list of fontified
+cell-lists), :body-source-rows (list of raw source cell-lists, in the
+same order as :body-rows, for shape-based heuristics such as numeric
+column detection)."
   (save-excursion
     (let* ((header-end (save-excursion
                          (goto-char header-beg) (line-end-position)))
@@ -988,6 +1068,7 @@ Keys: :header-beg :header-end :delim-beg :delim-end :body-positions
                            (gfm-pretty-tables--fontify-row-cells
                             header-beg header-end)))
            (body-rows '())
+           (body-source-rows '())
            (body-positions '()))
       (gfm-pretty-tables--time-phase 'parse
         (goto-char body-beg)
@@ -995,6 +1076,8 @@ Keys: :header-beg :header-end :delim-beg :delim-end :body-positions
           (let* ((lbeg (line-beginning-position))
                  (lend (line-end-position)))
             (push (cons lbeg lend) body-positions)
+            (push (gfm-pretty-tables--source-row-cells lbeg lend)
+                  body-source-rows)
             (push (gfm-pretty-tables--fontify-row-cells lbeg lend)
                   body-rows))
           (forward-line 1)))
@@ -1002,7 +1085,8 @@ Keys: :header-beg :header-end :delim-beg :delim-end :body-positions
             :delim-beg delim-beg :delim-end delim-end
             :body-positions (nreverse body-positions)
             :header-cells header-cells
-            :body-rows (nreverse body-rows)))))
+            :body-rows (nreverse body-rows)
+            :body-source-rows (nreverse body-source-rows)))))
 
 (defun gfm-pretty-tables--apply-table-display-for-parsed (parsed window)
   "Build display overlays for PARSED in WINDOW (or unrestricted when nil)."
@@ -1011,7 +1095,8 @@ Keys: :header-beg :header-end :delim-beg :delim-end :body-positions
    (plist-get parsed :header-beg) (plist-get parsed :header-end)
    (plist-get parsed :delim-beg) (plist-get parsed :delim-end)
    (plist-get parsed :body-positions)
-   (plist-get parsed :header-cells) (plist-get parsed :body-rows)))
+   (plist-get parsed :header-cells) (plist-get parsed :body-rows)
+   (plist-get parsed :body-source-rows)))
 
 (defun gfm-pretty-tables--apply-table (header-beg delim-beg body-beg body-end)
   "Decorate one table identified by HEADER-BEG, DELIM-BEG, BODY-BEG, BODY-END.
