@@ -1,0 +1,120 @@
+## MODIFIED Requirements
+
+### Requirement: Title-side overlay rendering
+
+The links decorator's `:apply-block-fn` SHALL replace the
+`[title]` span (brackets included) with the title text in a face
+chosen by the link's target class:
+
+| Class    | Face                            |
+| :------- | :------------------------------ |
+| `web`    | `gfm-pretty-links-title-face`   |
+| `anchor` | `gfm-pretty-links-anchor-face`  |
+| `file`   | `gfm-pretty-links-file-face`    |
+
+`gfm-pretty-links-title-face` SHALL continue to default to
+`markdown-link-face`. The overlay is per-window.
+
+When the label is fully wrapped in a single pair of backticks (e.g.
+`` `pretty` ``), the title-side overlay SHALL strip the wrapping
+backticks from the displayed string. A pair is considered "wrapping"
+only when the label both begins and ends with `` ` `` AND there are
+no further backticks between them. Labels with interior backticks
+(`` `code` and prose ``) SHALL display unchanged. The overlay's
+`gfm-pretty-links-label` metadata SHALL retain the original
+unstripped label so eldoc and xref see the source representation.
+
+#### Scenario: Web link uses title face
+
+- **GIVEN** `[Anthropic](https://anthropic.com)`
+- **THEN** the title-side overlay displays `Anthropic` in
+  `gfm-pretty-links-title-face`
+
+#### Scenario: Anchor link uses anchor face
+
+- **GIVEN** `[Setup](#setup)`
+- **THEN** the title-side overlay displays `Setup` in
+  `gfm-pretty-links-anchor-face`
+
+#### Scenario: File link uses file face
+
+- **GIVEN** `[ops](./scripts/x.sh)`
+- **THEN** the title-side overlay displays `ops` in
+  `gfm-pretty-links-file-face`
+
+#### Scenario: Fully backtick-wrapped label has backticks stripped
+
+- **GIVEN** ``[`pretty`](./x.hcl)``
+- **THEN** the title-side overlay's `display` is `pretty` (no
+  backticks) under `gfm-pretty-links-file-face`
+- **AND** the overlay's `gfm-pretty-links-label` metadata is
+  `` `pretty` `` (backticks retained)
+
+#### Scenario: Interior backticks leave display unchanged
+
+- **GIVEN** ``[say `hi` world](./x.md)``
+- **THEN** the title-side overlay's `display` is the full label
+  including backticks: `` say `hi` world ``
+
+### Requirement: URL-side icon rendering
+
+The links decorator's `:apply-block-fn` SHALL replace the URL span
+(`(url)`, `[label]`, the autolink span, …) with a single
+nerd-icons glyph for `web` and `file` classes: the glyph is resolved
+from the target host or scheme for `web`, and from the URL's basename
+via `nerd-icons-icon-for-file` for `file`.
+
+For the `anchor` class the URL-side overlay SHALL be created with its
+`display` property set to the empty string, hiding the `(#slug)` span
+from view while keeping the overlay's metadata
+(`gfm-pretty-links-class`, `gfm-pretty-links-url`, etc.) available to
+RET dispatch, eldoc, and xref.
+
+When `nerd-icons` is unavailable, the URL-side overlay SHALL be
+omitted for `web` links (URL shows raw). For `file` links the
+overlay SHALL still be created with `display` = `""` (path hidden,
+no icon). Anchor-class behaviour is unaffected.
+
+#### Scenario: Github URL
+
+- **GIVEN** `[code](https://github.com/user/repo)` and `nerd-icons`
+  available
+- **THEN** the URL-side renders as the GitHub icon
+
+#### Scenario: Unknown host
+
+- **GIVEN** a link to an unrecognised host (web class)
+- **THEN** the URL-side renders as a generic web icon
+
+#### Scenario: Anchor link hides URL span
+
+- **GIVEN** `[Setup](#setup)`
+- **THEN** a URL-side overlay covers the `(#setup)` span
+- **AND** its `display` property is the empty string
+- **AND** the overlay carries `gfm-pretty-links-class` = `anchor` and
+  `gfm-pretty-links-url` = `#setup`
+
+#### Scenario: File link renders icon for URL span
+
+- **GIVEN** `[ops](./scripts/x.sh)` and `nerd-icons` available
+- **THEN** a URL-side overlay covers the `(./scripts/x.sh)` span
+- **AND** its `display` property is the nerd-icons glyph resolved by
+  `nerd-icons-icon-for-file` on `x.sh`
+- **AND** the overlay carries `gfm-pretty-links-class` = `file` and
+  `gfm-pretty-links-url` = `./scripts/x.sh`
+
+#### Scenario: Parent-relative file link with code-styled label hides URL span
+
+- **GIVEN** ``[`dev/global/iam-roles/`](../../dev/global/iam-roles/terragrunt.stack.hcl)``
+- **THEN** the title-side overlay displays `dev/global/iam-roles/`
+  (wrapping backticks stripped) under `gfm-pretty-links-file-face`
+- **AND** a URL-side overlay covers the parenthesised path with a
+  non-nil `display` (an icon when `nerd-icons` resolves one, `""`
+  otherwise)
+
+#### Scenario: File link without `nerd-icons` still hides path
+
+- **GIVEN** a file-class link and `nerd-icons` unavailable
+- **THEN** a URL-side overlay covers the path span
+- **AND** its `display` property is the empty string
+- **AND** the overlay carries `gfm-pretty-links-class` = `file`

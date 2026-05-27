@@ -173,5 +173,124 @@ over the whole buffer."
     (should (= 1 (length records)))
     (should (eq 'anchor (gfm-pretty-links--link-class (car records))))))
 
+
+;;; URL-side hiding for file-class links
+
+(defun gfm-pretty-links-tests--rebuild-in (text)
+  "Insert TEXT into a fresh `markdown-mode' buffer and rebuild overlays.
+Returns the buffer (caller is inside `with-temp-buffer')."
+  (insert text)
+  (delay-mode-hooks (markdown-mode))
+  (gfm-pretty-links--rebuild))
+
+(defun gfm-pretty-links-tests--overlay-at (pos side)
+  "Return the gfm-pretty-links overlay covering POS on SIDE, or nil."
+  (cl-find-if (lambda (o)
+                (and (overlay-get o 'gfm-pretty-links-class)
+                     (eq side (overlay-get o 'gfm-pretty-links-side))
+                     (<= (overlay-start o) pos)
+                     (< pos (overlay-end o))))
+              (overlays-in (point-min) (point-max))))
+
+(ert-deftest gfm-pretty-links/file-link-url-overlay-hides-span ()
+  "File-class inline link gets a URL-side overlay that replaces the path span."
+  (with-temp-buffer
+    (gfm-pretty-links-tests--rebuild-in "run [ops](./scripts/x.sh)\n")
+    (let* ((url-pos (save-excursion
+                      (goto-char (point-min))
+                      (search-forward "(./scripts/x.sh)")
+                      (1- (point))))
+           (ov (gfm-pretty-links-tests--overlay-at url-pos 'url)))
+      (should ov)
+      (should (stringp (overlay-get ov 'display)))
+      (should (eq 'file (overlay-get ov 'gfm-pretty-links-class)))
+      (should (equal "./scripts/x.sh"
+                     (overlay-get ov 'gfm-pretty-links-url))))))
+
+(ert-deftest gfm-pretty-links/file-link-with-code-label-hides-url-span ()
+  "Code-styled label preserved on title side; URL-side overlay hides path."
+  (with-temp-buffer
+    (gfm-pretty-links-tests--rebuild-in
+     "see [`pretty`](../../path/x.hcl)\n")
+    (let* ((title-pos (save-excursion
+                       (goto-char (point-min))
+                       (search-forward "[`pretty`]")
+                       (- (point) 2)))
+           (url-pos (save-excursion
+                      (goto-char (point-min))
+                      (search-forward "(../../path/x.hcl)")
+                      (1- (point))))
+           (title-ov (gfm-pretty-links-tests--overlay-at title-pos 'title))
+           (url-ov (gfm-pretty-links-tests--overlay-at url-pos 'url)))
+      (should title-ov)
+      (should (equal "pretty"
+                     (substring-no-properties
+                      (overlay-get title-ov 'display))))
+      (should (eq 'gfm-pretty-links-file-face
+                  (get-text-property 0 'face
+                                     (overlay-get title-ov 'display))))
+      (should url-ov)
+      (should (stringp (overlay-get url-ov 'display)))
+      (should (eq 'file (overlay-get url-ov 'gfm-pretty-links-class))))))
+
+(ert-deftest gfm-pretty-links/file-link-icon-fallback-without-nerd-icons ()
+  "File link's URL-side overlay falls back to `\"\"' when nerd-icons absent."
+  (with-temp-buffer
+    (cl-letf (((symbol-function 'gfm-pretty-links--call-nerd)
+               (lambda (_fn _arg) nil)))
+      (gfm-pretty-links-tests--rebuild-in "run [ops](./scripts/x.sh)\n")
+      (let* ((url-pos (save-excursion
+                        (goto-char (point-min))
+                        (search-forward "(./scripts/x.sh)")
+                        (1- (point))))
+             (ov (gfm-pretty-links-tests--overlay-at url-pos 'url)))
+        (should ov)
+        (should (equal "" (overlay-get ov 'display)))
+        (should (eq 'file (overlay-get ov 'gfm-pretty-links-class)))))))
+
+
+;;; Wrapping backtick stripping on title side
+
+(ert-deftest gfm-pretty-links/title-strips-wrapping-backticks ()
+  "Fully backtick-wrapped label shows without backticks; metadata keeps them."
+  (with-temp-buffer
+    (gfm-pretty-links-tests--rebuild-in "see [`pretty`](./x.hcl)\n")
+    (let* ((title-pos (save-excursion
+                       (goto-char (point-min))
+                       (search-forward "[`pretty`]")
+                       (- (point) 2)))
+           (ov (gfm-pretty-links-tests--overlay-at title-pos 'title)))
+      (should ov)
+      (should (equal "pretty"
+                     (substring-no-properties (overlay-get ov 'display))))
+      (should (equal "`pretty`"
+                     (overlay-get ov 'gfm-pretty-links-label))))))
+
+(ert-deftest gfm-pretty-links/title-keeps-interior-backticks ()
+  "Interior backticks in the label are not stripped from the display."
+  (with-temp-buffer
+    (gfm-pretty-links-tests--rebuild-in "see [say `hi` world](./x.md)\n")
+    (let* ((title-pos (save-excursion
+                       (goto-char (point-min))
+                       (search-forward "[say `hi` world]")
+                       (- (point) 2)))
+           (ov (gfm-pretty-links-tests--overlay-at title-pos 'title)))
+      (should ov)
+      (should (equal "say `hi` world"
+                     (substring-no-properties (overlay-get ov 'display)))))))
+
+(ert-deftest gfm-pretty-links/strip-wrapping-backticks-helper ()
+  "Unit checks on the strip helper."
+  (should (equal "x" (gfm-pretty-links--strip-wrapping-backticks "`x`")))
+  (should (equal "" (gfm-pretty-links--strip-wrapping-backticks "``")))
+  (should (equal "plain"
+                 (gfm-pretty-links--strip-wrapping-backticks "plain")))
+  (should (equal "a `b` c"
+                 (gfm-pretty-links--strip-wrapping-backticks "a `b` c")))
+  (should (equal "`only-leading"
+                 (gfm-pretty-links--strip-wrapping-backticks "`only-leading")))
+  (should (equal "only-trailing`"
+                 (gfm-pretty-links--strip-wrapping-backticks "only-trailing`"))))
+
 (provide 'gfm-pretty-links-tests)
 ;;; gfm-pretty-links-tests.el ends here

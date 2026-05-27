@@ -4072,15 +4072,18 @@ window holding point."
       (should (eq 'anchor (overlay-get ov 'gfm-pretty-links-class)))
       (should (equal "#setup" (overlay-get ov 'gfm-pretty-links-url))))))
 
-(ert-deftest lang-markdown/gfm-pretty-links-file-link-has-no-url-overlay ()
-  "A file link produces only a title-side overlay (no icon)."
+(ert-deftest lang-markdown/gfm-pretty-links-file-link-hides-url-span ()
+  "A file link produces a url-side overlay that replaces the path span."
   (lang-markdown-tests--with-links-buffer
       "[ops](./scripts/x.sh)\n"
     (should (lang-markdown-tests--link-overlay-at 2 'title))
-    (should (= 1 (lang-markdown-tests--link-overlay-count-for 'inline)))
-    (should-not (cl-find-if
-                 (lambda (o) (eq 'url (overlay-get o 'gfm-pretty-links-side)))
-                 (gfm-pretty--state-get 'links 'overlays)))))
+    (let ((ov (lang-markdown-tests--link-overlay-at 8 'url)))
+      (should ov)
+      (should (stringp (overlay-get ov 'display)))
+      (should (eq 'file (overlay-get ov 'gfm-pretty-links-class)))
+      (should (equal "./scripts/x.sh"
+                     (overlay-get ov 'gfm-pretty-links-url))))
+    (should (= 2 (lang-markdown-tests--link-overlay-count-for 'inline)))))
 
 ;;; 9.x RET / follow-link
 
