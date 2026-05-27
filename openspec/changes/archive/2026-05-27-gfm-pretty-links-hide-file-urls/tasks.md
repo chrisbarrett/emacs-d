@@ -70,7 +70,7 @@
 ## 6. Verify
 
 - [x] 6.1 `make test` — full suite green.
-- [ ] 6.2 Open the original repro file in a live Emacs session and
+- [x] 6.2 Open the original repro file in a live Emacs session and
       confirm the EOF list renders with file icons and stripped
       backticks:
       `~/src/gotracksuit/platform/live__worktrees/sre-569-extra-gh-environment-support/_stacks/tf-repos/README.md`.
