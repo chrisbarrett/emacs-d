@@ -953,8 +953,10 @@ line (last body line's after-string also carries the bottom border)."
           (maphash (lambda (k _) (push k xs)) before)
           (should (cl-every (lambda (ov) (not (gethash ov after))) xs)))))))
 
-(ert-deftest lang-markdown/gfm-pretty-callouts-scoped-edit-outside-blocks-noop ()
-  "Edit outside every decorated callout is a no-op."
+(ert-deftest lang-markdown/gfm-pretty-callouts-scoped-edit-outside-blocks-full-rebuild ()
+  "Edit outside every decorated callout escalates to a full rebuild.
+The decorator's overlay objects are replaced (full teardown + reapply),
+even though the logical overlay set converges back to the same shape."
   (with-temp-buffer
     (insert "intro line.\n\nmore.\n\n> [!NOTE]\n> Hello.\n")
     (gfm-pretty-mode 1)
@@ -962,8 +964,35 @@ line (last body line's after-string also carries the bottom border)."
       (gfm-pretty--state-set 'callouts 'dirty-region (cons 1 5))
       (gfm-pretty--scheduled-rebuild)
       (let ((after (gfm-pretty-callouts--test-overlay-set)))
-        (should (= (hash-table-count before) (hash-table-count after)))
-        (maphash (lambda (ov _) (should (gethash ov after))) before)))))
+        (let (xs)
+          (maphash (lambda (k _) (push k xs)) before)
+          (should (cl-every (lambda (ov) (not (gethash ov after))) xs)))
+        (should (> (hash-table-count after) 0))))))
+
+(ert-deftest lang-markdown/gfm-pretty-callouts-scoped-edit-destroys-block-evacuates-overlays ()
+  "Edit that destroys a tracked callout block evacuates its stale overlays.
+
+Reproduces the `(null matching)` branch in
+`gfm-pretty--rebuild-scoped-by-block': an edit inserts a leading
+space at BOL of a callout marker line so the marker no longer parses,
+no current block overlaps the dirty region, and the engine MUST
+escalate to a full rebuild so the now-defunct block's overlays are
+swept."
+  (with-temp-buffer
+    (insert "> [!NOTE]\n> Hello.\n")
+    (gfm-pretty-mode 1)
+    (should (cl-some (lambda (o) (overlay-get o 'gfm-pretty-callouts))
+                     (overlays-in (point-min) (point-max))))
+    (save-excursion
+      (goto-char (point-min))
+      (insert " "))
+    (gfm-pretty--state-set 'callouts 'dirty-region
+                           (cons (point-min) (1+ (point-min))))
+    (gfm-pretty--scheduled-rebuild)
+    (let ((stale (cl-remove-if-not
+                  (lambda (o) (overlay-get o 'gfm-pretty-callouts))
+                  (overlays-in (point-min) (point-max)))))
+      (should (null stale)))))
 
 ;;; Integration: hang regression with cursor-intangible-mode active
 
@@ -2312,8 +2341,8 @@ Anchors stay shared across windows; only display overlays carry a
           (maphash (lambda (k _) (push k xs)) before)
           (should (cl-every (lambda (ov) (not (gethash ov after))) xs)))))))
 
-(ert-deftest lang-markdown/gfm-pretty-fences-scoped-edit-outside-blocks-noop ()
-  "Edit outside every decorated block is a no-op."
+(ert-deftest lang-markdown/gfm-pretty-fences-scoped-edit-outside-blocks-full-rebuild ()
+  "Edit outside every decorated fence block escalates to a full rebuild."
   (with-temp-buffer
     (insert "intro line\n\n```bash\necho hi\n```\n")
     (gfm-pretty-mode 1)
@@ -2322,10 +2351,11 @@ Anchors stay shared across windows; only display overlays carry a
       (gfm-pretty--state-set 'fences 'dirty-region (cons 1 5))
       (gfm-pretty--scheduled-rebuild)
       (let ((after (gfm-pretty-fences--test-overlay-set)))
-        (should (= (hash-table-count before) (hash-table-count after)))
-        (maphash (lambda (ov _) (should (gethash ov after))) before)
-        (should (= rebuild-count
-                   (plist-get (gfm-pretty--state-get 'fences 'rebuild-stats) :count)))))))
+        (let (xs)
+          (maphash (lambda (k _) (push k xs)) before)
+          (should (cl-every (lambda (ov) (not (gethash ov after))) xs)))
+        (should (> (plist-get (gfm-pretty--state-get 'fences 'rebuild-stats) :count)
+                   rebuild-count))))))
 
 ;;; Visible-first prioritisation
 
@@ -3444,8 +3474,8 @@ emitted by `gfm-pretty-tables--multiline-row-char-bounds'."
         (should (cl-every (lambda (o) (memq o b2-after)) b2-before))
         (should (cl-every (lambda (o) (memq o b2-before)) b2-after))))))
 
-(ert-deftest lang-markdown/gfm-pretty-tables-scoped-edit-outside-tables-noop ()
-  "Editing in a region intersecting no decorated table is a no-op."
+(ert-deftest lang-markdown/gfm-pretty-tables-scoped-edit-outside-tables-full-rebuild ()
+  "Editing in a region intersecting no decorated table escalates to a full rebuild."
   (with-temp-buffer
     (insert "intro line\n\n| A | B |\n| - | - |\n| 1 | 2 |\n")
     (gfm-pretty-mode 1)
@@ -3454,10 +3484,11 @@ emitted by `gfm-pretty-tables--multiline-row-char-bounds'."
       (gfm-pretty--state-set 'tables 'dirty-region (cons 1 5))
       (gfm-pretty--scheduled-rebuild)
       (let ((after (gfm-pretty-tables--test-overlay-set)))
-        (should (= (hash-table-count before) (hash-table-count after)))
-        (maphash (lambda (ov _) (should (gethash ov after))) before)
-        (should (= rebuild-count
-                   (plist-get (gfm-pretty--state-get 'tables 'rebuild-stats) :count)))))))
+        (let (xs)
+          (maphash (lambda (k _) (push k xs)) before)
+          (should (cl-every (lambda (ov) (not (gethash ov after))) xs)))
+        (should (> (plist-get (gfm-pretty--state-get 'tables 'rebuild-stats) :count)
+                   rebuild-count))))))
 
 (ert-deftest lang-markdown/gfm-pretty-tables-scoped-edit-spans-two-tables-full-rebuild ()
   "Edit region intersecting two tables triggers a full rebuild."
@@ -5099,6 +5130,88 @@ than reading stale `cell-bounds'."
       (gfm-pretty-tables--evil-j)
       (setq shim (point))
       (should (= shim baseline)))))
+
+;;; gfm-pretty-tab-dwim — TAB dispatch in gfm-pretty-mode
+
+(ert-deftest lang-markdown/gfm-pretty-tab-dwim-callout-marker-is-noop ()
+  "TAB at BOL of a callout marker line MUST NOT insert whitespace."
+  (with-temp-buffer
+    (insert "> [!NOTE]\n> Hello.\n")
+    (gfm-pretty-mode 1)
+    (goto-char (point-min))
+    (let ((before (buffer-string)))
+      (cl-letf (((symbol-function 'evil-insert-state-p) (lambda () t)))
+        (call-interactively #'gfm-pretty-tab-dwim))
+      (should (string= before (buffer-string))))))
+
+(ert-deftest lang-markdown/gfm-pretty-tab-dwim-heading-invokes-cycle ()
+  "TAB on a heading line invokes `markdown-cycle' interactively.
+`markdown-on-heading-p' reads the `markdown-heading' text property
+set by font-lock, so the test enables `gfm-mode' and runs
+`font-lock-ensure' before dispatching."
+  (with-temp-buffer
+    (insert "## Section\n\nBody.\n")
+    (gfm-mode)
+    (font-lock-ensure)
+    (gfm-pretty-mode 1)
+    (goto-char (point-min))
+    (let ((called 0))
+      (cl-letf (((symbol-function 'markdown-cycle)
+                 (lambda (&rest _) (interactive) (cl-incf called))))
+        (call-interactively #'gfm-pretty-tab-dwim))
+      (should (= called 1)))))
+
+(ert-deftest lang-markdown/gfm-pretty-tab-dwim-table-forward-cell ()
+  "TAB inside a GFM table invokes `markdown-table-forward-cell'."
+  (with-temp-buffer
+    (insert "| A | B |\n| - | - |\n| 1 | 2 |\n")
+    (gfm-pretty-mode 1)
+    ;; Position point inside the body row's first cell.
+    (goto-char (point-min))
+    (forward-line 2)
+    (forward-char 2)
+    (let ((called 0))
+      (cl-letf (((symbol-function 'markdown-table-forward-cell)
+                 (lambda (&rest _) (interactive) (cl-incf called))))
+        (call-interactively #'gfm-pretty-tab-dwim))
+      (should (= called 1)))))
+
+(ert-deftest lang-markdown/gfm-pretty-tab-dwim-list-prefix-indents-in-insert-state ()
+  "TAB at a list-item prefix slot indents one step when evil insert state is active."
+  (with-temp-buffer
+    (insert "- item\n")
+    (gfm-pretty-mode 1)
+    (goto-char (point-min))
+    (let ((called 0))
+      (cl-letf (((symbol-function 'evil-insert-state-p) (lambda () t))
+                ((symbol-function 'markdown-indent-line)
+                 (lambda (&rest _) (cl-incf called))))
+        (let ((evil-mode t))
+          (call-interactively #'gfm-pretty-tab-dwim)))
+      (should (= called 1)))))
+
+(ert-deftest lang-markdown/gfm-pretty-tab-dwim-list-prefix-noop-outside-insert-state ()
+  "TAB at a list-item prefix slot is a no-op when not in evil insert state."
+  (with-temp-buffer
+    (insert "- item\n")
+    (gfm-pretty-mode 1)
+    (goto-char (point-min))
+    (let ((before (buffer-string)))
+      (cl-letf (((symbol-function 'evil-insert-state-p) (lambda () nil)))
+        (call-interactively #'gfm-pretty-tab-dwim))
+      (should (string= before (buffer-string))))))
+
+(ert-deftest lang-markdown/gfm-pretty-tab-dwim-paragraph-body-is-noop ()
+  "TAB inside paragraph body MUST NOT insert whitespace."
+  (with-temp-buffer
+    (insert "A plain paragraph line.\n")
+    (gfm-pretty-mode 1)
+    (goto-char (point-min))
+    (forward-char 5)
+    (let ((before (buffer-string)))
+      (cl-letf (((symbol-function 'evil-insert-state-p) (lambda () t)))
+        (call-interactively #'gfm-pretty-tab-dwim))
+      (should (string= before (buffer-string))))))
 
 (provide 'gfm-pretty-tests)
 
