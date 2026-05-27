@@ -10,12 +10,16 @@ L535 says the URL renders raw.
 
 ## What Changes
 
-- `file`-class links SHALL hide the URL span the same way `anchor` does:
-  a URL-side overlay with `display` = `""`, metadata preserved.
+- `file`-class links SHALL hide the raw URL span by replacing it with
+  a single nerd-icons file-type glyph resolved from the URL's basename
+  via `nerd-icons-icon-for-file` (mirroring `web`'s icon treatment).
+- When `nerd-icons` is unavailable, the file URL-side overlay SHALL
+  fall back to `display` = `""` (URL hidden, no icon).
 - `gfm-pretty-links--decorate-link` SHALL create the URL-side overlay for
   `file` (in addition to `web` and `anchor`).
-- `gfm-pretty-links--make-overlay` SHALL return `""` for the URL side when
-  class is `file` (same branch as `anchor`).
+- `gfm-pretty-links--make-overlay` SHALL resolve the URL display for
+  `file` via the same icon-resolution path as `web`. `anchor` retains
+  its empty-string display.
 - Commentary at the top of `gfm-pretty-links.el` and on
   `decorate-link` SHALL be reconciled to describe the new behaviour.
 
@@ -24,9 +28,10 @@ L535 says the URL renders raw.
 ### Modified Capabilities
 
 - `gfm-pretty`: requirement *URL-side icon rendering* changes — `file`
-  class now creates an empty-display URL overlay instead of omitting the
-  overlay. Scenario *File link omits icon* updates to assert the
-  empty-display overlay exists.
+  class now creates a URL-side overlay whose `display` is a nerd-icons
+  file-type glyph (with `""` fallback when `nerd-icons` is unavailable).
+  Scenario *File link omits icon* updates to assert the icon overlay
+  exists; a new scenario covers the `nerd-icons`-unavailable fallback.
 
 ## Impact
 

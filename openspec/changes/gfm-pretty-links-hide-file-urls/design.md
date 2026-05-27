@@ -24,15 +24,16 @@ commentary is wrong.
 
 **Goals:**
 
-- File-class URL span hidden on screen, same way anchor's is.
+- File-class URL span hidden on screen and replaced with a nerd-icons
+  file-type glyph (mirroring `web`'s icon treatment).
 - Overlay metadata (`gfm-pretty-links-class`, `-url`, `-kind`, etc.)
   remains addressable for RET, eldoc, xref.
 - Top-of-file commentary, decorate-link docstring, and spec all agree.
+- Graceful fallback to empty-string display when `nerd-icons` is
+  unavailable (path stays hidden; just no glyph).
 
 **Non-Goals:**
 
-- No icon for file-class links. (Could be added later as a separate
-  change — file icons via `nerd-icons-icon-for-file`.)
 - No change to URL classification rules. `./`, `../`, `/`, `file:` still
   classify as `file`; everything else still falls through to `web`.
 - No change to RET / find-file / eldoc / xref behaviour. They already
@@ -40,18 +41,25 @@ commentary is wrong.
 
 ## Decisions
 
-### Decision: extend `anchor`'s empty-display branch to cover `file`
+### Decision: route `file` through the existing icon branch
 
-`make-overlay` has the right shape already — the `(eq class 'anchor)`
-branch returns `""` for the URL side. Extend it to
-`(memq class '(anchor file))`. `decorate-link`'s class guard widens to
-`'(web anchor file)`. Two-line change.
+`make-overlay`'s `t` branch already resolves an icon via
+`gfm-pretty-links--icon-for-target`, which falls through to
+`nerd-icons-icon-for-file` on the URL's basename for relative paths
+and `file:` URIs. Letting `file` fall into that branch is the
+minimum-friction implementation: keep `(eq class 'anchor) ""`, drop
+`file` from the empty-display branch so it inherits the icon path.
+`decorate-link`'s class guard still widens to `'(web anchor file)`.
 
-**Alternative considered:** give `file` its own URL-side icon (e.g. a
-file-type glyph via `nerd-icons-icon-for-file`). Rejected for this
-change — it's a separable UX decision, would need icon-resolution work
-in `--icon-for-target`, and the immediate goal is parity with the
-existing "URL hidden" expectation that authors already write toward.
+The fallback when `nerd-icons` is unavailable is already encoded in
+`make-overlay` as `(or (--icon-for-target …) "")`, so file links keep
+hiding the path even without icons.
+
+**Alternative considered:** keep file URL-side as empty `display` and
+paint the icon on the title overlay's `before-string`. Rejected —
+adds a second visual moving piece (separate face, separate placement
+heuristic) and diverges from `web`'s structure where the icon lives
+on the URL-side overlay.
 
 ### Decision: spec delta on `gfm-pretty`
 
@@ -60,12 +68,15 @@ requirement *URL-side icon rendering*, scenario *File link omits icon*.
 Both the requirement body and the scenario change. Delta uses
 `## MODIFIED Requirements`.
 
-### Decision: keep `nerd-icons` independence
+### Decision: file URL hiding survives missing `nerd-icons`
 
-Anchor's URL hiding doesn't depend on `nerd-icons` (it's just an empty
-display string). File hiding inherits the same property. The existing
-spec carve-out at L2181-2183 (web URLs render raw when `nerd-icons`
-unavailable) does not extend to file — file is unconditional.
+`web`'s carve-out (URL renders raw when `nerd-icons` is unavailable)
+exists because the URL-side overlay is *omitted* in that branch, so
+the text falls back to whatever markdown-mode draws. For `file` the
+overlay is always created — only its `display` switches between an
+icon (when nerd-icons resolves one) and `""` (fallback). So even
+without `nerd-icons`, the path stays hidden. Anchor remains
+unaffected; its `display` is always `""`.
 
 ## Risks / Trade-offs
 

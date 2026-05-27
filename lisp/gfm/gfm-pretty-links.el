@@ -18,8 +18,13 @@
 ;;   `gfm-pretty-links-file-face' for file.  The two local-link faces
 ;;   inherit `markdown-link-face' with `:underline nil' so the
 ;;   underline affordance is reserved for "leaves the buffer".
-;; - URL-side overlay: only created for `web' links (a single
-;;   nerd-icons glyph).  `anchor' and `file' links render title-only.
+;; - URL-side overlay: for `web' and `file' links, a single nerd-icons
+;;   glyph resolved from the host (web) or filename basename (file).
+;;   For `anchor' links, an empty-display overlay that hides the
+;;   `(#slug)' span.  Either way the overlay's metadata stays
+;;   addressable by RET, eldoc, and xref.  When `nerd-icons' is
+;;   unavailable, `web' falls back to a raw URL and `file' falls back
+;;   to empty `display' (path stays hidden, no icon).
 ;; - RET behaviour: anchors jump to the matching heading in-buffer,
 ;;   file paths open via `find-file' relative to the buffer's
 ;;   directory, web URLs go through `markdown--browse-url'.
@@ -528,14 +533,15 @@ eldoc, and the xref backend can read it without re-parsing."
 
 (defun gfm-pretty-links--decorate-link (record window)
   "Create RECORD's per-side overlays in WINDOW.
-Degenerate records (empty title span) are skipped.  Web links get a
-url-side icon overlay; anchor links get a url-side overlay whose
-`display' is empty, hiding the `(#slug)' span while preserving its
-metadata for RET dispatch.  File links produce only a title-side
-overlay; the URL span renders raw."
+Degenerate records (empty title span) are skipped.  Web and file
+links get a url-side icon overlay (nerd-icons by host or basename);
+anchor links get a url-side overlay whose `display' is empty, hiding
+the `(#slug)' span.  Either way the overlay's metadata stays
+addressable for RET dispatch, eldoc, and xref.  When `nerd-icons' is
+unavailable, file links fall back to empty `display'."
   (when (< (gfm-pretty-links--link-tbeg record) (gfm-pretty-links--link-tend record))
     (gfm-pretty-links--make-title-overlay record window)
-    (when (and (memq (gfm-pretty-links--link-class record) '(web anchor))
+    (when (and (memq (gfm-pretty-links--link-class record) '(web anchor file))
                (< (gfm-pretty-links--link-ubeg record) (gfm-pretty-links--link-uend record)))
       (gfm-pretty-links--make-url-overlay record window))))
 
