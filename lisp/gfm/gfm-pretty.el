@@ -184,6 +184,9 @@ removes the hooks."
   (cond
    (gfm-pretty-mode
     (gfm-pretty--install-engine-hooks)
+    ;; Mark every decorator enabled before any rebuild fires, so cross-decorator state queries (link-previews → blockquotes) succeed regardless of registration order.
+    (dolist (entry gfm-pretty--decorators)
+      (gfm-pretty--state-set (car entry) 'enabled-p t))
     (dolist (entry gfm-pretty--decorators)
       (gfm-pretty--enable-decorator (cdr entry))))
    (t

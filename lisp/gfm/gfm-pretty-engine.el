@@ -21,6 +21,9 @@
 
 (require 'cl-lib)
 
+(defvar gfm-pretty--last-selection-bounds)
+(declare-function gfm-pretty--update-selection "gfm-pretty-borders" ())
+
 (defgroup gfm-pretty nil
   "Engine controls for GFM pretty decorators."
   :group 'markdown-faces)
