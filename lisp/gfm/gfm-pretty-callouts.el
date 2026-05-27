@@ -248,18 +248,23 @@ visual line from `│' to the window's right edge, masking any
     (put-text-property 0 1 'cursor t str)
     str))
 
-(defun gfm-pretty-callouts--right-after-overflow (face tint-face line-text window)
+(defun gfm-pretty-callouts--right-after-overflow (face tint-face body-text window)
   "Build the right-edge after-string for a wrapped body line.
-Simulates word-wrap of `│ ' + LINE-TEXT in WINDOW's width to compute
-how much padding is needed before the closing `│' on the final wrapped
-visual row.  TINT-FACE, when non-nil, supplies the tinted background
-via `:inherit' so theme switches propagate without rebuild.  A
-trailing `(space :align-to right)' in the default face extends the
-last wrapped row to the window edge, suppressing past-EOL `:extend'
-leaks — see `gfm-pretty-callouts--right-after'."
+BODY-TEXT is the body line's visualised string (overlay `display'
+substitutions inlined, `gfm-pretty-atomic' carried forward) — the
+caller composes it via `gfm-pretty--visualised-string' so the wrap
+simulation observes the rendered visual width and refuses to break
+inside an atom-decorator's substitution.  Simulates word-wrap of
+`│ ' + BODY-TEXT in WINDOW's width to compute padding before the
+closing `│' on the final wrapped visual row.  TINT-FACE, when
+non-nil, supplies the tinted background via `:inherit' so theme
+switches propagate without rebuild.  A trailing `(space :align-to
+right)' in the default face extends the last wrapped row to the
+window edge, suppressing past-EOL `:extend' leaks — see
+`gfm-pretty-callouts--right-after'."
   (let* ((text-width (gfm-pretty--available-width window))
          (visual-col (gfm-pretty--last-visual-col
-                      (concat "│ " line-text) text-width
+                      (concat "│ " body-text) text-width
                       gfm-pretty--wrap-prefix-w))
          (target-col (1- text-width))
          (pad-len (max 0 (- target-col visual-col)))
@@ -362,9 +367,11 @@ See `gfm-pretty-callouts--apply-block-anchors' for the widening rationale."
            (has-body (and (<= body-beg-pos end)
                           (not (= body-beg-pos (1+ end)))
                           (< marker-line-end end)))
-           ;; max-content excludes the 2-char `> ' prefix.
+           ;; max-content excludes the 2-char `> ' prefix.  Visual
+           ;; cell count so width-changing atom-phase overlays (links
+           ;; icon + label substitution) collapse before measurement.
            (max-content (if has-body
-                            (gfm-pretty--max-line-width
+                            (gfm-pretty--visual-max-line-width
                              body-beg-pos end 2)
                           0))
            (box-width (min text-width (max 80 (+ max-content 4))))
@@ -413,16 +420,29 @@ See `gfm-pretty-callouts--apply-block-anchors' for the widening rationale."
                      (lend (save-excursion
                              (goto-char p) (line-end-position)))
                      (last-body (>= lend end))
-                     (line-content-w (max 0 (- (- lend lbeg) 2)))
+                     ;; Visual cell width of the body content (excluding
+                     ;; the 2-cell `> ' prefix).  Honours atom-phase
+                     ;; overlays' `display' substitutions, so a body
+                     ;; line dominated by a prettified link is sized
+                     ;; from its rendered extent, not its raw chars.
+                     (line-content-w
+                      (max 0 (- (gfm-pretty--visual-line-width lbeg lend) 2)))
                      (overflow-p (> line-content-w content-budget))
-                     (line-text (buffer-substring-no-properties
-                                 (min (+ lbeg 2) lend) lend))
                      (right-after
-                      (if overflow-p
+                      (cond
+                       (overflow-p
+                        ;; Build the body's visualised string from the
+                        ;; chars after the `> ' prefix so the
+                        ;; simulator observes the rendered width and
+                        ;; refuses to break inside atomic spans.
+                        (let ((body-text
+                               (gfm-pretty--visualised-string
+                                (min (+ lbeg 2) lend) lend)))
                           (gfm-pretty-callouts--right-after-overflow
-                           border-face tint-face line-text window)
+                           border-face tint-face body-text window)))
+                       (t
                         (gfm-pretty-callouts--right-after
-                         box-width border-face tint-face))))
+                         box-width border-face tint-face)))))
                 ;; `> ' / bare `>' → `│ ' substitution as a per-window
                 ;; display so reveal in window A doesn't expose the
                 ;; source in B.  Source range is 2 chars for `> ',
@@ -985,6 +1005,7 @@ only that line, missing the multi-line matcher's anchor."
 
 (with-eval-after-load 'gfm-pretty-engine
   (gfm-pretty-define-decorator 'callouts
+    :phase              'containers
     :registry           gfm-pretty-callouts--registry
     :collect-fn         #'gfm-pretty-callouts--collect-blocks
     :range-fn           #'gfm-pretty-callouts--block-range

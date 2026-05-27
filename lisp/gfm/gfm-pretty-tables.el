@@ -2181,6 +2181,7 @@ The umbrella `gfm-pretty-edit-block-at-point' dispatch looks for
 
 (with-eval-after-load 'gfm-pretty-engine
   (gfm-pretty-define-decorator 'tables
+    :phase                 'containers
     :registry              gfm-pretty-tables--registry
     :collect-fn            #'gfm-pretty-tables--collect-blocks
     :range-fn              #'gfm-pretty-tables--block-range

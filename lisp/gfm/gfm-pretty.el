@@ -86,7 +86,8 @@ contract is a naming convention rather than a registry slot — see
 `gfm-pretty--block-at-point-fn'."
   (interactive)
   (gfm-pretty--require-all)
-  (cl-loop for (name . _d) in gfm-pretty--decorators
+  (cl-loop for d in (gfm-pretty--decorators-by-phase)
+           for name = (gfm-pretty--decorator-name d)
            for fn = (gfm-pretty--block-at-point-fn name)
            when (and fn (gfm-pretty--state-get name 'enabled-p))
            for block = (funcall fn)
@@ -185,13 +186,13 @@ removes the hooks."
    (gfm-pretty-mode
     (gfm-pretty--install-engine-hooks)
     ;; Mark every decorator enabled before any rebuild fires, so cross-decorator state queries (link-previews → blockquotes) succeed regardless of registration order.
-    (dolist (entry gfm-pretty--decorators)
-      (gfm-pretty--state-set (car entry) 'enabled-p t))
-    (dolist (entry gfm-pretty--decorators)
-      (gfm-pretty--enable-decorator (cdr entry))))
+    (dolist (d (gfm-pretty--decorators-by-phase))
+      (gfm-pretty--state-set (gfm-pretty--decorator-name d) 'enabled-p t))
+    (dolist (d (gfm-pretty--decorators-by-phase))
+      (gfm-pretty--enable-decorator d)))
    (t
-    (dolist (entry (reverse gfm-pretty--decorators))
-      (gfm-pretty--disable-decorator (cdr entry)))
+    (dolist (d (reverse (gfm-pretty--decorators-by-phase)))
+      (gfm-pretty--disable-decorator d))
     (gfm-pretty--remove-engine-hooks))))
 
 (provide 'gfm-pretty)

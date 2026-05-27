@@ -154,10 +154,29 @@ there is no past-EOL region to fill is the working idiom."
     (put-text-property 0 1 'cursor t str)
     str))
 
+(defun gfm-pretty--find-wrap-point (text from to)
+  "Return the rightmost `?\\s' in TEXT[FROM, TO) that is not in an atomic span.
+A position P is atomic when TEXT has a non-nil `gfm-pretty-atomic'
+property at P.  Returns nil when no eligible wrap point exists."
+  (let ((i (1- to))
+        (hit nil))
+    (while (and (null hit) (>= i from))
+      (when (and (eq (aref text i) ?\s)
+                 (not (get-text-property i 'gfm-pretty-atomic text)))
+        (setq hit i))
+      (setq i (1- i)))
+    hit))
+
 (defun gfm-pretty--simulate-wrap (text width &optional cont-prefix-w)
   "Simulate word-wrap of TEXT in a WIDTH-col window.
 CONT-PREFIX-W is the width of the wrap-prefix shown on continuation
 visual lines (default 0).  Returns (LAST-COL . WRAP-POSITIONS).
+
+TEXT MAY carry the `gfm-pretty-atomic' text-property over arbitrary
+substrings; the simulator SHALL NOT break inside an atomic span.
+Spaces inside an atomic span are not treated as wrap points, mirroring
+Emacs's actual redisplay where a `display' string is one indivisible
+unit at wrap time.
 
 The per-iteration `line-width' is clamped to at least 1 so the position
 counter advances on every loop body, even when WIDTH ≤ CONT-PREFIX-W —
@@ -180,9 +199,23 @@ width)."
           (setq col (+ col remaining)
                 pos len))
          (t
-          (let* ((slice (substring text pos (+ pos space-left)))
-                 (wrap-at (cl-position ?\s slice :from-end t))
-                 (next-pos (if wrap-at (+ pos wrap-at 1) (+ pos space-left))))
+          (let* ((slice-end (+ pos space-left))
+                 (wrap-at (gfm-pretty--find-wrap-point text pos slice-end))
+                 (raw-next (if wrap-at (1+ wrap-at) slice-end))
+                 ;; The simulator must never wrap inside an atomic
+                 ;; span.  If RAW-NEXT lands inside one (no eligible
+                 ;; non-atomic space found AND RAW-NEXT carries the
+                 ;; `gfm-pretty-atomic' property), advance past the
+                 ;; span end so the wrap lands on its right boundary.
+                 (next-pos
+                  (cond
+                   (wrap-at raw-next)
+                   ((and (< raw-next len)
+                         (get-text-property raw-next 'gfm-pretty-atomic text))
+                    (or (next-single-property-change
+                         raw-next 'gfm-pretty-atomic text)
+                        len))
+                   (t raw-next))))
             (push next-pos wraps)
             (setq pos next-pos
                   col 0
