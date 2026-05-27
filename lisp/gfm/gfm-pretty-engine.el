@@ -47,6 +47,41 @@ Engine-level; applies uniformly to every registered decorator."
   "Non-nil if (BEG . END) ranges A and B overlap."
   (and (<= (car a) (cdr b)) (>= (cdr a) (car b))))
 
+;;; Public document-layout helpers
+
+(defconst gfm-pretty--standalone-marker-rx
+  (rx bos (* blank)
+      (? (or "- " "* " "+ " "> "
+             (: (+ digit) ". ")))
+      (* blank) eos)
+  "Shape of a line that contains only whitespace and at most one
+leading list-item or blockquote marker.  Used by
+`gfm-pretty-standalone-span-p' to decide whether a span is the only
+non-marker content on its line.")
+
+(defun gfm-pretty-standalone-span-p (beg end)
+  "Return non-nil iff [BEG, END) occupies its line up to layout markers.
+The check is purely positional: the buffer text between the BOL of
+BEG and the EOL of END, with the [BEG, END) span removed, must
+match `gfm-pretty--standalone-marker-rx' — whitespace plus at most
+one list-item (`- ', `* ', `+ ', `<n>. ') or blockquote (`> ')
+marker.
+
+The function does not modify match-data observable to callers.
+Single source of truth for decorators that need standalone-line
+gating."
+  (save-match-data
+    (save-excursion
+      (goto-char beg)
+      (let ((bol (line-beginning-position)))
+        (goto-char end)
+        (let* ((eol (line-end-position))
+               (rest (concat
+                      (buffer-substring-no-properties bol beg)
+                      (buffer-substring-no-properties end eol))))
+          (and (string-match-p gfm-pretty--standalone-marker-rx rest)
+               t))))))
+
 ;;; Width primitives
 
 (defconst gfm-pretty--wrap-prefix-w 2

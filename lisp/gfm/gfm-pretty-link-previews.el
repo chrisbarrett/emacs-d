@@ -83,29 +83,9 @@ Returns (:base BASE :head HEAD :path PATH-OR-NIL) or nil."
 
 (defun gfm-pretty-link-previews--standalone-link-p (link-start link-end)
   "Return non-nil when [LINK-START, LINK-END) span is a standalone link.
-A link is standalone when its line, with the `[label](url)' span
-removed, is whitespace plus at most one list-item marker (`- ',
-`* ', `+ ', `<n>. ') or a blockquote marker (`> ').
-
-Callers MUST pass explicit positions rather than rely on global
-match-data, since intervening `string-match' calls in parser helpers
-\(e.g. `gfm-pretty-link-previews--parse-source-link') will have
-clobbered it."
-  (save-excursion
-    (goto-char link-start)
-    (let ((bol (line-beginning-position)))
-      (goto-char link-end)
-      (let* ((eol (line-end-position))
-             (rest (concat
-                    (buffer-substring-no-properties bol link-start)
-                    (buffer-substring-no-properties link-end eol))))
-        (and (string-match-p
-              (rx bos (* blank)
-                  (? (or "- " "* " "+ " "> "
-                         (: (+ digit) ". ")))
-                  (* blank) eos)
-              rest)
-             t)))))
+Thin wrapper over `gfm-pretty-standalone-span-p' — kept as a stable
+internal symbol for this module's call sites."
+  (gfm-pretty-standalone-span-p link-start link-end))
 
 
 ;;; Bare-line recognition and preformatted-context exclusion

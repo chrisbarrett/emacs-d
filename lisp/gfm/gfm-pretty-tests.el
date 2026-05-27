@@ -77,6 +77,51 @@
   (should (gfm-pretty--in-ranges-p 5 '((1 . 4) (5 . 9))))
   (should-not (gfm-pretty--in-ranges-p 12 '((1 . 4) (5 . 9)))))
 
+(defun lang-markdown-tests--span-in-buffer (text)
+  "Insert TEXT, find a `S' span, return (BEG . END) for it.
+TEXT must contain exactly one literal `S' standing in for the span;
+the helper inserts `<span>' in its place and returns its bounds."
+  (let* ((idx (string-match "S" text))
+         (head (substring text 0 idx))
+         (tail (substring text (1+ idx)))
+         (span "[lbl](modules/auth.rs#L42-L48)"))
+    (insert head span tail)
+    (let ((beg (+ (point-min) (length head))))
+      (cons beg (+ beg (length span))))))
+
+(ert-deftest lang-markdown/gfm-pretty-standalone-span-p-whole-line ()
+  (with-temp-buffer
+    (let ((range (lang-markdown-tests--span-in-buffer "S\n")))
+      (should (gfm-pretty-standalone-span-p (car range) (cdr range))))))
+
+(ert-deftest lang-markdown/gfm-pretty-standalone-span-p-list-item ()
+  (with-temp-buffer
+    (let ((range (lang-markdown-tests--span-in-buffer "- S\n")))
+      (should (gfm-pretty-standalone-span-p (car range) (cdr range))))))
+
+(ert-deftest lang-markdown/gfm-pretty-standalone-span-p-blockquote ()
+  (with-temp-buffer
+    (let ((range (lang-markdown-tests--span-in-buffer "> S\n")))
+      (should (gfm-pretty-standalone-span-p (car range) (cdr range))))))
+
+(ert-deftest lang-markdown/gfm-pretty-standalone-span-p-ordered-list ()
+  (with-temp-buffer
+    (let ((range (lang-markdown-tests--span-in-buffer "1. S\n")))
+      (should (gfm-pretty-standalone-span-p (car range) (cdr range))))))
+
+(ert-deftest lang-markdown/gfm-pretty-standalone-span-p-embedded-in-prose ()
+  (with-temp-buffer
+    (let ((range (lang-markdown-tests--span-in-buffer "See S for details.\n")))
+      (should-not (gfm-pretty-standalone-span-p (car range) (cdr range))))))
+
+(ert-deftest lang-markdown/gfm-pretty-standalone-span-p-preserves-match-data ()
+  (with-temp-buffer
+    (let ((range (lang-markdown-tests--span-in-buffer "S\n")))
+      (string-match "^\\(a\\)\\(b\\)$" "ab")
+      (gfm-pretty-standalone-span-p (car range) (cdr range))
+      (should (equal "a" (match-string 1 "ab")))
+      (should (equal "b" (match-string 2 "ab"))))))
+
 (ert-deftest lang-markdown/gfm-pretty--normalised-border-face-resets-styling ()
   "Normalised face spec resets slant/weight/underline/etc.
 `:weight light' to draw a hairline box; explicit so an inherited
@@ -666,6 +711,7 @@ re-introduces narrowing-dependent caches/teardown."
       (should (equal baseline
                      (lang-markdown-tests--tagged-source-positions
                       'gfm-pretty-callouts))))))
+
 
 ;;; Extend-clip — callouts
 
@@ -4342,6 +4388,40 @@ decoration must be baked into the cell string itself."
     (lang-markdown-tests--two-slide-links-buffer)
     (gfm-pretty-mode 1)
     (let* ((baseline (lang-markdown-tests--tagged-source-positions 'gfm-pretty-links))
+           (slide-1-end (save-excursion
+                          (goto-char (point-min))
+                          (search-forward "# slide 2")
+                          (line-beginning-position))))
+      (narrow-to-region (point-min) slide-1-end)
+      (gfm-pretty-links--rebuild)
+      (widen)
+      (gfm-pretty-links--rebuild)
+      (should (equal baseline
+                     (lang-markdown-tests--tagged-source-positions
+                      'gfm-pretty-links))))))
+
+(defun lang-markdown-tests--two-slide-source-range-links-buffer ()
+  "Insert a two-slide buffer with one inline source-range link per slide.
+Each link is embedded in prose so the new decorate-inline path
+collects it; standalone shapes would be deferred to `link-previews'."
+  (insert "Slide one: see [snippet](/path/foo.el#L42-L48) inline.\n")
+  (insert "\n# slide 2\n\n")
+  (insert "Slide two: also [bit](/path/bar.py#L7-L9) over there.\n"))
+
+(ert-deftest lang-markdown/gfm-pretty-links-source-range-narrow-rebuild-widen-rebuild-converges ()
+  "narrow -> rebuild -> widen -> rebuild for inline source-range links matches clean widened rebuild.
+Regression net for `gfm-pretty-standalone-span-p' extraction: the
+standalone predicate must answer the same way under narrowing and
+widening, so the decorator does not gain or lose source-range
+overlays around a narrowed slide boundary."
+  :tags '(narrowing-regression)
+  (with-temp-buffer
+    (delay-mode-hooks (markdown-mode))
+    (setq-local markdown-hide-urls t)
+    (lang-markdown-tests--two-slide-source-range-links-buffer)
+    (gfm-pretty-mode 1)
+    (let* ((baseline (lang-markdown-tests--tagged-source-positions
+                      'gfm-pretty-links))
            (slide-1-end (save-excursion
                           (goto-char (point-min))
                           (search-forward "# slide 2")

@@ -121,7 +121,7 @@
           (should (= click (car recorded))))))))
 
 
-;;; URL-form skip (source-range / diff URLs owned by gfm-present)
+;;; URL-form deferral to `link-previews'
 
 (defun gfm-pretty-links-tests--blocks (text)
   "Return link records discovered in TEXT.
@@ -134,15 +134,33 @@ over the whole buffer."
     (gfm-pretty-links--build-ref-def-alist)
     (gfm-pretty-links--blocks-in-range (point-min) (point-max))))
 
-(ert-deftest gfm-pretty-links/skip-inline-source-range-link ()
-  "Inline `path#L<a>-L<b>' link produces no decoration record."
+(ert-deftest gfm-pretty-links/defer-standalone-inline-source-range-link ()
+  "Standalone inline `path#L<a>-L<b>' link is deferred (no record)."
   (should (null (gfm-pretty-links-tests--blocks
-                 "see [snippet](/repo/foo.yml#L13-L22) inline\n"))))
+                 "[snippet](/repo/foo.yml#L13-L22)\n"))))
 
-(ert-deftest gfm-pretty-links/skip-inline-source-link-single-line ()
-  "Single-line `path#L<n>' link is also skipped."
+(ert-deftest gfm-pretty-links/defer-standalone-inline-source-link-single-line ()
+  "Standalone single-line `path#L<n>' link is deferred."
   (should (null (gfm-pretty-links-tests--blocks
-                 "see [line](/repo/x.el#L42)\n"))))
+                 "[line](/repo/x.el#L42)\n"))))
+
+(ert-deftest gfm-pretty-links/defer-list-item-inline-source-range-link ()
+  "List-item-only inline source-range link is deferred."
+  (should (null (gfm-pretty-links-tests--blocks
+                 "- [snippet](/repo/foo.yml#L13-L22)\n"))))
+
+(ert-deftest gfm-pretty-links/defer-blockquote-inline-source-range-link ()
+  "Blockquote-marker-only inline source-range link is deferred."
+  (should (null (gfm-pretty-links-tests--blocks
+                 "> [snippet](/repo/foo.yml#L13-L22)\n"))))
+
+(ert-deftest gfm-pretty-links/decorate-inline-in-prose-source-range-link ()
+  "Inline source-range link embedded in prose is decorated as `file'."
+  (let ((records (gfm-pretty-links-tests--blocks
+                  "see [snippet](/repo/foo.yml#L13-L22) inline\n")))
+    (should (= 1 (length records)))
+    (should (eq 'file (gfm-pretty-links--link-class (car records))))
+    (should (eq 'inline (gfm-pretty-links--link-kind (car records))))))
 
 (ert-deftest gfm-pretty-links/skip-inline-diff-link ()
   "Inline `diff:<base>...<head>' link produces no decoration record."
@@ -154,10 +172,13 @@ over the whole buffer."
   (should (null (gfm-pretty-links-tests--blocks
                  "see [changed](diff:main...feature#path/to/file.el)\n"))))
 
-(ert-deftest gfm-pretty-links/skip-reference-link-resolving-to-source-range ()
-  "Reference link whose definition resolves to a source-range URL is skipped."
-  (should (null (gfm-pretty-links-tests--blocks
-                 "see [snippet][src] inline\n\n[src]: /repo/foo.yml#L13-L22\n"))))
+(ert-deftest gfm-pretty-links/decorate-reference-link-resolving-to-source-range ()
+  "Reference link resolving to a source-range URL is decorated as `file'."
+  (let ((records (gfm-pretty-links-tests--blocks
+                  "see [snippet][src] inline\n\n[src]: /repo/foo.yml#L13-L22\n")))
+    (should (= 1 (length records)))
+    (should (eq 'file (gfm-pretty-links--link-class (car records))))
+    (should (eq 'reference (gfm-pretty-links--link-kind (car records))))))
 
 (ert-deftest gfm-pretty-links/plain-file-link-still-decorated ()
   "Plain file link (no `#L...' suffix) still produces a `file' record."
@@ -172,6 +193,133 @@ over the whole buffer."
                   "see [Setup](#setup)\n")))
     (should (= 1 (length records)))
     (should (eq 'anchor (gfm-pretty-links--link-class (car records))))))
+
+
+;;; Inline source-range overlay decoration
+
+(ert-deftest gfm-pretty-links/inline-source-range-creates-title-and-url-overlays ()
+  "Inline-in-prose source-range link gets `file' title + URL-side overlays."
+  (with-temp-buffer
+    (gfm-pretty-links-tests--rebuild-in
+     "See [snippet](/path/foo.el#L42-L48) for context.\n")
+    (let* ((title-pos (save-excursion
+                       (goto-char (point-min))
+                       (search-forward "[snippet]")
+                       (- (point) 2)))
+           (url-pos (save-excursion
+                      (goto-char (point-min))
+                      (search-forward "(/path/foo.el#L42-L48)")
+                      (1- (point))))
+           (title-ov (gfm-pretty-links-tests--overlay-at title-pos 'title))
+           (url-ov (gfm-pretty-links-tests--overlay-at url-pos 'url)))
+      (should title-ov)
+      (should (eq 'file (overlay-get title-ov 'gfm-pretty-links-class)))
+      (should url-ov)
+      (should (eq 'file (overlay-get url-ov 'gfm-pretty-links-class)))
+      (should (equal "/path/foo.el#L42-L48"
+                     (overlay-get url-ov 'gfm-pretty-links-url))))))
+
+(ert-deftest gfm-pretty-links/standalone-inline-source-range-no-overlay ()
+  "Standalone inline source-range link creates no pretty-links overlay."
+  (with-temp-buffer
+    (gfm-pretty-links-tests--rebuild-in
+     "[snippet](/path/foo.el#L42-L48)\n")
+    (should-not
+     (cl-find-if (lambda (o) (overlay-get o 'gfm-pretty-links-class))
+                 (overlays-in (point-min) (point-max))))))
+
+(ert-deftest gfm-pretty-links/list-item-inline-source-range-no-overlay ()
+  "List-item-only inline source-range link creates no pretty-links overlay."
+  (with-temp-buffer
+    (gfm-pretty-links-tests--rebuild-in
+     "- [snippet](/path/foo.el#L42-L48)\n")
+    (should-not
+     (cl-find-if (lambda (o) (overlay-get o 'gfm-pretty-links-class))
+                 (overlays-in (point-min) (point-max))))))
+
+(ert-deftest gfm-pretty-links/blockquote-inline-source-range-no-overlay ()
+  "Blockquote-marker-only inline source-range link creates no overlay."
+  (with-temp-buffer
+    (gfm-pretty-links-tests--rebuild-in
+     "> [snippet](/path/foo.el#L42-L48)\n")
+    (should-not
+     (cl-find-if (lambda (o) (overlay-get o 'gfm-pretty-links-class))
+                 (overlays-in (point-min) (point-max))))))
+
+(ert-deftest gfm-pretty-links/reference-source-range-creates-file-overlay ()
+  "Reference-style source-range link gets a `file' title-side overlay."
+  (with-temp-buffer
+    (gfm-pretty-links-tests--rebuild-in
+     "see [snippet][src]\n\n[src]: /path/foo.el#L42\n")
+    (let* ((title-pos (save-excursion
+                       (goto-char (point-min))
+                       (search-forward "[snippet]")
+                       (- (point) 2)))
+           (title-ov (gfm-pretty-links-tests--overlay-at title-pos 'title)))
+      (should title-ov)
+      (should (eq 'file (overlay-get title-ov 'gfm-pretty-links-class))))))
+
+(ert-deftest gfm-pretty-links/inline-diff-link-no-overlay ()
+  "Inline diff link creates no pretty-links overlay (unconditional skip)."
+  (with-temp-buffer
+    (gfm-pretty-links-tests--rebuild-in
+     "see [changed](diff:main...feature) inline.\n")
+    (should-not
+     (cl-find-if (lambda (o) (overlay-get o 'gfm-pretty-links-class))
+                 (overlays-in (point-min) (point-max))))))
+
+(ert-deftest gfm-pretty-links/follow-file-source-range-jumps-to-line ()
+  "`--follow-file' opens the path and lands point on the start line."
+  (let* ((tmp (make-temp-file "gfm-pretty-links-" nil ".el"
+                              "line1\nline2\nline3\nline4\nline5\n"))
+         (find-file-args nil))
+    (unwind-protect
+        (cl-letf (((symbol-function 'find-file)
+                   (lambda (path)
+                     (push path find-file-args)
+                     (set-buffer (find-file-noselect path)))))
+          (gfm-pretty-links--follow-file (concat tmp "#L3-L4"))
+          (should (equal (list tmp) find-file-args))
+          (should (= 3 (line-number-at-pos))))
+      (when (get-file-buffer tmp)
+        (kill-buffer (get-file-buffer tmp)))
+      (delete-file tmp))))
+
+(ert-deftest gfm-pretty-links/follow-file-single-line-fragment-jumps-to-line ()
+  "Single-line `#L<n>' fragment also jumps to that line."
+  (let* ((tmp (make-temp-file "gfm-pretty-links-" nil ".el"
+                              "a\nb\nc\nd\ne\n"))
+         (find-file-args nil))
+    (unwind-protect
+        (cl-letf (((symbol-function 'find-file)
+                   (lambda (path)
+                     (push path find-file-args)
+                     (set-buffer (find-file-noselect path)))))
+          (gfm-pretty-links--follow-file (concat tmp "#L4"))
+          (should (equal (list tmp) find-file-args))
+          (should (= 4 (line-number-at-pos))))
+      (when (get-file-buffer tmp)
+        (kill-buffer (get-file-buffer tmp)))
+      (delete-file tmp))))
+
+(ert-deftest gfm-pretty-links/follow-file-no-fragment-does-not-move-point ()
+  "Plain file URL (no fragment) does not call `forward-line'."
+  (let* ((tmp (make-temp-file "gfm-pretty-links-" nil ".el"
+                              "a\nb\nc\n"))
+         (find-file-args nil))
+    (unwind-protect
+        (cl-letf (((symbol-function 'find-file)
+                   (lambda (path)
+                     (push path find-file-args)
+                     (set-buffer (find-file-noselect path))
+                     (goto-char (point-max)))))
+          (gfm-pretty-links--follow-file tmp)
+          (should (equal (list tmp) find-file-args))
+          ;; Point remains where `find-file' left it (point-max).
+          (should (= (point-max) (point))))
+      (when (get-file-buffer tmp)
+        (kill-buffer (get-file-buffer tmp)))
+      (delete-file tmp))))
 
 
 ;;; URL-side hiding for file-class links
@@ -232,6 +380,39 @@ Returns the buffer (caller is inside `with-temp-buffer')."
       (should url-ov)
       (should (stringp (overlay-get url-ov 'display)))
       (should (eq 'file (overlay-get url-ov 'gfm-pretty-links-class))))))
+
+(ert-deftest gfm-pretty-links/file-link-icon-strips-source-range-fragment ()
+  "File-class URL with `#L<n>[-L<n>]' resolves icon for the path basename."
+  (let ((seen nil))
+    (cl-letf (((symbol-function 'gfm-pretty-links--call-nerd)
+               (lambda (fn arg)
+                 (when (eq fn 'nerd-icons-icon-for-file)
+                   (push arg seen))
+                 "ICON")))
+      (gfm-pretty-links--icon-for-target "/path/foo.el#L42-L48")
+      (should (equal '("foo.el") seen)))))
+
+(ert-deftest gfm-pretty-links/file-link-icon-strips-fragment-from-file-url ()
+  "`file:'-scheme URL with fragment resolves icon for the path basename."
+  (let ((seen nil))
+    (cl-letf (((symbol-function 'gfm-pretty-links--call-nerd)
+               (lambda (fn arg)
+                 (when (eq fn 'nerd-icons-icon-for-file)
+                   (push arg seen))
+                 "ICON")))
+      (gfm-pretty-links--icon-for-target "file:/path/bar.py#L7")
+      (should (equal '("bar.py") seen)))))
+
+(ert-deftest gfm-pretty-links/anchor-icon-keeps-slug ()
+  "`#'-prefixed URL keeps the slug; fragment-strip does not run."
+  (let ((seen nil))
+    (cl-letf (((symbol-function 'gfm-pretty-links--call-nerd)
+               (lambda (fn arg)
+                 (when (eq fn 'nerd-icons-icon-for-url)
+                   (push arg seen))
+                 "ICON")))
+      (gfm-pretty-links--icon-for-target "#setup")
+      (should (equal '("#setup") seen)))))
 
 (ert-deftest gfm-pretty-links/file-link-icon-fallback-without-nerd-icons ()
   "File link's URL-side overlay falls back to `\"\"' when nerd-icons absent."
