@@ -690,9 +690,10 @@ under `widen').  Returns nil when the decorator did not register one."
 
 (defun gfm-pretty--rebuild-scoped-by-block (decorator dirty)
   "Scoped DECORATOR rebuild driven solely by block-range containment.
-Falls back to a full rebuild when no block contains DIRTY, when more
-than one block overlaps, or when the overlapping block does not fully
-contain DIRTY."
+Falls back to a full rebuild when no block contains DIRTY (the edit
+destroyed the block whose overlays the decorator owned), when more
+than one block overlaps, or when the overlapping block does not
+fully contain DIRTY."
   (let* ((range-fn (gfm-pretty--decorator-range-fn decorator))
          (blocks (gfm-pretty--collect decorator))
          (matching (cl-loop for b in blocks
@@ -700,7 +701,7 @@ contain DIRTY."
                                   dirty (funcall range-fn b))
                             collect b)))
     (cond
-     ((null matching) nil)
+     ((null matching) (gfm-pretty--rebuild decorator))
      ((and (null (cdr matching))
            (let ((r (funcall range-fn (car matching))))
              (and (>= (car dirty) (car r))

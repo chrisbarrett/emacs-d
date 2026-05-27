@@ -112,6 +112,62 @@ does not provide an editor."
       (funcall fn))))
 
 
+;;; TAB-key dispatch
+
+(declare-function markdown-on-heading-p "markdown-mode")
+(declare-function markdown-cycle "markdown-mode")
+(declare-function markdown-table-at-point-p "markdown-mode")
+(declare-function markdown-table-forward-cell "markdown-mode")
+(declare-function markdown-indent-line "markdown-mode")
+(declare-function evil-insert-state-p "evil-states")
+
+(defun gfm-pretty--at-list-item-prefix-p ()
+  "Non-nil when point is at or before a list-item marker's content slot.
+Matches the prefix `^\\s-*(?:[-*+]|[0-9]+[.)])\\s-+' on the current
+line and requires `(point)' to be no greater than the match end."
+  (save-excursion
+    (let ((p (point)))
+      (beginning-of-line)
+      (and (looking-at (rx bol
+                           (zero-or-more (syntax whitespace))
+                           (or (any "-*+")
+                               (seq (one-or-more digit) (any ".)")))
+                           (one-or-more (syntax whitespace))))
+           (<= p (match-end 0))))))
+
+(defun gfm-pretty-tab-dwim ()
+  "Context-aware `TAB' dispatch for `gfm-pretty-mode'.
+
+Dispatches by point context, and otherwise does nothing.  Importantly
+this never silently inserts whitespace — `markdown-cycle' would
+otherwise fall through to `indent-for-tab-command' on callout, fence
+and paragraph lines, corrupting block source signatures.
+
+- On a heading line (`markdown-on-heading-p'): invoke `markdown-cycle'
+  interactively so heading-visibility cycling keeps its
+  `last-command' state machine intact.
+- Inside a table (`markdown-table-at-point-p'): invoke
+  `markdown-table-forward-cell'.
+- On a list-item marker prefix slot AND in evil insert state: invoke
+  `markdown-indent-line' once.
+- Everywhere else: no-op."
+  (interactive)
+  (cond
+   ((markdown-on-heading-p)
+    (call-interactively #'markdown-cycle))
+   ((markdown-table-at-point-p)
+    (call-interactively #'markdown-table-forward-cell))
+   ((and (gfm-pretty--at-list-item-prefix-p)
+         (bound-and-true-p evil-mode)
+         (fboundp 'evil-insert-state-p)
+         (evil-insert-state-p))
+    (markdown-indent-line))))
+
+(defvar-keymap gfm-pretty-mode-map
+  :doc "Keymap activated by `gfm-pretty-mode'."
+  "TAB" #'gfm-pretty-tab-dwim)
+
+
 ;;; Umbrella mode
 
 ;;;###autoload
@@ -123,6 +179,7 @@ registered decorator (callouts, fences, tables, hrule, links) in
 registration order.  Disabling tears them down in reverse order and
 removes the hooks."
   :lighter " gfmp"
+  :keymap gfm-pretty-mode-map
   (gfm-pretty--require-all)
   (cond
    (gfm-pretty-mode
