@@ -332,6 +332,7 @@ callout-to-plain transitions where the partition flips)."
 
 (with-eval-after-load 'gfm-pretty-engine
   (gfm-pretty-define-decorator 'blockquotes
+    :phase              'overlays
     :registry           gfm-pretty-blockquotes--registry
     :collect-fn         #'gfm-pretty-blockquotes--collect-blocks
     :range-fn           #'gfm-pretty-blockquotes--block-range

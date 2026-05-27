@@ -137,6 +137,7 @@ lazily; we depend on it being populated before discovery."
 
 (with-eval-after-load 'gfm-pretty-engine
   (gfm-pretty-define-decorator 'hrule
+    :phase              'overlays
     :registry           gfm-pretty-hrule--registry
     :collect-fn         #'gfm-pretty-hrule--collect-blocks
     :range-fn           #'gfm-pretty-hrule--block-range

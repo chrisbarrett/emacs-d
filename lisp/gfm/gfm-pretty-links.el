@@ -551,6 +551,12 @@ eldoc, and the xref backend can read it without re-parsing."
            (t
             (or (gfm-pretty-links--icon-for-target (gfm-pretty-links--link-url record))
                 "")))))
+    ;; Tag the display string atomic so wrap simulation cannot break
+    ;; inside a link's icon + label substitution.  Non-empty strings
+    ;; only — the empty `""' for anchor links has nothing to mark.
+    (when (and (stringp display) (> (length display) 0))
+      (setq display (copy-sequence display))
+      (put-text-property 0 (length display) 'gfm-pretty-atomic t display))
     (apply #'gfm-pretty--make-display
            gfm-pretty-links--registry beg end window
            'gfm-pretty-links-class class
@@ -561,6 +567,7 @@ eldoc, and the xref backend can read it without re-parsing."
            'gfm-pretty-links-title-attr (gfm-pretty-links--link-title-attr record)
            'gfm-pretty-links-ref-label (gfm-pretty-links--link-ref-label record)
            'gfm-pretty-links-ref-def-pos (gfm-pretty-links--link-ref-def-pos record)
+           'gfm-pretty-atomic t
            'display display
            'evaporate t
            (when (eq side 'title)
@@ -911,6 +918,7 @@ decorator's enable bit via `gfm-pretty-toggle-decorator'."
 
 (with-eval-after-load 'gfm-pretty-engine
   (gfm-pretty-define-decorator 'links
+    :phase              'atoms
     :registry           gfm-pretty-links--registry
     :collect-fn         #'gfm-pretty-links--collect-blocks
     :range-fn           #'gfm-pretty-links--block-range

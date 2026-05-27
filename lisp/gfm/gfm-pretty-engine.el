@@ -106,8 +106,101 @@ Falls back to a window currently showing the buffer, then to
 Compatibility alias for `gfm-pretty--available-width'."
   (gfm-pretty--available-width window))
 
-(defun gfm-pretty--max-line-width (beg end &optional indent)
-  "Maximum line width between BEG and END, subtracting INDENT from each line."
+;;; Visual-width primitives
+
+(defun gfm-pretty--stretch-glyph-width (spec)
+  "Return integer cell count derivable from SPEC, or nil.
+SPEC is a `display' value such as `(space :width N)' or
+`(space :align-to N)'.  Only the `:width N' shape produces a
+positive integer cell count we can use safely.  Other shapes —
+notably `:align-to', whose result depends on the surrounding
+context — return nil and the caller falls back to `string-width'
+of the underlying buffer chars."
+  (when (and (consp spec) (eq (car-safe spec) 'space))
+    (let ((w (plist-get (cdr spec) :width)))
+      (cond
+       ((integerp w) (max 0 w))
+       ((floatp w) (max 0 (truncate w)))))))
+
+(defun gfm-pretty--invisible-p-at (pos)
+  "Non-nil iff POS carries any non-nil `invisible' overlay or text-prop."
+  (or (get-char-property pos 'invisible)
+      (cl-some (lambda (ov) (overlay-get ov 'invisible))
+               (overlays-at pos))))
+
+(defun gfm-pretty--display-overlay-at (pos)
+  "Return the overlay carrying a `display' prop at POS, or nil.
+When multiple overlays are stacked, picks the highest-priority one
+\(matching Emacs's display-property merge rule); priority is the
+overlay's `priority' prop, defaulting to 0."
+  (let (best best-prio)
+    (dolist (ov (overlays-at pos))
+      (when (overlay-get ov 'display)
+        (let ((p (or (overlay-get ov 'priority) 0)))
+          (when (or (null best) (> p best-prio))
+            (setq best ov best-prio p)))))
+    best))
+
+(defun gfm-pretty--display-spec-width (spec underlying)
+  "Return visual width of `display' SPEC, falling back to UNDERLYING string-width.
+SPEC may be a string (returns its `string-width'), a stretch-glyph
+`(space …)' (returns the derivable cell count or falls back), or
+any other shape (falls back)."
+  (cond
+   ((stringp spec) (string-width spec))
+   ((gfm-pretty--stretch-glyph-width spec))
+   (t (string-width underlying))))
+
+(defun gfm-pretty--visual-line-width (lbeg lend)
+  "Return visual cell width of [LBEG, LEND).
+Walks overlays + text-property changes; honours `display' (string
+and `(space :width N)' stretch glyphs) and `invisible'.  Unknown
+display shapes fall back to `string-width' of the underlying
+buffer chars.  Does not consume the newline at LEND.
+
+Composition props are not honoured (out of scope; documented gap)."
+  (let ((pos lbeg)
+        (width 0))
+    (while (< pos lend)
+      (let* ((next-ov (next-overlay-change pos))
+             (next-tp (next-property-change pos nil lend))
+             (next (min lend
+                        (or next-tp lend)
+                        (or next-ov lend))))
+        (cond
+         ((gfm-pretty--invisible-p-at pos)
+          ;; Invisible chunk → 0 cells.
+          nil)
+         (t
+          (let* ((ov (gfm-pretty--display-overlay-at pos))
+                 (ov-display (and ov (overlay-get ov 'display)))
+                 (tp-display (get-text-property pos 'display)))
+            (cond
+             (ov-display
+              ;; Overlay display covers [overlay-start, overlay-end);
+              ;; advance to overlay-end so we count it once.
+              (let* ((ov-end (min lend (overlay-end ov)))
+                     (underlying (buffer-substring-no-properties pos ov-end)))
+                (setq width (+ width
+                               (gfm-pretty--display-spec-width
+                                ov-display underlying)))
+                (setq next ov-end)))
+             (tp-display
+              (let ((underlying (buffer-substring-no-properties pos next)))
+                (setq width (+ width
+                               (gfm-pretty--display-spec-width
+                                tp-display underlying)))))
+             (t
+              (setq width (+ width
+                             (string-width
+                              (buffer-substring-no-properties pos next)))))))))
+        (setq pos (if (> next pos) next (1+ pos)))))
+    width))
+
+(defun gfm-pretty--visual-max-line-width (beg end &optional indent)
+  "Maximum per-line visual width between BEG and END, minus INDENT (default 0).
+Iterates lines from BEG to END.  `gfm-pretty--visual-line-width' is
+invoked per line and SHALL NOT cross a newline."
   (let ((max-col 0)
         (indent (or indent 0)))
     (save-excursion
@@ -115,10 +208,77 @@ Compatibility alias for `gfm-pretty--available-width'."
       (while (and (not (eobp)) (<= (line-beginning-position) end))
         (let* ((lbeg (line-beginning-position))
                (lend (line-end-position))
-               (len (max 0 (- (- lend lbeg) indent))))
-          (setq max-col (max max-col len)))
+               (w (max 0 (- (gfm-pretty--visual-line-width lbeg lend) indent))))
+          (setq max-col (max max-col w)))
         (forward-line 1)))
     max-col))
+
+(defun gfm-pretty--visualised-string (lbeg lend)
+  "Return a propertised string composed by walking [LBEG, LEND).
+For each chunk:
+- Invisible → contributes nothing.
+- Overlay `display' string → appended verbatim, with
+  `gfm-pretty-atomic' copied forward when set on the overlay.
+- Text-property `display' string → appended verbatim, with
+  `gfm-pretty-atomic' copied forward from the contributing text-prop.
+- Stretch-glyph spec → underlying buffer chars are appended (the
+  simulator measures `string-width' which roughly matches the
+  cell count `--visual-line-width' would produce in the unknown-
+  spec fallback).
+- Plain chunk → underlying buffer chars appended verbatim.
+
+The intent is a string whose `string-width' matches what
+`--visual-line-width' would report, with `gfm-pretty-atomic' carried
+forward so `gfm-pretty--simulate-wrap' can avoid breaking inside
+atom-decorator substitutions."
+  (let ((pos lbeg)
+        (out nil))
+    (while (< pos lend)
+      (let* ((next-ov (next-overlay-change pos))
+             (next-tp (next-property-change pos nil lend))
+             (next (min lend
+                        (or next-tp lend)
+                        (or next-ov lend))))
+        (cond
+         ((gfm-pretty--invisible-p-at pos)
+          (setq pos (if (> next pos) next (1+ pos))))
+         (t
+          (let* ((ov (gfm-pretty--display-overlay-at pos))
+                 (ov-display (and ov (overlay-get ov 'display)))
+                 (tp-display (get-text-property pos 'display)))
+            (cond
+             ((and ov-display (stringp ov-display))
+              (let* ((ov-end (min lend (overlay-end ov)))
+                     (s (copy-sequence ov-display))
+                     (atomic (overlay-get ov 'gfm-pretty-atomic)))
+                (when atomic
+                  (put-text-property 0 (length s) 'gfm-pretty-atomic atomic s))
+                (push s out)
+                (setq pos ov-end)))
+             ((and tp-display (stringp tp-display))
+              (let* ((s (copy-sequence tp-display))
+                     (atomic (get-text-property pos 'gfm-pretty-atomic)))
+                (when atomic
+                  (put-text-property 0 (length s) 'gfm-pretty-atomic atomic s))
+                (push s out)
+                (setq pos (if (> next pos) next (1+ pos)))))
+             (t
+              ;; Plain or unknown-display chunk: copy underlying chars.
+              (push (buffer-substring-no-properties pos next) out)
+              (setq pos (if (> next pos) next (1+ pos))))))))))
+    (apply #'concat (nreverse out))))
+
+;;;###autoload
+(defalias 'gfm-pretty-visual-line-width 'gfm-pretty--visual-line-width
+  "Public name for `gfm-pretty--visual-line-width'.")
+
+;;;###autoload
+(defalias 'gfm-pretty-visual-max-line-width 'gfm-pretty--visual-max-line-width
+  "Public name for `gfm-pretty--visual-max-line-width'.")
+
+;;;###autoload
+(defalias 'gfm-pretty-visualised-string 'gfm-pretty--visualised-string
+  "Public name for `gfm-pretty--visualised-string'.")
 
 ;;; Buffer-local engine state
 
@@ -166,7 +326,14 @@ Thin accessor for ad-hoc inspection from `M-:'."
 
 (cl-defstruct gfm-pretty--decorator
   "Metadata for a registered gfm-pretty decorator.
-Fields populated via `gfm-pretty-define-decorator'."
+Fields populated via `gfm-pretty-define-decorator'.
+
+PHASE is one of `atoms', `containers', `overlays' (default
+`containers').  The engine iterates decorators
+`atoms → containers → overlays' at every dispatch site so that
+atom-phase overlays (visual-width-changing in-line substitutions)
+are in place before container-phase decorators measure visual
+width."
   name
   registry
   collect-fn
@@ -176,7 +343,11 @@ Fields populated via `gfm-pretty-define-decorator'."
   on-disable-fn
   rebuild-fn
   full-rebuild-required-p
-  reveal-fn)
+  reveal-fn
+  (phase 'containers))
+
+(defconst gfm-pretty--phases '(atoms containers overlays)
+  "Decorator iteration phases, in dispatch order.")
 
 (defvar gfm-pretty--decorators nil
   "Alist of NAME -> `gfm-pretty--decorator' struct.")
@@ -192,6 +363,13 @@ Fields populated via `gfm-pretty-define-decorator'."
 
 Recognised keys:
 
+  :phase               one of `(atoms containers overlays)';
+                       defaults to `containers' when omitted.  The
+                       engine iterates decorators phase-ordered
+                       (`atoms → containers → overlays') at every
+                       dispatch site so atom-phase overlays are in
+                       place before container-phase decorators
+                       measure visual width.
   :registry            `gfm-pretty--registry' for the decorator's
                        overlay tag.  The engine derives every overlay
                        property name (anchor, display, revealable,
@@ -212,18 +390,25 @@ Recognised keys:
   :on-disable-fn       optional (no-arg) thunk run on disable.
   :reveal-fn           optional (no-arg) bespoke reveal handler."
   (declare (indent 1))
-  `(setf (alist-get ,name gfm-pretty--decorators)
-         (make-gfm-pretty--decorator
-          :name              ,name
-          :registry          ,(plist-get plist :registry)
-          :collect-fn        ,(plist-get plist :collect-fn)
-          :range-fn          ,(plist-get plist :range-fn)
-          :apply-block-fn    ,(plist-get plist :apply-block-fn)
-          :on-enable-fn      ,(plist-get plist :on-enable-fn)
-          :on-disable-fn     ,(plist-get plist :on-disable-fn)
-          :rebuild-fn        ,(plist-get plist :rebuild-fn)
-          :full-rebuild-required-p ,(plist-get plist :full-rebuild-required-p)
-          :reveal-fn         ,(plist-get plist :reveal-fn))))
+  (let ((phase (or (plist-get plist :phase) ''containers)))
+    `(progn
+       (let ((phase-val ,phase))
+         (unless (memq phase-val gfm-pretty--phases)
+           (error "gfm-pretty-define-decorator: :phase must be one of %S, got %S"
+                  gfm-pretty--phases phase-val)))
+       (setf (alist-get ,name gfm-pretty--decorators)
+             (make-gfm-pretty--decorator
+              :name              ,name
+              :phase             ,phase
+              :registry          ,(plist-get plist :registry)
+              :collect-fn        ,(plist-get plist :collect-fn)
+              :range-fn          ,(plist-get plist :range-fn)
+              :apply-block-fn    ,(plist-get plist :apply-block-fn)
+              :on-enable-fn      ,(plist-get plist :on-enable-fn)
+              :on-disable-fn     ,(plist-get plist :on-disable-fn)
+              :rebuild-fn        ,(plist-get plist :rebuild-fn)
+              :full-rebuild-required-p ,(plist-get plist :full-rebuild-required-p)
+              :reveal-fn         ,(plist-get plist :reveal-fn))))))
 
 ;;; Overlay registry
 
@@ -716,11 +901,35 @@ fully contain DIRTY."
 
 (defvar gfm-pretty-mode)
 
+(defun gfm-pretty--sort-by-phase (decorators)
+  "Return DECORATORS ordered `atoms → containers → overlays'.
+Intra-phase order is unspecified.  Stable wrt the input list within
+each phase (uses a phase index keyed off `gfm-pretty--phases')."
+  (let ((indexed (cl-loop for d in decorators
+                          for i from 0
+                          collect (cons i d))))
+    (mapcar #'cdr
+            (sort indexed
+                  (lambda (a b)
+                    (let ((pa (cl-position (gfm-pretty--decorator-phase (cdr a))
+                                           gfm-pretty--phases))
+                          (pb (cl-position (gfm-pretty--decorator-phase (cdr b))
+                                           gfm-pretty--phases)))
+                      (cond
+                       ((/= pa pb) (< pa pb))
+                       (t (< (car a) (car b))))))))))
+
+(defun gfm-pretty--decorators-by-phase ()
+  "Return all registered decorators ordered by phase."
+  (gfm-pretty--sort-by-phase
+   (mapcar #'cdr gfm-pretty--decorators)))
+
 (defun gfm-pretty--enabled-decorators ()
-  "Return decorators whose engine-tracked `enabled-p' is non-nil."
-  (cl-loop for (name . d) in gfm-pretty--decorators
-           when (gfm-pretty--state-get name 'enabled-p)
-           collect d))
+  "Return enabled decorators, ordered `atoms → containers → overlays'."
+  (gfm-pretty--sort-by-phase
+   (cl-loop for (name . d) in gfm-pretty--decorators
+            when (gfm-pretty--state-get name 'enabled-p)
+            collect d)))
 
 (defun gfm-pretty--after-change (beg end _len)
   "Engine `after-change-functions' handler.

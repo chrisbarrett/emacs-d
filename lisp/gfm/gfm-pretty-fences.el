@@ -294,7 +294,7 @@ left-side mask is suppressed so the indicator keeps its own bg."
   (let* ((body-beg (save-excursion
                      (goto-char open-line-end) (forward-line 1) (point)))
          (body-end (max body-beg (1- close-line-beg)))
-         (max-content (gfm-pretty--max-line-width body-beg body-end))
+         (max-content (gfm-pretty--visual-max-line-width body-beg body-end))
          (text-width (gfm-pretty--available-width window))
          ;; Left decoration: 2 cols (`│ ') normally, 1 col (`│') when
          ;; LHS-MARGIN.  Right decoration is always 2 cols (sep + `│').
@@ -351,10 +351,11 @@ left-side mask is suppressed so the indicator keeps its own bg."
         (let* ((lbeg p)
                (lend (save-excursion (goto-char p) (line-end-position)))
                (line-bg (gfm-pretty-fences--line-extend-bg lbeg lend))
+               (line-visual-w (gfm-pretty--visual-line-width lbeg lend))
                (after-masked (gfm-pretty-time-phase 'fences 'compose-overflow
-                               (if (> (- lend lbeg) content-budget)
+                               (if (> line-visual-w content-budget)
                                    (gfm-pretty--right-after-overflow
-                                    face (buffer-substring-no-properties lbeg lend)
+                                    face (gfm-pretty--visualised-string lbeg lend)
                                     window nil line-bg)
                                  (gfm-pretty--right-after
                                   box-width face line-bg))))
@@ -461,7 +462,7 @@ left-side mask is suppressed so the indicator keeps its own bg."
 (defun gfm-pretty-fences--apply-indent-display (window beg end indent-width face)
   "Build per-WINDOW display overlays for an indent block at [BEG, END].
 INDENT-WIDTH is the buffer indent width; FACE colours the borders."
-  (let* ((max-content (gfm-pretty--max-line-width beg end indent-width))
+  (let* ((max-content (gfm-pretty--visual-max-line-width beg end indent-width))
          (text-width (gfm-pretty--available-width window))
          (box-width (min text-width (max 80 (+ max-content 4))))
          (content-budget (- box-width 4))
@@ -477,16 +478,18 @@ INDENT-WIDTH is the buffer indent width; FACE colours the borders."
         (let* ((lbeg p)
                (lend (save-excursion (goto-char p) (line-end-position)))
                (last-line (>= lend end))
-               (line-content-w (max 0 (- (- lend lbeg) indent-width)))
-               (line-text (buffer-substring-no-properties
-                           (min (+ lbeg indent-width) lend) lend))
+               (line-content-w
+                (max 0 (- (gfm-pretty--visual-line-width lbeg lend)
+                          indent-width)))
                (line-bg (gfm-pretty-fences--line-extend-bg lbeg lend))
                (overflow-p (> line-content-w content-budget))
                (after-masked-base
                 (gfm-pretty-time-phase 'fences 'compose-overflow
                   (if overflow-p
                       (gfm-pretty--right-after-overflow
-                       face line-text window nil line-bg)
+                       face (gfm-pretty--visualised-string
+                             (min (+ lbeg indent-width) lend) lend)
+                       window nil line-bg)
                     (gfm-pretty--right-after
                      box-width face line-bg))))
                ;; Indent-rhs covers ONLY the right-edge of each body
@@ -871,6 +874,7 @@ destroy a block."
 
 (with-eval-after-load 'gfm-pretty-engine
   (gfm-pretty-define-decorator 'fences
+    :phase              'containers
     :registry           gfm-pretty-fences--registry
     :collect-fn         #'gfm-pretty-fences--collect-blocks
     :range-fn           #'gfm-pretty-fences--block-range

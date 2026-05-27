@@ -59,13 +59,13 @@
     ;; First line takes "hello wo" -> wrap at last space (after "hello ").
     (should (consp (cdr res)))))
 
-(ert-deftest lang-markdown/gfm-pretty--max-line-width-respects-indent ()
-  "`gfm-pretty--max-line-width' subtracts INDENT per line."
+(ert-deftest lang-markdown/gfm-pretty--visual-max-line-width-respects-indent ()
+  "`gfm-pretty--visual-max-line-width' subtracts INDENT per line."
   (with-temp-buffer
     (insert "    aaaa\n    aa\n    aaaaaa\n")
-    (should (= 6 (gfm-pretty--max-line-width
+    (should (= 6 (gfm-pretty--visual-max-line-width
                   (point-min) (point-max) 4)))
-    (should (= 10 (gfm-pretty--max-line-width
+    (should (= 10 (gfm-pretty--visual-max-line-width
                    (point-min) (point-max))))))
 
 (ert-deftest lang-markdown/gfm-pretty--region-overlaps-p ()
@@ -5212,6 +5212,174 @@ set by font-lock, so the test enables `gfm-mode' and runs
       (cl-letf (((symbol-function 'evil-insert-state-p) (lambda () t)))
         (call-interactively #'gfm-pretty-tab-dwim))
       (should (string= before (buffer-string))))))
+
+;;; gfm-pretty-phases-visual-width — new requirement coverage
+
+(ert-deftest lang-markdown/gfm-pretty-visual-line-width-display-string-collapses-cells ()
+  "Overlay display string contributes its `string-width', not source chars."
+  (with-temp-buffer
+    (insert "[label](/very/long/path)\n")
+    (let ((ov (make-overlay (point-min) (1- (point-max)))))
+      (overlay-put ov 'display "icon L")
+      (should (= 6 (gfm-pretty--visual-line-width
+                    (point-min) (1- (point-max))))))))
+
+(ert-deftest lang-markdown/gfm-pretty-visual-line-width-invisible-zero ()
+  "Invisible chunk contributes nothing to visual width."
+  (with-temp-buffer
+    (insert "abcdef\n")
+    (let ((ov (make-overlay 2 5)))
+      (overlay-put ov 'invisible t)
+      (should (= 3 (gfm-pretty--visual-line-width
+                    (point-min) (1- (point-max))))))))
+
+(ert-deftest lang-markdown/gfm-pretty-visual-line-width-unknown-spec-falls-back ()
+  "Unknown stretch-glyph specs fall back to underlying chars' `string-width'."
+  (with-temp-buffer
+    (insert "abcd\n")
+    (let ((ov (make-overlay 1 5)))
+      ;; `(space :align-to 99)' is the prototypical context-dependent
+      ;; spec the helper cannot evaluate cell-wise.
+      (overlay-put ov 'display '(space :align-to 99))
+      (should (= 4 (gfm-pretty--visual-line-width
+                    (point-min) (1- (point-max))))))))
+
+(ert-deftest lang-markdown/gfm-pretty-simulate-wrap-atomic-span-not-broken ()
+  "`gfm-pretty--simulate-wrap' refuses to wrap inside a `gfm-pretty-atomic' span."
+  ;; A pre-built input with the atomic property over `"icon label phrase"'
+  ;; (positions 0–17) and a trailing word.  The slice `[0, 8)' inside the
+  ;; default width contains a space at index 4 — but it is inside the
+  ;; atomic span and thus not a wrap point.  The simulator must fall
+  ;; back to the slice end (8), which carries the property too — keep
+  ;; walking past the span boundary to the first space at the span end.
+  (let* ((s (copy-sequence "icon label phrase tail"))
+         (span-end 17))
+    (put-text-property 0 span-end 'gfm-pretty-atomic t s)
+    (let* ((res (gfm-pretty--simulate-wrap s 14))
+           (wraps (cdr res)))
+      ;; Wrap must NOT land inside [0, 17); it must be at or past 17.
+      (dolist (w wraps)
+        (should (>= w span-end))))))
+
+(ert-deftest lang-markdown/gfm-pretty-decorators-by-phase-orders-atoms-first ()
+  "`--decorators-by-phase' returns atoms before containers before overlays."
+  (let ((gfm-pretty--decorators nil))
+    (gfm-pretty-define-decorator 'stub-overlay :phase 'overlays)
+    (gfm-pretty-define-decorator 'stub-atom :phase 'atoms)
+    (gfm-pretty-define-decorator 'stub-container :phase 'containers)
+    (let* ((ordered (gfm-pretty--decorators-by-phase))
+           (names (mapcar #'gfm-pretty--decorator-name ordered)))
+      (should (equal '(stub-atom stub-container stub-overlay) names)))))
+
+(ert-deftest lang-markdown/gfm-pretty-define-decorator-rejects-unknown-phase ()
+  "`:phase' value outside the enum signals an error at registration time."
+  (let ((gfm-pretty--decorators nil))
+    (should-error (gfm-pretty-define-decorator 'stub-bogus :phase 'frobnicate))))
+
+(ert-deftest lang-markdown/gfm-pretty-define-decorator-default-phase-is-containers ()
+  "Omitting `:phase' defaults the decorator to the `containers' phase."
+  (let ((gfm-pretty--decorators nil))
+    (gfm-pretty-define-decorator 'stub-default)
+    (should (eq 'containers
+                (gfm-pretty--decorator-phase
+                 (alist-get 'stub-default gfm-pretty--decorators))))))
+
+(ert-deftest lang-markdown/gfm-pretty-atoms-apply-before-containers ()
+  "Engine dispatch invokes atom-phase `:apply-block-fn' before container's.
+Registers two stub decorators side-by-side and asserts the
+phase-ordered iterator yields the atom first."
+  (let ((gfm-pretty--decorators nil)
+        (log nil))
+    (gfm-pretty-define-decorator 'stub-container
+      :phase 'containers
+      :apply-block-fn (lambda (_b _w) (push 'container log)))
+    (gfm-pretty-define-decorator 'stub-atom
+      :phase 'atoms
+      :apply-block-fn (lambda (_b _w) (push 'atom log)))
+    (dolist (d (gfm-pretty--decorators-by-phase))
+      (funcall (gfm-pretty--decorator-apply-block-fn d) nil nil))
+    (should (equal '(container atom) log))))
+
+(ert-deftest lang-markdown/gfm-pretty-callouts-box-width-uses-visual-width-with-link ()
+  "Callout body line dominated by a prettified link sizes box from visual width."
+  (let ((buf (generate-new-buffer "*gfm-pretty-callouts-link-test*")))
+    (unwind-protect
+        (with-current-buffer buf
+          (delay-mode-hooks (markdown-mode))
+          (insert "> [!NOTE]\n"
+                  "> see [proposal](/very/long/path.md) inline\n")
+          (gfm-pretty-mode 1)
+          (let* ((rhs-overlays
+                  (cl-remove-if-not
+                   (lambda (o)
+                     (eq (overlay-get o 'gfm-pretty-callouts-kind) 'body-rhs))
+                   (overlays-in (point-min) (point-max)))))
+            (should rhs-overlays)
+            ;; Non-overflow path: right-edge after-string carries a
+            ;; `(space :align-to (- box-width 2))' padding, never the
+            ;; pad-to-window-edge wrap simulation.
+            (let* ((after (overlay-get (car rhs-overlays) 'after-string))
+                   (display (and (stringp after)
+                                 (get-text-property 0 'display after))))
+              (should (consp display))
+              (should (eq 'space (car display)))
+              (should (eq :align-to (cadr display))))))
+      (kill-buffer buf))))
+
+(ert-deftest lang-markdown/gfm-pretty-callouts-overflow-right-edge-pads-to-window ()
+  "An overflowing body line lands `│' at the box's right edge on final visual row."
+  (let ((buf (generate-new-buffer "*gfm-pretty-callouts-overflow-vw*")))
+    (unwind-protect
+        (with-current-buffer buf
+          (insert "> [!NOTE]\n> " (make-string 200 ?a) "\n> trailing.\n")
+          (gfm-pretty-mode 1)
+          (let* ((rhs-overlays
+                  (cl-remove-if-not
+                   (lambda (o)
+                     (eq (overlay-get o 'gfm-pretty-callouts-kind) 'body-rhs))
+                   (overlays-in (point-min) (point-max))))
+                 (sorted (sort (copy-sequence rhs-overlays)
+                               (lambda (a b)
+                                 (< (overlay-start a) (overlay-start b)))))
+                 (after (overlay-get (car sorted) 'after-string)))
+            ;; Overflow path: after-string is raw padding to the box's
+            ;; right edge ending in `│', then the window-edge tail.  No
+            ;; `(space :align-to N)' header — the leading char is a
+            ;; literal space.
+            (should (stringp after))
+            (should (string-match-p "│ \\'" after))
+            (should-not (consp (get-text-property 0 'display after)))))
+      (kill-buffer buf))))
+
+(ert-deftest lang-markdown/gfm-pretty-window-resize-rebuilds-box-keeps-link-overlays ()
+  "Resizing the window rebuilds the callout box; links overlays survive."
+  (let ((buf (generate-new-buffer "*gfm-pretty-callouts-link-resize*")))
+    (unwind-protect
+        (progn
+          (with-current-buffer buf
+            (delay-mode-hooks (markdown-mode))
+            ;; URL avoids the `#L<n>[-L<n>]' source-range shape so the
+            ;; record is NOT deferred to `link-previews' — see
+            ;; `gfm-pretty-links--skip-record-p'.
+            (insert "> [!NOTE]\n"
+                    "> see [proposal](/very/long/path.md) inline\n"))
+          (set-window-buffer (selected-window) buf)
+          (with-current-buffer buf
+            (gfm-pretty-mode 1)
+            (let* ((links-before
+                    (cl-remove-if-not
+                     (lambda (o) (overlay-get o 'gfm-pretty-links-class))
+                     (overlays-in (point-min) (point-max)))))
+              (should (> (length links-before) 0))
+              ;; Force a window-config-change reconcile + full rebuild.
+              (gfm-pretty--rebuild
+               (gfm-pretty--get 'callouts))
+              (let* ((links-after
+                      (cl-remove-if-not
+                       (lambda (o) (overlay-get o 'gfm-pretty-links-class))
+                       (overlays-in (point-min) (point-max)))))
+                (should (> (length links-after) 0))))))
+      (kill-buffer buf))))
 
 (provide 'gfm-pretty-tests)
 

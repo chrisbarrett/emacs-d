@@ -910,6 +910,7 @@ to render previews without first toggling `gfm-pretty-mode'."
 
 (with-eval-after-load 'gfm-pretty-engine
   (gfm-pretty-define-decorator 'link-previews
+    :phase              'overlays
     :registry           gfm-pretty-link-previews--registry
     :collect-fn         #'gfm-pretty-link-previews--collect-blocks
     :range-fn           #'gfm-pretty-link-previews--block-range
