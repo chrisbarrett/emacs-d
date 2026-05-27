@@ -155,7 +155,7 @@ world' is left untouched."
     ('file   'gfm-pretty-links-file-face)
     (_       gfm-pretty-links-title-face)))
 
-;;; URL-form exclusions (owned by `gfm-present-mode')
+;;; URL-form deferral to `link-previews'
 
 (defconst gfm-pretty-links--source-range-url-rx
   (rx bos
@@ -173,15 +173,34 @@ world' is left untouched."
       eos)
   "Regexp matching `diff:<base>...<head>[#<path>]' diff URLs.")
 
-(defun gfm-pretty-links--skip-url-p (url)
-  "Non-nil when URL is owned by `gfm-present-mode' and must be skipped.
-Source-range (`<path>#L<n>[-L<n>]') and diff (`diff:<base>...<head>')
-URLs render through gfm-present's own overlays and RET dispatch.
-Decorating them here would either stack display strings (visual
-garbling) or shadow gfm-present's RET via overlay-keymap precedence."
-  (and url
-       (or (string-match-p gfm-pretty-links--source-range-url-rx url)
-           (string-match-p gfm-pretty-links--diff-url-rx url))))
+(defun gfm-pretty-links--source-range-url-p (url)
+  "Non-nil when URL matches the source-range `<path>#L<n>[-L<n>]' shape."
+  (and url (string-match-p gfm-pretty-links--source-range-url-rx url)))
+
+(defun gfm-pretty-links--diff-url-p (url)
+  "Non-nil when URL matches the diff `diff:<base>...<head>[#<path>]' shape."
+  (and url (string-match-p gfm-pretty-links--diff-url-rx url)))
+
+(defun gfm-pretty-links--skip-record-p (record)
+  "Non-nil when RECORD should be deferred to the `link-previews' decorator.
+Deferral matches `link-previews'' own claim rules so spans that
+neither decorator would render do not silently disappear:
+
+- Diff-URL records (`diff:<base>...<head>[#<path>]') are deferred
+  unconditionally.
+- Inline source-range records (`[label](<path>#L<n>[-L<n>])')
+  whose `[label](url)' span is standalone on its line (per
+  `gfm-pretty-standalone-span-p') are deferred.  Reference,
+  shortcut, autolink, wiki, and inline-in-prose source-range
+  records fall through to normal decoration."
+  (let ((url (gfm-pretty-links--link-url record)))
+    (cond
+     ((gfm-pretty-links--diff-url-p url) t)
+     ((and (eq (gfm-pretty-links--link-kind record) 'inline)
+           (gfm-pretty-links--source-range-url-p url))
+      (let ((span (gfm-pretty-links--record-span record)))
+        (gfm-pretty-standalone-span-p (car span) (cdr span))))
+     (t nil))))
 
 ;;; Link records
 
@@ -241,12 +260,24 @@ LABEL is matched case-insensitively, matching markdown-mode."
   "Call nerd-icons FN with ARG when it is available; nil otherwise."
   (and (fboundp fn) (ignore-errors (funcall fn arg))))
 
+(defun gfm-pretty-links--strip-url-fragment (url)
+  "Return URL with any `#…' fragment removed.
+A `#'-prefixed URL (same-document anchor) is returned unchanged so
+the caller's anchor branch keeps the slug."
+  (cond
+   ((or (null url) (string-empty-p url)) url)
+   ((eq (aref url 0) ?#) url)
+   (t (let ((hash (string-match-p "#" url)))
+        (if hash (substring url 0 hash) url)))))
+
 (defun gfm-pretty-links--icon-for-target (url)
   "Return a single nerd-icons glyph for URL, deferring entirely to nerd-icons.
 http(s) URLs, same-document anchors, and other absolute schemes resolve
 via `nerd-icons-icon-for-url'; relative paths and `file:' URLs resolve
-via `nerd-icons-icon-for-file' on the basename.  No `:height' override
-is passed.  Returns nil when nerd-icons is unavailable."
+via `nerd-icons-icon-for-file' on the basename, with any trailing
+`#…' fragment stripped first so source-range URLs resolve their
+underlying file extension.  No `:height' override is passed.
+Returns nil when nerd-icons is unavailable."
   (when (and url (not (string-empty-p url)))
     (cond
      ((string-match-p (rx bos (or "http://" "https://")) url)
@@ -256,12 +287,16 @@ is passed.  Returns nil when nerd-icons is unavailable."
      ((string-prefix-p "file:" url)
       (gfm-pretty-links--call-nerd
        #'nerd-icons-icon-for-file
-       (file-name-nondirectory (string-remove-prefix "file:" url))))
+       (file-name-nondirectory
+        (gfm-pretty-links--strip-url-fragment
+         (string-remove-prefix "file:" url)))))
      ((string-match-p (rx bos (+ (any "a-zA-Z0-9.+-")) ":") url)
       (gfm-pretty-links--call-nerd #'nerd-icons-icon-for-url url))
      (t
-      (gfm-pretty-links--call-nerd #'nerd-icons-icon-for-file
-                            (file-name-nondirectory url))))))
+      (gfm-pretty-links--call-nerd
+       #'nerd-icons-icon-for-file
+       (file-name-nondirectory
+        (gfm-pretty-links--strip-url-fragment url)))))))
 
 (defun gfm-pretty-links--label-for-naked-url (url)
   "Return the visible label for an autolink or bare URL with target URL.
@@ -489,8 +524,7 @@ lines are excluded entirely."
       (let ((span (gfm-pretty-links--record-span record)))
         (unless (or (gfm-pretty-links--pos-in-ranges-p (car span) ref-def-ranges)
                     (gfm-pretty-links--in-code-p (car span))
-                    (gfm-pretty-links--skip-url-p
-                     (gfm-pretty-links--link-url record))
+                    (gfm-pretty-links--skip-record-p record)
                     (cl-some (lambda (c)
                                (gfm-pretty--region-overlaps-p span c))
                              claimed))
@@ -681,16 +715,31 @@ Prefers `better-jumper-set-jump' (used by this config), falls back to
    ((fboundp 'better-jumper-set-jump) (better-jumper-set-jump pos))
    ((fboundp 'evil-set-jump) (evil-set-jump pos))))
 
+(defconst gfm-pretty-links--source-range-fragment-rx
+  (rx "#L" (group (+ digit)) (? "-L" (+ digit)) eos)
+  "Regexp matching an `#L<n>[-L<n>]' source-range fragment.
+Group 1 captures the start line number.")
+
 (defun gfm-pretty-links--follow-file (url)
   "Open file at URL via `find-file', expanded against the buffer's directory.
-URL is a path beginning with `./', `../', `/', or a `file:' URI."
-  (let* ((path (if (string-prefix-p "file:" url)
-                   (string-remove-prefix "file:" url)
-                 url))
+URL is a path beginning with `./', `../', `/', or a `file:' URI.
+When URL carries an `#L<n>[-L<n>]' source-range fragment, point jumps
+to line <n> after the file opens; the range-end is ignored."
+  (let* ((stripped (if (string-prefix-p "file:" url)
+                       (string-remove-prefix "file:" url)
+                     url))
+         (line (and (string-match
+                     gfm-pretty-links--source-range-fragment-rx
+                     stripped)
+                    (string-to-number (match-string 1 stripped))))
+         (path (gfm-pretty-links--strip-url-fragment stripped))
          (base (or (and buffer-file-name
                         (file-name-directory buffer-file-name))
                    default-directory)))
-    (find-file (expand-file-name path base))))
+    (find-file (expand-file-name path base))
+    (when line
+      (goto-char (point-min))
+      (forward-line (1- line)))))
 
 (defun gfm-pretty-links-follow-link-at-point ()
   "Follow the decorated link at point, dispatched by target class.
