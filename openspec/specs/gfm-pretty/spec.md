@@ -46,6 +46,79 @@ which `(require 'gfm-pretty)` and enables the mode).
   the links xref backend and eldoc function)
 - **AND** the buffer visually matches its raw markdown source
 
+### Requirement: TAB-key dispatch in `gfm-pretty-mode`
+
+`gfm-pretty-mode` SHALL bind `TAB` in its own keymap
+(`gfm-pretty-mode-map`) to a command that dispatches by point context,
+and SHALL NOT fall through to `indent-for-tab-command` /
+`markdown-indent-line` in non-list contexts.
+
+The dispatch SHALL be:
+
+- On a heading line (`markdown-on-heading-p`) — invoke
+  `markdown-cycle` interactively so heading visibility cycling
+  (including its `last-command` state machine) keeps working.
+- Inside a table (`markdown-table-at-point-p`) — invoke
+  `markdown-table-forward-cell`.
+- On a list-item prefix slot — invoke `markdown-indent-line` once.
+  The "prefix slot" predicate SHALL match
+  `^\s-*\(?:[-*+]\|[0-9]+[.)]\)\s-+` and require point ≤
+  `(match-end 0)`; this branch SHALL additionally require
+  `(and (bound-and-true-p evil-mode) (evil-insert-state-p))`.
+- Everywhere else — no-op. No whitespace SHALL be inserted into the
+  buffer.
+
+Disabling `gfm-pretty-mode` SHALL restore the prior `TAB` binding
+(`markdown-cycle`) by deactivating the buffer-local keymap.
+
+#### Scenario: TAB on a callout marker line is a no-op
+
+- **GIVEN** a buffer with `> [!NOTE]` at BOL and `gfm-pretty-mode`
+  enabled
+- **WHEN** point is at column 0 of the marker line and the user
+  presses `TAB`
+- **THEN** the buffer SHALL be unchanged (no spaces inserted)
+- **AND** the callout block SHALL still parse and decorate correctly
+
+#### Scenario: TAB on a heading cycles visibility
+
+- **GIVEN** a buffer with `## Section` and `gfm-pretty-mode` enabled
+- **WHEN** point is on the heading line and the user presses `TAB`
+- **THEN** the engine SHALL invoke `markdown-cycle` interactively
+- **AND** the heading's subtree visibility state SHALL advance
+
+#### Scenario: TAB inside a table moves to the next cell
+
+- **GIVEN** a GFM table with point inside a cell and
+  `gfm-pretty-mode` enabled
+- **WHEN** the user presses `TAB`
+- **THEN** point SHALL move to the next cell via
+  `markdown-table-forward-cell`
+
+#### Scenario: TAB at list-item prefix slot indents in evil insert state
+
+- **GIVEN** a buffer with `- item` at BOL, `gfm-pretty-mode` enabled,
+  and `evil-insert-state-p` returning non-nil
+- **WHEN** point is between BOL and the start of `item` and the user
+  presses `TAB`
+- **THEN** the engine SHALL invoke `markdown-indent-line` once
+- **AND** the list-item line SHALL be indented one step
+
+#### Scenario: TAB at list-item prefix slot outside evil insert state is a no-op
+
+- **GIVEN** a buffer with `- item` at BOL, `gfm-pretty-mode` enabled,
+  and `evil-insert-state-p` returning nil
+- **WHEN** point is between BOL and the start of `item` and the user
+  presses `TAB`
+- **THEN** the buffer SHALL be unchanged
+
+#### Scenario: TAB in paragraph body is a no-op
+
+- **GIVEN** a buffer with a plain paragraph line and
+  `gfm-pretty-mode` enabled
+- **WHEN** point is mid-paragraph and the user presses `TAB`
+- **THEN** the buffer SHALL be unchanged
+
 ### Requirement: Decorator registration via `gfm-pretty-define-decorator`
 
 The system SHALL expose `gfm-pretty-define-decorator` as the public
@@ -158,8 +231,12 @@ the decorator's accumulated dirty region:
    and matches the dirty region against each block's `:range-fn`
    result. If exactly one block fully contains the dirty region, the
    engine SHALL rebuild that single block via `:apply-block-fn` per
-   currently-displayed window. Otherwise the engine SHALL perform a
-   full rebuild.
+   currently-displayed window. If no collected block overlaps the
+   dirty region (the edit destroyed the block whose overlays the
+   decorator owned), the engine SHALL perform a full rebuild via
+   `:rebuild-fn` (or generic teardown + reapply when `:rebuild-fn` is
+   absent) so stale overlays are evacuated. Otherwise (multiple
+   overlapping blocks) the engine SHALL also perform a full rebuild.
 
 A decorator that does not register `:full-rebuild-required-p` SHALL
 still receive correct scoped rebuilds via the block-containment
@@ -198,6 +275,21 @@ fallback (step 2).
   return non-nil for the dirty region
 - **AND** the engine SHALL invoke the fences decorator's
   `:rebuild-fn` (full rebuild)
+
+#### Scenario: Edit destroys a tracked block, leaving no overlap
+
+- **GIVEN** a buffer containing a single callout `> [!NOTE]` with
+  the callouts decorator enabled
+- **WHEN** an edit inserts a leading space at BOL of the marker line
+  (e.g. via a fallback indent path), so the marker no longer parses
+  as a callout
+- **AND** the idle timer fires
+- **THEN** `:collect-fn` SHALL return no callout block overlapping
+  the dirty region
+- **AND** the engine SHALL perform a full rebuild of the callouts
+  decorator
+- **AND** no overlays tagged with the callouts decorator's registry
+  SHALL remain in the now-destroyed block's former range
 
 ### Requirement: Engine-owned generic rebuild stats
 
