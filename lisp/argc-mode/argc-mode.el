@@ -208,37 +208,85 @@ Checks the next non-blank line after POS."
       (or (match-string-no-properties 1)
           (match-string-no-properties 2)))))
 
-(defun argc--block-max-col (beg end)
-  "Return the maximum line length between BEG and END."
-  (let ((max-col 0)
-        (done nil))
-    (save-excursion
-      (goto-char beg)
-      (while (and (not done) (<= (point) end))
-        (setq max-col (max max-col (- (line-end-position) (line-beginning-position))))
-        (when (= (forward-line 1) 1)
-          (setq done t))))
-    max-col))
+(defun argc--normalised-box-face ()
+  "Return a face spec inheriting `argc-box-face' with text styling cleared.
+Border glyphs share buffer regions with prose font-lock that may
+carry `:slant italic', `:underline t', etc; without an explicit
+override those attrs leak through face composition on GUI frames
+and slant the box edges.  `:background' is pinned to the system
+marker `\"unspecified-bg\"' so text-property backgrounds (e.g.
+`diff-added' on a body line) do not bleed into border /
+before-string / after-string chars."
+  '(:inherit argc-box-face
+    :slant normal
+    :underline nil :overline nil :strike-through nil :box nil
+    :background "unspecified-bg"))
 
-(defun argc--make-border (width corner-l corner-r &optional label)
-  "Build a box border string of WIDTH chars.
-CORNER-L and CORNER-R are the corner characters.
-LABEL is an optional right-aligned bold label."
-  (let ((face 'argc-box-face))
+(defun argc--make-border (corner-l corner-r &optional label)
+  "Build a window-relative box border using `:align-to right'.
+CORNER-L and CORNER-R are the corner characters.  LABEL, when
+non-nil, is right-aligned just before CORNER-R in bold."
+  (let* ((face (argc--normalised-box-face))
+         (left (propertize (string corner-l) 'face face))
+         (right-corner (propertize (string corner-r) 'face face))
+         (lead (propertize (make-string 2 ?─) 'face face)))
     (if label
-        (let* ((bold-label (propertize label 'face '(:inherit (bold argc-box-face))))
-               (label-width (+ (string-width label) 2))
-               (fill-width (max 1 (- width 2 label-width)))
-               (fill (propertize (make-string fill-width ?─) 'face face)))
-          (concat (propertize (string corner-l) 'face face)
-                  fill
-                  (propertize " " 'face face)
-                  bold-label
-                  (propertize (concat " " (string corner-r)) 'face face)))
-      (let ((fill (propertize (make-string (max 1 (- width 2)) ?─) 'face face)))
-        (concat (propertize (string corner-l) 'face face)
-                fill
-                (propertize (string corner-r) 'face face))))))
+        (let* ((label-face `(:inherit (bold argc-box-face)
+                             :slant normal
+                             :underline nil :overline nil
+                             :strike-through nil :box nil
+                             :background "unspecified-bg"))
+               (bold-label (propertize label 'face label-face))
+               (label-w (string-width label))
+               (pad (propertize " " 'face face
+                                'display `(space :align-to (- right ,(+ label-w 4)))))
+               (gap (propertize " " 'face face)))
+          (concat left lead pad bold-label gap right-corner))
+      (let ((snap (propertize " " 'face face
+                              'display '(space :align-to (- right 3)))))
+        (concat left lead snap right-corner)))))
+
+(defun argc--substitute-hash (lbeg lend face)
+  "Replace the `#' at the start of line [LBEG, LEND] with a `│' overlay.
+The overlay is single-char, evaporating, and uses `display' to swap in
+`│' painted in FACE.  The substituted glyph is also stashed under the
+`argc-hash-display' overlay prop so `argc--reveal-hash-at-point' can
+restore it after a transient reveal.  Mirrors the `> ' → `│ '
+substitution in `gfm-pretty-callouts--apply-block-display'."
+  (save-excursion
+    (goto-char lbeg)
+    (skip-chars-forward " \t" lend)
+    (when (and (< (point) lend) (eq (char-after) ?#))
+      (let ((sub (make-overlay (point) (1+ (point))))
+            (disp (propertize "│" 'face face)))
+        (overlay-put sub 'argc t)
+        (overlay-put sub 'argc-box t)
+        (overlay-put sub 'argc-hash-sub t)
+        (overlay-put sub 'argc-hash-display disp)
+        (overlay-put sub 'evaporate t)
+        (overlay-put sub 'display disp)))))
+
+(defvar-local argc--revealed-hash nil
+  "Substitution overlay whose `display' is currently suppressed for reveal.")
+
+(defun argc--reveal-hash-at-point (&rest _)
+  "Reveal the source `#' under point by hiding its substitution overlay.
+Run from `post-command-hook'.  Restores the previously revealed overlay
+when point moves off; mirrors prettify-symbols-mode's
+unprettify-at-point semantics but at the overlay layer so it composes
+with the rest of the box overlays."
+  (let* ((subs (cl-remove-if-not
+                (lambda (ov) (overlay-get ov 'argc-hash-sub))
+                (overlays-at (point))))
+         (here (car subs)))
+    (when (and argc--revealed-hash
+               (not (eq argc--revealed-hash here))
+               (overlay-buffer argc--revealed-hash))
+      (overlay-put argc--revealed-hash 'display
+                   (overlay-get argc--revealed-hash 'argc-hash-display)))
+    (when (and here (not (eq here argc--revealed-hash)))
+      (overlay-put here 'display nil))
+    (setq argc--revealed-hash here)))
 
 (defun argc--apply-box-overlays ()
   "Create box overlays around argc directive blocks."
@@ -247,41 +295,43 @@ LABEL is an optional right-aligned bold label."
       (let* ((beg (nth 0 block))
              (end (nth 1 block))
              (func-name (argc--function-after end))
-             (max-col (argc--block-max-col beg end))
-             (box-width (max 80 (+ max-col 4)))
-             (face 'argc-box-face)
-             (left-border (propertize "│ " 'face face))
-             (top (argc--make-border box-width ?┌ ?┐ func-name))
-             (bottom (argc--make-border box-width ?└ ?┘)))
-        ;; Per-line overlays: content only (lbeg to lend, no newline)
+             (face (argc--normalised-box-face))
+             (wrap-rail (propertize "│ " 'face face))
+             (top (argc--make-border ?┌ ?┐ func-name))
+             (bottom (argc--make-border ?└ ?┘)))
         (goto-char beg)
         (let ((first t)
-              (align-col (- box-width 2))
-              (right-border (propertize " │" 'face face))
               (done nil)
               last-ov)
           (while (and (not done) (<= (point) end))
             (let* ((lbeg (line-beginning-position))
                    (lend (line-end-position))
-                   (pad (propertize " " 'display `(space :align-to ,align-col) 'face face))
+                   (pad (propertize " " 'face face
+                                    'display '(space :align-to (- right 3))))
+                   (right-border (propertize "│" 'face face))
+                   (mask (propertize " " 'face 'default
+                                     'display '(space :align-to (- right 1))))
                    (ov (make-overlay lbeg lend nil nil t))
-                   (after (concat pad right-border)))
+                   (after (concat pad right-border mask)))
               (overlay-put ov 'argc t)
               (overlay-put ov 'argc-box t)
-              (if first
-                  (progn
-                    (overlay-put ov 'before-string (concat top "\n" left-border))
-                    (setq first nil))
-                (overlay-put ov 'before-string left-border))
+              (overlay-put ov 'wrap-prefix wrap-rail)
+              (when first
+                (overlay-put ov 'before-string (concat top "\n"))
+                (setq first nil))
               (put-text-property 0 1 'cursor t after)
               (overlay-put ov 'after-string after)
+              (argc--substitute-hash lbeg lend face)
               (setq last-ov ov))
             (when (= (forward-line 1) 1)
               (setq done t)))
-          ;; Append bottom border to last line's after-string
           (when last-ov
-            (let* ((pad (propertize " " 'display `(space :align-to ,align-col) 'face face))
-                   (after (concat pad right-border "\n" bottom)))
+            (let* ((pad (propertize " " 'face face
+                                    'display '(space :align-to (- right 3))))
+                   (right-border (propertize "│" 'face face))
+                   (mask (propertize " " 'face 'default
+                                     'display '(space :align-to (- right 1))))
+                   (after (concat pad right-border mask "\n" bottom)))
               (put-text-property 0 1 'cursor t after)
               (overlay-put last-ov 'after-string after))))))))
 
@@ -307,6 +357,7 @@ ORIG-FN is the original function, POS-BEG and POS-END the range."
 (defun argc--rebuild ()
   "Remove and recreate all argc overlays."
   (argc--remove-overlays)
+  (setq argc--revealed-hash nil)
   (argc--apply-face-overlays)
   (argc--apply-box-overlays))
 
@@ -342,11 +393,14 @@ Skips indirect buffers since base buffer overlays are already visible."
       (progn
         (argc--rebuild)
         (add-hook 'after-change-functions #'argc--schedule-rebuild nil t)
+        (add-hook 'post-command-hook #'argc--reveal-hash-at-point nil t)
         (advice-add 'spell-fu-mark-incorrect :around #'argc--spell-fu-skip-directives))
     (remove-hook 'after-change-functions #'argc--schedule-rebuild t)
+    (remove-hook 'post-command-hook #'argc--reveal-hash-at-point t)
     (advice-remove 'spell-fu-mark-incorrect #'argc--spell-fu-skip-directives)
     (when (timerp argc--rebuild-timer)
       (cancel-timer argc--rebuild-timer))
+    (setq argc--revealed-hash nil)
     (argc--remove-overlays)))
 
 (provide 'argc-mode)

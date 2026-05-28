@@ -227,33 +227,144 @@
                               before-strings)))
       (should has-name))))
 
-(ert-deftest argc-test-box-min-width-80 ()
-  "Top border should be at least 80 characters wide."
+(defun argc-test--collect-display-aligns (s)
+  "Walk S; return all :align-to values from `space' display specs."
+  (let ((pos 0)
+        (len (length s))
+        out)
+    (while (< pos len)
+      (let* ((disp (get-text-property pos 'display s))
+             (next (or (next-single-property-change pos 'display s) len)))
+        (when (and (consp disp) (eq (car disp) 'space))
+          (let ((a (plist-get (cdr disp) :align-to)))
+            (when a (push a out))))
+        (setq pos next)))
+    (nreverse out)))
+
+(defun argc-test--aligns-to-right-p (a)
+  "Return non-nil if A is `right' or `(- right N)'."
+  (or (eq a 'right)
+      (and (consp a) (eq (car a) '-) (eq (cadr a) 'right))))
+
+(ert-deftest argc-test-right-border-aligns-to-window-edge ()
+  "Per-line right-edge after-string SHALL position via `:align-to right'."
   (with-temp-buffer
     (insert "# @cmd Foo\nfoo() {\n}\n")
     (argc--apply-box-overlays)
     (let* ((ovs (cl-remove-if-not
                  (lambda (ov) (overlay-get ov 'argc-box))
                  (overlays-in (point-min) (point-max))))
-           (before-strings (mapcar (lambda (ov) (overlay-get ov 'before-string)) ovs))
-           (top-str (cl-find-if (lambda (s) (and s (string-match-p "┌" s))) before-strings)))
-      (should top-str)
-      (let ((top-line (car (split-string top-str "\n"))))
-        (should (>= (string-width top-line) 80))))))
+           (after-strings (delq nil (mapcar (lambda (ov) (overlay-get ov 'after-string)) ovs)))
+           (all-aligns (cl-mapcan #'argc-test--collect-display-aligns after-strings)))
+      (should (cl-some #'argc-test--aligns-to-right-p all-aligns)))))
 
-(ert-deftest argc-test-box-expands-for-long-lines ()
-  "Box width should expand for lines longer than 76 chars."
+(ert-deftest argc-test-per-line-wrap-prefix-has-rail ()
+  "Per-line overlays SHALL carry a `wrap-prefix' containing the rail `│ '."
   (with-temp-buffer
-    (insert (concat "# @cmd " (make-string 80 ?x) "\nfoo() {\n}\n"))
+    (insert "# @cmd Foo\nfoo() {\n}\n")
+    (argc--apply-box-overlays)
+    (let ((ovs (cl-remove-if-not
+                (lambda (ov) (overlay-get ov 'argc-box))
+                (overlays-in (point-min) (point-max)))))
+      (should (cl-some (lambda (ov)
+                         (let ((wp (overlay-get ov 'wrap-prefix)))
+                           (and (stringp wp) (string-match-p "│ " wp))))
+                       ovs)))))
+
+(ert-deftest argc-test-after-string-ends-with-default-face-mask ()
+  "Per-line after-string body SHALL end with `(space :align-to right)' default."
+  (with-temp-buffer
+    (insert "# @cmd Foo\n# @arg bar!\nfoo() {\n}\n")
     (argc--apply-box-overlays)
     (let* ((ovs (cl-remove-if-not
                  (lambda (ov) (overlay-get ov 'argc-box))
                  (overlays-in (point-min) (point-max))))
-           (before-strings (mapcar (lambda (ov) (overlay-get ov 'before-string)) ovs))
-           (top-str (cl-find-if (lambda (s) (and s (string-match-p "┌" s))) before-strings)))
-      (should top-str)
-      (let ((top-line (car (split-string top-str "\n"))))
-        (should (> (string-width top-line) 80))))))
+           (after-strings (delq nil (mapcar (lambda (ov) (overlay-get ov 'after-string)) ovs))))
+      (should
+       (cl-some
+        (lambda (s)
+          ;; Inspect the segment before any embedded newline (bottom border
+          ;; tail).  The body-line mask SHALL be its final char.
+          (let* ((nl (string-match "\n" s))
+                 (body-end (1- (or nl (length s))))
+                 (disp (get-text-property body-end 'display s))
+                 (face (get-text-property body-end 'face s)))
+            (and (consp disp)
+                 (eq (car disp) 'space)
+                 (argc-test--aligns-to-right-p (plist-get (cdr disp) :align-to))
+                 (eq face 'default))))
+        after-strings)))))
+
+(ert-deftest argc-test-leading-hash-replaced-with-rail ()
+  "Each body line's leading `#' SHALL be replaced by an evaporating overlay
+whose `display' is `│' painted in the normalised box face."
+  (with-temp-buffer
+    (insert "# @cmd Foo\n# @arg bar!\nfoo() {\n}\n")
+    (argc--apply-box-overlays)
+    (let ((hash-ovs
+           (cl-remove-if-not
+            (lambda (ov)
+              (and (overlay-get ov 'argc-box)
+                   (= (- (overlay-end ov) (overlay-start ov)) 1)
+                   (eq (char-after (overlay-start ov)) ?#)
+                   (overlay-get ov 'evaporate)
+                   (let ((disp (overlay-get ov 'display)))
+                     (and (stringp disp) (string-match-p "│" disp)))))
+            (overlays-in (point-min) (point-max)))))
+      (should (= 2 (length hash-ovs))))))
+
+(ert-deftest argc-test-hash-reveal-on-point ()
+  "Point on the substitution overlay SHALL hide its `display' so `#' shows;
+moving off SHALL restore the `│' display."
+  (with-temp-buffer
+    (insert "# @cmd Foo\nfoo() {\n}\n")
+    (argc--apply-box-overlays)
+    (let ((sub (cl-find-if (lambda (ov) (overlay-get ov 'argc-hash-sub))
+                           (overlays-in (point-min) (point-max)))))
+      (should sub)
+      (goto-char (overlay-start sub))
+      (argc--reveal-hash-at-point)
+      (should (null (overlay-get sub 'display)))
+      (goto-char (overlay-end sub))
+      (argc--reveal-hash-at-point)
+      (let ((disp (overlay-get sub 'display)))
+        (should (and (stringp disp) (string-match-p "│" disp)))))))
+
+(ert-deftest argc-test-no-before-string-rail-on-body-lines ()
+  "Body lines SHALL NOT carry a `before-string' rail — substitution replaces it.
+Only the first line may carry a `before-string' (for the top border)."
+  (with-temp-buffer
+    (insert "# @cmd Foo\n# @arg bar!\nfoo() {\n}\n")
+    (argc--apply-box-overlays)
+    (let* ((line-ovs
+            (cl-remove-if-not
+             (lambda (ov)
+               (and (overlay-get ov 'argc-box)
+                    (> (- (overlay-end ov) (overlay-start ov)) 1)))
+             (overlays-in (point-min) (point-max))))
+           (with-rail
+            (cl-count-if
+             (lambda (ov)
+               (let ((bs (overlay-get ov 'before-string)))
+                 (and bs (string-match-p "│ " bs))))
+             line-ovs)))
+      ;; Only one before-string carrying the rail is permitted — the first
+      ;; line, whose before-string is the top border followed by a newline.
+      ;; With the substitution approach even that is gone; allow zero or one.
+      (should (<= with-rail 0)))))
+
+(ert-deftest argc-test-normalised-box-face-clears-prose-styling ()
+  "`argc--normalised-box-face' SHALL clear text-styling attrs and pin bg."
+  (let ((spec (argc--normalised-box-face)))
+    (should (eq (plist-get spec :slant) 'normal))
+    (should (null (plist-get spec :underline)))
+    (should (null (plist-get spec :overline)))
+    (should (null (plist-get spec :strike-through)))
+    (should (null (plist-get spec :box)))
+    (should (equal (plist-get spec :background) "unspecified-bg"))
+    (let ((inh (plist-get spec :inherit)))
+      (should (or (eq inh 'argc-box-face)
+                  (and (listp inh) (memq 'argc-box-face inh)))))))
 
 
 ;;; Rebuild scheduler
