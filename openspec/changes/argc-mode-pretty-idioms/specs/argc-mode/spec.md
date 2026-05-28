@@ -7,7 +7,22 @@ argc directive lines (including comment continuations between
 directives) into a "block" and draw a Unicode box around each
 block using overlay `before-string` / `after-string` properties.
 A block is bounded above by `┌─…─┐` and below by `└─…─┘`. Each
-content line gets a `│ ` prefix and a right-aligned ` │` suffix.
+content line gets a left rail at its leading `#` (see substitution
+requirement below) and a right-aligned `│` suffix.
+
+The leading `#` of each body line SHALL be replaced by a single-
+char overlay carrying `display "│"` painted in the normalised
+border face and `evaporate t` (so the overlay self-destroys if
+the underlying `#` is deleted).  Mirrors the `> ` → `│ `
+substitution idiom in `gfm-pretty-callouts--apply-block-display`.
+The space following `#` is left in the buffer and serves as the
+visual separator between the rail and directive content.
+
+When point sits on a substitution overlay (i.e. on the source
+`#`), the overlay's `display` SHALL be transiently suppressed so
+the source `#` is revealed, and SHALL be restored when point
+moves off.  Implemented via `post-command-hook`; mirrors
+`prettify-symbols-unprettify-at-point` at the overlay layer.
 
 The box SHALL be sized per displaying window. The top border,
 bottom border, and per-line right `│` SHALL be positioned using a
@@ -85,6 +100,24 @@ no argc directive.
 - **THEN** it SHALL explicitly set `:slant normal`,
   `:underline nil`, `:overline nil`, `:strike-through nil`,
   `:box nil`, and `:background "unspecified-bg"`
+
+#### Scenario: Leading `#` is substituted with `│`
+
+- **GIVEN** a buffer with `argc-mode` enabled containing a
+  directive block
+- **WHEN** the box overlays are built
+- **THEN** for each body line the buffer SHALL contain a single-
+  char overlay covering the leading `#` with `evaporate t` and
+  `display "│"`
+
+#### Scenario: Point on substitution reveals source `#`
+
+- **GIVEN** a buffer with `argc-mode` enabled and a substitution
+  overlay over a body line's leading `#`
+- **WHEN** point moves onto the overlay's start position
+- **THEN** the overlay's `display` SHALL be transiently nil so
+  the source `#` shows; once point moves off the overlay's range,
+  `display` SHALL be restored
 
 #### Scenario: Top border labels the next function
 
