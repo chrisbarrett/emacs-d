@@ -192,8 +192,9 @@ binds finish/cancel, and protects against `kill-buffer'."
               (claude-prompt-setup-check-buffer)
               (should claude-prompt-mode)
               (should (bound-and-true-p with-editor-mode))
-              (should (eq (key-binding (kbd "C-c C-c")) #'with-editor-finish))
-              (should (eq (key-binding (kbd "C-c C-k")) #'with-editor-cancel))
+              (should (eq (key-binding (kbd "C-c C-c")) #'claude-prompt-finish))
+              (should (eq (key-binding (kbd "C-c C-k")) #'claude-prompt-cancel))
+              (should (eq (key-binding (kbd "C-x C-c")) #'claude-prompt-cancel))
               (should (eq (key-binding (kbd "M-p")) #'claude-prompt-previous))
               (should (eq (key-binding (kbd "C-r")) #'claude-prompt-recall))
               (should (memq #'with-editor-kill-buffer-noop
@@ -230,6 +231,35 @@ This is the primary, wrapper-driven path (no filename pattern needed)."
       (setq buffer-file-name "/home/me/notes.md")
       (claude-prompt-setup-check-buffer)
       (should-not claude-prompt-mode))))
+
+(ert-deftest claude-prompt/cancel-restores-original-and-finishes ()
+  "Cancel restores the opened content and finishes (zero exit), not error-exit.
+Claude crashes on a failed editor, so cancel must route through
+`with-editor-finish', never `with-editor-cancel'."
+  (claude-prompt-tests--with-history file
+    (let ((claude-prompt-history-file file)
+          (claude-prompt--context-table (make-hash-table :test 'equal))
+          (with-editor-show-usage nil)
+          (finished nil)
+          (cancelled nil))
+      (with-temp-buffer
+        (setq buffer-file-name "/private/tmp/claude-503/claude-prompt-abc.md")
+        (insert "ORIGINAL PROMPT")
+        (unwind-protect
+            (cl-letf (((symbol-function 'with-editor-finish)
+                       (lambda (&rest _) (setq finished t)))
+                      ((symbol-function 'with-editor-cancel)
+                       (lambda (&rest _) (setq cancelled t))))
+              (claude-prompt-setup-check-buffer)
+              (should (equal claude-prompt--initial-content "ORIGINAL PROMPT"))
+              ;; User edits, then cancels.
+              (claude-prompt--replace-body "EDITED AWAY")
+              (claude-prompt-cancel)
+              (should (equal (buffer-string) "ORIGINAL PROMPT"))
+              (should finished)
+              (should-not cancelled))
+          (setq kill-buffer-query-functions nil)
+          (set-buffer-modified-p nil))))))
 
 (provide 'claude-prompt-tests)
 

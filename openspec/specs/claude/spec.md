@@ -47,35 +47,38 @@ prompt-file pattern. That pattern — a `claude-prompt-<guid>.md` file inside a
 
 ### Requirement: Finish and cancel via with-editor
 
-The mode SHALL delegate session completion to `with-editor`. `C-c C-c` SHALL
-save the buffer and finish the edit session (`server-done`), returning the
-buffer contents to the waiting Claude process with a zero exit status. `C-c
-C-k` SHALL cancel the session via `with-editor-cancel`, causing the waiting
-`emacsclient` to exit with a non-zero status. The buffer SHALL be protected
+The mode SHALL complete the edit session via `with-editor`'s `server-done`
+with a zero exit status in both the finish and cancel cases, because Claude
+Code crashes when its editor exits non-zero. `C-c C-c` SHALL save the buffer
+and finish, returning the edited contents. `C-c C-k` and `C-x C-c` SHALL
+cancel by restoring the buffer to the content Claude opened it with and then
+finishing, so Claude receives the original prompt unchanged. Cancel SHALL NOT
+use `with-editor-cancel` (which exits non-zero). The buffer SHALL be protected
 from ordinary `kill-buffer` while the session is live.
 
 #### Scenario: Finish returns contents
 
 - **WHEN** the user edits the prompt and presses `C-c C-c`
 - **THEN** the buffer is saved
-- **AND** the server edit session completes so the Claude process resumes
+- **AND** the server edit session completes with a zero exit so the Claude process resumes
 
-#### Scenario: Cancel exits non-zero
+#### Scenario: Cancel restores original and exits zero
 
-- **WHEN** the user presses `C-c C-k`
-- **THEN** the edit session is cancelled
-- **AND** the waiting `emacsclient` receives a cancel signal and exits non-zero
+- **WHEN** the user presses `C-c C-k` or `C-x C-c`
+- **THEN** the buffer is restored to the content Claude opened it with
+- **AND** the edit session finishes with a zero exit status
 
 ### Requirement: Mode-line lighter and on-open help
 
 The mode SHALL display a distinct mode-line lighter identifying the Claude
-prompt session. On activation it SHALL show a one-time help message listing the
-active bindings (finish, cancel, history previous/next, recall search).
+prompt session. On activation it SHALL show a one-time, minimal help message in
+the style of `git-commit-mode` — naming only the finish and cancel bindings,
+not the full binding set.
 
 #### Scenario: Help shown on open
 
 - **WHEN** `claude-prompt-mode` activates in a buffer
-- **THEN** a message lists the `C-c C-c`, `C-c C-k`, `M-p`/`M-n`, and `C-r` bindings
+- **THEN** a one-line message names the finish (`C-c C-c`) and cancel bindings
 
 ### Requirement: Repo-scoped prompt history ring
 

@@ -259,41 +259,71 @@ projects."
 
 ;;; Mode
 
+(declare-function with-editor-finish "with-editor" (force))
+
+(defvar-local claude-prompt--initial-content nil
+  "Buffer body as Claude wrote it when the file was opened.
+Restored by `claude-prompt-cancel' so cancelling returns the
+original prompt unchanged.")
+
+(defun claude-prompt-finish ()
+  "Send the current prompt to Claude and finish the edit session.
+Saves and runs `server-done' with a zero exit status."
+  (interactive)
+  (with-editor-finish nil))
+
+(defun claude-prompt-cancel ()
+  "Discard edits and return the original prompt to Claude.
+Restores the buffer to the content Claude opened it with, then
+finishes with a zero exit status.  Unlike `with-editor-cancel' this
+does NOT exit non-zero -- Claude crashes on a failed editor."
+  (interactive)
+  (claude-prompt--replace-body (or claude-prompt--initial-content ""))
+  (with-editor-finish nil))
+
 (defvar-keymap claude-prompt-mode-map
-  :doc "Keymap for `claude-prompt-mode'.
-Finish (\\`C-c C-c') and cancel (\\`C-c C-k') come from `with-editor-mode'."
+  :doc "Keymap for `claude-prompt-mode'."
+  "C-c C-c" #'claude-prompt-finish
+  "C-c C-k" #'claude-prompt-cancel
+  "C-x C-c" #'claude-prompt-cancel
   "M-p" #'claude-prompt-previous
   "M-n" #'claude-prompt-next
   "C-r" #'claude-prompt-recall)
 
 (defconst claude-prompt-usage-message "\
-Type \\[with-editor-finish] to send the prompt to Claude, \
-\\[with-editor-cancel] to cancel, \
-\\[claude-prompt-previous] and \\[claude-prompt-next] to cycle prior prompts, \
-and \\[claude-prompt-recall] to search history"
+Type \\[claude-prompt-finish] to send the prompt, \
+or \\[claude-prompt-cancel] to cancel"
   "Help message shown when a Claude prompt buffer opens.")
 
 ;;;###autoload
 (define-minor-mode claude-prompt-mode
   "Minor mode for editing a Claude Code prompt file.
 
-Layered on the file's existing major mode (normally `gfm-mode') and
-on `with-editor-mode', which provides finish (\\`C-c C-c'), cancel
-(\\`C-c C-k'), and kill-buffer protection.  Adds a repo-scoped history
-ring (\\`M-p' / \\`M-n') and a `consult' recall picker (\\`C-r')."
+Layered on the file's existing major mode (normally `gfm-mode') and on
+`with-editor-mode' (for `server-done' and kill-buffer protection).
+Finish (\\`C-c C-c') sends the prompt; cancel (\\`C-c C-k' or \\`C-x C-c')
+restores the original and finishes with a zero exit status.  Adds a
+repo-scoped history ring (\\`M-p' / \\`M-n') and a `consult' recall picker
+(\\`C-r')."
   :lighter " Claude"
   :keymap claude-prompt-mode-map
   :interactive nil
   (when claude-prompt-mode
     (require 'with-editor)
+    (setq claude-prompt--initial-content (buffer-string))
     (setq claude-prompt--repo-root (claude-prompt--resolve-repo-root))
     (setq claude-prompt--ring
           (mapcar #'car (claude-prompt-repo-prompts claude-prompt--repo-root)))
     (setq claude-prompt--ring-index -1)
-    ;; Show our richer help message in place of with-editor's default.
     (setq-local with-editor-usage-message claude-prompt-usage-message)
     (unless (bound-and-true-p with-editor-mode)
-      (with-editor-mode 1))))
+      (with-editor-mode 1))
+    ;; Our finish/cancel must win over `with-editor-mode's C-c C-c / C-c C-k.
+    ;; Overriding its map slot guarantees precedence regardless of minor-mode
+    ;; ordering, so cancel always exits zero (Claude crashes on a failed editor).
+    (setq-local minor-mode-overriding-map-alist
+                (cons (cons 'with-editor-mode claude-prompt-mode-map)
+                      minor-mode-overriding-map-alist))))
 
 (defun claude-prompt--registered-p ()
   "Return non-nil if the current buffer's file has a registered context.
