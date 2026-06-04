@@ -63,14 +63,17 @@ harvested autoload entry SHALL point at the new library path.
 The library SHALL define the following faces in the `argc` group:
 `argc-directive-face`, `argc-param-name-face`, `argc-flag-face`,
 `argc-modifier-face`, `argc-notation-face`, `argc-choice-face`,
-`argc-default-value-face`, `argc-box-face`. Each face SHALL inherit
-from a sensible built-in face by default
+`argc-default-value-face`, `argc-bind-env-face`, `argc-fn-face`,
+`argc-box-face`. Each face SHALL inherit from a sensible built-in face
+by default
 (`argc-directive-face` from `font-lock-keyword-face`,
 `argc-param-name-face` from `font-lock-variable-name-face`,
 `argc-flag-face` from `font-lock-constant-face`,
 `argc-modifier-face` / `argc-notation-face` / `argc-choice-face`
 from `font-lock-type-face`,
 `argc-default-value-face` from `font-lock-string-face`,
+`argc-bind-env-face` from `font-lock-variable-name-face`,
+`argc-fn-face` from `font-lock-function-name-face`,
 `argc-box-face` from `shadow`).
 
 #### Scenario: All faces are defined in the `argc` group
@@ -93,10 +96,14 @@ overlapping ranges:
    `@alias`, `@arg`, `@option`, `@flag`, `@env`, `@meta`) carries
    `argc-directive-face`.
 3. `@arg <name>` and `@env <NAME>` argument identifiers carry
-   `argc-param-name-face`; their trailing modifier character
-   (`!`, `*`, `+`, `,`, `~`) carries `argc-modifier-face`.
+   `argc-param-name-face`; their trailing modifier carries
+   `argc-modifier-face`. A modifier is `!` or `~`, or a `*` / `+`
+   optionally followed by one multi-value delimiter character
+   (`,`, `:`, `;`, `@`, `|`, `/`); the delimiter is part of the
+   `argc-modifier-face` span.
 4. `@option` / `@flag` short and long flags carry `argc-flag-face`;
-   their trailing modifier carries `argc-modifier-face`.
+   their trailing modifier carries `argc-modifier-face` under the
+   same modifier-plus-delimiter rule as item 3.
 5. `@meta` keys and `@alias` name lists carry
    `argc-param-name-face`.
 6. Angle-bracket notations (`<FILE>`, `<NUM>`) carry
@@ -107,6 +114,20 @@ overlapping ranges:
    `@arg`, and `@env` carry `argc-default-value-face`. argc grants
    `@env` the same `param-value` slot as the others, so these
    forms SHALL be faced on `@env` identically.
+9. An environment-binding suffix — ` $$` (anonymous) or ` $NAME`
+   where `NAME` is uppercase ASCII and underscore — on `@arg`,
+   `@option`, `@flag`, or `@env` carries `argc-bind-env-face`.
+10. A backtick-delimited function reference appearing in a
+    function default (`` =`fn` ``) or a function choice list
+    (`` [`fn`] ``, `` [?`fn`] ``) carries `argc-fn-face`,
+    overriding the enclosing default / choice face on the
+    `` `fn` `` span. The optional `?` in `` [?`fn`] `` keeps the
+    choice face.
+
+The `@env` name charset is uppercase ASCII and underscore, matching
+argc's `is_env_name_char`; the existing `@env <NAME>` rule already
+faces exactly this charset, so no relaxation is made (recorded so it
+is not revisited).
 
 Regular shell comments that do NOT start with an argc directive
 SHALL NOT receive any `argc-*` face.
@@ -151,6 +172,31 @@ SHALL NOT receive any `argc-*` face.
 - **WHEN** the buffer is fontified
 - **THEN** `=0` SHALL carry `argc-default-value-face`
 - **AND** `[debug|info|warn]` SHALL carry `argc-choice-face`
+
+#### Scenario: Multi-value modifier with delimiter fontifies
+
+- **GIVEN** a buffer with `argc-mode` enabled containing
+  `# @option --tags*, Comma-separated tags`
+- **WHEN** the buffer is fontified
+- **THEN** the `*,` run SHALL carry `argc-modifier-face`
+
+#### Scenario: Environment-binding suffix fontifies
+
+- **GIVEN** a buffer with `argc-mode` enabled containing
+  `# @flag -v --verbose $VERBOSE Verbose mode` and
+  `# @option --port $$ Port`
+- **WHEN** the buffer is fontified
+- **THEN** `$VERBOSE` SHALL carry `argc-bind-env-face`
+- **AND** `$$` SHALL carry `argc-bind-env-face`
+
+#### Scenario: Backtick function reference fontifies
+
+- **GIVEN** a buffer with `argc-mode` enabled containing
+  ``# @option --file[`_choice_fn`] File`` and
+  ``# @arg name=`_default_fn` Name``
+- **WHEN** the buffer is fontified
+- **THEN** the `` `_choice_fn` `` span SHALL carry `argc-fn-face`
+- **AND** the `` `_default_fn` `` span SHALL carry `argc-fn-face`
 
 #### Scenario: Non-argc comments are untouched
 
