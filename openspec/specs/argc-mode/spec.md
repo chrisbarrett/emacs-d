@@ -163,11 +163,22 @@ the source `#` is revealed, and SHALL be restored when point
 moves off.  Implemented via `post-command-hook`; mirrors
 `prettify-symbols-unprettify-at-point` at the overlay layer.
 
-The box SHALL be sized per displaying window. The top border,
-bottom border, and per-line right `│` SHALL be positioned using a
+The box SHALL be sized to the displaying window. The top and
+bottom borders SHALL draw their horizontal rule with literal `─`
+glyphs spanning the box width (`window-body-width` less the two
+columns the right rail is inset), so the rule is a continuous
+visible line — a blank `(space :align-to …)` stretch SHALL NOT
+stand in for the rule, since it renders no glyphs. Because the
+dash count is fixed at build time, the overlays SHALL be rebuilt
+on `window-configuration-change-hook` so the borders re-fit after
+a resize.
+
+The per-line right `│` SHALL be positioned using a
 `(space :align-to right)` (or `(space :align-to (- right N))`)
-display spec so the border lands flush with each window's right
+display spec so the rail lands flush with each window's right
 edge at redisplay time, rather than at a fixed buffer-wide column.
+The top / bottom border corners land on the same column as that
+rail.
 
 Each per-line overlay SHALL set a `wrap-prefix` property carrying
 the left rail (`│ `) so that under `visual-line-mode` or
@@ -215,6 +226,22 @@ no argc directive.
 - **THEN** its `display` spec SHALL include a
   `(space :align-to right)` (or `(space :align-to (- right N))`)
   segment positioning the `│` at the window's right edge
+
+#### Scenario: Top and bottom borders draw a continuous dash rule
+
+- **GIVEN** a top or bottom border built for a known box width
+- **WHEN** its string is inspected
+- **THEN** the horizontal rule SHALL be filled with literal `─`
+  glyphs spanning the width, AND SHALL NOT contain a
+  `(space :align-to right)` / `(space :align-to (- right N))`
+  stretch in place of the rule
+
+#### Scenario: Borders re-fit on window configuration change
+
+- **GIVEN** a buffer with `argc-mode` enabled
+- **WHEN** the mode's hook registration is inspected
+- **THEN** `argc--schedule-rebuild` SHALL be on the buffer-local
+  `window-configuration-change-hook`
 
 #### Scenario: Continuation rows continue the left rail
 
