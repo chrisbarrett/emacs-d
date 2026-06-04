@@ -120,4 +120,16 @@
   (when (+file-should-be-opened-read-only-p (buffer-file-name))
     (read-only-mode +1)))
 
+;;; Shebang fontification
+
+(defun +fontify-shebang-h ()
+  "Fontify a leading shebang line in any `prog-mode' buffer."
+  (font-lock-add-keywords
+   nil
+   `((,(rx buffer-start "#!" (* nonl) eol) 0 'font-lock-preprocessor-face t))
+   'append)
+  (font-lock-flush))
+
+(add-hook 'prog-mode-local-vars-hook #'+fontify-shebang-h)
+
 ;;; init.el ends here
