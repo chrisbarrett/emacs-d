@@ -23,6 +23,14 @@
     (cl-some (lambda (ov) (eq (overlay-get ov 'face) face))
              (overlays-in (point-min) (point-max)))))
 
+(defun argc-test-faces-at (content pos)
+  "Return faces on overlays covering POS (1-based) in CONTENT."
+  (with-temp-buffer
+    (insert content)
+    (argc--apply-face-overlays)
+    (delq nil (mapcar (lambda (ov) (overlay-get ov 'face))
+                      (overlays-at pos)))))
+
 
 ;;; Autoload + feature wiring
 
@@ -162,6 +170,76 @@ argc grants @env the same `param-value' slot as @arg/@option."
 (ert-deftest argc-test-fontify-option-description ()
   "@option description text should get font-lock-doc-face."
   (should (argc-test-has-face-p "# @option -f --force Override existing" 'font-lock-doc-face)))
+
+
+;;; New faces (bind-env, fn)
+
+(ert-deftest argc-test-new-faces-defined-and-inherit ()
+  "`argc-bind-env-face' and `argc-fn-face' SHALL be faces inheriting documented built-ins."
+  (should (facep 'argc-bind-env-face))
+  (should (facep 'argc-fn-face))
+  (should (eq (face-attribute 'argc-bind-env-face :inherit nil)
+              'font-lock-variable-name-face))
+  (should (eq (face-attribute 'argc-fn-face :inherit nil)
+              'font-lock-function-name-face)))
+
+
+;;; Bind-env suffix ($$ / $NAME)
+
+(ert-deftest argc-test-fontify-bind-env-name ()
+  "A `$NAME' env-binding suffix should get argc-bind-env-face."
+  (should (argc-test-has-face-p
+           "# @flag -v --verbose $VERBOSE Verbose mode" 'argc-bind-env-face)))
+
+(ert-deftest argc-test-fontify-bind-env-anonymous ()
+  "A `$$' anonymous env-binding suffix should get argc-bind-env-face."
+  (should (argc-test-has-face-p
+           "# @option --port $$ Port" 'argc-bind-env-face)))
+
+(ert-deftest argc-test-bind-env-bare-dollar-untouched ()
+  "A bare `$' in a directive description should not get argc-bind-env-face."
+  (should-not (argc-test-has-face-p
+               "# @arg cost Price is $ per unit" 'argc-bind-env-face)))
+
+
+;;; Multi-value modifier delimiter
+
+(ert-deftest argc-test-fontify-modifier-delimiter ()
+  "The delimiter char in `*,' should be part of the argc-modifier-face span."
+  ;; `,' is at column 18 (1-based) in `# @option --tags*,'.
+  (should (memq 'argc-modifier-face
+                (argc-test-faces-at "# @option --tags*, Comma-separated tags" 18))))
+
+(ert-deftest argc-test-modifier-delimiter-keeps-choice ()
+  "A delimiter does not swallow a choice list `|' on the same line."
+  (should (memq 'argc-modifier-face
+                (argc-test-faces-at "# @option --tags*, [a|b|c] Tags" 18)))
+  (should (argc-test-has-face-p
+           "# @option --tags*, [a|b|c] Tags" 'argc-choice-face)))
+
+
+;;; Backtick function references
+
+(ert-deftest argc-test-fontify-choice-fn ()
+  "A function choice list ([`fn`]) should get argc-fn-face on the backtick span."
+  (should (argc-test-has-face-p
+           "# @option --file[`_choice_fn`] File" 'argc-fn-face)))
+
+(ert-deftest argc-test-fontify-default-fn ()
+  "A function default (=`fn`) should get argc-fn-face on the backtick span."
+  (should (argc-test-has-face-p
+           "# @arg name=`_default_fn` Name" 'argc-fn-face)))
+
+(ert-deftest argc-test-choice-fn-question-keeps-choice ()
+  "The `?' in [?`fn`] keeps argc-choice-face; only the `fn` span is fn-faced."
+  (let ((faces (argc-test-faces-at "# @option --file[?`_fn`] File" 18)))
+    (should (memq 'argc-choice-face faces))
+    (should-not (memq 'argc-fn-face faces))))
+
+(ert-deftest argc-test-prose-backtick-untouched ()
+  "A prose backtick (not after = or [) should not get argc-fn-face."
+  (should-not (argc-test-has-face-p
+               "# @cmd Use `code` here" 'argc-fn-face)))
 
 
 ;;; Block detection

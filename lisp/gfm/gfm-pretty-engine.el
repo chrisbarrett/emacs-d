@@ -344,6 +344,8 @@ width."
   rebuild-fn
   full-rebuild-required-p
   reveal-fn
+  block-at-point-fn
+  edit-at-point-fn
   (phase 'containers))
 
 (defconst gfm-pretty--phases '(atoms containers overlays)
@@ -388,7 +390,12 @@ Recognised keys:
                        full rebuild for that dirty region.
   :on-enable-fn        optional (no-arg) thunk run on enable.
   :on-disable-fn       optional (no-arg) thunk run on disable.
-  :reveal-fn           optional (no-arg) bespoke reveal handler."
+  :reveal-fn           optional (no-arg) bespoke reveal handler.
+  :block-at-point-fn   optional (no-arg) returns the decorator's block
+                       at point, or nil; drives `gfm-pretty-block-at-point'.
+  :edit-at-point-fn    optional (no-arg) invokes the decorator's editor
+                       for the block at point; drives
+                       `gfm-pretty-edit-block-at-point'."
   (declare (indent 1))
   (let ((phase (or (plist-get plist :phase) ''containers)))
     `(progn
@@ -408,7 +415,9 @@ Recognised keys:
               :on-disable-fn     ,(plist-get plist :on-disable-fn)
               :rebuild-fn        ,(plist-get plist :rebuild-fn)
               :full-rebuild-required-p ,(plist-get plist :full-rebuild-required-p)
-              :reveal-fn         ,(plist-get plist :reveal-fn))))))
+              :reveal-fn         ,(plist-get plist :reveal-fn)
+              :block-at-point-fn ,(plist-get plist :block-at-point-fn)
+              :edit-at-point-fn  ,(plist-get plist :edit-at-point-fn))))))
 
 ;;; Overlay registry
 

@@ -13,6 +13,7 @@
 ;;; Code:
 
 (require 'cl-lib)
+(require 'box-glyphs)
 (require 'gfm-pretty-engine)
 
 ;; Forward declarations: evil's selection state vars are touched by
@@ -51,21 +52,10 @@ Compensates for icon-font glyphs whose pixel width exceeds the
 
 (defun gfm-pretty--normalised-border-face (face)
   "Return a face spec that inherits FACE but resets text-styling attrs.
-Border glyphs share buffer regions with prose whose font-lock face
-carries `:slant italic', `:underline t', etc.  Without an explicit
-override, those attrs leak through face composition on GUI frames
-and visually slant the box edges.
-
-`:background' is explicitly pinned to `\"unspecified-bg\"' — the
-literal Emacs marker for the system / frame background — to stop
-the buffer position's text-property `:background' (e.g. `diff-added'
-on the newline at the body line's end) from bleeding through into
-border / before-string / after-string chars whose `:background'
-would otherwise be unspecified and inherit from below."
-  `(:inherit ,face
-    :slant normal :weight light
-    :underline nil :overline nil :strike-through nil :box nil
-    :background "unspecified-bg"))
+Thin wrapper over `box-glyphs-normalised-face' with `:weight light'
+added to draw a hairline box; see that function's docstring for why
+each attr is neutralised and the background pinned."
+  (box-glyphs-normalised-face face :weight 'light))
 
 (defun gfm-pretty--top-strings (width face buffer-width &optional icon)
   "Return (LEADING . TRAILING) split of the top border WIDTH cols wide.

@@ -31,7 +31,7 @@
         (let ((limit (save-excursion (forward-line 50) (point))))
           (when (re-search-forward
                  (rx bol (* space) "#" (+ space)
-                     "@" (or "describe" "cmd" "alias" "arg" "option"
+                     "@" (or "describe" "version" "cmd" "alias" "arg" "option"
                              "flag" "env" "meta"))
                  limit t)
             (argc-mode 1)))))))

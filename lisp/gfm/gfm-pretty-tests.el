@@ -16,6 +16,14 @@
 (require 'gfm-pretty-hrule)
 (require 'gfm-pretty-links)
 
+;; `gfm-pretty-tab-dwim' gates on `(bound-and-true-p evil-mode)'.  The
+;; tab-dwim tests dynamically bind `evil-mode' with `let' to simulate
+;; insert state; under `lexical-binding' that only takes effect when
+;; the symbol is special.  Evil declares it special when loaded, but
+;; the `--affected' single-file test runner does not load evil, so
+;; declare it here to keep the binding dynamic in every environment.
+(defvar evil-mode)
+
 ;; Load lang-markdown composition (config of `markdown-code-lang-modes',
 ;; `gfm-mode-hook' wiring, `major-mode-remap-alist') so tests that exercise
 ;; behaviour driven by that config see the live values.
@@ -4719,6 +4727,34 @@ hooks and are checked separately."
     (should (gfm-pretty--state-get 'fences 'enabled-p))
     (gfm-pretty-toggle-decorator 'fences)
     (should-not (gfm-pretty--state-get 'fences 'enabled-p))))
+
+(ert-deftest gfm-pretty/tables-declares-introspection-via-registry ()
+  "The tables decorator declares block-at-point/edit-at-point as registry slots,
+not via a naming convention."
+  (require 'gfm-pretty-tables)
+  (let ((d (gfm-pretty--get 'tables)))
+    (should (eq (gfm-pretty--decorator-block-at-point-fn d)
+                #'gfm-pretty-tables--block-at-point))
+    (should (eq (gfm-pretty--decorator-edit-at-point-fn d)
+                #'gfm-pretty-tables--edit-at-point))))
+
+(ert-deftest gfm-pretty/block-at-point-finds-decorator-by-slot ()
+  "`gfm-pretty-block-at-point' resolves the editor from the registry slot,
+so a decorator whose function is NOT conventionally named still participates."
+  (require 'gfm-pretty-tables)
+  (with-temp-buffer
+    (let* ((name 'gfm-pretty-test-oddly-named-decorator)
+           (gfm-pretty--decorators
+            (cons (cons name
+                        (make-gfm-pretty--decorator
+                         :name name
+                         :block-at-point-fn (lambda () '(1 . 2))
+                         :edit-at-point-fn #'ignore))
+                  gfm-pretty--decorators)))
+      (gfm-pretty--state-set name 'enabled-p t)
+      (let ((hit (gfm-pretty-block-at-point)))
+        (should hit)
+        (should (eq name (car hit)))))))
 
 (ert-deftest gfm-pretty/block-at-point-dispatches-to-tables ()
   "`gfm-pretty-block-at-point' returns (tables . BLOCK) inside a table."

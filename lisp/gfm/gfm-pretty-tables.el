@@ -2260,9 +2260,9 @@ block-containment fallback."
         (gfm-pretty-fences--find-blocks))))
 
 (defalias 'gfm-pretty-tables--edit-at-point #'gfm-pretty-tables-edit-table-at-point
-  "Conventional decorator-protocol name for the table editor.
-The umbrella `gfm-pretty-edit-block-at-point' dispatch looks for
-`<name>--edit-at-point' by intern.")
+  "Decorator-protocol editor for the table at point.
+Registered through the `:edit-at-point-fn' slot of
+`gfm-pretty-define-decorator' below.")
 
 (with-eval-after-load 'gfm-pretty-engine
   (gfm-pretty-define-decorator 'tables
@@ -2274,7 +2274,9 @@ The umbrella `gfm-pretty-edit-block-at-point' dispatch looks for
     :rebuild-fn            #'gfm-pretty-tables--rebuild
     :full-rebuild-required-p #'gfm-pretty-tables--full-rebuild-required-p
     :on-enable-fn          #'gfm-pretty-tables--on-enable
-    :on-disable-fn         #'gfm-pretty-tables--on-disable))
+    :on-disable-fn         #'gfm-pretty-tables--on-disable
+    :block-at-point-fn     #'gfm-pretty-tables--block-at-point
+    :edit-at-point-fn      #'gfm-pretty-tables--edit-at-point))
 
 (provide 'gfm-pretty-tables)
 

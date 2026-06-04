@@ -122,6 +122,15 @@
     (+argc-maybe-enable)
     (should (bound-and-true-p argc-mode))))
 
+;;; +argc-maybe-enable triggers on a lone @version directive
+
+(ert-deftest argc-test-maybe-enable-on-version ()
+  "A buffer whose only directive is @version should enable argc-mode."
+  (with-temp-buffer
+    (insert "#!/usr/bin/env bash\n# @version 1.0.0\n")
+    (+argc-maybe-enable)
+    (should (bound-and-true-p argc-mode))))
+
 ;;; P35b: +argc-maybe-enable skips indirect buffers
 
 (ert-deftest argc-test-maybe-enable-skip-indirect ()
