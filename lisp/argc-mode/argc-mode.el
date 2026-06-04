@@ -17,6 +17,7 @@
 ;;; Code:
 
 (require 'cl-lib)
+(require 'box-glyphs)
 
 (defgroup argc nil
   "Fontification for argc CLI framework directives."
@@ -57,6 +58,16 @@
   "Face for argc default values (=value)."
   :group 'argc)
 
+(defface argc-bind-env-face
+  '((t :inherit font-lock-variable-name-face))
+  "Face for argc environment-binding suffixes ($$, $NAME)."
+  :group 'argc)
+
+(defface argc-fn-face
+  '((t :inherit font-lock-function-name-face))
+  "Face for argc backtick function references (=`fn`, [`fn`])."
+  :group 'argc)
+
 (defface argc-box-face
   '((t :inherit shadow))
   "Face for argc box-drawing characters."
@@ -87,10 +98,12 @@
                          "flag" "env" "meta")))
      (1 argc-directive-face))
 
-    ;; @arg <name><modifier>
+    ;; @arg <name><modifier>.  A modifier is `!' or `~', or a `*' / `+'
+    ;; optionally carrying one multi-value delimiter from `,:;@|/'.
     (,(rx bol (* space) "#" (+ space) "@arg" (+ space)
           (group (+ (any alnum ?_ ?-)))
-          (? (group (any ?! ?* ?+ ?, ?~))))
+          (? (group (or (seq (any ?* ?+) (? (any ?, ?: ?\; ?@ ?| ?/)))
+                        (any ?! ?~)))))
      (1 argc-param-name-face)
      (2 argc-modifier-face))
 
@@ -98,7 +111,8 @@
     (,(rx bol (* space) "#" (+ space) "@option" (+ space)
           (group (? "-" (any alnum) (+ space))
                  "--" (+ (any alnum ?_ ?-)))
-          (? (group (any ?! ?* ?+))))
+          (? (group (or (seq (any ?* ?+) (? (any ?, ?: ?\; ?@ ?| ?/)))
+                        (any ?! ?~)))))
      (1 argc-flag-face)
      (2 argc-modifier-face))
 
@@ -106,14 +120,16 @@
     (,(rx bol (* space) "#" (+ space) "@flag" (+ space)
           (group (? "-" (any alnum) (+ space))
                  "--" (+ (any alnum ?_ ?-)))
-          (? (group (any ?*))))
+          (? (group (or (seq (any ?* ?+) (? (any ?, ?: ?\; ?@ ?| ?/)))
+                        (any ?! ?~)))))
      (1 argc-flag-face)
      (2 argc-modifier-face))
 
     ;; @env NAME with modifier
     (,(rx bol (* space) "#" (+ space) "@env" (+ space)
           (group (+ (any upper ?_)))
-          (? (group (any ?! ?*))))
+          (? (group (or (seq (any ?* ?+) (? (any ?, ?: ?\; ?@ ?| ?/)))
+                        (any ?! ?~)))))
      (1 argc-param-name-face)
      (2 argc-modifier-face))
 
@@ -140,7 +156,24 @@
     ;; Default values =value (not inside brackets) — also valid on @env.
     (,(rx bol (* space) "#" (+ space) "@" (or "option" "arg" "env") (+ nonl)
           (group "=" (+ (not (any space ?\[ ?\])))))
-     (1 argc-default-value-face)))
+     (1 argc-default-value-face))
+
+    ;; Environment-binding suffix: ` $$' (anonymous) or ` $NAME' on
+    ;; @arg/@option/@flag/@env.  argc requires the leading space (`tag(" $")');
+    ;; the name charset is uppercase ASCII + underscore.
+    (,(rx bol (* space) "#" (+ space) "@" (or "arg" "option" "flag" "env")
+          (+? nonl)
+          (group space "$" (or "$" (+ (any upper ?_)))))
+     (1 argc-bind-env-face))
+
+    ;; Backtick function reference inside a default (=`fn`) or choice list
+    ;; ([`fn`], [?`fn`]).  Ordered last so it re-faces just the `fn' span,
+    ;; overriding the enclosing default / choice face.  The optional `?'
+    ;; stays choice-faced because only the backtick span is captured.
+    (,(rx bol (* space) "#" (+ space) "@" (or "option" "arg" "env") (+ nonl)
+          (any ?= ?\[) (? "?")
+          (group "`" (+? nonl) "`"))
+     (1 argc-fn-face)))
   "Argc face rules.
 Each entry is (REGEXP (GROUP FACE) ...).  Used by `argc--apply-face-overlays'.
 Rules are processed in order; later rules create higher-priority overlays.")
@@ -210,17 +243,9 @@ Checks the next non-blank line after POS."
 
 (defun argc--normalised-box-face ()
   "Return a face spec inheriting `argc-box-face' with text styling cleared.
-Border glyphs share buffer regions with prose font-lock that may
-carry `:slant italic', `:underline t', etc; without an explicit
-override those attrs leak through face composition on GUI frames
-and slant the box edges.  `:background' is pinned to the system
-marker `\"unspecified-bg\"' so text-property backgrounds (e.g.
-`diff-added' on a body line) do not bleed into border /
-before-string / after-string chars."
-  '(:inherit argc-box-face
-    :slant normal
-    :underline nil :overline nil :strike-through nil :box nil
-    :background "unspecified-bg"))
+Thin wrapper over `box-glyphs-normalised-face'; see its docstring for
+why each attr is neutralised and the background pinned."
+  (box-glyphs-normalised-face 'argc-box-face))
 
 (defun argc--box-width ()
   "Target column count for the top / bottom borders.
@@ -246,11 +271,7 @@ the way the `gfm-pretty' fence borders are."
          (left (propertize (string corner-l) 'face face))
          (right-corner (propertize (string corner-r) 'face face)))
     (if label
-        (let* ((label-face `(:inherit (bold argc-box-face)
-                             :slant normal
-                             :underline nil :overline nil
-                             :strike-through nil :box nil
-                             :background "unspecified-bg"))
+        (let* ((label-face (box-glyphs-normalised-face '(bold argc-box-face)))
                (bold-label (propertize label 'face label-face))
                (label-w (string-width label))
                ;; ┌ + dashes + ' ' + label + ' ' + ┐ = WIDTH
