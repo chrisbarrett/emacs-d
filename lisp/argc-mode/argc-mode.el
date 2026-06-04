@@ -64,7 +64,7 @@
 
 (defconst argc--directive-re
   (rx bol (* space) "#" (+ space)
-      "@" (or "describe" "cmd" "alias" "arg" "option"
+      "@" (or "describe" "version" "cmd" "alias" "arg" "option"
               "flag" "env" "meta"))
   "Regexp matching a line containing an argc directive.")
 
@@ -76,14 +76,14 @@
   `(;; Base: description text gets doc face.
     ;; Later rules create higher-priority overlays that override.
     (,(rx bol (* space) "#" (+ space)
-          "@" (or "describe" "cmd" "alias" "arg" "option"
+          "@" (or "describe" "version" "cmd" "alias" "arg" "option"
                   "flag" "env" "meta")
           (+ space) (group (+? nonl) eol))
      (1 font-lock-doc-face))
 
     ;; @directive tag
     (,(rx bol (* space) "#" (+ space)
-          (group "@" (or "describe" "cmd" "alias" "arg" "option"
+          (group "@" (or "describe" "version" "cmd" "alias" "arg" "option"
                          "flag" "env" "meta")))
      (1 argc-directive-face))
 
@@ -132,13 +132,13 @@
           (group "<" (+ (any alnum ?_ ?+ ?* ??)) ">"))
      (1 argc-notation-face))
 
-    ;; Choice lists [a|b|c]
-    (,(rx bol (* space) "#" (+ space) "@" (or "option" "arg") (+ nonl)
+    ;; Choice lists [a|b|c] — argc allows these on @env too.
+    (,(rx bol (* space) "#" (+ space) "@" (or "option" "arg" "env") (+ nonl)
           (group "[" (+? nonl) "]"))
      (1 argc-choice-face))
 
-    ;; Default values =value (not inside brackets)
-    (,(rx bol (* space) "#" (+ space) "@" (or "option" "arg") (+ nonl)
+    ;; Default values =value (not inside brackets) — also valid on @env.
+    (,(rx bol (* space) "#" (+ space) "@" (or "option" "arg" "env") (+ nonl)
           (group "=" (+ (not (any space ?\[ ?\])))))
      (1 argc-default-value-face)))
   "Argc face rules.

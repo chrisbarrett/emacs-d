@@ -106,6 +106,29 @@
   "Choice list should get argc-choice-face."
   (should (argc-test-has-face-p "# @arg val[x|y|z]" 'argc-choice-face)))
 
+(ert-deftest argc-test-fontify-env-default ()
+  "@env default value (=value) should get argc-default-value-face.
+argc grants @env the same `param-value' slot as @arg/@option."
+  (should (argc-test-has-face-p "# @env AUTOSEND=0 Auto-submit" 'argc-default-value-face)))
+
+(ert-deftest argc-test-fontify-env-choices ()
+  "@env choice list should get argc-choice-face."
+  (should (argc-test-has-face-p "# @env LEVEL[debug|info|warn] Log level" 'argc-choice-face)))
+
+(ert-deftest argc-test-fontify-version ()
+  "@version tag should get argc-directive-face."
+  (should (argc-test-has-face-p "# @version 1.0.0" 'argc-directive-face)))
+
+(ert-deftest argc-test-fontify-version-description ()
+  "@version value text should get font-lock-doc-face."
+  (should (argc-test-has-face-p "# @version 1.0.0" 'font-lock-doc-face)))
+
+(ert-deftest argc-test-version-starts-block ()
+  "@version is a recognised directive, so it opens a box block."
+  (with-temp-buffer
+    (insert "# @version 1.0.0\n")
+    (should (= 1 (length (argc--find-blocks))))))
+
 (ert-deftest argc-test-no-false-positive ()
   "Regular comments should not get argc-directive-face."
   (should-not (argc-test-has-face-p "# This is a regular comment" 'argc-directive-face)))

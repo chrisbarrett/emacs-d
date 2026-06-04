@@ -89,8 +89,8 @@ overlapping ranges:
 
 1. Description text following any directive carries
    `font-lock-doc-face`.
-2. The `@<directive>` tag (`@describe`, `@cmd`, `@alias`, `@arg`,
-   `@option`, `@flag`, `@env`, `@meta`) carries
+2. The `@<directive>` tag (`@describe`, `@version`, `@cmd`,
+   `@alias`, `@arg`, `@option`, `@flag`, `@env`, `@meta`) carries
    `argc-directive-face`.
 3. `@arg <name>` and `@env <NAME>` argument identifiers carry
    `argc-param-name-face`; their trailing modifier character
@@ -101,9 +101,12 @@ overlapping ranges:
    `argc-param-name-face`.
 6. Angle-bracket notations (`<FILE>`, `<NUM>`) carry
    `argc-notation-face`.
-7. Choice lists (`[a|b|c]`) carry `argc-choice-face`.
-8. Default values (`=value`, not inside brackets) carry
-   `argc-default-value-face`.
+7. Choice lists (`[a|b|c]`) on `@option`, `@arg`, and `@env`
+   carry `argc-choice-face`.
+8. Default values (`=value`, not inside brackets) on `@option`,
+   `@arg`, and `@env` carry `argc-default-value-face`. argc grants
+   `@env` the same `param-value` slot as the others, so these
+   forms SHALL be faced on `@env` identically.
 
 Regular shell comments that do NOT start with an argc directive
 SHALL NOT receive any `argc-*` face.
@@ -131,6 +134,23 @@ SHALL NOT receive any `argc-*` face.
 - **WHEN** the buffer is fontified
 - **THEN** the flag run `-t --tries` SHALL carry `argc-flag-face`
 - **AND** `<NUM>` SHALL carry `argc-notation-face`
+
+#### Scenario: `@version` tag and value fontify
+
+- **GIVEN** a buffer with `argc-mode` enabled containing
+  `# @version 1.0.0`
+- **WHEN** the buffer is fontified
+- **THEN** `@version` SHALL carry `argc-directive-face`
+- **AND** `1.0.0` SHALL carry `font-lock-doc-face`
+- **AND** the line SHALL open a box block
+
+#### Scenario: `@env` default value and choices fontify
+
+- **GIVEN** a buffer with `argc-mode` enabled containing
+  `# @env AUTOSEND=0` and `# @env LEVEL[debug|info|warn]`
+- **WHEN** the buffer is fontified
+- **THEN** `=0` SHALL carry `argc-default-value-face`
+- **AND** `[debug|info|warn]` SHALL carry `argc-choice-face`
 
 #### Scenario: Non-argc comments are untouched
 
