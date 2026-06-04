@@ -35,6 +35,15 @@
 
 (add-hook 'eat-exec-hook #'+claude-code-eat-remap-nbsp)
 
+;; git-commit-style editing surface for the prompt files Claude opens via
+;; $EDITOR. The editor wrapper opens them through `emacsclient', so we hook
+;; `server-visit-hook' (fires only for server-visited buffers) rather than
+;; `find-file-hook' (every file) -- ordinary editing pays nothing.
+;; `claude-prompt-setup-check-buffer' is autoloaded from lisp/claude-prompt/.
+
+(with-eval-after-load 'server
+  (add-hook 'server-visit-hook #'claude-prompt-setup-check-buffer))
+
 ;; Disable evil-mode in claude-code-ide buffers
 
 (use-package evil

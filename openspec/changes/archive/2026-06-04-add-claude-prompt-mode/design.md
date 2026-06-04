@@ -51,9 +51,21 @@ and calls `server-done` on finish / sends `-error Canceled by user` then
 Emacs did not spawn. So enabling `with-editor-mode` (`with-editor.el:423`) in
 the prompt buffer gives finish (`with-editor-finish`, :333), cancel
 (`with-editor-cancel`, :351), `kill-buffer` protection (:435), and the usage
-message (:438) for free. `git-commit` uses exactly this layering (minor mode on
-`find-file-hook` keyed by `git-commit-filename-regexp`, then flips on
-`with-editor-mode`), which we mirror.
+message (:438) for free. `git-commit` uses exactly this layering (minor mode
+keyed by `git-commit-filename-regexp`, then flips on `with-editor-mode`), which
+we mirror — except for the activation hook (see below).
+
+### Decision: activate on `server-visit-hook`, not `find-file-hook`
+
+`git-commit` enables its mode from a global `find-file-hook`, which runs for
+every file Emacs opens. The prompt files only ever arrive through the
+`emacsclient` editor wrapper, so we instead hook `server-visit-hook`, which
+fires only for server-visited buffers — ordinary editing pays nothing. The
+hook enables the mode when the wrapper has registered a context for the file
+(the primary, wrapper-driven trigger) or, as a fallback for editor invocations
+outside the wrapper, when the filename matches `claude-prompt-filename-regexp`.
+_Alternative rejected:_ a global `find-file-hook` — needless per-file overhead
+for a buffer that only ever opens via the server.
 
 Cancel keeps `with-editor-cancel` as-is: it makes `emacsclient` exit non-zero,
 which the wrapper uses to suppress auto-send and which Claude treats as "keep
@@ -96,12 +108,14 @@ editor was actually opened.
 
 `emacsclient --eval` returns immediately (non-blocking) while file-visiting
 blocks until `server-done`. The wrapper therefore makes two calls: first
-`emacsclient -e '(+claude-prompt-register-context "<file>" "<repo_root>")'` to
-stash an alist entry keyed by `(file-truename file)`, then
-`emacsclient -nw -c <file>` to open and block. `find-file-hook` setup looks the
-context up by `buffer-file-name`, applies it buffer-local, and pops the entry.
-Keyed by path → no race between the two calls. When no entry exists (editor
-invoked outside the wrapper), repo root falls back to the newest history entry.
+`emacsclient -e '(claude-prompt-register-context "<file>" "<repo_root>")'` to
+stash an entry keyed by `(file-truename file)`, then
+`emacsclient -nw -c <file>` to open and block. The registered entry both arms
+activation (`server-visit-hook`, see above) and supplies the repo root: setup
+looks the context up by `buffer-file-name`, applies it buffer-local, and pops
+the entry. Keyed by path → no race between the two calls. When no entry exists
+(editor invoked outside the wrapper), repo root falls back to the newest
+history entry.
 
 ### Decision: tmux/auto-send stays entirely in the wrapper
 

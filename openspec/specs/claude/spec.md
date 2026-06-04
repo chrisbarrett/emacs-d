@@ -1,25 +1,49 @@
-## ADDED Requirements
+# claude Specification
+
+## Purpose
+
+Behaviour-facing. Covers the `claude-prompt-mode` editing surface for Claude
+Code prompt files opened through the Emacs server (`modules/claude/`): a
+`git-commit`-style finish/cancel session layered on `with-editor`, a mode-line
+lighter and on-open help, a repo-scoped prompt-history ring sourced from
+`~/.claude/history.jsonl`, a `consult`-based recall picker with repo and global
+scopes, and the git-anchored repo classification that scopes both. No `claude`
+axis existed under `openspec/specs/` but `modules/claude/` does, so this
+introduces the `claude` behaviour axis (see the change's design.md, "Decision:
+new axis `claude`"). The Emacs layer is tmux-agnostic; auto-send/tmux logic
+lives in the external editor wrapper and is out of scope here.
+
+## Requirements
 
 ### Requirement: Activation on Claude prompt files
 
-`+claude-prompt-mode` SHALL be a buffer-local minor mode layered on the file's
-existing major mode (normally `gfm-mode`). A `find-file-hook` entry SHALL
-enable it when, and only when, the visited file's name matches the Claude
-prompt-file pattern: a `claude-prompt-<guid>.md` file inside a `claude-<uid>`
-directory under the system temporary directory (e.g.
-`/private/tmp/claude-503/claude-prompt-<guid>.md`). The pattern SHALL be
-defined with `rx`.
+`claude-prompt-mode` SHALL be a buffer-local minor mode layered on the file's
+existing major mode (normally `gfm-mode`). Activation SHALL be driven by the
+editor wrapper opening the prompt file through the Emacs server: a
+`server-visit-hook` entry — which runs only for server-visited buffers, so
+ordinary `find-file` visits incur no cost — SHALL enable the mode when either
+the wrapper has registered a context for the file (the primary path, see "Repo
+classification") or, as a fallback, the visited file's name matches the Claude
+prompt-file pattern. That pattern — a `claude-prompt-<guid>.md` file inside a
+`claude-<uid>` directory under the system temporary directory (e.g.
+`/private/tmp/claude-503/claude-prompt-<guid>.md`) — SHALL be defined with
+`rx`. The mode SHALL NOT be enabled from a global `find-file-hook`.
 
-#### Scenario: Prompt file enables the mode
+#### Scenario: Wrapper-opened prompt file enables the mode
 
-- **WHEN** Emacs visits `/private/tmp/claude-503/claude-prompt-abc.md` via the server
-- **THEN** `+claude-prompt-mode` is enabled in that buffer
+- **WHEN** the editor wrapper registers a context for the prompt file and the server visits it
+- **THEN** `claude-prompt-mode` is enabled in that buffer
 - **AND** `with-editor-mode` is enabled in that buffer
+
+#### Scenario: Prompt file enables the mode by pattern fallback
+
+- **WHEN** the server visits `/private/tmp/claude-503/claude-prompt-abc.md` with no registered context
+- **THEN** `claude-prompt-mode` is enabled in that buffer
 
 #### Scenario: Unrelated markdown file does not enable the mode
 
-- **WHEN** Emacs visits an ordinary `notes.md`
-- **THEN** `+claude-prompt-mode` is not enabled
+- **WHEN** the server visits an ordinary `notes.md` with no registered context
+- **THEN** `claude-prompt-mode` is not enabled
 
 ### Requirement: Finish and cancel via with-editor
 
@@ -50,7 +74,7 @@ active bindings (finish, cancel, history previous/next, recall search).
 
 #### Scenario: Help shown on open
 
-- **WHEN** `+claude-prompt-mode` activates in a buffer
+- **WHEN** `claude-prompt-mode` activates in a buffer
 - **THEN** a message lists the `C-c C-c`, `C-c C-k`, `M-p`/`M-n`, and `C-r` bindings
 
 ### Requirement: Repo-scoped prompt history ring
