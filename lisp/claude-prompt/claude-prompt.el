@@ -260,6 +260,14 @@ projects."
 ;;; Mode
 
 (declare-function with-editor-finish "with-editor" (force))
+(declare-function evil-insert-state "evil-states" (&optional arg))
+
+(defun claude-prompt--position-point ()
+  "Place point at the end of the prompt, ready to edit.
+Enters `evil' insert state so the prompt is immediately editable."
+  (goto-char (point-max))
+  (when (fboundp 'evil-insert-state)
+    (evil-insert-state)))
 
 (defvar-local claude-prompt--initial-content nil
   "Buffer body as Claude wrote it when the file was opened.
@@ -323,7 +331,8 @@ repo-scoped history ring (\\`M-p' / \\`M-n') and a `consult' recall picker
     ;; ordering, so cancel always exits zero (Claude crashes on a failed editor).
     (setq-local minor-mode-overriding-map-alist
                 (cons (cons 'with-editor-mode claude-prompt-mode-map)
-                      minor-mode-overriding-map-alist))))
+                      minor-mode-overriding-map-alist))
+    (claude-prompt--position-point)))
 
 (defun claude-prompt--registered-p ()
   "Return non-nil if the current buffer's file has a registered context.

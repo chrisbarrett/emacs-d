@@ -261,6 +261,19 @@ Claude crashes on a failed editor, so cancel must route through
           (setq kill-buffer-query-functions nil)
           (set-buffer-modified-p nil))))))
 
+(ert-deftest claude-prompt/position-point-ends-at-max-in-insert ()
+  "Point goes to end of buffer and enters `evil' insert state, any length."
+  (dolist (body '("one line prompt" "first line\nsecond line\nthird"))
+    (let ((insert-entered nil))
+      (cl-letf (((symbol-function 'evil-insert-state)
+                 (lambda (&rest _) (setq insert-entered t))))
+        (with-temp-buffer
+          (insert body)
+          (goto-char (point-min))
+          (claude-prompt--position-point)
+          (should (= (point) (point-max)))
+          (should insert-entered))))))
+
 (provide 'claude-prompt-tests)
 
 ;;; claude-prompt-tests.el ends here
