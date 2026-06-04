@@ -222,14 +222,29 @@ before-string / after-string chars."
     :underline nil :overline nil :strike-through nil :box nil
     :background "unspecified-bg"))
 
-(defun argc--make-border (corner-l corner-r &optional label)
-  "Build a window-relative box border using `:align-to right'.
-CORNER-L and CORNER-R are the corner characters.  LABEL, when
-non-nil, is right-aligned just before CORNER-R in bold."
+(defun argc--box-width ()
+  "Target column count for the top / bottom borders.
+Each body line's right rail `│' is positioned at `:align-to (- right
+3)' — i.e. 3 columns shy of the text area's right edge.  A border of
+this many glyphs spans columns 0..WIDTH-1, landing its right corner on
+the same column as that rail so the box closes flush.  Falls back to
+the selected window when the buffer is not displayed."
+  (let* ((win (get-buffer-window (current-buffer) t))
+         (w (if win (window-body-width win) (window-body-width))))
+    (max 20 (- w 2))))
+
+(defun argc--make-border (corner-l corner-r width &optional label)
+  "Build a WIDTH-column box border whose rule is drawn with `─' glyphs.
+CORNER-L and CORNER-R are the corner characters at columns 0 and
+WIDTH-1.  LABEL, when non-nil, is drawn in bold right-aligned just
+before CORNER-R, the dash fill running up to it.
+
+The fill uses literal `─' rather than a blank `:align-to' stretch
+\(which renders no visible rule), so the horizontal edge is continuous
+the way the `gfm-pretty' fence borders are."
   (let* ((face (argc--normalised-box-face))
          (left (propertize (string corner-l) 'face face))
-         (right-corner (propertize (string corner-r) 'face face))
-         (lead (propertize (make-string 2 ?─) 'face face)))
+         (right-corner (propertize (string corner-r) 'face face)))
     (if label
         (let* ((label-face `(:inherit (bold argc-box-face)
                              :slant normal
@@ -238,13 +253,14 @@ non-nil, is right-aligned just before CORNER-R in bold."
                              :background "unspecified-bg"))
                (bold-label (propertize label 'face label-face))
                (label-w (string-width label))
-               (pad (propertize " " 'face face
-                                'display `(space :align-to (- right ,(+ label-w 4)))))
+               ;; ┌ + dashes + ' ' + label + ' ' + ┐ = WIDTH
+               (dash-w (max 1 (- width 4 label-w)))
+               (fill (propertize (make-string dash-w ?─) 'face face))
                (gap (propertize " " 'face face)))
-          (concat left lead pad bold-label gap right-corner))
-      (let ((snap (propertize " " 'face face
-                              'display '(space :align-to (- right 3)))))
-        (concat left lead snap right-corner)))))
+          (concat left fill gap bold-label gap right-corner))
+      (let* ((dash-w (max 0 (- width 2)))
+             (fill (propertize (make-string dash-w ?─) 'face face)))
+        (concat left fill right-corner)))))
 
 (defun argc--substitute-hash (lbeg lend face)
   "Replace the `#' at the start of line [LBEG, LEND] with a `│' overlay.
@@ -296,9 +312,10 @@ with the rest of the box overlays."
              (end (nth 1 block))
              (func-name (argc--function-after end))
              (face (argc--normalised-box-face))
+             (box-width (argc--box-width))
              (wrap-rail (propertize "│ " 'face face))
-             (top (argc--make-border ?┌ ?┐ func-name))
-             (bottom (argc--make-border ?└ ?┘)))
+             (top (argc--make-border ?┌ ?┐ box-width func-name))
+             (bottom (argc--make-border ?└ ?┘ box-width)))
         (goto-char beg)
         (let ((first t)
               (done nil)
@@ -393,9 +410,13 @@ Skips indirect buffers since base buffer overlays are already visible."
       (progn
         (argc--rebuild)
         (add-hook 'after-change-functions #'argc--schedule-rebuild nil t)
+        ;; Borders are sized to the window width, so re-fit them when the
+        ;; window is resized or reconfigured.
+        (add-hook 'window-configuration-change-hook #'argc--schedule-rebuild nil t)
         (add-hook 'post-command-hook #'argc--reveal-hash-at-point nil t)
         (advice-add 'spell-fu-mark-incorrect :around #'argc--spell-fu-skip-directives))
     (remove-hook 'after-change-functions #'argc--schedule-rebuild t)
+    (remove-hook 'window-configuration-change-hook #'argc--schedule-rebuild t)
     (remove-hook 'post-command-hook #'argc--reveal-hash-at-point t)
     (advice-remove 'spell-fu-mark-incorrect #'argc--spell-fu-skip-directives)
     (when (timerp argc--rebuild-timer)

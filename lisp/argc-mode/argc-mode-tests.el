@@ -258,6 +258,51 @@
            (all-aligns (cl-mapcan #'argc-test--collect-display-aligns after-strings)))
       (should (cl-some #'argc-test--aligns-to-right-p all-aligns)))))
 
+(ert-deftest argc-test-border-fills-with-dashes ()
+  "Top/bottom border SHALL draw its horizontal rule with real `─' glyphs.
+A blank `(space :align-to ...)' stretch renders no visible rule, so the
+fill SHALL be box-drawing chars spanning the requested WIDTH."
+  (let* ((width 40)
+         (plain (argc--make-border ?┌ ?┐ width))
+         (labelled (argc--make-border ?┌ ?┐ width "main")))
+    ;; No blank stretch standing in for the rule.
+    (should-not (cl-some #'argc-test--aligns-to-right-p
+                         (argc-test--collect-display-aligns plain)))
+    (should-not (cl-some #'argc-test--aligns-to-right-p
+                         (argc-test--collect-display-aligns labelled)))
+    ;; Continuous run of `─' fills the width (not just the 2-char lead).
+    (should (>= (cl-count ?─ plain) (- width 3)))
+    (should (>= (cl-count ?─ labelled) 3))
+    ;; Border occupies exactly WIDTH display columns.
+    (should (= (string-width plain) width))
+    (should (= (string-width labelled) width))
+    ;; Label still present, right-aligned before the corner.
+    (should (string-match-p "main" labelled))))
+
+(ert-deftest argc-test-top-border-spans-box-width ()
+  "The live top border before-string SHALL span `argc--box-width' columns."
+  (with-temp-buffer
+    (insert "# @cmd Foo\nfoo() {\n}\n")
+    (argc--apply-box-overlays)
+    (let* ((ov (cl-find-if (lambda (o) (and (overlay-get o 'argc-box)
+                                            (overlay-get o 'before-string)))
+                           (overlays-in (point-min) (point-max))))
+           (bs (overlay-get ov 'before-string)))
+      (should bs)
+      ;; before-string is BORDER + "\n"; measure up to the newline.
+      (let ((border (substring bs 0 (string-match "\n" bs))))
+        (should (= (string-width border) (argc--box-width)))))))
+
+(ert-deftest argc-test-mode-rebuilds-on-window-size-change ()
+  "Enabling argc-mode SHALL schedule a rebuild on window configuration change
+so width-sized borders re-fit after a resize."
+  (with-temp-buffer
+    (insert "# @cmd Foo\nfoo() {\n}\n")
+    (argc-mode 1)
+    (should (memq #'argc--schedule-rebuild
+                  (buffer-local-value 'window-configuration-change-hook
+                                      (current-buffer))))))
+
 (ert-deftest argc-test-per-line-wrap-prefix-has-rail ()
   "Per-line overlays SHALL carry a `wrap-prefix' containing the rail `│ '."
   (with-temp-buffer
