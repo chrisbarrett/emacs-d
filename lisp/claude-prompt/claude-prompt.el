@@ -261,6 +261,8 @@ projects."
 
 (declare-function with-editor-finish "with-editor" (force))
 (declare-function evil-insert-state "evil-states" (&optional arg))
+(declare-function evil-make-intercept-map "evil-core" (keymap &optional state aux))
+(declare-function evil-normalize-keymaps "evil-core" (&optional state))
 
 (defun claude-prompt--position-point ()
   "Place point at the end of the prompt, ready to edit.
@@ -332,6 +334,14 @@ repo-scoped history ring (\\`M-p' / \\`M-n') and a `consult' recall picker
     (setq-local minor-mode-overriding-map-alist
                 (cons (cons 'with-editor-mode claude-prompt-mode-map)
                       minor-mode-overriding-map-alist))
+    ;; Evil state maps (e.g. insert-state `C-r' = `evil-paste-from-register')
+    ;; reach the buffer via `emulation-mode-map-alists', which outranks
+    ;; `minor-mode-overriding-map-alist'.  Marking our map an intercept map
+    ;; gives it precedence over evil too, so `C-r' recall works in any state.
+    (when (fboundp 'evil-make-intercept-map)
+      (evil-make-intercept-map claude-prompt-mode-map)
+      (when (fboundp 'evil-normalize-keymaps)
+        (evil-normalize-keymaps)))
     (claude-prompt--position-point)))
 
 (defun claude-prompt--registered-p ()
