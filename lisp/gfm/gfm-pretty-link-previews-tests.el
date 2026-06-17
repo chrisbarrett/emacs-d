@@ -1046,6 +1046,214 @@ into the boxed display string at the position `string-match' returns."
           (should (<= (cdr (nth 0 spans)) (car (nth 1 spans)))))))))
 
 
+;;; Token-unwrap helper (wrapped bare-line references)
+
+(ert-deftest gfm-pretty-link-previews/unwrap-token-strips-brackets ()
+  "`[X]' unwraps to inner `X' with 1 / -1 offsets."
+  (let ((r (gfm-pretty-link-previews--unwrap-token "[X]")))
+    (should (equal "X" (car r)))
+    (should (= 1 (cadr r)))
+    (should (= -1 (cddr r)))))
+
+(ert-deftest gfm-pretty-link-previews/unwrap-token-strips-angles ()
+  "`<X>' unwraps to inner `X' with 1 / -1 offsets."
+  (let ((r (gfm-pretty-link-previews--unwrap-token "<X>")))
+    (should (equal "X" (car r)))
+    (should (= 1 (cadr r)))
+    (should (= -1 (cddr r)))))
+
+(ert-deftest gfm-pretty-link-previews/unwrap-token-passes-unwrapped-through ()
+  "An unwrapped token is returned unchanged with zero offsets."
+  (let ((r (gfm-pretty-link-previews--unwrap-token "modules/auth.rs#L1-L5")))
+    (should (equal "modules/auth.rs#L1-L5" (car r)))
+    (should (= 0 (cadr r)))
+    (should (= 0 (cddr r)))))
+
+(ert-deftest gfm-pretty-link-previews/unwrap-token-mismatched-not-stripped ()
+  "Mismatched delimiters (`[X>') are not stripped."
+  (let ((r (gfm-pretty-link-previews--unwrap-token "[X>")))
+    (should (equal "[X>" (car r)))
+    (should (= 0 (cadr r)))
+    (should (= 0 (cddr r)))))
+
+(ert-deftest gfm-pretty-link-previews/unwrap-token-single-sided-not-stripped ()
+  "Single-sided delimiters (`[X', `X]') are not stripped."
+  (let ((r1 (gfm-pretty-link-previews--unwrap-token "[X"))
+        (r2 (gfm-pretty-link-previews--unwrap-token "X]")))
+    (should (equal "[X" (car r1)))
+    (should (= 0 (cadr r1)))
+    (should (equal "X]" (car r2)))
+    (should (= 0 (cadr r2)))))
+
+(ert-deftest gfm-pretty-link-previews/unwrap-token-empty-and-empty-pair-have-no-inner ()
+  "An empty token, or a matched pair with empty inner, returns nil."
+  (should-not (gfm-pretty-link-previews--unwrap-token ""))
+  (should-not (gfm-pretty-link-previews--unwrap-token "[]"))
+  (should-not (gfm-pretty-link-previews--unwrap-token "<>")))
+
+
+;;; Wrapped bare-line reference discovery
+
+(ert-deftest gfm-pretty-link-previews/wrapped-bracket-source-creates-overlay ()
+  "`[<path>#L<a>-L<b>]' on its own line gets one preview overlay."
+  (gfm-pretty-link-previews-tests--with-temp-source '("a" "b" "c") tmp
+    (with-temp-buffer
+      (insert (format "[%s#L1-L3]\n" tmp))
+      (let ((fill-column 200)) (gfm-pretty-link-previews--rebuild))
+      (let* ((ovs (gfm-pretty-link-previews-tests--overlays))
+             (abbrev (gfm-pretty-link-previews--abbrev-source-path tmp)))
+        (should (= 1 (length ovs)))
+        (should (string-match-p (regexp-quote (format "%s:1-3" abbrev))
+                                (overlay-get (car ovs) 'display)))))))
+
+(ert-deftest gfm-pretty-link-previews/wrapped-angle-source-creates-overlay ()
+  "`<<path>#L<a>-L<b>>' on its own line gets one preview overlay."
+  (gfm-pretty-link-previews-tests--with-temp-source '("a" "b" "c") tmp
+    (with-temp-buffer
+      (insert (format "<%s#L1-L3>\n" tmp))
+      (let ((fill-column 200)) (gfm-pretty-link-previews--rebuild))
+      (let* ((ovs (gfm-pretty-link-previews-tests--overlays))
+             (abbrev (gfm-pretty-link-previews--abbrev-source-path tmp)))
+        (should (= 1 (length ovs)))
+        (should (string-match-p (regexp-quote (format "%s:1-3" abbrev))
+                                (overlay-get (car ovs) 'display)))))))
+
+(ert-deftest gfm-pretty-link-previews/wrapped-diff-creates-lhs-margin-overlay ()
+  "`[diff:<base>...<head>#<path>]' on its own line renders the diff box."
+  (gfm-pretty-link-previews-tests--with-fake-call-process "+added\n-removed\n" 0
+    (with-temp-buffer
+      (insert "[diff:abc1234...def5678#main.tf]\n")
+      (gfm-pretty-link-previews--rebuild)
+      (let ((ovs (gfm-pretty-link-previews-tests--overlays)))
+        (should (= 1 (length ovs)))
+        (let* ((display (overlay-get (car ovs) 'display))
+               (lines (split-string display "\n"))
+               (body (cl-subseq lines 1 -1)))
+          (should (string-match-p "abc1234\\.\\.\\.def5678" (car lines)))
+          (dolist (line body)
+            (should (string-match-p "^│[-+ ]" line))))))))
+
+(ert-deftest gfm-pretty-link-previews/wrapped-overlay-covers-full-token ()
+  "The wrapped overlay range spans the `[ ]' delimiters, not just the inner URL."
+  (gfm-pretty-link-previews-tests--with-temp-source '("a" "b" "c") tmp
+    (with-temp-buffer
+      (insert (format "[%s#L1-L3]\n" tmp))
+      (gfm-pretty-link-previews--rebuild)
+      (let* ((ovs (gfm-pretty-link-previews-tests--overlays))
+             (ov (car ovs))
+             (token (format "[%s#L1-L3]" tmp)))
+        (should (= 1 (length ovs)))
+        ;; Overlay starts on the opening `[' (buffer pos 1) and ends
+        ;; one past the closing `]'.
+        (should (= 1 (overlay-start ov)))
+        (should (= (1+ (length token)) (overlay-end ov)))
+        (should (eq ?\[ (char-after (overlay-start ov))))
+        (should (eq ?\] (char-before (overlay-end ov))))))))
+
+(ert-deftest gfm-pretty-link-previews/wrapped-basename-only-creates-no-overlay ()
+  "Wrapped basename-only references (no `/' in inner path) are rejected."
+  (with-temp-buffer
+    (insert "[auth.rs#L1-L5]\n")
+    (insert "<auth.rs#L1-L5>\n")
+    (gfm-pretty-link-previews--rebuild)
+    (should (= 0 (length (gfm-pretty-link-previews-tests--overlays))))))
+
+(ert-deftest gfm-pretty-link-previews/wrapped-embedded-in-prose-is-skipped ()
+  "A wrapped reference embedded in prose is left undecorated."
+  (with-temp-buffer
+    (insert "See [modules/auth.rs#L1-L2] here.\n")
+    (gfm-pretty-link-previews--rebuild)
+    (should (= 0 (length (gfm-pretty-link-previews-tests--overlays))))))
+
+(ert-deftest gfm-pretty-link-previews/wrapped-list-item-overlay-covers-token-only ()
+  "`- [<bare-url>]' overlay starts at the `[', not the `- ' marker."
+  (gfm-pretty-link-previews-tests--with-temp-source '("a" "b" "c") tmp
+    (with-temp-buffer
+      (insert (format "- [%s#L1-L3]\n" tmp))
+      (gfm-pretty-link-previews--rebuild)
+      (let* ((ovs (gfm-pretty-link-previews-tests--overlays))
+             (ov (car ovs))
+             (display (overlay-get ov 'display))
+             (lines (split-string display "\n"))
+             (bot (car (last lines)))
+             (body (butlast (cdr lines))))
+        (should (= 1 (length ovs)))
+        ;; Overlay starts at column 2 (after `- '), on the `['.
+        (should (= 3 (overlay-start ov)))
+        (should (eq ?\[ (char-after (overlay-start ov))))
+        (should (string-prefix-p "  └" bot))
+        (dolist (line body)
+          (should (string-prefix-p "  │" line)))))))
+
+(ert-deftest gfm-pretty-link-previews/wrapped-blockquote-overlay-uses-rail-prefix ()
+  "`> [<bare-url>]' overlay continuation prefix mirrors the blockquote rail."
+  (require 'gfm-pretty-blockquotes)
+  (gfm-pretty-link-previews-tests--with-temp-source '("a" "b" "c") tmp
+    (with-temp-buffer
+      (insert (format "> [%s#L1-L3]\n" tmp))
+      (gfm-pretty-mode 1)
+      (unwind-protect
+          (let* ((ovs (gfm-pretty-link-previews-tests--overlays))
+                 (ov (car ovs))
+                 (display (overlay-get ov 'display))
+                 (lines (split-string display "\n"))
+                 (bot (car (last lines)))
+                 (body (butlast (cdr lines))))
+            (should (= 1 (length ovs)))
+            (should (string-match-p "▌" bot))
+            (dolist (line body)
+              (should (string-match-p "▌" line))))
+        (gfm-pretty-mode -1)))))
+
+(ert-deftest gfm-pretty-link-previews/wrapped-in-fence-is-skipped ()
+  "A wrapped reference inside a ```...``` fence creates no overlay."
+  (with-temp-buffer
+    (insert "```\n")
+    (insert "[/abs/path/main.rs#L1-L3]\n")
+    (insert "```\n")
+    (gfm-pretty-link-previews--rebuild)
+    (should (= 0 (length (gfm-pretty-link-previews-tests--overlays))))))
+
+(ert-deftest gfm-pretty-link-previews/wrapped-with-four-space-indent-is-skipped ()
+  "A wrapped reference with 4-space leading indent is preformatted."
+  (with-temp-buffer
+    (insert "    [/abs/path/main.rs#L1-L3]\n")
+    (gfm-pretty-link-previews--rebuild)
+    (should (= 0 (length (gfm-pretty-link-previews-tests--overlays))))))
+
+(ert-deftest gfm-pretty-link-previews/wrapped-in-inline-code-is-skipped ()
+  "A wrapped reference inside inline code on its own line is left undecorated."
+  (with-temp-buffer
+    (insert "`[/abs/path/main.rs#L1-L3]`\n")
+    (gfm-pretty-link-previews--rebuild)
+    (should (= 0 (length (gfm-pretty-link-previews-tests--overlays))))))
+
+(ert-deftest gfm-pretty-link-previews/wrapped-link-reference-definition-is-skipped ()
+  "A link reference definition line is not mistaken for a wrapped reference."
+  (with-temp-buffer
+    (insert "[modules/auth.rs#L1-L5]: https://example.com/x\n")
+    (gfm-pretty-link-previews--rebuild)
+    (should (= 0 (length (gfm-pretty-link-previews-tests--overlays))))))
+
+(ert-deftest gfm-pretty-link-previews/wrapped-mismatched-delimiters-create-no-overlay ()
+  "Mismatched delimiters (`[<url>>') create no overlay."
+  (with-temp-buffer
+    (insert "[modules/auth.rs#L1-L5>\n")
+    (gfm-pretty-link-previews--rebuild)
+    (should (= 0 (length (gfm-pretty-link-previews-tests--overlays))))))
+
+(ert-deftest gfm-pretty-link-previews/real-bracketed-link-not-double-claimed ()
+  "A real `[label](url)' link yields exactly one (Pass 1) overlay."
+  (gfm-pretty-link-previews-tests--with-temp-source '("a" "b" "c") tmp
+    (with-temp-buffer
+      (insert (format "[foo](%s#L1-L2)\n" tmp))
+      (gfm-pretty-link-previews--rebuild)
+      (let ((ovs (gfm-pretty-link-previews-tests--overlays)))
+        (should (= 1 (length ovs)))
+        ;; Pass 1 claims the whole `[foo](url)' span, not a bare token.
+        (should (= 1 (overlay-start (car ovs))))))))
+
+
 (provide 'gfm-pretty-link-previews-tests)
 
 ;;; gfm-pretty-link-previews-tests.el ends here

@@ -187,6 +187,32 @@ Bare-line source-range references with basename-only paths (e.g.
 `auth.rs#L1') are rejected to suppress false positives on prose."
   (and (stringp path) (string-match-p "/" path)))
 
+(defun gfm-pretty-link-previews--unwrap-token (token)
+  "Strip one matched `[ ]' or `< >' delimiter pair from TOKEN.
+Return (INNER START-OFFSET . END-OFFSET): INNER is the inner token and
+START-OFFSET / END-OFFSET are the signed character offsets from TOKEN's
+own bounds to INNER's bounds — 1 / -1 for a stripped wrapped token, 0 /
+0 for a token left unwrapped.  Mismatched (`[X>') or single-sided
+\(`[X', `X]') delimiters are left unwrapped: TOKEN is returned unchanged
+with zero offsets, so it falls through to the existing unwrapped parse.
+An empty TOKEN, or a matched pair with empty inner content (`[]'),
+returns nil — there is no inner token to parse."
+  (cond
+   ((or (null token) (string-empty-p token)) nil)
+   (t
+    (let* ((len (length token))
+           (first (aref token 0))
+           (last (aref token (1- len)))
+           (matched (and (>= len 2)
+                         (or (and (eq first ?\[) (eq last ?\]))
+                             (and (eq first ?<) (eq last ?>))))))
+      (cond
+       (matched
+        (let ((inner (substring token 1 -1)))
+          (unless (string-empty-p inner)
+            (cons inner (cons 1 -1)))))
+       (t (cons token (cons 0 0))))))))
+
 (defun gfm-pretty-link-previews--token-bounds-on-line ()
   "Return (TOKEN-START . TOKEN-END) for the current bare-line match.
 Assumes the caller has just matched `--bare-line-rx' on the current
@@ -812,11 +838,18 @@ the preformatted-context gate.  Engine memoises via
               (when (looking-at gfm-pretty-link-previews--bare-line-rx)
                 (let* ((token (match-string-no-properties 1))
                        (bounds (gfm-pretty-link-previews--token-bounds-on-line))
-                       (source (gfm-pretty-link-previews--parse-source-link
-                                token))
-                       (diff (and (not source)
+                       ;; Strip a single matched `[ ]' / `< >' wrapper
+                       ;; before parsing; `bounds' keep the original
+                       ;; (delimiter-spanning) token range so the overlay
+                       ;; covers the full wrapped token.
+                       (inner (car (gfm-pretty-link-previews--unwrap-token
+                                    token)))
+                       (source (and inner
+                                    (gfm-pretty-link-previews--parse-source-link
+                                     inner)))
+                       (diff (and inner (not source)
                                   (gfm-pretty-link-previews--parse-diff-link
-                                   token))))
+                                   inner))))
                   (when (and (or source diff)
                              (not (gfm-pretty-link-previews--preformatted-line-p
                                    (line-beginning-position) fence-ranges)))
