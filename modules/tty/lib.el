@@ -16,26 +16,32 @@
 
 
 ;;;###autoload
-(defun +tty-frame-use-box-characters (frame)
-  "On TTY FRAME, use Unicode box-drawing for window separators."
-  (with-selected-frame frame
-    (let ((dt (or (frame-parameter frame '+vborder-dtable)
-                  (let ((dt (make-display-table)))
-                    (set-display-table-slot dt 'vertical-border (make-glyph-code ?│))
-                    (set-frame-parameter frame '+vborder-dtable dt)
-                    dt))))
-      (set-display-table-slot dt 'truncation (make-glyph-code ?… 'warning))
+(defun +tty-window-display-table (window)
+  "Return WINDOW's `window-display-table', creating a box-glyph one if absent.
+The table carries the `vertical-border' and `truncation' glyphs used for
+window separators on terminals.  Because a `window-display-table' shadows
+`buffer-display-table' outright (Emacs uses a single display table per
+window, no merging), we only ever install one on TTY windows -- graphical
+frames render separators and truncation natively and must keep
+`buffer-display-table' visible so `page-break-lines-mode' works there."
+  (or (window-display-table window)
+      (let ((dt (make-display-table)))
+        (set-display-table-slot dt 'vertical-border (make-glyph-code ?│))
+        (set-display-table-slot dt 'truncation (make-glyph-code ?… 'warning))
+        (set-window-display-table window dt)
+        dt)))
 
-      (dolist (window (window-list frame 'no-minibuf))
-        (set-window-display-table window dt))
-
-      (let ((update-display-table (lambda ()
-                                    (when (eq (selected-frame) frame)
-                                      (dolist (window (window-list frame 'no-minibuf))
-                                        (unless (eq (window-display-table window) dt)
-                                          (set-window-display-table window dt)))))))
-        (with-current-buffer (window-buffer (frame-selected-window frame))
-          (add-hook 'window-configuration-change-hook update-display-table nil t))))))
+;;;###autoload
+(defun +tty-frame-use-box-characters (&optional frame)
+  "Give every window on a TTY FRAME a box-drawing `window-display-table'.
+FRAME defaults to the selected frame.  Graphical frames are left untouched
+so their native separators, fringe truncation indicators, and
+`page-break-lines-mode' rules (drawn via `buffer-display-table') keep
+working."
+  (setq frame (or frame (selected-frame)))
+  (unless (display-graphic-p frame)
+    (dolist (window (window-list frame 'no-minibuf))
+      (+tty-window-display-table window))))
 
 
 ;;; lib.el ends here

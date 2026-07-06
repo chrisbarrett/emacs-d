@@ -14,6 +14,7 @@
 ;; whose invariants we're asserting against.
 (defvar tty-tests--dir (file-name-directory (or load-file-name buffer-file-name)))
 (load (expand-file-name "../../early-init.el" tty-tests--dir) nil t)
+(load (expand-file-name "lib.el" tty-tests--dir) nil t)
 
 ;; Forward-declare the cache var so `let' creates a dynamic binding visible to
 ;; `boundp' inside `+sync-frame-parameters'.  The real defvar lives in
@@ -98,6 +99,65 @@ face's `:background' anywhere in `(face-list)'."
           (+sync-frame-parameters nil)))
       (should (null (tty-tests--faces-with-attr-value :foreground "unspecified-bg")))
       (should (null (tty-tests--faces-with-attr-value :background "unspecified-fg"))))))
+
+;;; Box-drawing display table
+
+;; The box glyphs must live only on per-window tables of TTY frames.  A window
+;; table shadows `buffer-display-table' outright (one table per window, no
+;; merging), so putting the glyphs on the global `standard-display-table' -- or
+;; on the shared per-buffer tables -- leaks `│'/`…' into graphical frames and
+;; also hides the `page-break-lines' `?\f' rule.  Keep them window-local and
+;; TTY-only.
+
+(ert-deftest tty/box-chars-on-tty-window-table-not-global ()
+  "`+tty-frame-use-box-characters' installs box glyphs on a TTY frame's
+per-window display table, leaving `standard-display-table' untouched."
+  (let ((frame (selected-frame)))
+    (skip-unless (not (display-graphic-p frame)))
+    (let ((standard-display-table nil))
+      (dolist (w (window-list frame 'no-minibuf))
+        (set-window-display-table w nil))
+      (+tty-frame-use-box-characters frame)
+      (let ((dt (window-display-table (frame-selected-window frame))))
+        (should dt)
+        (should (equal (display-table-slot dt 'vertical-border)
+                       (make-glyph-code ?│)))
+        (should (equal (display-table-slot dt 'truncation)
+                       (make-glyph-code ?… 'warning)))
+        ;; The global fallback table never receives box glyphs -> no GUI
+        ;; leak.  (`make-display-table' lazily inits the table itself, so we
+        ;; assert on the slots rather than on the table being nil.)
+        (should (null (and standard-display-table
+                           (display-table-slot standard-display-table
+                                                'vertical-border))))
+        (should (null (and standard-display-table
+                           (display-table-slot standard-display-table
+                                                'truncation))))))))
+
+(ert-deftest tty/box-chars-skip-graphical-frames ()
+  "`+tty-frame-use-box-characters' installs nothing on graphical frames,
+so `buffer-display-table' (and thus `page-break-lines') stays visible."
+  (cl-letf (((symbol-function 'display-graphic-p) (lambda (&rest _) t)))
+    (let ((frame (selected-frame)))
+      (dolist (w (window-list frame 'no-minibuf))
+        (set-window-display-table w nil))
+      (+tty-frame-use-box-characters frame)
+      (dolist (w (window-list frame 'no-minibuf))
+        (should (null (window-display-table w)))))))
+
+(ert-deftest tty/window-display-table-creates-box-glyphs-and-is-idempotent ()
+  "`+tty-window-display-table' creates a box-glyph table once and reuses it."
+  (let ((frame (selected-frame)))
+    (dolist (w (window-list frame 'no-minibuf))
+      (set-window-display-table w nil))
+    (let* ((win (frame-selected-window frame))
+           (dt (+tty-window-display-table win)))
+      (should (equal (display-table-slot dt 'vertical-border)
+                     (make-glyph-code ?│)))
+      (should (equal (display-table-slot dt 'truncation)
+                     (make-glyph-code ?… 'warning)))
+      ;; Second call returns the same object rather than replacing it.
+      (should (eq dt (+tty-window-display-table win))))))
 
 (provide 'tty-tests)
 

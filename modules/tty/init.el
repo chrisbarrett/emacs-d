@@ -28,6 +28,24 @@
 (add-hook! 'after-init-hook
   (+tty-frame-use-box-characters (selected-frame)))
 
+;; Keep box glyphs on every TTY window as splits and new windows appear.  The
+;; global hook covers all frames; graphical frames no-op inside the helper.
+(add-hook 'window-configuration-change-hook #'+tty-frame-use-box-characters)
+
+;; On TTY windows the box `window-display-table' shadows `buffer-display-table',
+;; where `page-break-lines-mode' writes its form-feed rule -- so the rule would
+;; vanish.  Mirror the buffer's `?\f' glyph into the window table after every
+;; page-break-lines rebuild (per-window, so the width matches).  Graphical
+;; windows have no window table and render the rule from the buffer table.
+(with-eval-after-load 'page-break-lines
+  (define-advice page-break-lines--update-display-table
+      (:after (window) tty-mirror-page-break)
+    (unless (display-graphic-p (window-frame window))
+      (let ((dt (+tty-window-display-table window)))
+        (aset dt ?\f (with-current-buffer (window-buffer window)
+                       (and buffer-display-table
+                            (aref buffer-display-table ?\f))))))))
+
 ;; The special value "unspecified-bg" is used by the Emacs rendering system to
 ;; avoid painting over the terminal's default background. We need to use this in
 ;; TTY contexts so active vs inactive background colours are applied in Tmux.
