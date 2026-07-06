@@ -7,6 +7,7 @@
 ;;; Code:
 
 (require 'ert)
+(require 'cl-lib)
 
 ;; Capture module directory at load time
 (defvar org-agenda-test--module-dir
@@ -44,6 +45,46 @@
 (ert-deftest org-agenda/test-p4-page-break-lines ()
   "P4: page-break-lines-modes includes org-agenda-mode."
   (should (memq 'org-agenda-mode page-break-lines-modes)))
+
+;;; P5: outline-path context action caches per-line
+
+(ert-deftest org-agenda/test-p5-context-action-caches-outline-path ()
+  "`+org-agenda-do-context-action-cached' computes the outline path once
+per agenda line and reuses it, instead of re-walking the source heading
+tree on every cursor move."
+  (skip-unless (fboundp '+org-agenda-do-context-action-cached))
+  (let ((src (get-buffer-create " *olp-src*"))
+        (agenda (get-buffer-create " *olp-agenda*"))
+        (calls 0))
+    (unwind-protect
+        (let (m)
+          (with-current-buffer src
+            (org-mode)
+            (insert "* Alpha\n** Beta\n*** Gamma\n")
+            (goto-char (point-min))
+            (re-search-forward "Gamma")
+            (setq m (copy-marker (line-beginning-position))))
+          (with-current-buffer agenda
+            (insert "  cat: TODO Gamma\n")
+            (goto-char (point-min))
+            (put-text-property (line-beginning-position) (line-end-position)
+                               'org-marker m)
+            (setq-local org-agenda-show-outline-path t)
+            (setq-local org-agenda-follow-mode nil)
+            (cl-letf* ((orig (symbol-function 'org-display-outline-path))
+                       ((symbol-function 'org-display-outline-path)
+                        (lambda (&rest args)
+                          (setq calls (1+ calls))
+                          (apply orig args))))
+              ;; First visit: computes and caches.
+              (+org-agenda-do-context-action-cached)
+              (should (get-text-property (line-beginning-position) '+org-agenda-olp))
+              (should (= calls 1))
+              ;; Second visit: cache hit, no recompute.
+              (+org-agenda-do-context-action-cached)
+              (should (= calls 1)))))
+      (when (buffer-live-p src) (kill-buffer src))
+      (when (buffer-live-p agenda) (kill-buffer agenda)))))
 
 (provide 'org-agenda-tests)
 

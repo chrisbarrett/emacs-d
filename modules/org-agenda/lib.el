@@ -8,6 +8,39 @@
 
 (require 'org)
 
+;;; Cursor-movement context action
+
+;;;###autoload
+(defun +org-agenda-do-context-action-cached ()
+  "Drop-in for `org-agenda-do-context-action' that caches the outline path.
+
+Stock `org-agenda-do-context-action' re-walks the source file's heading
+tree via `org-display-outline-path' on every cursor move, forcing a
+tree traversal per keystroke.  The path is stable for the life of an
+agenda buffer, so compute it once per line and stash it in the
+`+org-agenda-olp' text property; later visits reuse it.  The cache is
+regenerated with the buffer on redo, so it never goes stale.
+
+Follow-mode behaviour is preserved verbatim."
+  (let ((m (org-get-at-bol 'org-marker)))
+    (when (and (markerp m) (marker-buffer m))
+      (and org-agenda-follow-mode
+	   (if org-agenda-follow-indirect
+               (let ((org-indirect-buffer-display 'other-window))
+		 (org-agenda-tree-to-indirect-buffer nil))
+	     (org-agenda-show)))
+      (when org-agenda-show-outline-path
+        (let* ((bol (line-beginning-position))
+               (path (or (get-text-property bol '+org-agenda-olp)
+                         (let ((s (org-with-point-at m
+                                    (org-display-outline-path
+                                     org-agenda-show-outline-path nil nil t))))
+                           (with-silent-modifications
+                             (put-text-property bol (line-end-position)
+                                                '+org-agenda-olp s))
+                           s))))
+          (org-unlogged-message "%s" path))))))
+
 ;;; Predicates
 
 ;;;###autoload

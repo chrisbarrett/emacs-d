@@ -119,6 +119,11 @@
   (autoload '+inhibit-local-var-hooks-a "+hooks")
   (advice-add 'org-get-agenda-file-buffer :around #'+inhibit-local-var-hooks-a)
 
+  ;; Cache the per-line outline path so cursor movement doesn't re-walk the
+  ;; source heading tree on every keystroke.
+  (advice-add 'org-agenda-do-context-action :override
+              #'+org-agenda-do-context-action-cached)
+
   ;; Page-break separator for sections
   (setq org-agenda-block-separator (char-to-string ?\f))
 
