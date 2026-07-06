@@ -120,7 +120,8 @@
   (advice-add 'org-get-agenda-file-buffer :around #'+inhibit-local-var-hooks-a)
 
   ;; Cache the per-line outline path so cursor movement doesn't re-walk the
-  ;; source heading tree on every keystroke.
+  ;; source heading tree on every keystroke, and debounce the echo so fast
+  ;; movement skips intermediate lines.
   (advice-add 'org-agenda-do-context-action :override
               #'+org-agenda-do-context-action-cached)
 

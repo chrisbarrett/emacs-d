@@ -10,18 +10,53 @@
 
 ;;; Cursor-movement context action
 
+(defvar +org-agenda-olp-delay 0.2
+  "Idle seconds to wait before echoing the agenda outline path.
+Debounces `+org-agenda-do-context-action-cached' so fast cursor
+movement skips intermediate lines instead of emitting a message -- and
+its forced redisplay -- per line.")
+
+(defvar +org-agenda-olp-timer nil
+  "Pending debounce timer for the agenda outline-path message.")
+
+(defun +org-agenda--show-olp (buf)
+  "Echo the cached outline path for the current line of agenda BUF.
+Computes and memoises the path in the `+org-agenda-olp' text property on
+first visit and reuses it thereafter.  No-op unless BUF is still the
+buffer of the selected window, so a debounce that fires after focus has
+moved away stays silent."
+  (when (and (buffer-live-p buf)
+             (eq buf (window-buffer (selected-window))))
+    (with-current-buffer buf
+      (let ((m (org-get-at-bol 'org-marker)))
+        (when (and org-agenda-show-outline-path (markerp m) (marker-buffer m))
+          (let* ((bol (line-beginning-position))
+                 (path (or (get-text-property bol '+org-agenda-olp)
+                           (let ((s (org-with-point-at m
+                                      (org-display-outline-path
+                                       org-agenda-show-outline-path nil nil t))))
+                             (with-silent-modifications
+                               (put-text-property bol (line-end-position)
+                                                  '+org-agenda-olp s))
+                             s))))
+            (org-unlogged-message "%s" path)))))))
+
 ;;;###autoload
 (defun +org-agenda-do-context-action-cached ()
-  "Drop-in for `org-agenda-do-context-action' that caches the outline path.
+  "Drop-in for `org-agenda-do-context-action', cached and debounced.
 
 Stock `org-agenda-do-context-action' re-walks the source file's heading
-tree via `org-display-outline-path' on every cursor move, forcing a
-tree traversal per keystroke.  The path is stable for the life of an
-agenda buffer, so compute it once per line and stash it in the
-`+org-agenda-olp' text property; later visits reuse it.  The cache is
-regenerated with the buffer on redo, so it never goes stale.
+tree via `org-display-outline-path' on every cursor move and echoes it
+at once -- one message and forced redisplay per line, even when
+scrolling straight past.
 
-Follow-mode behaviour is preserved verbatim."
+Two changes: the outline path is memoised per line in the
+`+org-agenda-olp' text property (rebuilt with the buffer on redo, so
+never stale), and the echo is deferred by `+org-agenda-olp-delay' idle
+seconds -- rescheduling on each move -- so lines passed through during
+fast movement never emit a message.
+
+Follow-mode behaviour is preserved and stays immediate."
   (let ((m (org-get-at-bol 'org-marker)))
     (when (and (markerp m) (marker-buffer m))
       (and org-agenda-follow-mode
@@ -30,16 +65,11 @@ Follow-mode behaviour is preserved verbatim."
 		 (org-agenda-tree-to-indirect-buffer nil))
 	     (org-agenda-show)))
       (when org-agenda-show-outline-path
-        (let* ((bol (line-beginning-position))
-               (path (or (get-text-property bol '+org-agenda-olp)
-                         (let ((s (org-with-point-at m
-                                    (org-display-outline-path
-                                     org-agenda-show-outline-path nil nil t))))
-                           (with-silent-modifications
-                             (put-text-property bol (line-end-position)
-                                                '+org-agenda-olp s))
-                           s))))
-          (org-unlogged-message "%s" path))))))
+        (when (timerp +org-agenda-olp-timer)
+          (cancel-timer +org-agenda-olp-timer))
+        (setq +org-agenda-olp-timer
+              (run-with-idle-timer +org-agenda-olp-delay nil
+                                   #'+org-agenda--show-olp (current-buffer)))))))
 
 ;;; Predicates
 
