@@ -7,6 +7,7 @@
 ;;; Code:
 
 (require 'ert)
+(require 'cl-lib)
 
 ;; Get module directory
 (defvar org-test--module-dir
@@ -102,6 +103,55 @@ Checks for org-ellipsis which we set to \" …\" (not the default)."
   (should (or (memq 'evil-org-mode org-mode-hook)
               ;; Hook might be added via use-package
               (featurep 'evil-org))))
+
+;;; P8: org-modern label/habit box never carries the TTY bg sentinel globally
+
+(defun org-test--org-modern-available-p ()
+  "Load `org-modern' from its elpaca checkout; return non-nil on success."
+  (or (featurep 'org-modern)
+      (let ((repo (expand-file-name "../../elpaca/repos/org-modern"
+                                    org-test--module-dir)))
+        (when (file-directory-p repo)
+          (add-to-list 'load-path repo)
+          (ignore-errors (require 'org-modern))))))
+
+(ert-deftest org-test-p8-org-modern-box-never-sentinel-globally ()
+  "`org-modern--update-faces' must not stamp the TTY background sentinel
+\"unspecified-bg\" onto the GLOBAL `org-modern-label'/`org-modern-habit'
+`:box' `:color'.  It reads the selected frame's `default' background but
+writes to all frames; on a TTY frame that background is the sentinel, and
+stamping it globally leaks onto GUI frames — flooding *Messages* with
+`Unable to load color \"unspecified-bg\"' and painting spurious box
+outlines on a TTY->GUI switch.  `+org-modern-frame-local-box-a' confines
+the write to the selected frame."
+  (skip-unless (org-test--org-modern-available-p))
+  (skip-unless (fboundp '+org-modern-frame-local-box-a))
+  (let ((pre-attached (advice-member-p '+org-modern-frame-local-box-a
+                                       'org-modern--update-faces)))
+    (unless pre-attached
+      (advice-add 'org-modern--update-faces :around
+                  #'+org-modern-frame-local-box-a))
+    (unwind-protect
+        (progn
+          ;; Simulate a TTY frame: `default' background is the sentinel.
+          (cl-letf (((symbol-function 'face-attribute)
+                     (let ((orig (symbol-function 'face-attribute)))
+                       (lambda (face attr &optional frame inherit)
+                         (if (and (eq face 'default) (eq attr :background)
+                                  (memq frame '(nil t)))
+                             "unspecified-bg"
+                           (funcall orig face attr frame inherit))))))
+            (org-modern--update-faces))
+          (dolist (face '(org-modern-label org-modern-habit))
+            (let ((box (face-attribute face :box t)))
+              (should-not (and (listp box)
+                               (equal (plist-get box :color)
+                                      "unspecified-bg"))))))
+      (unless pre-attached
+        (advice-remove 'org-modern--update-faces
+                       #'+org-modern-frame-local-box-a))
+      (face-spec-reset-face 'org-modern-label)
+      (face-spec-reset-face 'org-modern-habit))))
 
 (provide 'org-tests)
 

@@ -6,6 +6,28 @@
 
 ;;; Code:
 
+(require 'cl-lib)
+
+;;;###autoload
+(defun +org-modern-frame-local-box-a (fn &rest args)
+  "Around-advice: stamp org-modern box colours frame-locally.
+
+`org-modern--update-faces' reads the SELECTED frame's `default'
+background but writes the `org-modern-label'/`org-modern-habit' `:box'
+`:color' to ALL frames.  On a TTY frame the background is the sentinel
+\"unspecified-bg\"; stamping it globally leaks onto GUI frames, which
+flood *Messages* with `Unable to load color \"unspecified-bg\"' and paint
+a spurious box outline until the GUI frame's own redisplay heals it.
+
+Redirecting the write to `(selected-frame)' keeps each frame's box
+colour matched to that frame's own background, so the sentinel stays
+confined to TTY frames."
+  (cl-letf* ((orig (symbol-function 'set-face-attribute))
+             ((symbol-function 'set-face-attribute)
+              (lambda (face frame &rest attrs)
+                (apply orig face (or frame (selected-frame)) attrs))))
+    (apply fn args)))
+
 ;;;###autoload
 (defface +org-id-link
   '((t (:weight semi-bold :inherit font-lock-variable-name-face)))

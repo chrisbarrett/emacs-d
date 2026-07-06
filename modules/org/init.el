@@ -421,6 +421,9 @@
      ("example" . ("" "◌"))))
   :config
   (global-org-modern-mode +1)
+  ;; Keep the label/habit box `:color' frame-local so the TTY `default' bg
+  ;; sentinel "unspecified-bg" can't leak onto GUI frames on a frame switch.
+  (advice-add 'org-modern--update-faces :around #'+org-modern-frame-local-box-a)
   (custom-theme-set-faces 'user
                           '(org-todo ((t (:bold t :inverse-video t))))
                           ;; Based on `eldoc-highlight-function-argument'
