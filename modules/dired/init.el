@@ -15,6 +15,8 @@
   :hook
   (dired-mode-hook . dired-hide-details-mode)
   (dired-mode-hook . hl-line-mode)
+  ;; Surface the columns hidden by `dired-hide-details-mode' via eldoc.
+  (dired-mode-hook . +dired-enable-details-eldoc)
   :custom
   (dired-garbage-files-regexp (rx (or ".log" ".toc" ".dvi" ".bak" ".orig" ".rej" ".aux" ".DS_Store")
                                   eos))
