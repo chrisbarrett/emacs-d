@@ -9,17 +9,19 @@
 (require '+autoloads)
 
 (require '+corelib)
+(require '+lang)
 
-(use-package apheleia
-  :after tex-mode
-  :config
-  ;; Set latexindent's indent style based on `indent-tabs-mode'.
-  (alist-set! apheleia-formatters 'latexindent
-              '("latexindent" "--logfile=/dev/null"
-                (when apheleia-formatters-respect-indent-level
-                  (if indent-tabs-mode
-                      "-y=defaultIndent:\"\\t\""
-                    "-y=defaultIndent:\"  \"")))))
+;; latexindent is a built-in apheleia formatter; override its command to
+;; silence the logfile and set the indent style from `indent-tabs-mode'.
+;; No mode association is declared: apheleia already maps the TeX modes to
+;; latexindent, so this registers the command definition only.
+(+lang-declare nil
+               :formatter '(latexindent
+                            . ("latexindent" "--logfile=/dev/null"
+                               (when apheleia-formatters-respect-indent-level
+                                 (if indent-tabs-mode
+                                     "-y=defaultIndent:\"\\t\""
+                                   "-y=defaultIndent:\"  \"")))))
 
 
 

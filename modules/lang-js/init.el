@@ -10,6 +10,7 @@
 (require '+autoloads)
 
 (require '+corelib)
+(require '+lang)
 
 ;; JavaScript mode associations
 (use-package js
@@ -46,9 +47,10 @@
             "deno.json" "deno.jsonc"
             "bun.lockb" "bunfig.toml"))
 
+(+lang-declare 'typescript-ts-mode :lsp t)
+
 ;; Select appropriate language server based on project type
 (use-package eglot
-  :hook (typescript-ts-mode-local-vars-hook . eglot-ensure)
   :config
   (alist-set! eglot-server-programs
               '((js-mode :language-id "javascript")

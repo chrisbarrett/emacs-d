@@ -14,10 +14,10 @@
 (require '+autoloads)
 
 (require '+corelib)
+(require '+lang)
 
 (use-package elixir-ts-mode
   :mode ("\\.ex\\'" "\\.exs\\'")
-  :hook (elixir-ts-mode-local-vars-hook . eglot-ensure)
   :config
   (pushnew! find-sibling-rules
             ;; Impl -> tests
@@ -26,6 +26,8 @@
             ;; Tests -> impl
             (list (rx (group-n 1 (+? nonl)) "/test/" (group-n 2 (+? any)) "_test.exs" eos)
                   (rx (backref 1) "/lib/" (backref 2) ".ex"))))
+
+(+lang-declare 'elixir-ts-mode :lsp t)
 
 (use-package eglot
   :config

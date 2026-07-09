@@ -9,6 +9,7 @@
 
 (require '+autoloads)
 (require '+corelib)
+(require '+lang)
 
 ;;; Mode configuration
 
@@ -215,19 +216,25 @@ themselves are activated by `gfm-pretty-mode' on the same hook."
 
 ;;; Formatting
 
-(use-package apheleia
-  :defines apheleia-formatters
-  :config
-  (setf (alist-get 'deno-markdown apheleia-formatters)
-        '("deno" "fmt" "--prose-wrap" "always" (apheleia-formatters-fill-column "--line-width") "--ext=md" "-"))
+;; Two Markdown formatters; the mode picks between them per-buffer below,
+;; so each is registered as a definition without a static mode association.
+(+lang-declare nil
+               :formatter '(deno-markdown
+                            . ("deno" "fmt" "--prose-wrap" "always"
+                               (apheleia-formatters-fill-column "--line-width")
+                               "--ext=md" "-")))
+(+lang-declare nil
+               :formatter '(prettier-markdown
+                            . ("prettier" "--stdin-filepath" filepath
+                               "--parser=markdown" "--prose-wrap" "always"
+                               (apheleia-formatters-fill-column "--print-width"))))
 
-  (setf (alist-get 'prettier-markdown apheleia-formatters)
-        '("prettier" "--stdin-filepath" filepath "--parser=markdown" "--prose-wrap" "always" (apheleia-formatters-fill-column "--print-width")))
-
-  (add-hook! (gfm-mode-local-vars)
-    (setq-local apheleia-formatter
-                (if (executable-find "deno")
-                    'deno-markdown
-                  'prettier-markdown))))
+;; Prefer deno when available, else prettier; buffer-local since the choice
+;; depends on the environment, not the mode.
+(add-hook! (gfm-mode-local-vars)
+  (setq-local apheleia-formatter
+              (if (executable-find "deno")
+                  'deno-markdown
+                'prettier-markdown)))
 
 ;;; init.el ends here

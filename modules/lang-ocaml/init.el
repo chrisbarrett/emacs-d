@@ -8,6 +8,7 @@
 
 (require '+autoloads)
 (require '+corelib)
+(require '+lang)
 
 ;; Read-only protection for build directories
 (+dirlocals-set-regexp "/_build/"
@@ -29,11 +30,8 @@
   (alist-set! org-src-lang-modes "ocamli" 'neocamli))
 
 ;; Formatter configuration
-(use-package apheleia
-  :defines apheleia-mode-alist
-  :config
-  (alist-set! apheleia-mode-alist 'neocaml-mode 'ocamlformat)
-  (alist-set! apheleia-mode-alist 'neocamli-mode 'ocamlformat))
+(+lang-declare 'neocaml-mode :formatter 'ocamlformat)
+(+lang-declare 'neocamli-mode :formatter 'ocamlformat)
 
 ;; LSP server configuration
 (use-package eglot

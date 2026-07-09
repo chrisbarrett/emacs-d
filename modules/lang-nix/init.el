@@ -12,6 +12,7 @@
 
 (require '+autoloads)
 (require '+corelib)
+(require '+lang)
 
 ;; Read-only protection for Nix store
 (+dirlocals-set "/nix/store/"
@@ -19,10 +20,11 @@
 
 (use-package nix-ts-mode
   :mode "\\.nix\\'"
-  :hook (nix-ts-mode-local-vars-hook . eglot-ensure)
   :init
   ;; flake.lock files are JSON
   (add-to-list 'auto-mode-alist (cons (rx "/flake.lock" eos) #'json-ts-mode)))
+
+(+lang-declare 'nix-ts-mode :lsp t)
 
 (use-package project
   :config

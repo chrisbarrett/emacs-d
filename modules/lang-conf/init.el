@@ -8,6 +8,7 @@
 
 (require '+autoloads)
 (require '+corelib)
+(require '+lang)
 
 (use-package conf-mode
   :mode ("rc\\'"
@@ -20,14 +21,16 @@
   :mode "\\.kdl\\'")
 
 (use-package json-ts-mode
-  :mode "\\.json\\'"
-  :hook (json-ts-mode-local-vars-hook . eglot-ensure))
+  :mode "\\.json\\'")
+
+(+lang-declare 'json-ts-mode :lsp t)
 
 (use-package yaml-ts-mode
   :mode "\\.ya?ml\\'"
-  :hook (yaml-ts-mode-local-vars-hook . eglot-ensure)
   :config
   (setq-hook! 'yaml-ts-mode-hook
     tab-width 2))
+
+(+lang-declare 'yaml-ts-mode :lsp t)
 
 ;;; init.el ends here
