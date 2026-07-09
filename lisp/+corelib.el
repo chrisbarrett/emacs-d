@@ -330,21 +330,6 @@ If FETCHER is a function, ELT is used as the key in LIST (an alist)."
                         elt)
                      ,list)))
 
-(defun +separate (pred sequence)
-  "Partition SEQUENCE by applying PRED to each element.
-Elements are partitioned according to whether the result is truthy or
-nil.
-
-Return a cons cell, where the CAR is the truthy partition and the CDR is
-the falsey partition."
-  (let (truthy falsey)
-    (seq-do (lambda (it)
-              (push it (if (funcall pred it)
-                           truthy
-                         falsey)))
-            sequence)
-    (cons truthy falsey)))
-
 (defun +split-with (pred sequence)
   "Split SEQUENCE into two according to PRED.
 
@@ -397,20 +382,6 @@ Every time PRED returns non-nil, the list is split into a new chunk."
                            (cons h current-chunk)))))))
     (loop sequence nil nil)))
 
-(defun +alist-from-hash-table (hash-table)
-  "Convert HASH-TABLE into an alist."
-
-  ;; (+alist-from-hash-table (let ((ht (make-hash-table)))
-  ;;                           (puthash :foo t ht)
-  ;;                           (puthash :bar t ht)
-  ;;                           ht))
-
-  (let ((result))
-    (dolist (key (hash-table-keys hash-table))
-      (push (cons key (gethash key hash-table))
-            result))
-    (nreverse result)))
-
 (defun +plist-from-hash-table (hash-table)
   "Convert HASH-TABLE into an plist."
 
@@ -452,61 +423,6 @@ Every time PRED returns non-nil, the list is split into a new chunk."
     (nreverse result)))
 
 
-
-(defvar-local +sppss-memo-last-point nil)
-(defvar-local +sppss-memo-last-result nil)
-
-(defun +sppss-memo-reset-h (&rest _ignored)
-  "Reset memoization as a safety precaution.
-
-IGNORED is a dummy argument used to eat up arguments passed from
-the hook where this is executed."
-  (setq +sppss-memo-last-point nil
-        +sppss-memo-last-result nil))
-
-(defun +syntax-ppss (&optional p)
-  "Memoize the last result of `syntax-ppss'.
-
-P is the point at which we run `syntax-ppss'"
-  (let ((p (or p (point)))
-        (mem-p +sppss-memo-last-point))
-    (if (and (eq p (nth 0 mem-p))
-             (eq (point-min) (nth 1 mem-p))
-             (eq (point-max) (nth 2 mem-p)))
-        +sppss-memo-last-result
-      ;; Add hook to reset memoization if necessary
-      (unless +sppss-memo-last-point
-        (add-hook 'before-change-functions #'+sppss-memo-reset-h t t))
-      (setq +sppss-memo-last-point (list p (point-min) (point-max))
-            +sppss-memo-last-result (syntax-ppss p)))))
-
-(defun +point-in-comment-p (&optional pt)
-  (let ((pt (or pt (point))))
-    (ignore-errors
-      (save-excursion
-        ;; We cannot be in a comment if we are inside a string
-        (unless (nth 3 (+syntax-ppss pt))
-          (or (nth 4 (+syntax-ppss pt))
-              ;; this also test opening and closing comment delimiters... we
-              ;; need to chack that it is not newline, which is in "comment
-              ;; ender" class in elisp-mode, but we just want it to be treated
-              ;; as whitespace
-              (and (< pt (point-max))
-                   (memq (char-syntax (char-after pt)) '(?< ?>))
-                   (not (eq (char-after pt) ?\n)))
-              ;; we also need to test the special syntax flag for comment
-              ;; starters and enders, because `syntax-ppss' does not yet know if
-              ;; we are inside a comment or not (e.g. / can be a division or
-              ;; comment starter...).
-              (when-let* ((s (car (syntax-after pt))))
-                (or (and (/= 0 (logand (ash 1 16) s))
-                         (nth 4 (syntax-ppss (+ pt 2))))
-                    (and (/= 0 (logand (ash 1 17) s))
-                         (nth 4 (syntax-ppss (+ pt 1))))
-                    (and (/= 0 (logand (ash 1 18) s))
-                         (nth 4 (syntax-ppss (- pt 1))))
-                    (and (/= 0 (logand (ash 1 19) s))
-                         (nth 4 (syntax-ppss (- pt 2))))))))))))
 
 (defmacro +local-leader-set-key (keymaps &rest general-args)
   (declare (indent 1))
