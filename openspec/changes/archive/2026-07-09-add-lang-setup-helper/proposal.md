@@ -13,10 +13,11 @@ module.
 
 ## What Changes
 
-- **New `lang-support` module**: `modules/lang-support/lib.el` provides
-  one autoloaded declarative helper that, given a major mode, wires
-  LSP activation on the mode's `local-vars-hook` and registers an
-  apheleia formatter (definition + mode association) lazily.
+- **New `+lang` library**: `lisp/+lang.el` provides one declarative
+  helper that, given a major mode, wires LSP activation on the mode's
+  `local-vars-hook` and registers an apheleia formatter (definition +
+  mode association) lazily. It is a shared lib (like `+corelib`),
+  `require`d by consuming modules — not a module of its own.
 - **lang modules migrate**: existing hand-rolled `eglot-ensure` hook
   entries and apheleia alist surgery across `modules/lang-*/init.el`
   are replaced by helper declarations. Behaviour identical.
@@ -30,8 +31,8 @@ module.
 
 - `lang-support`: the declarative language-wiring helper — LSP
   activation and formatter registration for language modules. New axis
-  (decision recorded in design.md); module directory
-  `modules/lang-support/`.
+  (decision recorded in design.md); implemented as the shared library
+  `lisp/+lang.el`, not a module.
 
 ### Modified Capabilities
 
@@ -41,7 +42,7 @@ migrating the mechanism produces no delta -->
 
 ## Impact
 
-- New `modules/lang-support/` (lib.el, tests.el).
+- New `lisp/+lang.el` and `lisp/+lang-tests.el`.
 - `modules/lang-*/init.el` for rust, ocaml, elixir, conf, js, nix,
   swift, latex, markdown (where applicable) — wiring replaced by
   declarations.

@@ -35,15 +35,26 @@ language module copies a neighbour and hopes it copied a correct one.
 
 The recognised-axes list does not include it and no existing axis
 fits: `eglot` (recognised, spec-less) covers only half the concern —
-formatter wiring is apheleia, not eglot. The helper lives in a new
-`modules/lang-support/` module, so the axis-name-matches-module rule
-holds. Internals-facing spec.
+formatter wiring is apheleia, not eglot. Internals-facing spec.
 
-### Decision: helper is an autoloaded function, not a use-package keyword
+### Decision: helper is a shared lisp library, not a module
 
-Shape: `(+lang-declare MODE &key lsp formatter)` in
-`modules/lang-support/lib.el`, marked `;;;###autoload`, where
-`:formatter` is either a symbol (existing apheleia formatter) or
+The helper is a generic utility — a language module calls it, but it is
+not itself a self-contained configuration unit. So it lives in `lisp/`
+alongside the other shared libraries (`+corelib`, `+hooks`), not under
+`modules/`. It is `lisp/+lang.el`, providing feature `+lang`, and each
+consuming module `(require '+lang)` (mirroring `(require '+corelib)`) —
+no module directory, no `packages.eld`, no `init.el`.
+
+Alternative considered: a `modules/lang-support/` module with an
+autoloaded `lib.el`. Rejected — modules are config units that get
+loaded and may install packages; a stateless wiring helper is a
+library. Since consumers `require` it directly, no autoload is needed.
+
+### Decision: helper is a function, not a use-package keyword
+
+Shape: `(+lang-declare MODE &key lsp formatter)` in `lisp/+lang.el`,
+where `:formatter` is either a symbol (existing apheleia formatter) or
 `(NAME . COMMAND-LIST)` (register + associate).
 
 Alternative considered: extend `+use-package-keywords.el` with
@@ -81,9 +92,10 @@ hand-rolled wiring remains" scenario keeps future modules honest.
   each; a genuine variation stays hand-rolled and the spec scenario's
   search pattern gets an explicit documented exception — only if one
   actually exists.
-- [Helper loads before `+autoloads` registration in some early module]
-  → module inits load after `+autoloads-rebuild` per init.el ordering;
-  no early callers exist.
+- [Consuming module calls `+lang-declare` before the helper is loaded]
+  → each consumer `(require '+lang)` at the top of its `init.el`, which
+  loads `lisp/+lang.el` synchronously before any call; no autoload or
+  load-order assumption is involved.
 
 ## Migration Plan
 
@@ -96,4 +108,12 @@ Rollback: revert migration commits; helper is additive.
 
 - Whether `lang-latex`'s formatter setup (custom `latexindent` entry)
   fits the `(NAME . COMMAND-LIST)` shape or needs the escape hatch —
-  resolve during migration.
+  resolve during migration. **Resolved:** it fits. `latexindent`
+  overrides a formatter apheleia already defines and adds no mode
+  association (apheleia's default maps the TeX modes). The helper's
+  define-only form — `(+lang-declare nil :formatter (NAME . COMMAND))`,
+  a nil MODE registering the command without an association — expresses
+  this exactly, so no hand-rolled exception is needed. `lang-markdown`
+  uses the same define-only form for its two formatters, whose
+  per-buffer selection stays a `gfm-mode-local-vars-hook` entry (not
+  enforced `apheleia-*` alist mutation).

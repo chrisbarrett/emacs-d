@@ -1,14 +1,21 @@
-# lang-support Delta
+# lang-support Specification
 
-## ADDED Requirements
+## Purpose
+
+Internals-facing. Documents the `+lang` helper library (`lisp/+lang.el`)
+through which a language module declaratively wires a major mode to LSP
+activation and/or an apheleia formatter, and the requirement that language
+modules express such wiring through the helper rather than hand-rolling it.
+
+## Requirements
 
 ### Requirement: Declarative language wiring helper
 
-Internals-facing. The `lang-support` module SHALL provide an
-autoloaded helper through which a language module declares, for a
-major mode: LSP activation, and/or an apheleia formatter. The helper
-SHALL be callable from a module `init.el` without requiring eglot or
-apheleia to be loaded at call time.
+Internals-facing. The `+lang` library (`lisp/+lang.el`) SHALL provide
+a helper through which a language module declares, for a major mode:
+LSP activation, and/or an apheleia formatter. The helper SHALL be
+callable from a module `init.el` (which `require`s `+lang`) without
+requiring eglot or apheleia to be loaded at call time.
 
 #### Scenario: declaration is lazy
 
@@ -58,11 +65,18 @@ add only the mode association.
 `modules/lang-*/init.el` files SHALL NOT hand-wire
 `(<mode>-local-vars-hook . eglot-ensure)` hook entries nor mutate
 `apheleia-formatters`/`apheleia-mode-alist` directly; language modules
-SHALL express that wiring through the lang-support helper.
+SHALL express that wiring through the `+lang` helper.
+
+A module whose wiring the helper cannot express (a genuine variation,
+e.g. associating a mode with a formatter *chain* rather than a single
+formatter) MAY keep that wiring hand-rolled, provided the exception is
+documented at the enforcement point.
 
 #### Scenario: no hand-rolled wiring remains
 
 - **WHEN** `modules/lang-*/init.el` files are searched for
   `eglot-ensure` hook pairs and direct
   `apheleia-formatters`/`apheleia-mode-alist` mutation
-- **THEN** no match remains outside `modules/lang-support/`
+- **THEN** no match remains in `modules/lang-*/init.el` apart from the
+  documented exceptions (the helper itself lives in `lisp/+lang.el`,
+  outside the searched module tree)
