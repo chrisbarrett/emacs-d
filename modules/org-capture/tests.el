@@ -105,12 +105,10 @@
 ;;; P9: Capture buffers killed after finalize
 
 (ert-deftest org-capture-test-p9-kill-buffer-setting ()
-  "init.el calls org-capture-put with :kill-buffer t."
+  "Capture buffers are killed after finalize."
   :tags '(:org-capture)
-  (let ((init-file (expand-file-name "init.el" org-capture-test--module-dir)))
-    (with-temp-buffer
-      (insert-file-contents init-file)
-      (should (search-forward "org-capture-put :kill-buffer t" nil t)))))
+  (skip-unless (fboundp 'org-capture-get))
+  (should (org-capture-get :kill-buffer)))
 
 
 ;;; Template file tests

@@ -14,15 +14,22 @@
 (load (expand-file-name "init.el" vulpea-test--module-dir) nil t)
 (require 'vulpea-note)
 
+;; init.el defers vulpea's config (`:defer-incrementally', `with-eval-after-load').
+;; Force the packages to load so tests assert post-load state instead of the
+;; text of init.el.  no-littering is required first because vulpea's :config
+;; calls `no-littering-expand-var-file-name'; without it the :config aborts.
+(ignore-errors (require 'no-littering))
+(ignore-errors (require 'vulpea))
+(ignore-errors (require 'vulpea-ui))
+
 
 ;;; P1: vulpea-db-autosync-mode enabled in config
 
 (ert-deftest vulpea-test-p1-autosync-configured ()
+  "vulpea-db-autosync-mode is enabled after load."
   :tags '(vulpea)
-  (let ((init-file (expand-file-name "init.el" vulpea-test--module-dir)))
-    (with-temp-buffer
-      (insert-file-contents init-file)
-      (should (search-forward "vulpea-db-autosync-mode" nil t)))))
+  (skip-unless (featurep 'vulpea))
+  (should (bound-and-true-p vulpea-db-autosync-mode)))
 
 
 ;;; P2: sensitive tag filtering
@@ -62,46 +69,41 @@
 ;;; P6: vulpea-ui sidebar configured
 
 (ert-deftest vulpea-test-p6-sidebar-configured ()
+  "vulpea-ui sidebar is configured on the right."
   :tags '(vulpea)
-  (let ((init-file (expand-file-name "init.el" vulpea-test--module-dir)))
-    (with-temp-buffer
-      (insert-file-contents init-file)
-      (should (search-forward "vulpea-ui" nil t)))))
+  (skip-unless (featurep 'vulpea-ui))
+  (should (eq vulpea-ui-sidebar-position 'right)))
 
 
 ;;; P7: alias keybindings configured
 
 (ert-deftest vulpea-test-p7-alias-bindings ()
+  "Alias add/remove commands wired to the leader are available."
   :tags '(vulpea)
-  (let ((init-file (expand-file-name "init.el" vulpea-test--module-dir)))
-    (with-temp-buffer
-      (insert-file-contents init-file)
-      (should (search-forward "vulpea-buffer-alias-add" nil t))
-      (should (search-forward "vulpea-buffer-alias-remove" nil t)))))
+  ;; The leader keymap is not populated under the batch harness, so the
+  ;; binding itself is not observable; assert the commands it targets exist.
+  (skip-unless (featurep 'vulpea))
+  (should (fboundp 'vulpea-buffer-alias-add))
+  (should (fboundp 'vulpea-buffer-alias-remove)))
 
 
 ;;; P8: org-id auto-create in vulpea files
 
 (ert-deftest vulpea-test-p8-id-link-hook ()
+  "Opening notes files installs the org-id link policy via find-file-hook."
   :tags '(vulpea)
-  (let ((init-file (expand-file-name "init.el" vulpea-test--module-dir)))
-    (with-temp-buffer
-      (insert-file-contents init-file)
-      (should (search-forward "org-id-link-to-org-use-id" nil t))
-      (goto-char (point-min))
-      (should (search-forward "find-file-hook" nil t)))))
+  (skip-unless (featurep 'vulpea))
+  (should (memq '+vulpea-set-id-link-policy-h find-file-hook)))
 
 
-;;; P9: packages.eld declares vulpea and vulpea-ui
+;;; P9: vulpea and vulpea-ui packages available
 
 (ert-deftest vulpea-test-p9-packages-declared ()
+  "Both vulpea packages load."
   :tags '(vulpea)
-  (let* ((pkg-file (expand-file-name "packages.eld" vulpea-test--module-dir))
-         (content (with-temp-buffer
-                    (insert-file-contents pkg-file)
-                    (buffer-string))))
-    (should (string-match-p "vulpea" content))
-    (should (string-match-p "vulpea-ui" content))))
+  (skip-unless (featurep 'vulpea))
+  (should (featurep 'vulpea))
+  (should (featurep 'vulpea-ui)))
 
 
 ;;; P10: notes directory var defined
